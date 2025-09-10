@@ -1,0 +1,78 @@
+{% extends 'base.html' %}
+{% block content %}
+  <h1>{% if object %}Upravit{% else %}Přidat{% endif %} recept</h1>
+  <form method="post">{% csrf_token %}
+    {{ form.as_p }}
+
+    <h3>Suroviny</h3>
+    {{ ingredients.management_form }}
+    <table>
+      <tr><th>Surovina</th><th>Pro dospělého</th><th>Pro dítě</th><th>Odstranit</th></tr>
+      {% for f in ingredients.forms %}
+      <tr>
+        <td>{{ f.ingredient }}</td>
+        <td>{{ f.quantity_adult }}</td>
+        <td>{{ f.quantity_child }}</td>
+        <td>
+          <button type="button" class="remove-ingredient">Odstranit</button>
+          {{ f.DELETE }}
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+
+    <p><button type="button" id="add-ingredient">Přidat surovinu</button></p>
+
+    <button type="submit">Uložit</button>
+  </form>
+
+  <!-- hidden empty form template -->
+  <div id="empty-form-template" style="display:none">
+    <table>
+      <tr>
+        <td>{{ ingredients.empty_form.ingredient }}</td>
+        <td>{{ ingredients.empty_form.quantity_adult }}</td>
+        <td>{{ ingredients.empty_form.quantity_child }}</td>
+        <td>
+          <button type="button" class="remove-ingredient">Odstranit</button>
+          {{ ingredients.empty_form.DELETE }}
+        </td>
+      </tr>
+    </table>
+  </div>
+
+  <script>
+    (function(){
+      const addBtn = document.getElementById('add-ingredient');
+      if(!addBtn) return;
+      const totalForms = document.querySelector('input[name="ingredients-TOTAL_FORMS"]');
+      const table = document.querySelector('form table');
+      const template = document.getElementById('empty-form-template').innerHTML;
+
+      function replaceIndex(html, index){
+        return html.replace(/__prefix__/g, index);
+      }
+
+      addBtn.addEventListener('click', function(){
+        const currentIndex = parseInt(totalForms.value, 10);
+        const rowHtml = replaceIndex(template, currentIndex);
+        // append row to table body
+        const tmp = document.createElement('tbody');
+        tmp.innerHTML = rowHtml;
+        const tr = tmp.querySelector('tr');
+        table.appendChild(tr);
+        totalForms.value = currentIndex + 1;
+      });
+
+      // delegate delete clicks: when a DELETE checkbox exists, hide row when checked
+      table.addEventListener('change', function(e){
+        const el = e.target;
+        if(!el.name) return;
+        if(el.name.indexOf('DELETE') !== -1){
+          const row = el.closest('tr');
+          if(el.checked){ row.style.display = 'none'; } else { row.style.display = ''; }
+        }
+      });
+    })();
+  </script>
+{% endblock %}

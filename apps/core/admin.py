@@ -1,6 +1,9 @@
 from django.contrib import admin
 from .models import Recipe, Ingredient, RecipeIngredient
 
+# Tento admin modul poskytuje jednoduché rozhraní pro správu receptů a surovin.
+# Inline `RecipeIngredientInline` umožňuje editovat normy přímo v editaci receptu.
+
 class RecipeIngredientInline(admin.TabularInline):
     model = RecipeIngredient
     extra = 1  # Počet prázdných řádků pro přidání nových surovin

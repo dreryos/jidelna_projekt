@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Domovská stránka{% endblock %}
+{% block content %}
+  <h1>Vítejte v jídelní správě</h1>
+  <p>Aplikace pro správu skladů, receptů a objednávek.</p>
+
+  {% if user.is_authenticated %}
+    <p>Přihlášen jako <strong>{{ user.username }}</strong></p>
+    <form method="post" action="{% url 'logout' %}">
+      {% csrf_token %}
+      <button type="submit">Odhlásit</button>
+    </form>
+    <ul>
+      <li><a href="/admin/">Administrace</a></li>
+      <li><a href="{% url 'reports:order_report' %}">Report objednávek</a></li>
+    </ul>
+  {% else %}
+    <p>Pro práci s aplikací se prosím <a href="{% url 'login' %}">přihlaste</a>.</p>
+  {% endif %}
+
+{% endblock %}

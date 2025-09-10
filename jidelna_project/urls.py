@@ -15,8 +15,18 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
-from django.urls import path
+from django.urls import path, include
+from apps.core import views as core_views
+from django.contrib.auth import views as auth_views
 
 urlpatterns = [
+    path('', core_views.home, name='home'),
     path('admin/', admin.site.urls),
+    path('accounts/login/', auth_views.LoginView.as_view(template_name='registration/login.html'), name='login'),
+    path('accounts/logout/', core_views.logout_view, name='logout'),
+    path('inventory/', include('apps.inventory.urls', namespace='inventory')),
+    path('', include('apps.core.urls', namespace='core')),
+
+    # Reporty (reporty objednávek) – rozhraní pro generování přehledů
+    path('reports/', include('apps.reports.urls', namespace='reports')),
 ]

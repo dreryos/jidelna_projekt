@@ -2,6 +2,16 @@ from django.db import models
 
 # Create your models here.
 
+"""
+Tento modul obsahuje sdílené modely používané napříč projektem:
+- Ingredient: základní surovina (název + jednotka)
+- Recipe: recept, který může obsahovat více surovin přes RecipeIngredient
+- RecipeIngredient: norma (množství suroviny pro dospělou a dětskou porci)
+
+Metoda `calculate_portion_price` počítá cenu porce pro zadanou jídelnu na základě
+průměrné ceny surovin v jejích skladech.
+"""
+
 class Ingredient(models.Model):
     """Surovina"""
     name = models.CharField(max_length=100, unique=True, verbose_name="Název suroviny")
@@ -23,6 +33,37 @@ class Recipe(models.Model):
         through='RecipeIngredient',
         verbose_name="Suroviny"
     )
+
+    def calculate_portion_price(self, canteen):
+        """
+        Vypočítá cenu dospělé a dětské porce pro danou jídelnu.
+        Cena se počítá na základě průměrné ceny surovin ve skladech dané jídelny.
+        """
+        from apps.inventory.models import StockItem
+        from django.db.models import Avg, F
+
+        total_price_adult = 0
+        total_price_child = 0
+
+        recipe_ingredients = self.recipeingredient_set.all()
+
+        for item in recipe_ingredients:
+            # Najdeme průměrnou cenu suroviny ve všech skladech dané jídelny
+            avg_price_data = StockItem.objects.filter(
+                ingredient=item.ingredient,
+                warehouse__canteen=canteen
+            ).aggregate(avg_price=Avg('price'))
+
+            avg_price = avg_price_data.get('avg_price') or 0
+
+            # Vypočítáme cenu pro danou surovinu v receptu
+            total_price_adult += item.quantity_adult * avg_price
+            total_price_child += item.quantity_child * avg_price
+
+        return {
+            'adult': round(total_price_adult, 2),
+            'child': round(total_price_child, 2)
+        }
 
     def __str__(self):
         return self.name

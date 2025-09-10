@@ -1,0 +1,26 @@
+<h1>Report</h1>
+<p>Jídelna: {{ report.canteen }}</p>
+<p>Období: {{ report.date_from }} - {{ report.date_to }}</p>
+<p>Položky: {{ report.items|length }}</p>
+
+<p>
+	<a href="{{ report.excel_url }}">Stáhnout Excel</a> |
+	<a href="{{ report.pdf_url }}">Stáhnout PDF</a>
+</p>
+
+<table border="1" cellpadding="4" cellspacing="0">
+	<thead>
+		<tr><th>Surovina</th><th>Jednotka</th><th>Potřeba</th><th>Sklad</th><th>K objednání</th></tr>
+	</thead>
+	<tbody>
+		{% for it in report.items %}
+			<tr>
+				<td>{{ it.ingredient.name }}</td>
+				<td>{{ it.unit }}</td>
+				<td>{{ it.needed }}</td>
+				<td>{{ it.stock }}</td>
+				<td>{{ it.to_order }}</td>
+			</tr>
+		{% endfor %}
+	</tbody>
+</table>

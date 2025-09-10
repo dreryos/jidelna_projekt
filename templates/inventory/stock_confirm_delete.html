@@ -1,0 +1,7 @@
+{% extends 'base.html' %}
+{% block content %}
+  <h1>Smazat položku</h1>
+  <p>Opravdu smazat {{ object }}?</p>
+  <form method="post">{% csrf_token %}<button type="submit">Smazat</button></form>
+  <p><a href="{% url 'inventory:stock_list' %}">Zpět</a></p>
+{% endblock %}

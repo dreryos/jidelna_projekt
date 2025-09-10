@@ -1,5 +1,13 @@
 from django.db import models
 
+"""
+Modely pro správu jídelny a jejích skladů.
+- Canteen: reprezentuje provozovnu (jídelnu)
+- Warehouse: konkrétní sklad patřící k jídelně (např. Hlavní sklad, Mrazák)
+
+Poznámka: zásoby (`StockItem`) budou vázány na `Warehouse`.
+"""
+
 # Create your models here.
 
 class Canteen(models.Model):

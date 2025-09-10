@@ -14,3 +14,6 @@ from django.core.asgi import get_asgi_application
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'jidelna_project.settings')
 
 application = get_asgi_application()
+
+# ASGI (Asynchronous Server Gateway Interface) se používá pro async servery a websockety.
+# Tady je místo, kde byste přidali middleware pro websockety nebo long-polling, pokud bude potřeba.

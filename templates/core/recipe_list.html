@@ -1,0 +1,12 @@
+{% extends 'base.html' %}
+{% block content %}
+  <h1>Recepty</h1>
+  <p><a href="{% url 'core:recipe_add' %}">Přidat recept</a></p>
+  <ul>
+  {% for r in object_list %}
+    <li>{{ r.name }} — <a href="{% url 'core:recipe_edit' r.pk %}">upravit</a> | <a href="{% url 'core:recipe_delete' r.pk %}">smazat</a></li>
+  {% empty %}
+    <li>Žádné recepty</li>
+  {% endfor %}
+  </ul>
+{% endblock %}

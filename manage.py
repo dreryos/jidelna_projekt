@@ -1,11 +1,15 @@
 #!/usr/bin/env python
-"""Django's command-line utility for administrative tasks."""
+"""Django's command-line utility for administrative tasks.
+
+Tento soubor je vstupním bodem pro příkazy jako `runserver`, `migrate`, `createsuperuser` atd.
+Zde se nastaví proměnná prostředí `DJANGO_SETTINGS_MODULE` a předá se řízení Django CLI.
+"""
 import os
 import sys
 
 
 def main():
-    """Run administrative tasks."""
+    """Spustí administrativní příkazy Django."""
     os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'jidelna_project.settings')
     try:
         from django.core.management import execute_from_command_line

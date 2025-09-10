@@ -2,6 +2,13 @@ from django.db import models
 from apps.core.models import Ingredient
 from apps.canteens.models import Warehouse
 
+"""
+Model pro evidenci zásob v konkrétních skladech.
+- StockItem: propojovací entita mezi `Ingredient` a `Warehouse`, obsahuje množství a cenu.
+
+Cenu používáme pro výpočet ceny porcí. Množství se aktualizuje při výdeji z výdejky (PickingList).
+"""
+
 class StockItem(models.Model):
     """Skladová položka"""
     ingredient = models.ForeignKey(Ingredient, on_delete=models.CASCADE, verbose_name="Surovina")

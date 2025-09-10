@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+{% block title %}Sklady{% endblock %}
+{% block content %}
+  <h1>Skladové položky</h1>
+  <p><a href="{% url 'inventory:stock_add' %}">Přidat položku</a></p>
+  <table>
+    <tr><th>Surovina</th><th>Sklad</th><th>Množství</th><th>Cena</th><th></th></tr>
+    {% for it in object_list %}
+    <tr>
+      <td>{{ it.ingredient.name }}</td>
+      <td>{{ it.warehouse.name }}</td>
+      <td>{{ it.quantity }}</td>
+      <td>{{ it.price }}</td>
+      <td>
+        <a href="{% url 'inventory:stock_edit' it.pk %}">upravit</a> |
+        <a href="{% url 'inventory:stock_delete' it.pk %}">smazat</a>
+      </td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="5">Žádné položky</td></tr>
+    {% endfor %}
+  </table>
+{% endblock %}

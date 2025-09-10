@@ -1,6 +1,8 @@
 from django.contrib import admin
 from .models import Canteen, Warehouse
 
+# Admin pro jídelny a sklady. WarehouseInline umožní přidávat sklady přímo při editaci jídelny.
+
 class WarehouseInline(admin.TabularInline):
     model = Warehouse
     extra = 1
