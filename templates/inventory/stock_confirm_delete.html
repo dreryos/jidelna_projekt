@@ -1,7 +1,54 @@
 {% extends 'base.html' %}
+{% load bootstrap5 %}
+
+{% block title %}Smazat skladovou položku - Jídelna{% endblock %}
+
 {% block content %}
-  <h1>Smazat položku</h1>
-  <p>Opravdu smazat {{ object }}?</p>
-  <form method="post">{% csrf_token %}<button type="submit">Smazat</button></form>
-  <p><a href="{% url 'inventory:stock_list' %}">Zpět</a></p>
+<div class="row justify-content-center">
+  <div class="col-lg-6">
+    <div class="card shadow border-danger">
+      <div class="card-header bg-danger text-white">
+        <h4 class="mb-0">
+          <i class="fas fa-exclamation-triangle me-2"></i>Smazat skladovou položku
+        </h4>
+      </div>
+      <div class="card-body">
+        <div class="alert alert-danger" role="alert">
+          <i class="fas fa-warning me-2"></i>
+          <strong>Varování!</strong> Tato akce je nevratná.
+        </div>
+        
+        <p class="lead">
+          Opravdu chcete smazat tuto skladovou položku?
+        </p>
+        
+        <div class="bg-light p-3 rounded mb-3">
+          <h6><i class="fas fa-info-circle me-1"></i>Informace o položce:</h6>
+          <ul class="mb-0">
+            <li><strong>Surovina:</strong> {{ object.ingredient.name }} ({{ object.ingredient.unit }})</li>
+            <li><strong>Sklad:</strong> {{ object.warehouse.name }} - {{ object.warehouse.canteen.name }}</li>
+            <li><strong>Množství:</strong> {{ object.quantity }} {{ object.ingredient.unit }}</li>
+            <li><strong>Cena za jednotku:</strong> {{ object.price|floatformat:2 }} Kč</li>
+            <li><strong>Celková hodnota:</strong> 
+              {% widthratio object.quantity 1 object.price as total_value %}
+              {{ total_value|floatformat:2 }} Kč
+            </li>
+          </ul>
+        </div>
+        
+        <form method="post">
+          {% csrf_token %}
+          <div class="d-flex justify-content-between">
+            <a href="{% url 'inventory:stock_list' %}" class="btn btn-secondary">
+              <i class="fas fa-arrow-left me-2"></i>Zpět na seznam
+            </a>
+            <button type="submit" class="btn btn-danger btn-lg">
+              <i class="fas fa-trash me-2"></i>Ano, smazat položku
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}

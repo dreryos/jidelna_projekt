@@ -1,36 +1,96 @@
+{% load bootstrap5 %}
 <!doctype html>
 <html lang="cs">
 <head>
   <meta charset="utf-8" />
   <title>{% block title %}Jídelna{% endblock %}</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <style>
-    body{font-family:Arial,Helvetica,sans-serif;margin:2rem}
-    header{margin-bottom:1rem}
-    nav a{margin-right:1rem}
-  </style>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  {% bootstrap_css %}
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+  {% bootstrap_javascript %}
 </head>
 <body>
-  <header>
-    <nav>
-      <a href="/">Domů</a>
-      <a href="/admin/">Administrace</a>
-      <a href="{% url 'reports:order_report' %}">Reporty</a>
-      {% if request.user.is_authenticated %}
-        <form method="post" action="{% url 'logout' %}" style="display:inline">
-          {% csrf_token %}
-          <button type="submit">Odhlásit</button>
-        </form>
-      {% else %}
-        <a href="{% url 'login' %}">Přihlásit</a>
-      {% endif %}
-    </nav>
-  </header>
-  <main>
+  <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+    <div class="container">
+      <a class="navbar-brand" href="/">
+        <i class="fas fa-utensils me-2"></i>Jídelna
+      </a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarNav">
+        <ul class="navbar-nav me-auto">
+          {% if request.user.is_authenticated %}
+            <li class="nav-item">
+              <a class="nav-link" href="/">Domů</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="{% url 'core:recipe_list' %}">Recepty</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="{% url 'inventory:stock_list' %}">Sklady</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="{% url 'reports:order_report' %}">Reporty</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="/admin/">Administrace</a>
+            </li>
+          {% endif %}
+        </ul>
+        <ul class="navbar-nav">
+          {% if request.user.is_authenticated %}
+            <li class="nav-item dropdown">
+              <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown">
+                <i class="fas fa-user me-1"></i>{{ user.username }}
+              </a>
+              <ul class="dropdown-menu">
+                <li>
+                  <form method="post" action="{% url 'logout' %}" class="m-0">
+                    {% csrf_token %}
+                    <button type="submit" class="dropdown-item">
+                      <i class="fas fa-sign-out-alt me-1"></i>Odhlásit
+                    </button>
+                  </form>
+                </li>
+              </ul>
+            </li>
+          {% else %}
+            <li class="nav-item">
+              <a class="nav-link" href="{% url 'login' %}">
+                <i class="fas fa-sign-in-alt me-1"></i>Přihlásit
+              </a>
+            </li>
+          {% endif %}
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container mt-4">
+    {% if messages %}
+      {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+          {{ message }}
+          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+      {% endfor %}
+    {% endif %}
+
     {% block content %}{% endblock %}
-  </main>
-  <footer>
-    <small>Jídelna projekt — interní nástroj</small>
+  </div>
+
+  <footer class="bg-light mt-5 py-4">
+    <div class="container">
+      <div class="row">
+        <div class="col-md-6">
+          <small class="text-muted">Jídelna projekt — interní nástroj</small>
+        </div>
+        <div class="col-md-6 text-md-end">
+          <small class="text-muted">© {% now "Y" %}</small>
+        </div>
+      </div>
+    </div>
   </footer>
 </body>
 </html>

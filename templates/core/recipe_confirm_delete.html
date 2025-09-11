@@ -1,7 +1,54 @@
 {% extends 'base.html' %}
+{% load bootstrap5 %}
+
+{% block title %}Smazat recept - {{ object.name }} - Jídelna{% endblock %}
+
 {% block content %}
-  <h1>Smazat recept</h1>
-  <p>Opravdu smazat {{ object.name }}?</p>
-  <form method="post">{% csrf_token %}<button type="submit">Smazat</button></form>
-  <p><a href="{% url 'core:recipe_list' %}">Zpět</a></p>
+<div class="row justify-content-center">
+  <div class="col-lg-6">
+    <div class="card shadow border-danger">
+      <div class="card-header bg-danger text-white">
+        <h4 class="mb-0">
+          <i class="fas fa-exclamation-triangle me-2"></i>Smazat recept
+        </h4>
+      </div>
+      <div class="card-body">
+        <div class="alert alert-danger" role="alert">
+          <i class="fas fa-warning me-2"></i>
+          <strong>Varování!</strong> Tato akce je nevratná.
+        </div>
+        
+        <p class="lead">
+          Opravdu chcete smazat recept <strong>"{{ object.name }}"</strong>?
+        </p>
+        
+        {% if object.description %}
+        <div class="border-left border-3 border-secondary ps-3 mb-3">
+          <small class="text-muted">{{ object.description|truncatewords:20 }}</small>
+        </div>
+        {% endif %}
+
+        <div class="bg-light p-3 rounded mb-3">
+          <h6><i class="fas fa-list me-1"></i>Informace o receptu:</h6>
+          <ul class="mb-0">
+            <li>Počet surovin: <strong>{{ object.ingredients.count }}</strong></li>
+            <li>Datum vytvoření: <strong>{{ object.pk }}</strong></li>
+          </ul>
+        </div>
+        
+        <form method="post">
+          {% csrf_token %}
+          <div class="d-flex justify-content-between">
+            <a href="{% url 'core:recipe_list' %}" class="btn btn-secondary">
+              <i class="fas fa-arrow-left me-2"></i>Zpět na seznam
+            </a>
+            <button type="submit" class="btn btn-danger btn-lg">
+              <i class="fas fa-trash me-2"></i>Ano, smazat recept
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}

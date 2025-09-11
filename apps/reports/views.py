@@ -9,6 +9,7 @@ from django import forms
 from django.http import HttpResponse
 from django.urls import reverse
 from django.utils import timezone
+from django.contrib.auth.decorators import login_required
 
 from apps.canteens.models import Canteen
 from apps.production.models import ProductionOrder
@@ -41,6 +42,7 @@ class ReportForm(forms.Form):
     date_to = forms.DateField(widget=forms.DateInput(attrs={'type': 'date'}))
 
 
+@login_required
 def order_report(request):
     if request.method == 'POST':
         form = ReportForm(request.POST)
@@ -95,6 +97,7 @@ def generate_order_report(canteen, date_from, date_to):
     }
 
 
+@login_required
 def order_report_download(request):
     """Endpoint, který stáhne report jako Excel nebo PDF podle query parametru `download`."""
     download = request.GET.get('download')

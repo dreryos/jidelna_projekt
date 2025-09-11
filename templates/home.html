@@ -1,21 +1,159 @@
 {% extends "base.html" %}
-{% block title %}Domovská stránka{% endblock %}
+{% load bootstrap5 %}
+
+{% block title %}Domovská stránka - Jídelna{% endblock %}
+
 {% block content %}
-  <h1>Vítejte v jídelní správě</h1>
-  <p>Aplikace pro správu skladů, receptů a objednávek.</p>
+<div class="row">
+  <div class="col-12">
+    <div class="jumbotron bg-primary text-white rounded p-5 mb-5">
+      <h1 class="display-4">
+        <i class="fas fa-utensils me-3"></i>Vítejte v systému správy jídelny
+      </h1>
+      <p class="lead">Komplexní řešení pro správu skladů, receptů, výroby a reportů</p>
+      {% if user.is_authenticated %}
+        <p class="mb-0">
+          <i class="fas fa-user me-2"></i>Přihlášen jako <strong>{{ user.username }}</strong>
+        </p>
+      {% endif %}
+    </div>
+  </div>
+</div>
 
-  {% if user.is_authenticated %}
-    <p>Přihlášen jako <strong>{{ user.username }}</strong></p>
-    <form method="post" action="{% url 'logout' %}">
-      {% csrf_token %}
-      <button type="submit">Odhlásit</button>
-    </form>
-    <ul>
-      <li><a href="/admin/">Administrace</a></li>
-      <li><a href="{% url 'reports:order_report' %}">Report objednávek</a></li>
-    </ul>
-  {% else %}
-    <p>Pro práci s aplikací se prosím <a href="{% url 'login' %}">přihlaste</a>.</p>
-  {% endif %}
+{% if user.is_authenticated %}
+<div class="row g-4">
+  <!-- Recepty a suroviny -->
+  <div class="col-lg-6">
+    <div class="card h-100 shadow-sm">
+      <div class="card-header bg-success text-white">
+        <h5 class="card-title mb-0">
+          <i class="fas fa-book-open me-2"></i>Recepty a suroviny
+        </h5>
+      </div>
+      <div class="card-body">
+        <p class="card-text">Správa receptů, surovin a jejich norem pro výpočet porcí.</p>
+        <div class="d-grid gap-2">
+          <a href="{% url 'core:recipe_list' %}" class="btn btn-success">
+            <i class="fas fa-list me-2"></i>Zobrazit recepty
+          </a>
+          <a href="{% url 'core:recipe_add' %}" class="btn btn-outline-success">
+            <i class="fas fa-plus me-2"></i>Přidat nový recept
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
 
+  <!-- Sklady a zásoby -->
+  <div class="col-lg-6">
+    <div class="card h-100 shadow-sm">
+      <div class="card-header bg-warning text-dark">
+        <h5 class="card-title mb-0">
+          <i class="fas fa-warehouse me-2"></i>Sklady a zásoby
+        </h5>
+      </div>
+      <div class="card-body">
+        <p class="card-text">Evidence zásob v jednotlivých skladech a jejich aktuální stavy.</p>
+        <div class="d-grid gap-2">
+          <a href="{% url 'inventory:stock_list' %}" class="btn btn-warning">
+            <i class="fas fa-boxes me-2"></i>Zobrazit zásoby
+          </a>
+          <a href="{% url 'inventory:stock_add' %}" class="btn btn-outline-warning">
+            <i class="fas fa-plus me-2"></i>Přidat zásobu
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Administrace -->
+  <div class="col-lg-6">
+    <div class="card h-100 shadow-sm">
+      <div class="card-header bg-primary text-white">
+        <h5 class="card-title mb-0">
+          <i class="fas fa-cogs me-2"></i>Administrace systému
+        </h5>
+      </div>
+      <div class="card-body">
+        <p class="card-text">Správa jídelen, skladů, uživatelů a výrobních příkazů.</p>
+        <div class="d-grid gap-2">
+          <a href="/admin/" class="btn btn-primary">
+            <i class="fas fa-tools me-2"></i>Django Admin
+          </a>
+          <small class="text-muted">
+            <i class="fas fa-info-circle me-1"></i>
+            Zde můžete spravovat jídelny, sklady, výrobní příkazy a výdejky.
+          </small>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Reporty -->
+  <div class="col-lg-6">
+    <div class="card h-100 shadow-sm">
+      <div class="card-header bg-info text-white">
+        <h5 class="card-title mb-0">
+          <i class="fas fa-chart-bar me-2"></i>Reporty a přehledy
+        </h5>
+      </div>
+      <div class="card-body">
+        <p class="card-text">Generování reportů objednávek a dalších přehledů.</p>
+        <div class="d-grid gap-2">
+          <a href="{% url 'reports:order_report' %}" class="btn btn-info">
+            <i class="fas fa-file-alt me-2"></i>Report objednávek
+          </a>
+          <a href="{% url 'reports:order_report_download' %}" class="btn btn-outline-info">
+            <i class="fas fa-download me-2"></i>Stáhnout report
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row mt-5">
+  <div class="col-12">
+    <div class="alert alert-light" role="alert">
+      <h6 class="alert-heading">
+        <i class="fas fa-lightbulb me-2"></i>Jak systém funguje:
+      </h6>
+      <div class="row">
+        <div class="col-md-3">
+          <strong>1. Recepty</strong><br>
+          <small>Definujte recepty a normy surovin pro jednotlivé porce</small>
+        </div>
+        <div class="col-md-3">
+          <strong>2. Sklady</strong><br>
+          <small>Evidujte zásoby surovin v jednotlivých skladech</small>
+        </div>
+        <div class="col-md-3">
+          <strong>3. Výroba</strong><br>
+          <small>Vytvářejte výrobní příkazy a výdejky z administrace</small>
+        </div>
+        <div class="col-md-3">
+          <strong>4. Reporty</strong><br>
+          <small>Generujte přehledy a reporty pro analýzu</small>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% else %}
+<div class="row justify-content-center">
+  <div class="col-md-6">
+    <div class="card shadow">
+      <div class="card-body text-center">
+        <i class="fas fa-lock fa-3x text-muted mb-3"></i>
+        <h4>Přístup pouze pro přihlášené</h4>
+        <p class="text-muted">Pro práci se systémem správy jídelny se prosím přihlaste.</p>
+        <a href="{% url 'login' %}" class="btn btn-primary btn-lg">
+          <i class="fas fa-sign-in-alt me-2"></i>Přihlásit se
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
 {% endblock %}

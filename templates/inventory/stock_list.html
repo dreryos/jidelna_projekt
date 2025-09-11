@@ -1,23 +1,135 @@
 {% extends 'base.html' %}
-{% block title %}Sklady{% endblock %}
+{% load bootstrap5 %}
+
+{% block title %}Sklady - Jídelna{% endblock %}
+
 {% block content %}
-  <h1>Skladové položky</h1>
-  <p><a href="{% url 'inventory:stock_add' %}">Přidat položku</a></p>
-  <table>
-    <tr><th>Surovina</th><th>Sklad</th><th>Množství</th><th>Cena</th><th></th></tr>
-    {% for it in object_list %}
-    <tr>
-      <td>{{ it.ingredient.name }}</td>
-      <td>{{ it.warehouse.name }}</td>
-      <td>{{ it.quantity }}</td>
-      <td>{{ it.price }}</td>
-      <td>
-        <a href="{% url 'inventory:stock_edit' it.pk %}">upravit</a> |
-        <a href="{% url 'inventory:stock_delete' it.pk %}">smazat</a>
-      </td>
-    </tr>
-    {% empty %}
-    <tr><td colspan="5">Žádné položky</td></tr>
-    {% endfor %}
-  </table>
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h1>
+    <i class="fas fa-warehouse me-2"></i>Skladové položky
+  </h1>
+  <a href="{% url 'inventory:stock_add' %}" class="btn btn-warning">
+    <i class="fas fa-plus me-2"></i>Přidat položku
+  </a>
+</div>
+
+{% if object_list %}
+  <div class="card shadow-sm">
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover mb-0">
+          <thead class="table-dark">
+            <tr>
+              <th><i class="fas fa-leaf me-1"></i>Surovina</th>
+              <th><i class="fas fa-building me-1"></i>Sklad</th>
+              <th><i class="fas fa-weight me-1"></i>Množství</th>
+              <th><i class="fas fa-coins me-1"></i>Cena za jednotku</th>
+              <th><i class="fas fa-calculator me-1"></i>Celková hodnota</th>
+              <th width="120"><i class="fas fa-cogs me-1"></i>Akce</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in object_list %}
+            <tr>
+              <td>
+                <strong>{{ item.ingredient.name }}</strong>
+                <small class="text-muted d-block">{{ item.ingredient.unit }}</small>
+              </td>
+              <td>
+                {{ item.warehouse.name }}
+                <small class="text-muted d-block">{{ item.warehouse.canteen.name }}</small>
+              </td>
+              <td>
+                <span class="badge {% if item.quantity <= 0 %}bg-danger{% elif item.quantity <= 10 %}bg-warning text-dark{% else %}bg-success{% endif %}">
+                  {{ item.quantity }} {{ item.ingredient.unit }}
+                </span>
+              </td>
+              <td>{{ item.price|floatformat:2 }} Kč</td>
+              <td>
+                {% widthratio item.quantity 1 item.price as total_value %}
+                <strong>{{ total_value|floatformat:2 }} Kč</strong>
+              </td>
+              <td>
+                <div class="btn-group btn-group-sm" role="group">
+                  <a href="{% url 'inventory:stock_edit' item.pk %}" class="btn btn-outline-primary" title="Upravit">
+                    <i class="fas fa-edit"></i>
+                  </a>
+                  <a href="{% url 'inventory:stock_delete' item.pk %}" class="btn btn-outline-danger" title="Smazat">
+                    <i class="fas fa-trash"></i>
+                  </a>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Statistiky -->
+  <div class="row mt-4">
+    <div class="col-md-4">
+      <div class="card bg-primary text-white">
+        <div class="card-body">
+          <div class="d-flex justify-content-between">
+            <div>
+              <h6 class="card-title">Celkem položek</h6>
+              <h3 class="mb-0">{{ object_list|length }}</h3>
+            </div>
+            <div class="align-self-center">
+              <i class="fas fa-boxes fa-2x"></i>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card bg-success text-white">
+        <div class="card-body">
+          <div class="d-flex justify-content-between">
+            <div>
+              <h6 class="card-title">Dostupné zásoby</h6>
+              <h3 class="mb-0">
+                {% regroup object_list by ingredient as grouped_items %}
+                {{ grouped_items|length }}
+              </h3>
+            </div>
+            <div class="align-self-center">
+              <i class="fas fa-check-circle fa-2x"></i>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card bg-warning text-dark">
+        <div class="card-body">
+          <div class="d-flex justify-content-between">
+            <div>
+              <h6 class="card-title">Nízké zásoby</h6>
+              <h3 class="mb-0">
+                {% for item in object_list %}
+                  {% if item.quantity <= 10 and item.quantity > 0 %}{{ forloop.counter0|add:1 }}{% endif %}
+                {% empty %}0{% endfor %}
+              </h3>
+            </div>
+            <div class="align-self-center">
+              <i class="fas fa-exclamation-triangle fa-2x"></i>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+{% else %}
+  <div class="text-center py-5">
+    <i class="fas fa-warehouse fa-3x text-muted mb-3"></i>
+    <h4 class="text-muted">Zatím nemáte žádné skladové položky</h4>
+    <p class="text-muted">Začněte přidáním vašej první skladové položky.</p>
+    <a href="{% url 'inventory:stock_add' %}" class="btn btn-warning">
+      <i class="fas fa-plus me-2"></i>Přidat první položku
+    </a>
+  </div>
+{% endif %}
 {% endblock %}

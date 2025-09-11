@@ -38,6 +38,9 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
 
+    # Third party apps
+    'bootstrap5',
+
     # Moje aplikace
     'apps.core',
     'apps.inventory',

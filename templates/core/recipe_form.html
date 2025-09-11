@@ -1,78 +1,155 @@
 {% extends 'base.html' %}
+{% load bootstrap5 %}
+
+{% block title %}{% if object %}Upravit{% else %}Přidat{% endif %} recept - Jídelna{% endblock %}
+
 {% block content %}
-  <h1>{% if object %}Upravit{% else %}Přidat{% endif %} recept</h1>
-  <form method="post">{% csrf_token %}
-    {{ form.as_p }}
+<div class="row justify-content-center">
+  <div class="col-lg-10">
+    <div class="card shadow">
+      <div class="card-header bg-success text-white">
+        <h4 class="mb-0">
+          <i class="fas fa-{% if object %}edit{% else %}plus{% endif %} me-2"></i>
+          {% if object %}Upravit recept{% else %}Přidat nový recept{% endif %}
+        </h4>
+      </div>
+      <div class="card-body">
+        <form method="post">
+          {% csrf_token %}
+          
+          <div class="row mb-4">
+            <div class="col-md-6">
+              <label for="{{ form.name.id_for_label }}" class="form-label">
+                <i class="fas fa-utensils me-1"></i>Název receptu:
+              </label>
+              {% bootstrap_field form.name show_label=False %}
+            </div>
+            <div class="col-md-6">
+              <label for="{{ form.description.id_for_label }}" class="form-label">
+                <i class="fas fa-file-text me-1"></i>Popis přípravy:
+              </label>
+              {% bootstrap_field form.description show_label=False %}
+            </div>
+          </div>
 
-    <h3>Suroviny</h3>
-    {{ ingredients.management_form }}
-    <table>
-      <tr><th>Surovina</th><th>Pro dospělého</th><th>Pro dítě</th><th>Odstranit</th></tr>
-      {% for f in ingredients.forms %}
-      <tr>
-        <td>{{ f.ingredient }}</td>
-        <td>{{ f.quantity_adult }}</td>
-        <td>{{ f.quantity_child }}</td>
-        <td>
-          <button type="button" class="remove-ingredient">Odstranit</button>
-          {{ f.DELETE }}
-        </td>
-      </tr>
-      {% endfor %}
-    </table>
+          <div class="card mb-4">
+            <div class="card-header bg-light">
+              <h5 class="mb-0">
+                <i class="fas fa-list me-2"></i>Suroviny a normy
+              </h5>
+            </div>
+            <div class="card-body">
+              {{ ingredients.management_form }}
+              
+              <div class="table-responsive">
+                <table class="table table-hover" id="ingredients-table">
+                  <thead class="table-dark">
+                    <tr>
+                      <th><i class="fas fa-leaf me-1"></i>Surovina</th>
+                      <th><i class="fas fa-user me-1"></i>Dospělá porce</th>
+                      <th><i class="fas fa-child me-1"></i>Dětská porce</th>
+                      <th width="100"><i class="fas fa-trash me-1"></i>Akce</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for f in ingredients.forms %}
+                    <tr class="ingredient-row">
+                      <td>{% bootstrap_field f.ingredient show_label=False %}</td>
+                      <td>{% bootstrap_field f.quantity_adult show_label=False %}</td>
+                      <td>{% bootstrap_field f.quantity_child show_label=False %}</td>
+                      <td>
+                        <button type="button" class="btn btn-sm btn-outline-danger remove-ingredient">
+                          <i class="fas fa-trash"></i>
+                        </button>
+                        {% bootstrap_field f.DELETE show_label=False form_group_class="d-none" %}
+                      </td>
+                    </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
 
-    <p><button type="button" id="add-ingredient">Přidat surovinu</button></p>
+              <div class="text-center">
+                <button type="button" class="btn btn-outline-success" id="add-ingredient">
+                  <i class="fas fa-plus me-2"></i>Přidat surovinu
+                </button>
+              </div>
+            </div>
+          </div>
 
-    <button type="submit">Uložit</button>
-  </form>
-
-  <!-- hidden empty form template -->
-  <div id="empty-form-template" style="display:none">
-    <table>
-      <tr>
-        <td>{{ ingredients.empty_form.ingredient }}</td>
-        <td>{{ ingredients.empty_form.quantity_adult }}</td>
-        <td>{{ ingredients.empty_form.quantity_child }}</td>
-        <td>
-          <button type="button" class="remove-ingredient">Odstranit</button>
-          {{ ingredients.empty_form.DELETE }}
-        </td>
-      </tr>
-    </table>
+          <div class="d-flex justify-content-between">
+            <a href="{% url 'core:recipe_list' %}" class="btn btn-secondary">
+              <i class="fas fa-arrow-left me-2"></i>Zpět na seznam
+            </a>
+            <button type="submit" class="btn btn-success btn-lg">
+              <i class="fas fa-save me-2"></i>Uložit recept
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
   </div>
+</div>
 
-  <script>
-    (function(){
-      const addBtn = document.getElementById('add-ingredient');
-      if(!addBtn) return;
-      const totalForms = document.querySelector('input[name="ingredients-TOTAL_FORMS"]');
-      const table = document.querySelector('form table');
-      const template = document.getElementById('empty-form-template').innerHTML;
+<!-- Hidden template for new ingredient rows -->
+<div id="empty-form-template" style="display:none">
+  <tr class="ingredient-row">
+    <td>{% bootstrap_field ingredients.empty_form.ingredient show_label=False %}</td>
+    <td>{% bootstrap_field ingredients.empty_form.quantity_adult show_label=False %}</td>
+    <td>{% bootstrap_field ingredients.empty_form.quantity_child show_label=False %}</td>
+    <td>
+      <button type="button" class="btn btn-sm btn-outline-danger remove-ingredient">
+        <i class="fas fa-trash"></i>
+      </button>
+      {% bootstrap_field ingredients.empty_form.DELETE show_label=False form_group_class="d-none" %}
+    </td>
+  </tr>
+</div>
 
-      function replaceIndex(html, index){
-        return html.replace(/__prefix__/g, index);
+<script>
+(function(){
+  const addBtn = document.getElementById('add-ingredient');
+  if(!addBtn) return;
+  
+  const totalForms = document.querySelector('input[name="ingredients-TOTAL_FORMS"]');
+  const tableBody = document.querySelector('#ingredients-table tbody');
+  const template = document.getElementById('empty-form-template').innerHTML;
+
+  function replaceIndex(html, index){
+    return html.replace(/__prefix__/g, index);
+  }
+
+  // Add new ingredient row
+  addBtn.addEventListener('click', function(){
+    const currentIndex = parseInt(totalForms.value, 10);
+    const rowHtml = replaceIndex(template, currentIndex);
+    
+    const tmp = document.createElement('div');
+    tmp.innerHTML = rowHtml;
+    const tr = tmp.querySelector('tr');
+    
+    tableBody.appendChild(tr);
+    totalForms.value = currentIndex + 1;
+  });
+
+  // Handle delete button clicks
+  document.addEventListener('click', function(e) {
+    if (e.target.closest('.remove-ingredient')) {
+      e.preventDefault();
+      const row = e.target.closest('tr');
+      const deleteField = row.querySelector('input[name$="-DELETE"]');
+      
+      if (deleteField) {
+        deleteField.checked = true;
+        row.style.display = 'none';
+      } else {
+        row.remove();
+        // Update form count
+        const currentCount = parseInt(totalForms.value, 10);
+        totalForms.value = currentCount - 1;
       }
-
-      addBtn.addEventListener('click', function(){
-        const currentIndex = parseInt(totalForms.value, 10);
-        const rowHtml = replaceIndex(template, currentIndex);
-        // append row to table body
-        const tmp = document.createElement('tbody');
-        tmp.innerHTML = rowHtml;
-        const tr = tmp.querySelector('tr');
-        table.appendChild(tr);
-        totalForms.value = currentIndex + 1;
-      });
-
-      // delegate delete clicks: when a DELETE checkbox exists, hide row when checked
-      table.addEventListener('change', function(e){
-        const el = e.target;
-        if(!el.name) return;
-        if(el.name.indexOf('DELETE') !== -1){
-          const row = el.closest('tr');
-          if(el.checked){ row.style.display = 'none'; } else { row.style.display = ''; }
-        }
-      });
-    })();
-  </script>
+    }
+  });
+})();
+</script>
 {% endblock %}

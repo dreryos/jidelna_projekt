@@ -1,26 +1,152 @@
-<h1>Report</h1>
-<p>Jídelna: {{ report.canteen }}</p>
-<p>Období: {{ report.date_from }} - {{ report.date_to }}</p>
-<p>Položky: {{ report.items|length }}</p>
+{% extends 'base.html' %}
+{% load bootstrap5 %}
 
-<p>
-	<a href="{{ report.excel_url }}">Stáhnout Excel</a> |
-	<a href="{{ report.pdf_url }}">Stáhnout PDF</a>
-</p>
+{% block title %}Report objednávek - {{ report.canteen.name }} - Jídelna{% endblock %}
 
-<table border="1" cellpadding="4" cellspacing="0">
-	<thead>
-		<tr><th>Surovina</th><th>Jednotka</th><th>Potřeba</th><th>Sklad</th><th>K objednání</th></tr>
-	</thead>
-	<tbody>
-		{% for it in report.items %}
-			<tr>
-				<td>{{ it.ingredient.name }}</td>
-				<td>{{ it.unit }}</td>
-				<td>{{ it.needed }}</td>
-				<td>{{ it.stock }}</td>
-				<td>{{ it.to_order }}</td>
-			</tr>
-		{% endfor %}
-	</tbody>
-</table>
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h1>
+      <i class="fas fa-chart-bar me-2"></i>Report objednávek
+    </h1>
+    <p class="text-muted mb-0">
+      <i class="fas fa-building me-1"></i>{{ report.canteen.name }} | 
+      <i class="fas fa-calendar me-1"></i>{{ report.date_from }} - {{ report.date_to }}
+    </p>
+  </div>
+  <div>
+    <a href="{% url 'reports:order_report' %}" class="btn btn-secondary">
+      <i class="fas fa-arrow-left me-2"></i>Zpět
+    </a>
+  </div>
+</div>
+
+<!-- Export možnosti -->
+<div class="row mb-4">
+  <div class="col-12">
+    <div class="card bg-light">
+      <div class="card-body">
+        <h6 class="card-title">
+          <i class="fas fa-download me-2"></i>Export reportu
+        </h6>
+        <div class="btn-group" role="group">
+          <a href="{{ report.excel_url }}" class="btn btn-success">
+            <i class="fas fa-file-excel me-2"></i>Stáhnout Excel
+          </a>
+          <a href="{{ report.pdf_url }}" class="btn btn-danger">
+            <i class="fas fa-file-pdf me-2"></i>Stáhnout PDF
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Statistiky -->
+<div class="row mb-4">
+  <div class="col-md-4">
+    <div class="card bg-primary text-white">
+      <div class="card-body text-center">
+        <i class="fas fa-list-ul fa-2x mb-2"></i>
+        <h4>{{ report.items|length }}</h4>
+        <small>Celkem surovin</small>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card bg-success text-white">
+      <div class="card-body text-center">
+        <i class="fas fa-check-circle fa-2x mb-2"></i>
+        <h4>
+          {% for item in report.items %}{% if item.stock >= item.needed %}{{ forloop.counter0|add:1 }}{% endif %}{% empty %}0{% endfor %}
+        </h4>
+        <small>Dostačující zásoby</small>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card bg-warning text-dark">
+      <div class="card-body text-center">
+        <i class="fas fa-shopping-cart fa-2x mb-2"></i>
+        <h4>
+          {% for item in report.items %}{% if item.to_order > 0 %}{{ forloop.counter0|add:1 }}{% endif %}{% empty %}0{% endfor %}
+        </h4>
+        <small>K objednání</small>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Tabulka s daty -->
+{% if report.items %}
+<div class="card shadow-sm">
+  <div class="card-header bg-dark text-white">
+    <h5 class="mb-0">
+      <i class="fas fa-table me-2"></i>Detail surovin
+    </h5>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead class="table-light">
+          <tr>
+            <th><i class="fas fa-leaf me-1"></i>Surovina</th>
+            <th><i class="fas fa-balance-scale me-1"></i>Jednotka</th>
+            <th><i class="fas fa-calculator me-1"></i>Potřeba</th>
+            <th><i class="fas fa-warehouse me-1"></i>Na skladě</th>
+            <th><i class="fas fa-shopping-cart me-1"></i>K objednání</th>
+            <th><i class="fas fa-chart-pie me-1"></i>Stav</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in report.items %}
+          <tr>
+            <td>
+              <strong>{{ item.ingredient.name }}</strong>
+            </td>
+            <td>{{ item.unit }}</td>
+            <td>
+              <span class="badge bg-info">{{ item.needed|floatformat:2 }}</span>
+            </td>
+            <td>
+              <span class="badge {% if item.stock <= 0 %}bg-danger{% elif item.stock < item.needed %}bg-warning text-dark{% else %}bg-success{% endif %}">
+                {{ item.stock|floatformat:2 }}
+              </span>
+            </td>
+            <td>
+              {% if item.to_order > 0 %}
+                <span class="badge bg-warning text-dark">{{ item.to_order|floatformat:2 }}</span>
+              {% else %}
+                <span class="badge bg-success">0</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if item.stock >= item.needed %}
+                <span class="badge bg-success">
+                  <i class="fas fa-check me-1"></i>OK
+                </span>
+              {% elif item.stock > 0 %}
+                <span class="badge bg-warning text-dark">
+                  <i class="fas fa-exclamation-triangle me-1"></i>Nedostatek
+                </span>
+              {% else %}
+                <span class="badge bg-danger">
+                  <i class="fas fa-times me-1"></i>Nedostupné
+                </span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% else %}
+<div class="text-center py-5">
+  <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+  <h4 class="text-muted">Žádné data pro vybrané období</h4>
+  <p class="text-muted">V tomto období nebyly plánovány žádné výrobní příkazy.</p>
+</div>
+{% endif %}
+{% endblock %}

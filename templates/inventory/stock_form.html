@@ -1,10 +1,78 @@
 {% extends 'base.html' %}
-{% block title %}Upravit položku skladu{% endblock %}
+{% load bootstrap5 %}
+
+{% block title %}{% if object %}Upravit{% else %}Přidat{% endif %} skladovou položku - Jídelna{% endblock %}
+
 {% block content %}
-  <h1>{% if object %}Upravit{% else %}Přidat{% endif %} položku skladu</h1>
-  <form method="post">
-    {% csrf_token %}
-    {{ form.as_p }}
-    <button type="submit">Uložit</button>
-  </form>
+<div class="row justify-content-center">
+  <div class="col-lg-8">
+    <div class="card shadow">
+      <div class="card-header bg-warning text-dark">
+        <h4 class="mb-0">
+          <i class="fas fa-{% if object %}edit{% else %}plus{% endif %} me-2"></i>
+          {% if object %}Upravit skladovou položku{% else %}Přidat novou skladovou položku{% endif %}
+        </h4>
+      </div>
+      <div class="card-body">
+        <form method="post">
+          {% csrf_token %}
+          
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <label for="{{ form.ingredient.id_for_label }}" class="form-label">
+                <i class="fas fa-leaf me-1"></i>Surovina:
+              </label>
+              {% bootstrap_field form.ingredient show_label=False %}
+            </div>
+            <div class="col-md-6 mb-3">
+              <label for="{{ form.warehouse.id_for_label }}" class="form-label">
+                <i class="fas fa-warehouse me-1"></i>Sklad:
+              </label>
+              {% bootstrap_field form.warehouse show_label=False %}
+            </div>
+          </div>
+          
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <label for="{{ form.quantity.id_for_label }}" class="form-label">
+                <i class="fas fa-weight me-1"></i>Množství na skladě:
+              </label>
+              {% bootstrap_field form.quantity show_label=False %}
+            </div>
+            <div class="col-md-6 mb-3">
+              <label for="{{ form.price.id_for_label }}" class="form-label">
+                <i class="fas fa-coins me-1"></i>Nákupní cena za jednotku (Kč):
+              </label>
+              {% bootstrap_field form.price show_label=False %}
+            </div>
+          </div>
+
+          {% if object %}
+          <div class="alert alert-info">
+            <i class="fas fa-info-circle me-2"></i>
+            <strong>Celková hodnota:</strong>
+            {% widthratio object.quantity 1 object.price as total_value %}
+            {{ total_value|floatformat:2 }} Kč
+          </div>
+          {% endif %}
+
+          <div class="d-flex justify-content-between">
+            <a href="{% url 'inventory:stock_list' %}" class="btn btn-secondary">
+              <i class="fas fa-arrow-left me-2"></i>Zpět na seznam
+            </a>
+            <button type="submit" class="btn btn-warning btn-lg">
+              <i class="fas fa-save me-2"></i>Uložit položku
+            </button>
+          </div>
+        </form>
+      </div>
+      <div class="card-footer bg-light">
+        <small class="text-muted">
+          <i class="fas fa-lightbulb me-1"></i>
+          Tip: Ujistěte se, že sklad patří ke správné jídelně pro danou surovinu.
+        </small>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
