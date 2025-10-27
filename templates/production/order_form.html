@@ -1,0 +1,172 @@
+{% extends 'base.html' %}
+{% load bootstrap5 %}
+
+{% block title %}{% if object %}Upravit{% else %}Nový{% endif %} výrobní příkaz - Jídelna{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-8">
+    <div class="card shadow">
+      <div class="card-header bg-success text-white">
+        <h4 class="mb-0">
+          <i class="fas fa-{% if object %}edit{% else %}plus{% endif %} me-2"></i>
+          {% if object %}Upravit výrobní příkaz{% else %}Nový výrobní příkaz{% endif %}
+        </h4>
+      </div>
+      <div class="card-body">
+        <form method="post">
+          {% csrf_token %}
+          
+          <div class="row mb-4">
+            <div class="col-md-6">
+              <label for="{{ form.recipe.id_for_label }}" class="form-label">
+                <i class="fas fa-utensils me-1"></i>Recept: <span class="text-danger">*</span>
+              </label>
+              {% bootstrap_field form.recipe show_label=False %}
+              <div class="form-text">Vyberte recept, který se bude vařit</div>
+            </div>
+            <div class="col-md-6">
+              <label for="{{ form.canteen.id_for_label }}" class="form-label">
+                <i class="fas fa-building me-1"></i>Jídelna: <span class="text-danger">*</span>
+              </label>
+              {% bootstrap_field form.canteen show_label=False %}
+              <div class="form-text">Jídelna, kde se bude vařit</div>
+            </div>
+          </div>
+
+          <div class="row mb-4">
+            <div class="col-md-4">
+              <label for="{{ form.date.id_for_label }}" class="form-label">
+                <i class="fas fa-calendar me-1"></i>Datum vaření: <span class="text-danger">*</span>
+              </label>
+              {% bootstrap_field form.date show_label=False %}
+              <div class="form-text">Kdy se bude vařit</div>
+            </div>
+            <div class="col-md-4">
+              <label for="{{ form.portions_adult.id_for_label }}" class="form-label">
+                <i class="fas fa-user me-1"></i>Dospělé porce: <span class="text-danger">*</span>
+              </label>
+              {% bootstrap_field form.portions_adult show_label=False %}
+              <div class="form-text">Počet porcí pro dospělé</div>
+            </div>
+            <div class="col-md-4">
+              <label for="{{ form.portions_child.id_for_label }}" class="form-label">
+                <i class="fas fa-child me-1"></i>Dětské porce: <span class="text-danger">*</span>
+              </label>
+              {% bootstrap_field form.portions_child show_label=False %}
+              <div class="form-text">Počet porcí pro děti</div>
+            </div>
+          </div>
+
+          <!-- Náhled informací o receptu -->
+          <div class="card bg-light mb-4" id="recipe-preview" style="display: none;">
+            <div class="card-header">
+              <h6 class="mb-0">
+                <i class="fas fa-info-circle me-2"></i>Náhled receptu
+              </h6>
+            </div>
+            <div class="card-body">
+              <div id="recipe-details">
+                <!-- Zde se načtou detaily receptu přes JavaScript -->
+              </div>
+            </div>
+          </div>
+
+          <!-- Kalkulačka porcí -->
+          <div class="card bg-info bg-opacity-10 border-info mb-4">
+            <div class="card-header bg-info bg-opacity-25">
+              <h6 class="mb-0">
+                <i class="fas fa-calculator me-2"></i>Kalkulačka porcí
+              </h6>
+            </div>
+            <div class="card-body">
+              <div class="row text-center">
+                <div class="col-md-4">
+                  <div class="border rounded p-3 bg-white">
+                    <i class="fas fa-user fa-2x text-primary mb-2"></i>
+                    <div class="fw-bold fs-4" id="adult-count">0</div>
+                    <small class="text-muted">Dospělé porce</small>
+                  </div>
+                </div>
+                <div class="col-md-4">
+                  <div class="border rounded p-3 bg-white">
+                    <i class="fas fa-child fa-2x text-warning mb-2"></i>
+                    <div class="fw-bold fs-4" id="child-count">0</div>
+                    <small class="text-muted">Dětské porce</small>
+                  </div>
+                </div>
+                <div class="col-md-4">
+                  <div class="border rounded p-3 bg-success bg-opacity-25">
+                    <i class="fas fa-utensils fa-2x text-success mb-2"></i>
+                    <div class="fw-bold fs-4" id="total-count">0</div>
+                    <small class="text-muted">Celkem porcí</small>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="d-flex justify-content-between">
+            <a href="{% url 'production:order_list' %}" class="btn btn-secondary">
+              <i class="fas fa-arrow-left me-2"></i>Zpět na seznam
+            </a>
+            <button type="submit" class="btn btn-success btn-lg">
+              <i class="fas fa-save me-2"></i>
+              {% if object %}Uložit změny{% else %}Vytvořit příkaz{% endif %}
+            </button>
+          </div>
+        </form>
+      </div>
+      <div class="card-footer bg-light">
+        <small class="text-muted">
+          <i class="fas fa-info-circle me-1"></i>
+          Po uložení výrobního příkazu se automaticky vytvoří výdejka se seznamem potřebných surovin.
+        </small>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const adultInput = document.getElementById('{{ form.portions_adult.id_for_label }}');
+    const childInput = document.getElementById('{{ form.portions_child.id_for_label }}');
+    const adultCount = document.getElementById('adult-count');
+    const childCount = document.getElementById('child-count');
+    const totalCount = document.getElementById('total-count');
+
+    function updateCounts() {
+        const adultVal = parseInt(adultInput.value) || 0;
+        const childVal = parseInt(childInput.value) || 0;
+        const total = adultVal + childVal;
+
+        adultCount.textContent = adultVal;
+        childCount.textContent = childVal;
+        totalCount.textContent = total;
+
+        // Změna barvy podle počtu
+        if (total === 0) {
+            totalCount.parentElement.className = 'border rounded p-3 bg-light';
+        } else if (total < 20) {
+            totalCount.parentElement.className = 'border rounded p-3 bg-warning bg-opacity-25';
+        } else {
+            totalCount.parentElement.className = 'border rounded p-3 bg-success bg-opacity-25';
+        }
+    }
+
+    // Event listenery
+    if (adultInput) adultInput.addEventListener('input', updateCounts);
+    if (childInput) childInput.addEventListener('input', updateCounts);
+
+    // Inicializace
+    updateCounts();
+
+    // Nastavení minimálního data na dnes
+    const dateInput = document.getElementById('{{ form.date.id_for_label }}');
+    if (dateInput) {
+        const today = new Date().toISOString().split('T')[0];
+        dateInput.min = today;
+    }
+});
+</script>
+{% endblock %}

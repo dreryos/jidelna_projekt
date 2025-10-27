@@ -1,0 +1,195 @@
+{% extends 'base.html' %}
+{% load bootstrap5 %}
+
+{% block title %}Jídelníčky{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1>
+                    <i class="fas fa-calendar-alt text-primary me-2"></i>
+                    Jídelníčky
+                </h1>
+                <a href="{% url 'production:menu_create' %}" class="btn btn-primary">
+                    <i class="fas fa-plus me-1"></i> Nový jídelníček
+                </a>
+            </div>
+
+            <!-- Rychlé stažení výdejky na dnešní/konkrétní den -->
+            <div class="card mb-4 border-success">
+                <div class="card-header bg-success text-white">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-download me-2"></i>Stáhnout výdejku na konkrétní den
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="get" action="{% url 'production:daily_picking_list' %}" class="row g-3">
+                        <div class="col-md-3">
+                            <label for="picking_date" class="form-label">Datum:</label>
+                            <input type="date" name="date" id="picking_date" class="form-control" value="{{ today|date:'Y-m-d' }}" required>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="picking_canteen" class="form-label">Jídelna:</label>
+                            <select name="canteen" id="picking_canteen" class="form-select">
+                                <option value="">Všechny jídelny</option>
+                                {% for canteen in canteens %}
+                                    <option value="{{ canteen.id }}">{{ canteen.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-3 d-flex align-items-end">
+                            <button type="submit" name="format" value="html" class="btn btn-success me-2">
+                                <i class="fas fa-eye me-1"></i> Zobrazit
+                            </button>
+                            <button type="submit" name="format" value="pdf" class="btn btn-outline-success">
+                                <i class="fas fa-file-pdf me-1"></i> PDF
+                            </button>
+                        </div>
+                        <div class="col-md-3 d-flex align-items-end">
+                            <button type="button" class="btn btn-info btn-sm" onclick="setToday()">
+                                <i class="fas fa-calendar-day me-1"></i> Dnes
+                            </button>
+                        </div>
+                    </form>
+                    <small class="text-muted mt-2 d-block">
+                        <i class="fas fa-info-circle me-1"></i>
+                        Vygeneruje seznam všech surovin potřebných pro výrobu jídel na vybraný den.
+                    </small>
+                </div>
+            </div>
+
+            <!-- Filtrování jídelníčků -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-filter me-2"></i>Filtry jídelníčků
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="get" class="row g-3">
+                        <div class="col-md-4">
+                            <label for="canteen" class="form-label">Jídelna:</label>
+                            <select name="canteen" id="canteen" class="form-select">
+                                <option value="">Všechny jídelny</option>
+                                {% for canteen in canteens %}
+                                    <option value="{{ canteen.id }}" {% if canteen.id|stringformat:'s' == selected_canteen %}selected{% endif %}>
+                                        {{ canteen.name }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4 d-flex align-items-end">
+                            <button type="submit" class="btn btn-outline-primary me-2">
+                                <i class="fas fa-search me-1"></i> Filtrovat
+                            </button>
+                            <a href="{% url 'production:menu_list' %}" class="btn btn-outline-secondary">
+                                <i class="fas fa-times me-1"></i> Vymazat
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Seznam jídelníčků -->
+            {% if menu_plans %}
+                <div class="row">
+                    {% for menu in menu_plans %}
+                        <div class="col-lg-6 col-xl-4 mb-4">
+                            <div class="card h-100 shadow-sm">
+                                <div class="card-header bg-light">
+                                    <h5 class="card-title mb-0">
+                                        <i class="fas fa-utensils text-primary me-2"></i>
+                                        {{ menu.name }}
+                                    </h5>
+                                </div>
+                                <div class="card-body">
+                                    <p class="card-text">
+                                        <strong>Jídelna:</strong> {{ menu.canteen.name }}<br>
+                                        <strong>Období:</strong> {{ menu.date_from|date:"d.m.Y" }} - {{ menu.date_to|date:"d.m.Y" }}<br>
+                                        <strong>Výchozí porce:</strong> {{ menu.default_portions_adult }} dospělých / {{ menu.default_portions_child }} dětských
+                                    </p>
+                                    
+                                    {% if menu.production_orders.count > 0 %}
+                                        <div class="mb-3">
+                                            <small class="text-muted">
+                                                <i class="fas fa-list me-1"></i>
+                                                {{ menu.production_orders.count }} jídel
+                                            </small>
+                                        </div>
+                                    {% endif %}
+                                    
+                                    <div class="d-flex justify-content-between">
+                                        <a href="{% url 'production:menu_detail' menu.pk %}" class="btn btn-primary btn-sm">
+                                            <i class="fas fa-eye me-1"></i> Upravit
+                                        </a>
+                                        <div class="btn-group" role="group">
+                                            <a href="{% url 'production:menu_delete' menu.pk %}" class="btn btn-outline-danger btn-sm">
+                                                <i class="fas fa-trash me-1"></i> Smazat
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="card-footer text-muted small">
+                                    <i class="fas fa-clock me-1"></i>
+                                    Vytvořeno: {{ menu.created_at|date:"d.m.Y H:i" }}
+                                </div>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+
+                <!-- Paginace -->
+                {% if is_paginated %}
+                    <nav aria-label="Navigace stránek">
+                        <ul class="pagination justify-content-center">
+                            {% if page_obj.has_previous %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?page=1{% if selected_canteen %}&canteen={{ selected_canteen }}{% endif %}">&laquo; První</a>
+                                </li>
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if selected_canteen %}&canteen={{ selected_canteen }}{% endif %}">Předchozí</a>
+                                </li>
+                            {% endif %}
+
+                            <li class="page-item active">
+                                <span class="page-link">
+                                    Stránka {{ page_obj.number }} z {{ page_obj.paginator.num_pages }}
+                                </span>
+                            </li>
+
+                            {% if page_obj.has_next %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if selected_canteen %}&canteen={{ selected_canteen }}{% endif %}">Následující</a>
+                                </li>
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% if selected_canteen %}&canteen={{ selected_canteen }}{% endif %}">Poslední &raquo;</a>
+                                </li>
+                            {% endif %}
+                        </ul>
+                    </nav>
+                {% endif %}
+            {% else %}
+                <div class="alert alert-info text-center">
+                    <i class="fas fa-info-circle me-2"></i>
+                    Žádné jídelníčky nenalezeny.
+                    <div class="mt-2">
+                        <a href="{% url 'production:menu_create' %}" class="btn btn-primary">
+                            <i class="fas fa-plus me-1"></i> Vytvořit první jídelníček
+                        </a>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+function setToday() {
+    const today = new Date();
+    const dateStr = today.toISOString().split('T')[0];
+    document.getElementById('picking_date').value = dateStr;
+}
+</script>
+{% endblock %}

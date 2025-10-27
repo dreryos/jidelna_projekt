@@ -25,6 +25,7 @@ urlpatterns = [
     path('accounts/login/', auth_views.LoginView.as_view(template_name='registration/login.html'), name='login'),
     path('accounts/logout/', core_views.logout_view, name='logout'),
     path('inventory/', include('apps.inventory.urls', namespace='inventory')),
+    path('production/', include('apps.production.urls', namespace='production')),
     path('', include('apps.core.urls', namespace='core')),
 
     # Reporty (reporty objednávek) – rozhraní pro generování přehledů

@@ -8,9 +8,14 @@
   <h1>
     <i class="fas fa-book-open me-2"></i>Recepty
   </h1>
-  <a href="{% url 'core:recipe_add' %}" class="btn btn-success">
-    <i class="fas fa-plus me-2"></i>Přidat recept
-  </a>
+  <div>
+    <a href="{% url 'core:ingredient_list' %}" class="btn btn-outline-primary me-2">
+      <i class="fas fa-seedling me-2"></i>Správa surovin
+    </a>
+    <a href="{% url 'core:recipe_add' %}" class="btn btn-success">
+      <i class="fas fa-plus me-2"></i>Přidat recept
+    </a>
+  </div>
 </div>
 
 {% if object_list %}

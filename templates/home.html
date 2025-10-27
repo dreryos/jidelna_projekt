@@ -36,6 +36,9 @@
           <a href="{% url 'core:recipe_list' %}" class="btn btn-success">
             <i class="fas fa-list me-2"></i>Zobrazit recepty
           </a>
+          <a href="{% url 'core:ingredient_list' %}" class="btn btn-success">
+            <i class="fas fa-seedling me-2"></i>Správa surovin
+          </a>
           <a href="{% url 'core:recipe_add' %}" class="btn btn-outline-success">
             <i class="fas fa-plus me-2"></i>Přidat nový recept
           </a>
@@ -58,8 +61,36 @@
           <a href="{% url 'inventory:stock_list' %}" class="btn btn-warning">
             <i class="fas fa-boxes me-2"></i>Zobrazit zásoby
           </a>
+          <a href="{% url 'inventory:canteen_list' %}" class="btn btn-outline-warning">
+            <i class="fas fa-utensils me-2"></i>Spravovat jídelny
+          </a>
+          <a href="{% url 'inventory:warehouse_list' %}" class="btn btn-outline-warning">
+            <i class="fas fa-building me-2"></i>Spravovat sklady
+          </a>
           <a href="{% url 'inventory:stock_add' %}" class="btn btn-outline-warning">
             <i class="fas fa-plus me-2"></i>Přidat zásobu
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Jídelníčky a výroba -->
+  <div class="col-lg-6">
+    <div class="card h-100 shadow-sm">
+      <div class="card-header bg-danger text-white">
+        <h5 class="card-title mb-0">
+          <i class="fas fa-calendar-alt me-2"></i>Jídelníčky a výroba
+        </h5>
+      </div>
+      <div class="card-body">
+        <p class="card-text">Plánování jídelníčků na více dní, správa jídel a počtu porcí pro jednotlivé dny.</p>
+        <div class="d-grid gap-2">
+          <a href="{% url 'production:menu_list' %}" class="btn btn-danger">
+            <i class="fas fa-calendar-alt me-2"></i>Jídelníčky
+          </a>
+          <a href="{% url 'production:menu_create' %}" class="btn btn-outline-danger">
+            <i class="fas fa-plus me-2"></i>Nový jídelníček
           </a>
         </div>
       </div>
@@ -128,8 +159,8 @@
           <small>Evidujte zásoby surovin v jednotlivých skladech</small>
         </div>
         <div class="col-md-3">
-          <strong>3. Výroba</strong><br>
-          <small>Vytvářejte výrobní příkazy a výdejky z administrace</small>
+          <strong>3. Jídelníčky</strong><br>
+          <small>Naplánujte jídelníčky pro více dní s kontrolou porcí</small>
         </div>
         <div class="col-md-3">
           <strong>4. Reporty</strong><br>

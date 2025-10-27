@@ -55,13 +55,19 @@
                       <label class="form-label">
                         <i class="fas fa-user me-1"></i>Dospělá porce
                       </label>
-                      {% bootstrap_field form.quantity_adult show_label=False %}
+                      <div class="input-group">
+                        {% bootstrap_field form.quantity_adult show_label=False %}
+                        <span class="input-group-text">kg/l/ks</span>
+                      </div>
                     </div>
                     <div class="col-md-3">
                       <label class="form-label">
                         <i class="fas fa-child me-1"></i>Dětská porce
                       </label>
-                      {% bootstrap_field form.quantity_child show_label=False %}
+                      <div class="input-group">
+                        {% bootstrap_field form.quantity_child show_label=False %}
+                        <span class="input-group-text">kg/l/ks</span>
+                      </div>
                     </div>
                     <div class="col-md-2">
                       <button type="button" class="btn btn-outline-danger w-100 remove-ingredient" data-form-index="{{ forloop.counter0 }}">
@@ -97,19 +103,25 @@
                       <label class="form-label">
                         <i class="fas fa-leaf me-1"></i>Surovina
                       </label>
-                      {% bootstrap_field ingredients.empty_form.ingredient show_label=False %}
+                      {{ ingredients.empty_form.ingredient|add_class:"form-control" }}
                     </div>
                     <div class="col-md-3">
                       <label class="form-label">
                         <i class="fas fa-user me-1"></i>Dospělá porce
                       </label>
-                      {% bootstrap_field ingredients.empty_form.quantity_adult show_label=False %}
+                      <div class="input-group">
+                        {{ ingredients.empty_form.quantity_adult|add_class:"form-control" }}
+                        <span class="input-group-text">kg/l/ks</span>
+                      </div>
                     </div>
                     <div class="col-md-3">
                       <label class="form-label">
                         <i class="fas fa-child me-1"></i>Dětská porce
                       </label>
-                      {% bootstrap_field ingredients.empty_form.quantity_child show_label=False %}
+                      <div class="input-group">
+                        {{ ingredients.empty_form.quantity_child|add_class:"form-control" }}
+                        <span class="input-group-text">kg/l/ks</span>
+                      </div>
                     </div>
                     <div class="col-md-2">
                       <button type="button" class="btn btn-outline-danger w-100 remove-ingredient" data-form-index="__prefix__">

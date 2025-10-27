@@ -1,0 +1,40 @@
+{% extends 'base.html' %}
+{% load bootstrap5 %}
+
+{% block title %}
+  {% if form.instance.pk %}Upravit sklad{% else %}Nový sklad{% endif %} - Jídelna
+{% endblock %}
+
+{% block content %}
+<div class="row">
+  <div class="col-md-8 offset-md-2">
+    <div class="card shadow-sm">
+      <div class="card-header bg-warning">
+        <h3 class="mb-0">
+          <i class="fas fa-building me-2"></i>
+          {% if form.instance.pk %}
+            Upravit sklad
+          {% else %}
+            Nový sklad
+          {% endif %}
+        </h3>
+      </div>
+      <div class="card-body">
+        <form method="post">
+          {% csrf_token %}
+          {% bootstrap_form form %}
+          
+          <div class="d-flex justify-content-between mt-4">
+            <a href="{% url 'inventory:warehouse_list' %}" class="btn btn-secondary">
+              <i class="fas fa-times me-2"></i>Zrušit
+            </a>
+            <button type="submit" class="btn btn-warning">
+              <i class="fas fa-save me-2"></i>Uložit
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,184 @@
+{% extends 'base.html' %}
+{% load bootstrap5 %}
+
+{% block title %}Import CSV - Krok 2 (Náhled a mapování){% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+  <div class="card shadow-sm">
+    <div class="card-header bg-info text-white">
+      <h3 class="mb-0">
+        <i class="fas fa-eye me-2"></i>Náhled importu a mapování surovin
+      </h3>
+    </div>
+    <div class="card-body">
+      <div class="alert alert-success">
+        <div class="row">
+          <div class="col-md-4">
+            <strong><i class="fas fa-warehouse me-1"></i>Cílový sklad:</strong><br>
+            {{ warehouse.name }} ({{ warehouse.canteen.name }})
+          </div>
+          <div class="col-md-2">
+            <strong><i class="fas fa-list me-1"></i>Celkem řádků:</strong><br>
+            {{ total_rows }}
+          </div>
+          <div class="col-md-3">
+            <strong><i class="fas fa-check me-1"></i>Existující suroviny:</strong><br>
+            <span class="badge bg-success">{{ existing_count }}</span>
+          </div>
+          <div class="col-md-3">
+            <strong><i class="fas fa-plus me-1"></i>Nové suroviny:</strong><br>
+            <span class="badge bg-warning text-dark">{{ new_count }}</span>
+          </div>
+        </div>
+      </div>
+
+      {% if new_count > 0 %}
+      <div class="alert alert-warning">
+        <i class="fas fa-exclamation-triangle me-2"></i>
+        <strong>Pozor!</strong> Některé suroviny z CSV souboru neexistují v databázi. 
+        Níže můžete pro každou položku vybrat akci:
+        <ul class="mb-0 mt-2">
+          <li><strong>Vytvořit novou:</strong> Vytvoří novou surovinu s názvem z CSV</li>
+          <li><strong>Namapovat:</strong> Přiřadí k existující surovině</li>
+          <li><strong>Přeskočit:</strong> Tuto položku neimportuje</li>
+        </ul>
+      </div>
+      {% endif %}
+
+      <form method="post" action="{% url 'inventory:import_csv_step2_confirm' %}">
+        {% csrf_token %}
+        
+        <div class="table-responsive">
+          <table class="table table-hover table-bordered">
+            <thead class="table-dark">
+              <tr>
+                <th width="5%">#</th>
+                <th width="15%">Název z CSV</th>
+                <th width="8%">Množství</th>
+                <th width="8%">Jednotka</th>
+                <th width="8%">Cena</th>
+                <th width="15%">Status</th>
+                <th width="41%">Akce</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for data in import_data %}
+              <tr class="{% if not data.ingredient_exists %}table-warning{% endif %}">
+                <td class="text-center">{{ forloop.counter }}</td>
+                <td>
+                  <strong>{{ data.csv_data.name }}</strong>
+                  {% if data.csv_data.code %}
+                    <br><small class="text-muted">Kód: {{ data.csv_data.code }}</small>
+                  {% endif %}
+                </td>
+                <td class="text-end">{{ data.csv_data.quantity }}</td>
+                <td>{{ data.csv_data.unit }}</td>
+                <td class="text-end">{{ data.csv_data.price }} Kč</td>
+                <td>
+                  {% if data.ingredient_exists %}
+                    <span class="badge bg-success">
+                      <i class="fas fa-check me-1"></i>Existuje
+                    </span>
+                    <br>
+                    <small class="text-muted">{{ data.matching_ingredient.name }} ({{ data.matching_ingredient.unit }})</small>
+                  {% else %}
+                    <span class="badge bg-warning text-dark">
+                      <i class="fas fa-exclamation me-1"></i>Nová surovina
+                    </span>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if data.ingredient_exists %}
+                    <!-- Existující surovina - použijeme ji -->
+                    <input type="hidden" name="action_{{ forloop.counter0 }}" value="use_existing">
+                    <div class="alert alert-success mb-0 py-2">
+                      <i class="fas fa-arrow-right me-1"></i>
+                      Bude použita existující surovina
+                    </div>
+                  {% else %}
+                    <!-- Nová surovina - nabídneme možnosti -->
+                    <div class="btn-group btn-group-sm mb-2" role="group">
+                      <input type="radio" class="btn-check" name="action_{{ forloop.counter0 }}" 
+                             id="create_{{ forloop.counter0 }}" value="create" checked>
+                      <label class="btn btn-outline-success" for="create_{{ forloop.counter0 }}">
+                        <i class="fas fa-plus me-1"></i>Vytvořit novou
+                      </label>
+                      
+                      <input type="radio" class="btn-check" name="action_{{ forloop.counter0 }}" 
+                             id="map_{{ forloop.counter0 }}" value="map">
+                      <label class="btn btn-outline-primary" for="map_{{ forloop.counter0 }}">
+                        <i class="fas fa-link me-1"></i>Namapovat
+                      </label>
+                      
+                      <input type="radio" class="btn-check" name="action_{{ forloop.counter0 }}" 
+                             id="skip_{{ forloop.counter0 }}" value="skip">
+                      <label class="btn btn-outline-secondary" for="skip_{{ forloop.counter0 }}">
+                        <i class="fas fa-times me-1"></i>Přeskočit
+                      </label>
+                    </div>
+                    
+                    <!-- Select pro mapování -->
+                    <div id="map_select_{{ forloop.counter0 }}" class="mt-2" style="display:none;">
+                      <select name="ingredient_{{ forloop.counter0 }}" class="form-select form-select-sm">
+                        <option value="">-- Vyberte existující surovinu --</option>
+                        {% if data.suggested_ingredients %}
+                          <optgroup label="Doporučené (podobný název)">
+                            {% for ing in data.suggested_ingredients %}
+                              <option value="{{ ing.id }}">{{ ing.name }} ({{ ing.unit }})</option>
+                            {% endfor %}
+                          </optgroup>
+                        {% endif %}
+                        <optgroup label="Všechny suroviny">
+                          {% for ing in data.matching_ingredient|default:''|slice:":0" %}
+                            {# Placeholder pro všechny suroviny - mohlo by být pomalé #}
+                          {% endfor %}
+                        </optgroup>
+                      </select>
+                      <small class="text-muted">Vyberte surovinu ze seznamu</small>
+                    </div>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="d-flex justify-content-between mt-4">
+          <a href="{% url 'inventory:import_csv_step1' %}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left me-2"></i>Zpět
+          </a>
+          <button type="submit" class="btn btn-success btn-lg">
+            <i class="fas fa-check me-2"></i>Potvrdit a importovat
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Zobrazení/skrytí selectu pro mapování
+  document.querySelectorAll('input[type="radio"][id^="map_"]').forEach(radio => {
+    radio.addEventListener('change', function() {
+      const idx = this.id.split('_')[1];
+      const mapSelect = document.getElementById('map_select_' + idx);
+      if (mapSelect) {
+        mapSelect.style.display = 'block';
+      }
+    });
+  });
+
+  document.querySelectorAll('input[type="radio"][id^="create_"], input[type="radio"][id^="skip_"]').forEach(radio => {
+    radio.addEventListener('change', function() {
+      const idx = this.id.split('_')[1];
+      const mapSelect = document.getElementById('map_select_' + idx);
+      if (mapSelect) {
+        mapSelect.style.display = 'none';
+      }
+    });
+  });
+</script>
+
+{% endblock %}

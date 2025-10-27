@@ -1,0 +1,116 @@
+{% extends 'base.html' %}
+{% load bootstrap5 %}
+
+{% block title %}Sklady - Jídelna{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h1>
+    <i class="fas fa-building me-2"></i>Správa skladů
+  </h1>
+  <div>
+    <a href="{% url 'inventory:canteen_list' %}" class="btn btn-outline-success me-2">
+      <i class="fas fa-utensils me-2"></i>Spravovat jídelny
+    </a>
+    <a href="{% url 'inventory:stock_list' %}" class="btn btn-outline-secondary me-2">
+      <i class="fas fa-arrow-left me-2"></i>Zpět na skladové položky
+    </a>
+    <a href="{% url 'inventory:warehouse_add' %}" class="btn btn-warning">
+      <i class="fas fa-plus me-2"></i>Přidat sklad
+    </a>
+  </div>
+</div>
+
+{% if warehouses %}
+  <div class="card shadow-sm">
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover mb-0">
+          <thead class="table-dark">
+            <tr>
+              <th><i class="fas fa-building me-1"></i>Název skladu</th>
+              <th><i class="fas fa-utensils me-1"></i>Jídelna</th>
+              <th><i class="fas fa-boxes me-1"></i>Počet položek</th>
+              <th width="120"><i class="fas fa-cogs me-1"></i>Akce</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for warehouse in warehouses %}
+            <tr>
+              <td>
+                <strong>{{ warehouse.name }}</strong>
+              </td>
+              <td>
+                <span class="badge bg-info text-dark">{{ warehouse.canteen.name }}</span>
+                {% if warehouse.canteen.address %}
+                  <small class="text-muted d-block">{{ warehouse.canteen.address }}</small>
+                {% endif %}
+              </td>
+              <td>
+                <span class="badge bg-primary">{{ warehouse.stock_items.count }} položek</span>
+              </td>
+              <td>
+                <div class="btn-group btn-group-sm" role="group">
+                  <a href="{% url 'inventory:warehouse_edit' warehouse.pk %}" class="btn btn-outline-primary" title="Upravit">
+                    <i class="fas fa-edit"></i>
+                  </a>
+                  <a href="{% url 'inventory:warehouse_delete' warehouse.pk %}" class="btn btn-outline-danger" title="Smazat">
+                    <i class="fas fa-trash"></i>
+                  </a>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Statistiky -->
+  <div class="row mt-4">
+    <div class="col-md-6">
+      <div class="card bg-primary text-white">
+        <div class="card-body">
+          <div class="d-flex justify-content-between">
+            <div>
+              <h6 class="card-title">Celkem skladů</h6>
+              <h3 class="mb-0">{{ warehouses|length }}</h3>
+            </div>
+            <div class="align-self-center">
+              <i class="fas fa-warehouse fa-2x"></i>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <div class="card bg-success text-white">
+        <div class="card-body">
+          <div class="d-flex justify-content-between">
+            <div>
+              <h6 class="card-title">Jídelny</h6>
+              <h3 class="mb-0">
+                {% regroup warehouses by canteen as grouped %}
+                {{ grouped|length }}
+              </h3>
+            </div>
+            <div class="align-self-center">
+              <i class="fas fa-utensils fa-2x"></i>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+{% else %}
+  <div class="text-center py-5">
+    <i class="fas fa-building fa-3x text-muted mb-3"></i>
+    <h4 class="text-muted">Zatím nemáte žádné sklady</h4>
+    <p class="text-muted">Začněte přidáním vašeho prvního skladu.</p>
+    <a href="{% url 'inventory:warehouse_add' %}" class="btn btn-warning">
+      <i class="fas fa-plus me-2"></i>Přidat první sklad
+    </a>
+  </div>
+{% endif %}
+{% endblock %}

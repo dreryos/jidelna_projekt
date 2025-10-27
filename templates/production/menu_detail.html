@@ -1,0 +1,356 @@
+{% extends 'base.html' %}
+{% load bootstrap5 %}
+
+{% block title %}{{ menu_plan.name }} - Detail jídelníčku{% endblock %}
+
+{% block extra_css %}
+<style>
+.meal-day-card {
+    border-left: 4px solid #007bff;
+}
+.meal-item {
+    background-color: #f8f9fa;
+    border-radius: 0.375rem;
+    border: 1px solid #dee2e6;
+    transition: all 0.2s ease;
+}
+.meal-item:hover {
+    background-color: #e9ecef;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+.portions-badge {
+    font-size: 0.875rem;
+}
+.date-header {
+    background: linear-gradient(135deg, #007bff, #0056b3);
+    color: white;
+}
+.add-meal-section {
+    background-color: #f8f9fa;
+    border: 2px dashed #dee2e6;
+    border-radius: 0.5rem;
+}
+.recipe-selector {
+    max-height: 200px;
+    overflow-y: auto;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-12">
+            <!-- Header s informacemi o jídelníčku -->
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h3 class="mb-0">
+                            <i class="fas fa-calendar-alt me-2"></i>
+                            {{ menu_plan.name }}
+                        </h3>
+                        <div class="btn-group">
+                            <a href="{% url 'production:menu_list' %}" class="btn btn-light btn-sm">
+                                <i class="fas fa-arrow-left me-1"></i> Zpět
+                            </a>
+                            <a href="{% url 'production:menu_delete' menu_plan.pk %}" class="btn btn-danger btn-sm">
+                                <i class="fas fa-trash me-1"></i> Smazat
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <strong>Jídelna:</strong><br>
+                            <i class="fas fa-building me-1 text-muted"></i>{{ menu_plan.canteen.name }}
+                        </div>
+                        <div class="col-md-3">
+                            <strong>Období:</strong><br>
+                            <i class="fas fa-calendar me-1 text-muted"></i>{{ menu_plan.date_from|date:"d.m.Y" }} - {{ menu_plan.date_to|date:"d.m.Y" }}
+                        </div>
+                        <div class="col-md-3">
+                            <strong>Výchozí porce dospělí:</strong><br>
+                            <i class="fas fa-users me-1 text-muted"></i>{{ menu_plan.default_portions_adult }}
+                        </div>
+                        <div class="col-md-3">
+                            <strong>Výchozí porce děti:</strong><br>
+                            <i class="fas fa-child me-1 text-muted"></i>{{ menu_plan.default_portions_child }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Plánování jídel po dnech -->
+            <div class="row">
+                {% for date in date_range %}
+                    <div class="col-lg-6 col-xl-4 mb-4">
+                        <div class="card meal-day-card h-100">
+                            <div class="card-header date-header">
+                                <h5 class="mb-0">
+                                    <i class="fas fa-calendar-day me-2"></i>
+                                    {{ date|date:"l d.m.Y" }}
+                                </h5>
+                                <div class="mt-2">
+                                    <button type="button" class="btn btn-light btn-sm bulk-portions-btn" data-date="{{ date|date:'Y-m-d' }}">
+                                        <i class="fas fa-edit me-1"></i> Hromadně upravit porce
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <!-- Existující jídla pro tento den -->
+                                <div class="meals-for-date" data-date="{{ date|date:'Y-m-d' }}">
+                                    {% for order in menu_plan.production_orders.all %}
+                                        {% if order.date == date %}
+                                            <div class="meal-item p-3 mb-2">
+                                                <div class="d-flex justify-content-between align-items-start">
+                                                    <div class="flex-grow-1">
+                                                        <h6 class="mb-1">
+                                                            <i class="fas fa-utensils me-1 text-primary"></i>
+                                                            {{ order.recipe.name }}
+                                                        </h6>
+                                                        <div class="portions-info">
+                                                            <span class="badge bg-primary portions-badge me-1">
+                                                                {{ order.portions_adult }} dospělých
+                                                            </span>
+                                                            <span class="badge bg-info portions-badge">
+                                                                {{ order.portions_child }} dětských
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                    <div class="btn-group btn-group-sm">
+                                                        <button type="button" class="btn btn-outline-primary edit-portions-btn" 
+                                                                data-order-id="{{ order.id }}"
+                                                                data-adult="{{ order.portions_adult }}"
+                                                                data-child="{{ order.portions_child }}">
+                                                            <i class="fas fa-edit"></i>
+                                                        </button>
+                                                        <button type="button" class="btn btn-outline-danger delete-meal-btn" 
+                                                                data-order-id="{{ order.id }}">
+                                                            <i class="fas fa-trash"></i>
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        {% endif %}
+                                    {% endfor %}
+                                </div>
+
+                                <!-- Formulář pro přidání nového jídla -->
+                                <div class="add-meal-section p-3 mt-3">
+                                    <h6 class="mb-2">
+                                        <i class="fas fa-plus me-1"></i> Přidat jídlo
+                                    </h6>
+                                    <form class="add-meal-form" data-date="{{ date|date:'Y-m-d' }}">
+                                        <div class="mb-2">
+                                            <select class="form-select recipe-select" name="recipe_id" required>
+                                                <option value="">Vyberte recept...</option>
+                                                {% for recipe in recipes %}
+                                                    <option value="{{ recipe.id }}">{{ recipe.name }}</option>
+                                                {% endfor %}
+                                            </select>
+                                        </div>
+                                        <div class="row mb-2">
+                                            <div class="col-6">
+                                                <input type="number" class="form-control form-control-sm" 
+                                                       name="portions_adult" 
+                                                       value="{{ menu_plan.default_portions_adult }}"
+                                                       placeholder="Dospělí" min="0">
+                                            </div>
+                                            <div class="col-6">
+                                                <input type="number" class="form-control form-control-sm" 
+                                                       name="portions_child" 
+                                                       value="{{ menu_plan.default_portions_child }}"
+                                                       placeholder="Děti" min="0">
+                                            </div>
+                                        </div>
+                                        <button type="submit" class="btn btn-primary btn-sm w-100">
+                                            <i class="fas fa-plus me-1"></i> Přidat jídlo
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal pro úpravu porcí -->
+<div class="modal fade" id="editPortionsModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Upravit počet porcí</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="editPortionsForm">
+                    <div class="row">
+                        <div class="col-6">
+                            <label class="form-label">Dospělí:</label>
+                            <input type="number" class="form-control" id="editAdultPortions" min="0">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">Děti:</label>
+                            <input type="number" class="form-control" id="editChildPortions" min="0">
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Zrušit</button>
+                <button type="button" class="btn btn-primary" id="savePortions">Uložit</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal pro hromadnou úpravu porcí -->
+<div class="modal fade" id="bulkPortionsModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Hromadně upravit porce</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Nastavit počet porcí pro všechna jídla v den: <strong id="bulkDate"></strong></p>
+                <form id="bulkPortionsForm">
+                    <div class="row">
+                        <div class="col-6">
+                            <label class="form-label">Dospělí:</label>
+                            <input type="number" class="form-control" id="bulkAdultPortions" min="0">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">Děti:</label>
+                            <input type="number" class="form-control" id="bulkChildPortions" min="0">
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Zrušit</button>
+                <button type="button" class="btn btn-primary" id="saveBulkPortions">Uložit</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const menuPlanId = {{ menu_plan.pk }};
+const csrfToken = '{{ csrf_token }}';
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Přidání jídla
+    document.querySelectorAll('.add-meal-form').forEach(form => {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(form);
+            const date = form.dataset.date;
+            
+            const data = {
+                recipe_id: formData.get('recipe_id'),
+                date: date,
+                portions_adult: formData.get('portions_adult'),
+                portions_child: formData.get('portions_child')
+            };
+            
+            fetch(`/production/jidelnicky/${menuPlanId}/pridat-jidlo/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    location.reload(); // Obnovíme stránku
+                } else {
+                    alert('Chyba při přidávání jídla: ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Nastala chyba při přidávání jídla.');
+            });
+        });
+    });
+    
+    // Úprava porcí jednotlivého jídla
+    let currentOrderId = null;
+    
+    document.querySelectorAll('.edit-portions-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            currentOrderId = this.dataset.orderId;
+            document.getElementById('editAdultPortions').value = this.dataset.adult;
+            document.getElementById('editChildPortions').value = this.dataset.child;
+            new bootstrap.Modal(document.getElementById('editPortionsModal')).show();
+        });
+    });
+    
+    document.getElementById('savePortions').addEventListener('click', function() {
+        // Tuto funkcionalitu implementujeme později přes AJAX
+        alert('Funkce bude implementována v další verzi');
+    });
+    
+    // Hromadná úprava porcí
+    let currentDate = null;
+    
+    document.querySelectorAll('.bulk-portions-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            currentDate = this.dataset.date;
+            document.getElementById('bulkDate').textContent = new Date(currentDate).toLocaleDateString('cs-CZ');
+            document.getElementById('bulkAdultPortions').value = {{ menu_plan.default_portions_adult }};
+            document.getElementById('bulkChildPortions').value = {{ menu_plan.default_portions_child }};
+            new bootstrap.Modal(document.getElementById('bulkPortionsModal')).show();
+        });
+    });
+    
+    document.getElementById('saveBulkPortions').addEventListener('click', function() {
+        const adultPortions = document.getElementById('bulkAdultPortions').value;
+        const childPortions = document.getElementById('bulkChildPortions').value;
+        
+        fetch(`/production/jidelnicky/${menuPlanId}/upravit-porce/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify({
+                date: currentDate,
+                portions_adult: adultPortions,
+                portions_child: childPortions
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert('Chyba při úpravě porcí: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Nastala chyba při úpravě porcí.');
+        });
+    });
+    
+    // Mazání jídla
+    document.querySelectorAll('.delete-meal-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            if (confirm('Opravdu chcete smazat toto jídlo?')) {
+                // Implementujeme později
+                alert('Funkce bude implementována v další verzi');
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

@@ -96,6 +96,35 @@ class RecipeDeleteView(LoginRequiredMixin, DeleteView):
 	template_name = 'core/recipe_confirm_delete.html'
 	success_url = reverse_lazy('core:recipe_list')
 
+
+# Views pro správu surovin
+
+class IngredientListView(LoginRequiredMixin, ListView):
+	model = Ingredient
+	template_name = 'core/ingredient_list.html'
+	context_object_name = 'ingredients'
+	ordering = ['name']
+
+
+class IngredientCreateView(LoginRequiredMixin, CreateView):
+	model = Ingredient
+	fields = ['name', 'unit']
+	template_name = 'core/ingredient_form.html'
+	success_url = reverse_lazy('core:ingredient_list')
+
+
+class IngredientUpdateView(LoginRequiredMixin, UpdateView):
+	model = Ingredient
+	fields = ['name', 'unit']
+	template_name = 'core/ingredient_form.html'
+	success_url = reverse_lazy('core:ingredient_list')
+
+
+class IngredientDeleteView(LoginRequiredMixin, DeleteView):
+	model = Ingredient
+	template_name = 'core/ingredient_confirm_delete.html'
+	success_url = reverse_lazy('core:ingredient_list')
+
 """
 Tento modul je místo pro view funkce související s jádrem aplikace (recepty, suroviny).
 V současné době používáme hlavně Django admin pro CRUD operace, proto zde nejsou implementovány konkrétní view.

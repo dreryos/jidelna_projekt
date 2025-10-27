@@ -8,12 +8,78 @@
   <h1>
     <i class="fas fa-warehouse me-2"></i>Skladové položky
   </h1>
-  <a href="{% url 'inventory:stock_add' %}" class="btn btn-warning">
-    <i class="fas fa-plus me-2"></i>Přidat položku
-  </a>
+  <div>
+    <a href="{% url 'inventory:canteen_list' %}" class="btn btn-outline-success me-2">
+      <i class="fas fa-utensils me-2"></i>Spravovat jídelny
+    </a>
+    <a href="{% url 'inventory:warehouse_list' %}" class="btn btn-outline-primary me-2">
+      <i class="fas fa-building me-2"></i>Spravovat sklady
+    </a>
+    <a href="{% url 'inventory:import_csv_step1' %}" class="btn btn-info me-2">
+      <i class="fas fa-file-import me-2"></i>Import CSV
+    </a>
+    <a href="{% url 'inventory:stock_add' %}" class="btn btn-warning">
+      <i class="fas fa-plus me-2"></i>Přidat položku
+    </a>
+  </div>
 </div>
 
-{% if object_list %}
+<!-- Filtr podle skladů -->
+<div class="card mb-4">
+  <div class="card-body">
+    <form method="get" id="filterForm">
+      <div class="row align-items-end">
+        <div class="col-md-10">
+          <label class="form-label"><i class="fas fa-filter me-1"></i>Filtrovat podle skladu:</label>
+          <div class="d-flex flex-wrap gap-2">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="selectAll" 
+                     {% if not selected_warehouses %}checked{% endif %}>
+              <label class="form-check-label fw-bold" for="selectAll">
+                Všechny sklady
+              </label>
+            </div>
+            {% for warehouse in warehouses %}
+            <div class="form-check">
+              <input class="form-check-input warehouse-checkbox" type="checkbox" 
+                     name="warehouse" value="{{ warehouse.id }}" 
+                     id="warehouse{{ warehouse.id }}"
+                     {% if warehouse.id|stringformat:"s" in selected_warehouses %}checked{% endif %}>
+              <label class="form-check-label" for="warehouse{{ warehouse.id }}">
+                {{ warehouse.name }} <small class="text-muted">({{ warehouse.canteen.name }})</small>
+              </label>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+        <div class="col-md-2">
+          <button type="submit" class="btn btn-primary w-100">
+            <i class="fas fa-search me-1"></i>Filtrovat
+          </button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  // Checkbox "Všechny sklady" ovládání
+  document.getElementById('selectAll').addEventListener('change', function() {
+    const checkboxes = document.querySelectorAll('.warehouse-checkbox');
+    checkboxes.forEach(cb => cb.checked = this.checked);
+  });
+  
+  // Odškrtnout "Všechny" když se mění jednotlivé checkboxy
+  document.querySelectorAll('.warehouse-checkbox').forEach(cb => {
+    cb.addEventListener('change', function() {
+      const allChecked = Array.from(document.querySelectorAll('.warehouse-checkbox'))
+                              .every(checkbox => checkbox.checked);
+      document.getElementById('selectAll').checked = allChecked;
+    });
+  });
+</script>
+
+{% if stock_items %}
   <div class="card shadow-sm">
     <div class="card-body p-0">
       <div class="table-responsive">
@@ -29,7 +95,7 @@
             </tr>
           </thead>
           <tbody>
-            {% for item in object_list %}
+            {% for item in stock_items %}
             <tr>
               <td>
                 <strong>{{ item.ingredient.name }}</strong>
@@ -41,7 +107,7 @@
               </td>
               <td>
                 <span class="badge {% if item.quantity <= 0 %}bg-danger{% elif item.quantity <= 10 %}bg-warning text-dark{% else %}bg-success{% endif %}">
-                  {{ item.quantity }} {{ item.ingredient.unit }}
+                  {{ item.quantity|floatformat:1 }} {{ item.ingredient.unit }}
                 </span>
               </td>
               <td>{{ item.price|floatformat:2 }} Kč</td>
@@ -75,7 +141,7 @@
           <div class="d-flex justify-content-between">
             <div>
               <h6 class="card-title">Celkem položek</h6>
-              <h3 class="mb-0">{{ object_list|length }}</h3>
+              <h3 class="mb-0">{{ stock_items|length }}</h3>
             </div>
             <div class="align-self-center">
               <i class="fas fa-boxes fa-2x"></i>
@@ -91,7 +157,7 @@
             <div>
               <h6 class="card-title">Dostupné zásoby</h6>
               <h3 class="mb-0">
-                {% regroup object_list by ingredient as grouped_items %}
+                {% regroup stock_items by ingredient as grouped_items %}
                 {{ grouped_items|length }}
               </h3>
             </div>
@@ -109,7 +175,7 @@
             <div>
               <h6 class="card-title">Nízké zásoby</h6>
               <h3 class="mb-0">
-                {% for item in object_list %}
+                {% for item in stock_items %}
                   {% if item.quantity <= 10 and item.quantity > 0 %}{{ forloop.counter0|add:1 }}{% endif %}
                 {% empty %}0{% endfor %}
               </h3>

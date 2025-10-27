@@ -1,0 +1,70 @@
+{% extends 'base.html' %}
+{% load bootstrap5 %}
+
+{% block title %}Smazat surovinu - Jídelna{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-header bg-danger text-white">
+        <h4 class="mb-0">
+          <i class="fas fa-exclamation-triangle me-2"></i>Potvrdit smazání
+        </h4>
+      </div>
+      <div class="card-body">
+        <div class="alert alert-warning">
+          <i class="fas fa-warning me-2"></i>
+          <strong>Pozor!</strong> Chystáte se smazat surovinu.
+        </div>
+        
+        <div class="mb-3">
+          <h5>Surovina k smazání:</h5>
+          <div class="p-3 bg-light rounded">
+            <h6 class="mb-1">
+              <i class="fas fa-seedling me-2"></i>{{ object.name }}
+            </h6>
+            <p class="text-muted mb-0">
+              <i class="fas fa-balance-scale me-1"></i>Jednotka: {{ object.unit }}
+            </p>
+          </div>
+        </div>
+        
+        {% with recipes=object.recipe_set.all %}
+          {% if recipes %}
+            <div class="alert alert-danger">
+              <i class="fas fa-exclamation-circle me-2"></i>
+              <strong>Varování:</strong> Tato surovina je použita v následujících receptech:
+              <ul class="mb-0 mt-2">
+                {% for recipe in recipes %}
+                  <li>{{ recipe.name }}</li>
+                {% endfor %}
+              </ul>
+              <p class="mb-0 mt-2">
+                <small>Smazání suroviny také odstraní všechny normy v receptech, kde je použita.</small>
+              </p>
+            </div>
+          {% else %}
+            <div class="alert alert-info">
+              <i class="fas fa-info-circle me-2"></i>
+              Tato surovina není použita v žádném receptu, můžete ji bezpečně smazat.
+            </div>
+          {% endif %}
+        {% endwith %}
+        
+        <form method="post">
+          {% csrf_token %}
+          <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+            <a href="{% url 'core:ingredient_list' %}" class="btn btn-secondary">
+              <i class="fas fa-times me-2"></i>Zrušit
+            </a>
+            <button type="submit" class="btn btn-danger">
+              <i class="fas fa-trash me-2"></i>Ano, smazat surovinu
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

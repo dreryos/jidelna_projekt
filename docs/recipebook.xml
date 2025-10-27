@@ -1,0 +1,2668 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<RecipeBook>
+  <Categories>
+    <Category id="P1" name="Příloha I" />
+    <Category id="P2" name="Příloha II" />
+    <Category id="P3" name="Příloha III" />
+    <Category id="PC" name="Pečivo" />
+    <Category id="VY" name="Vývary" />
+    <Category id="PO" name="Polévky" />
+    <Category id="HJ" name="Hlavní jídla" />
+  </Categories>
+  <PriceLevels>
+      <PriceLevel id="C1" name="1. cenová hladina" />
+      <PriceLevel id="C2" name="2. cenová hladina" />
+      <PriceLevel id="C3" name="3. cenová hladina" />
+  </PriceLevels>
+  <MealTypes>
+      <MealType id="M1" name="Minutka" priceLevelId="C1" />
+      <MealType id="M6" name="Výběrové jídlo" priceLevelId="C1" />
+      <MealType id="M23" name="2. a 3. jídlo" priceLevelId="C2" />
+      <MealType id="M4" name="Bezmasé" priceLevelId="C3" />
+      <MealType id="M5" name="Studené" priceLevelId="C3" />
+  </MealTypes>
+
+  <Recipes>
+    <Recipe code="1" categoryId="P1" basePortions="10">
+      <Name>Bramborové hranolky smažené</Name>
+      <Ingredients>
+        <Ingredient name="bramborové hranolky, zmrazené, předsmažené" netQuantityG="1875.0" />
+        <Ingredient name="tuk" netQuantityG="225.0" />
+        <Ingredient name="sůl" netQuantityG="22.5" />
+      </Ingredients>
+    </Recipe>
+    <Recipe code="2" categoryId="P1" basePortions="10">
+      <Name>Bramborové krokety smažené</Name>
+      <Ingredients>
+        <Ingredient name="bramborové krokety, zmrazené, předsmažené" netQuantityG="1100.0" />
+        <Ingredient name="tuk" netQuantityG="150.0" />
+      </Ingredients>
+    </Recipe>
+    <Recipe code="3" categoryId="P1" basePortions="10">
+        <Name>Americké brambory smažené</Name>
+        <Ingredients>
+            <Ingredient name="americké brambory, zmrazené, předsmažené" netQuantityG="1100.0" />
+            <Ingredient name="tuk" netQuantityG="150.0" />
+        </Ingredients>
+    </Recipe>
+    <Recipe code="4" categoryId="P1" basePortions="10">
+        <Name>Brambory opečené</Name>
+        <Ingredients>
+            <Ingredient name="brambory loupané, uvařené a vychladlé" netQuantityG="2100.0" />
+            <Ingredient name="sádlo škvařené" netQuantityG="100.0" />
+            <Ingredient name="sůl" netQuantityG="20.0" />
+        </Ingredients>
+    </Recipe>
+    <Recipe code="5" categoryId="P1" basePortions="10">
+        <Name>Bramboráčky smažené</Name>
+        <Ingredients>
+            <Ingredient name="brambory loupané" netQuantityG="840.0" />
+            <Ingredient name="mléko" netQuantityG="100.0" />
+            <Ingredient name="mouka hladká" netQuantityG="200.0" />
+            <Ingredient name="vejce 1ks" netQuantityG="40.0" />
+            <Ingredient name="česnek" netQuantityG="9.0" />
+            <Ingredient name="sůl" netQuantityG="10.0" />
+            <Ingredient name="majoránka" netQuantityG="0.5" />
+            <Ingredient name="pepř mletý" netQuantityG="0.5" />
+            <Ingredient name="sádlo škvařené" netQuantityG="200.0" />
+        </Ingredients>
+    </Recipe>
+    <Recipe code="D3-6" categoryId="P1" basePortions="10"> <Name>Bramborové placky Rosties</Name>
+        <Ingredients>
+            <Ingredient name="brambrové placky, zmrazené, předsmažené" netQuantityG="1100.0" />
+            <Ingredient name="tuk" netQuantityG="150.0" />
+        </Ingredients>
+    </Recipe>
+
+    <Recipe code="1" categoryId="P2" basePortions="10">
+        <Name>Brambory vařené</Name>
+        <Ingredients>
+            <Ingredient name="brambory loupané" netQuantityG="2100.0" />
+            <Ingredient name="voda pitná" netQuantityG="0" notes="dle potřeby" /> <Ingredient name="sůl" netQuantityG="30.0" />
+            <Ingredient name="kmín" netQuantityG="3.0" />
+            <Ingredient name="petrželová nať/pažitka" netQuantityG="7.5" />
+        </Ingredients>
+    </Recipe>
+     <Recipe code="2" categoryId="P2" basePortions="10">
+        <Name>Brambory šťouchané</Name>
+        <Ingredients>
+            <Ingredient name="brambory loupané" netQuantityG="2000.0" />
+            <Ingredient name="voda pitná" netQuantityG="0" notes="dle potřeby" />
+            <Ingredient name="sůl" netQuantityG="30.0" />
+            <Ingredient name="kmín" netQuantityG="40.0" /> <Ingredient name="cibule" netQuantityG="102.0" />
+            <Ingredient name="tuk" netQuantityG="120.0" notes="na osmažení cibule" />
+        </Ingredients>
+    </Recipe>
+     <Recipe code="3" categoryId="P2" basePortions="10">
+        <Name>Bramborová kaše</Name>
+        <Ingredients>
+            <Ingredient name="brambory loupané" netQuantityG="1600.0" />
+            <Ingredient name="voda pitná" netQuantityG="0" notes="dle potřeby" />
+            <Ingredient name="sůl" netQuantityG="30.0" />
+            <Ingredient name="mléko" netQuantityG="500.0" />
+        </Ingredients>
+    </Recipe>
+    <Recipe code="D1-25" categoryId="P3" basePortions="10"> <Name>Rajčatová rýže</Name>
+      <Ingredients>
+        <Ingredient name="rýže dlouhozrnná" netQuantityG="1250.0" />
+        <Ingredient name="olej" netQuantityG="120.0" />
+        <Ingredient name="rajčatová šťáva" netQuantityG="250.0" />
+        <Ingredient name="sůl" netQuantityG="30.0" />
+        <Ingredient name="tabasco" netQuantityG="5.0" />
+      </Ingredients>
+    </Recipe>
+     <Recipe code="D1-26" categoryId="P3" basePortions="10">
+      <Name>Rýže arašídová</Name>
+      <Ingredients>
+        <Ingredient name="rýže dlouhozrnná" netQuantityG="1200.0" />
+        <Ingredient name="arašídy" netQuantityG="300.0" />
+        <Ingredient name="petrželka čerstvá" netQuantityG="10.0" />
+        <Ingredient name="olej" netQuantityG="20.0" />
+        <Ingredient name="sůl" netQuantityG="20.0" />
+      </Ingredients>
+    </Recipe>
+    <Recipe code="D4-32" categoryId="P3" basePortions="10">
+      <Name>Grilovaná zelenina</Name>
+      <Ingredients>
+        <Ingredient name="paprika čerstvá" netQuantityG="670.0" notes="Váha zeleniny před očištěním"/>
+        <Ingredient name="lilek" netQuantityG="600.0" notes="Váha zeleniny před očištěním"/>
+        <Ingredient name="cuketa" netQuantityG="600.0" notes="Váha zeleniny před očištěním"/>
+        <Ingredient name="olej" netQuantityG="100.0" />
+        <Ingredient name="sůl" netQuantityG="10.0" />
+        <Ingredient name="žampiony čerstvé" netQuantityG="600.0" notes="Váha zeleniny před očištěním"/>
+        <Ingredient name="cibule" netQuantityG="330.0" notes="Váha zeleniny před očištěním"/>
+        <Ingredient name="bylinky - bazalka" netQuantityG="15.0" />
+      </Ingredients>
+      <FinalPortionWeightG>150</FinalPortionWeightG>
+    </Recipe>
+
+    <Recipe code="Rohlík" categoryId="PC" basePortions="1">
+        <Name>Rohlík</Name>
+        <Ingredients>
+            <Ingredient name="Rohlík" netQuantityG="40.0" />
+        </Ingredients>
+        <FinalPortionWeightG>40</FinalPortionWeightG>
+    </Recipe>
+     <Recipe code="Chléb" categoryId="PC" basePortions="1">
+        <Name>Chléb konzumní</Name>
+        <Ingredients>
+            <Ingredient name="Chléb konzumní" netQuantityG="40.0" />
+        </Ingredients>
+        <FinalPortionWeightG>40</FinalPortionWeightG>
+    </Recipe>
+    <Recipe code="1" categoryId="VY" basePortions="10">
+        <Name>Vývar z bílých kostí</Name>
+        <Ingredients>
+            <Ingredient name="kosti (výsekové - bílé)" netQuantityG="3000.0" />
+            <Ingredient name="voda pitná" netQuantityG="13500.0" />
+            <Ingredient name="sůl" netQuantityG="100.0" />
+            <Ingredient name="pepř celý" netQuantityG="3.0" />
+            <Ingredient name="cibule" netQuantityG="255.0" />
+            <Ingredient name="celer" netQuantityG="200.0" />
+            <Ingredient name="mrkev" netQuantityG="240.0" />
+            <Ingredient name="petržel" netQuantityG="200.0" />
+        </Ingredients>
+        <ServingNotes>Čirý až mléčně zakalený vývar s vůní a chutí po použitých surovinách. Používá se k přípravě bílých polévek a pokrmů.</ServingNotes>
+    </Recipe>
+    <Recipe code="2" categoryId="VY" basePortions="10">
+        <Name>Vývar z hovězích kostí</Name>
+        <Ingredients>
+            <Ingredient name="hovězí kosti řídké" netQuantityG="4600.0" />
+            <Ingredient name="voda pitná" netQuantityG="12000.0" />
+            <Ingredient name="sůl" netQuantityG="100.0" />
+            <Ingredient name="pepř celý" netQuantityG="0.3" /> <Ingredient name="zelenina kořenová" netQuantityG="800.0" />
+            <Ingredient name="cibule" netQuantityG="255.0" />
+        </Ingredients>
+        <ServingNotes>Čirý, světlý, mírně nažloutlý vývar s vůní a chutí po použitých surovinách a koření, téměř nemastný. Používá se zejména k přípravě hnědých polévek, případně i přípravě některých pokrmů.</ServingNotes>
+    </Recipe>
+    <Recipe code="3" categoryId="VY" basePortions="10">
+        <Name>Vývar z drůbeže</Name>
+        <Ingredients>
+            <Ingredient name="drůbeží suroviny získané při těžení drůbeží svaloviny" netQuantityG="2850.0" />
+            <Ingredient name="voda pitná" netQuantityG="11000.0" />
+            <Ingredient name="sůl" netQuantityG="50.0" />
+            <Ingredient name="zelenina kořenová" netQuantityG="600.0" />
+            <Ingredient name="cibule" netQuantityG="127.5" />
+        </Ingredients>
+         <ServingNotes>Čirý, světlý až mírně zakalený vývar s typickou vůní a chutí po použitých surovinách. Používá se přípravě některých pokrmů.</ServingNotes>
+    </Recipe>
+
+    <Recipe code="1" categoryId="PO" basePortions="10">
+        <Name>Selská polévka</Name>
+        <Ingredients>
+            <Ingredient name="tuk" netQuantityG="100.0" />
+            <Ingredient name="mouka hladká" netQuantityG="150.0" />
+            <Ingredient name="vývar z bílých kostí" netQuantityG="2700.0" />
+            <Ingredient name="pepř mletý" netQuantityG="1.0" />
+            <Ingredient name="mléko" netQuantityG="500.0" />
+            <Ingredient name="žampiony" netQuantityG="142.5" />
+            <Ingredient name="polévkové koření" netQuantityG="20.0" />
+            <Ingredient name="sůl" netQuantityG="10.0" />
+            <Ingredient name="nudle pološiroké" netQuantityG="240.0" notes="vařené"/>
+            <Ingredient name="petrželová nať/pažitka" netQuantityG="7.5" notes="vkládáme při expedici"/>
+        </Ingredients>
+    </Recipe>
+    <Recipe code="2" categoryId="PO" basePortions="10">
+        <Name>Bramborová polévka</Name>
+        <Ingredients>
+            <Ingredient name="cibule" netQuantityG="76.5" />
+            <Ingredient name="tuk" netQuantityG="100.0" />
+            <Ingredient name="mouka hladká" netQuantityG="120.0" />
+            <Ingredient name="voda pitná" netQuantityG="2800.0" />
+            <Ingredient name="celer" netQuantityG="48.0" />
+            <Ingredient name="mrkev" netQuantityG="64.0" />
+            <Ingredient name="petrželová nať/pažitka" netQuantityG="48.0" /> <Ingredient name="kapusta" netQuantityG="64.0" />
+            <Ingredient name="pepř mletý" netQuantityG="1.0" />
+            <Ingredient name="kmín" netQuantityG="1.0" />
+            <Ingredient name="majoránka" netQuantityG="1.0" />
+            <Ingredient name="brambory loupané" netQuantityG="600.0" />
+            <Ingredient name="sůl" netQuantityG="30.0" />
+            <Ingredient name="česnek" netQuantityG="13.5" />
+            <Ingredient name="polévkové koření" netQuantityG="20.0" />
+            <Ingredient name="petrželová nať/pažitka" netQuantityG="7.5" notes="vkládáme při expedici"/>
+        </Ingredients>
+    </Recipe>
+    <Recipe code="3" categoryId="PO" basePortions="10">
+        <Name>Bramborová polévka s houbami</Name>
+        <Ingredients>
+            <Ingredient name="cibule" netQuantityG="42.5" />
+            <Ingredient name="tuk" netQuantityG="100.0" />
+            <Ingredient name="mouka hladká" netQuantityG="120.0" />
+            <Ingredient name="vývar z bílých kostí" netQuantityG="2500.0" />
+            <Ingredient name="houby sušené" netQuantityG="10.0" />
+            <Ingredient name="celer" netQuantityG="32.0" />
+            <Ingredient name="mrkev" netQuantityG="40.0" />
+            <Ingredient name="petržel" netQuantityG="32.0" />
+            <Ingredient name="kapusta" netQuantityG="40.0" />
+            <Ingredient name="pepř mletý" netQuantityG="1.0" />
+            <Ingredient name="brambory loupané" netQuantityG="600.0" />
+            <Ingredient name="voda pitná" netQuantityG="300.0" />
+            <Ingredient name="sůl" netQuantityG="15.0" />
+            <Ingredient name="česnek" netQuantityG="13.5" />
+            <Ingredient name="kmín" netQuantityG="1.0" />
+            <Ingredient name="majoránka" netQuantityG="1.0" />
+            <Ingredient name="polévkové koření" netQuantityG="20.0" />
+            <Ingredient name="petrželová nať" netQuantityG="7.5" notes="vkládáme při expedici"/>
+        </Ingredients>
+    </Recipe>
+    <Recipe code="4" categoryId="PO" basePortions="10">
+        <Name>Hrachová polévka</Name>
+        <Ingredients>
+            <Ingredient name="hrách" netQuantityG="600.0" notes="vařený"/>
+            <Ingredient name="tuk" netQuantityG="100.0" />
+            <Ingredient name="mouka hladká" netQuantityG="150.0" />
+            <Ingredient name="voda pitná" netQuantityG="2800.0" />
+            <Ingredient name="pepř mletý" netQuantityG="1.0" />
+            <Ingredient name="majoránka" netQuantityG="1.0" />
+            <Ingredient name="česnek" netQuantityG="9.0" />
+            <Ingredient name="sůl" netQuantityG="30.0" />
+            <Ingredient name="polévkové koření" netQuantityG="20.0" />
+            <Ingredient name="petrželová nať/pažitka" netQuantityG="7.5" />
+            <Ingredient name="žemle" netQuantityG="100.0" notes="osmažená na tuku"/>
+        </Ingredients>
+    </Recipe>
+    <Recipe code="5" categoryId="PO" basePortions="10">
+        <Name>Květáková polévka</Name>
+        <Ingredients>
+            <Ingredient name="květák očištěný nebo zmrazený" netQuantityG="1000.0" />
+            <Ingredient name="sůl" netQuantityG="30.0" />
+            <Ingredient name="tuk" netQuantityG="100.0" />
+            <Ingredient name="mouka hladká" netQuantityG="150.0" />
+            <Ingredient name="květ mletý" netQuantityG="1.0" />
+            <Ingredient name="voda pitná" netQuantityG="1500.0" />
+            <Ingredient name="mléko konzumní" netQuantityG="500.0" />
+            <Ingredient name="polévkové koření" netQuantityG="20.0" />
+            <Ingredient name="petrželová nať/pažitka" netQuantityG="7.5" notes="vkládáme při expedici"/>
+        </Ingredients>
+    </Recipe>
+    <Recipe code="6" categoryId="PO" basePortions="10">
+        <Name>Zeleninová polévka</Name>
+        <Ingredients>
+            <Ingredient name="celer" netQuantityG="120.0" />
+            <Ingredient name="mrkev" netQuantityG="120.0" />
+            <Ingredient name="petržel" netQuantityG="96.0" />
+            <Ingredient name="sůl" netQuantityG="30.0" />
+            <Ingredient name="tuk" netQuantityG="100.0" />
+            <Ingredient name="mouka hladká" netQuantityG="150.0" />
+            <Ingredient name="květ mletý" netQuantityG="1.0" />
+            <Ingredient name="voda pitná" netQuantityG="2000.0" />
+            <Ingredient name="mléko konzumní" netQuantityG="500.0" />
+            <Ingredient name="hrášek sterilovaný bez nálevu" netQuantityG="150.0" />
+            <Ingredient name="polévkové koření" netQuantityG="20.0" />
+            <Ingredient name="petrželová nať/pažitka" netQuantityG="7.5" notes="vkládáme při expedici"/>
+        </Ingredients>
+    </Recipe>
+    <Recipe code="7" categoryId="PO" basePortions="10">
+        <Name>Houbařská polévka zalitá</Name>
+        <Ingredients>
+            <Ingredient name="žampiony - hříbky čerstvé" netQuantityG="285.0" />
+            <Ingredient name="tuk" netQuantityG="100.0" />
+            <Ingredient name="kopr sterilovaný bez nálevu" netQuantityG="50.0" />
+            <Ingredient name="vývar z bílých kostí" netQuantityG="2500.0" />
+            <Ingredient name="brambory loupané" netQuantityG="600.0" />
+            <Ingredient name="máslo" netQuantityG="500.0" /> <Ingredient name="mouka hladká" netQuantityG="100.0" />
+            <Ingredient name="mléko konzumní" netQuantityG="500.0" />
+            <Ingredient name="ocet" netQuantityG="50.0" />
+            <Ingredient name="vaječná melanž" netQuantityG="80.0" notes="srazit v polévce"/>
+            <Ingredient name="sůl" netQuantityG="20.0" />
+            <Ingredient name="cukr" netQuantityG="50.0" />
+        </Ingredients>
+    </Recipe>
+    <Recipe code="8" categoryId="PO" basePortions="10">
+        <Name>Čočková polévka</Name>
+        <Ingredients>
+            <Ingredient name="čočka" netQuantityG="500.0" notes="vařená"/>
+            <Ingredient name="tuk" netQuantityG="100.0" />
+            <Ingredient name="cibule" netQuantityG="85.0" />
+            <Ingredient name="mouka hladká" netQuantityG="120.0" />
+            <Ingredient name="voda pitná" netQuantityG="2700.0" />
+            <Ingredient name="majoránka" netQuantityG="0.3" />
+            <Ingredient name="pepř mletý" netQuantityG="0.3" />
+            <Ingredient name="česnek" netQuantityG="18.0" />
+            <Ingredient name="sůl" netQuantityG="30.0" />
+            <Ingredient name="polévkové koření" netQuantityG="20.0" />
+        </Ingredients>
+    </Recipe>
+    <Recipe code="9" categoryId="PO" basePortions="10">
+        <Name>Zelná polévka</Name>
+        <Ingredients>
+            <Ingredient name="zelí kysané" netQuantityG="750.0" />
+            <Ingredient name="voda pitná" netQuantityG="1800.0" />
+            <Ingredient name="brambory loupané" netQuantityG="400.0" />
+            <Ingredient name="kmín" netQuantityG="1.0" />
+            <Ingredient name="tuk" netQuantityG="100.0" />
+            <Ingredient name="mouka hladká" netQuantityG="120.0" />
+            <Ingredient name="mléko konzumní" netQuantityG="500.0" />
+            <Ingredient name="sůl" netQuantityG="30.0" />
+            <Ingredient name="petrželová nať/pažitka" netQuantityG="7.5" notes="vkládáme při expedici"/>
+        </Ingredients>
+    </Recipe>
+    <Recipe code="10" categoryId="PO" basePortions="10">
+        <Name>Fazolová polévka</Name>
+        <Ingredients>
+            <Ingredient name="fazole bílé" netQuantityG="750.0" notes="vařené"/>
+            <Ingredient name="tuk" netQuantityG="100.0" />
+            <Ingredient name="cibule" netQuantityG="85.0" />
+            <Ingredient name="mouka hladká" netQuantityG="150.0" />
+            <Ingredient name="voda pitná" netQuantityG="2500.0" />
+            <Ingredient name="pepř mletý" netQuantityG="0.5" />
+            <Ingredient name="česnek" netQuantityG="13.5" />
+            <Ingredient name="sůl" netQuantityG="30.0" />
+            <Ingredient name="polévkové koření" netQuantityG="20.0" />
+            <Ingredient name="petrželová nať" netQuantityG="7.5" notes="vkládáme při expedici"/>
+        </Ingredients>
+    </Recipe>
+    <Recipe code="11" categoryId="PO" basePortions="10">
+        <Name>Rajčatová polévka</Name>
+        <Ingredients>
+            <Ingredient name="tuk" netQuantityG="100.0" />
+            <Ingredient name="mouka hladká" netQuantityG="150.0" />
+            <Ingredient name="vývar z bílých kostí" netQuantityG="2700.0" />
+            <Ingredient name="bobkový list" netQuantityG="0.2" />
+            <Ingredient name="rajčatový protlak" netQuantityG="300.0" />
+            <Ingredient name="cukr" netQuantityG="50.0" />
+            <Ingredient name="rýže" netQuantityG="300.0" notes="vařené"/>
+            <Ingredient name="sůl" netQuantityG="10.0" />
+            <Ingredient name="polévkové koření" netQuantityG="20.0" />
+            <Ingredient name="petrželová nať/pažitka" netQuantityG="7.5" notes="vkládáme při expedici"/>
+        </Ingredients>
+    </Recipe>
+    <Recipe code="12" categoryId="PO" basePortions="10">
+        <Name>Pórková s vejcem</Name>
+        <Ingredients>
+            <Ingredient name="pórek" netQuantityG="192.0" />
+            <Ingredient name="voda pitná" netQuantityG="2700.0" />
+            <Ingredient name="sůl" netQuantityG="30.0" />
+            <Ingredient name="tuk" netQuantityG="100.0" />
+            <Ingredient name="mouka hladká" netQuantityG="180.0" />
+            <Ingredient name="pepř mletý" netQuantityG="0.5" />
+            <Ingredient name="mléko konzumní" netQuantityG="600.0" />
+            <Ingredient name="vaječná melanž" netQuantityG="40.0" notes="srazit v polévce"/>
+            <Ingredient name="polévkové koření" netQuantityG="20.0" />
+        </Ingredients>
+    </Recipe>
+    <Recipe code="13" categoryId="PO" basePortions="10">
+        <Name>Kulajda</Name>
+        <Ingredients>
+            <Ingredient name="tuk" netQuantityG="100.0" />
+            <Ingredient name="mouka hladká" netQuantityG="100.0" />
+            <Ingredient name="vývar z bílých kostí" netQuantityG="2700.0" />
+            <Ingredient name="brambory loupané" netQuantityG="420.0" />
+            <Ingredient name="kmín" netQuantityG="2.0" />
+            <Ingredient name="sůl" netQuantityG="20.0" />
+            <Ingredient name="smetana" netQuantityG="200.0" />
+            <Ingredient name="kopr sterilovaný bez nálevu" netQuantityG="50.0" />
+            <Ingredient name="ocet" netQuantityG="100.0" />
+            <Ingredient name="vejce 1 ks vařené" netQuantityG="400.0" notes="vkládáme při expedici"/> </Ingredients>
+    </Recipe>
+    <Recipe code="14" categoryId="PO" basePortions="10">
+        <Name>Drštková polévka</Name>
+        <Ingredients>
+            <Ingredient name="dršťky syrové" netQuantityG="570.0" />
+            <Ingredient name="vývar z dršťek" netQuantityG="1500.0" />
+            <Ingredient name="cibule" netQuantityG="127.5" />
+            <Ingredient name="tuk" netQuantityG="100.0" />
+            <Ingredient name="mouka hladká" netQuantityG="150.0" />
+            <Ingredient name="paprika mletá" netQuantityG="30.0" />
+            <Ingredient name="voda pitná" netQuantityG="1500.0" />
+            <Ingredient name="kmín" netQuantityG="1.0" />
+            <Ingredient name="pepř mletý" netQuantityG="0.5" />
+            <Ingredient name="majoránka" netQuantityG="0.7" />
+            <Ingredient name="česnek" netQuantityG="13.5" />
+            <Ingredient name="sůl" netQuantityG="30.0" />
+            <Ingredient name="polévkové koření" netQuantityG="20.0" />
+        </Ingredients>
+    </Recipe>
+     <Recipe code="15" categoryId="PO" basePortions="10">
+        <Name>Gulášová polévka</Name>
+        <Ingredients>
+            <Ingredient name="hovězí výřez" netQuantityG="300.0" />
+            <Ingredient name="brambory loupané" netQuantityG="600.0" />
+            <Ingredient name="voda pitná" netQuantityG="2400.0" />
+            <Ingredient name="sůl" netQuantityG="30.0" />
+            <Ingredient name="cibule" netQuantityG="127.5" />
+            <Ingredient name="paprika mletá" netQuantityG="30.0" />
+            <Ingredient name="tuk" netQuantityG="100.0" />
+            <Ingredient name="mouka hladká" netQuantityG="150.0" />
+            <Ingredient name="kmín" netQuantityG="1.0" />
+            <Ingredient name="pepř mletý" netQuantityG="1.0" />
+            <Ingredient name="majoránka" netQuantityG="0.5" />
+            <Ingredient name="česnek" netQuantityG="13.5" />
+            <Ingredient name="polévkové koření" netQuantityG="20.0" />
+        </Ingredients>
+    </Recipe>
+    <Recipe code="16" categoryId="PO" basePortions="10">
+        <Name>Hráškový krém</Name>
+        <Ingredients>
+            <Ingredient name="tuk" netQuantityG="100.0" />
+            <Ingredient name="mouka hladká" netQuantityG="180.0" />
+            <Ingredient name="voda pitná" netQuantityG="2400.0" />
+            <Ingredient name="pepř mletý" netQuantityG="0.5" />
+            <Ingredient name="hrášek sterilovaný bez nálevu" netQuantityG="600.0" />
+            <Ingredient name="mléko konzumní" netQuantityG="500.0" />
+            <Ingredient name="polévkové koření" netQuantityG="20.0" />
+        </Ingredients>
+    </Recipe>
+    <Recipe code="34" categoryId="PO" basePortions="10">
+        <Name>Zeleninová polévka se strouháním</Name>
+        <Ingredients>
+            <Ingredient name="cibule" netQuantityG="42.5" />
+            <Ingredient name="tuk" netQuantityG="50.0" />
+            <Ingredient name="zelenina kořenová" netQuantityG="240.0" />
+            <Ingredient name="květák očištěný nebo zmrazený" netQuantityG="50.0" />
+            <Ingredient name="paprika mletá" netQuantityG="20.0" />
+            <Ingredient name="vývar z bílých kostí" netQuantityG="3000.0" />
+            <Ingredient name="mouka hrubá" netQuantityG="120.0" />
+            <Ingredient name="vaječná melanž" netQuantityG="40.0" />
+            <Ingredient name="hrášek sterilovaný bez nálevu" netQuantityG="50.0" />
+            <Ingredient name="sůl" netQuantityG="20.0" />
+            <Ingredient name="muškátový ořísek" netQuantityG="0.2" />
+            <Ingredient name="máslo" netQuantityG="50.0" />
+            <Ingredient name="petrželová nať" netQuantityG="15.0" notes="vkládáme při expedici"/>
+        </Ingredients>
+    </Recipe>
+    <Recipe code="35" categoryId="PO" basePortions="10">
+        <Name>Rybí polévka z kapra</Name>
+        <Ingredients>
+            <Ingredient name="kapr mražený" netQuantityG="320.0" />
+            <Ingredient name="voda pitná" netQuantityG="1200.0" />
+            <Ingredient name="sůl" netQuantityG="20.0" />
+            <Ingredient name="celer" netQuantityG="72.0" />
+            <Ingredient name="mrkev" netQuantityG="72.0" />
+            <Ingredient name="petržel" netQuantityG="48.0" />
+            <Ingredient name="tuk" netQuantityG="100.0" />
+            <Ingredient name="mouka hladká" netQuantityG="180.0" />
+            <Ingredient name="vývar z bílých kostí" netQuantityG="1200.0" />
+            <Ingredient name="květ mletý" netQuantityG="0.5" />
+            <Ingredient name="pepř mletý" netQuantityG="0.5" />
+            <Ingredient name="mléko" netQuantityG="750.0" />
+            <Ingredient name="polévkové koření" netQuantityG="20.0" />
+            <Ingredient name="petrželová nať/pažitka" netQuantityG="7.5" notes="vkládáme při expedici"/>
+            <Ingredient name="žemle" netQuantityG="120.0" />
+            <Ingredient name="máslo na osmažení žemle" netQuantityG="60.0" notes="vkládáme při expedici"/>
+        </Ingredients>
+    </Recipe>
+    <Recipe code="36" categoryId="PO" basePortions="10">
+        <Name>Kuřecí vývar s masem a nudlemi</Name>
+        <Ingredients>
+            <Ingredient name="kuře očištěné" netQuantityG="800.0" />
+            <Ingredient name="voda pitná" netQuantityG="2800.0" />
+            <Ingredient name="sůl" netQuantityG="30.0" />
+            <Ingredient name="nové koření" netQuantityG="0.2" />
+            <Ingredient name="celý pepř" netQuantityG="0.2" />
+            <Ingredient name="zelenina kořenová" netQuantityG="240.0" />
+            <Ingredient name="cibule" netQuantityG="85.0" />
+            <Ingredient name="nudle polévkové" netQuantityG="400.0" notes="vařené"/>
+            <Ingredient name="polévkové koření" netQuantityG="15.0" />
+            <Ingredient name="petrželová nať/pažitka" netQuantityG="15.0" notes="vkládáme při expedici"/>
+        </Ingredients>
+    </Recipe>
+    <Recipe code="37" categoryId="PO" basePortions="10">
+        <Name>Bílá polévka z drůbeže</Name>
+        <Ingredients>
+            <Ingredient name="kuřecí drůbky (křídla, krky, apod.)" netQuantityG="300.0" />
+            <Ingredient name="kuřecí játra, srdce, žaludky" netQuantityG="180.0" />
+            <Ingredient name="voda pitná" netQuantityG="2500.0" />
+            <Ingredient name="sůl" netQuantityG="10.0" />
+            <Ingredient name="celer" netQuantityG="40.0" />
+            <Ingredient name="mrkev" netQuantityG="40.0" />
+            <Ingredient name="petržel" netQuantityG="40.0" />
+            <Ingredient name="mouka hladká" netQuantityG="120.0" />
+            <Ingredient name="mléko" netQuantityG="500.0" />
+            <Ingredient name="rýže" netQuantityG="200.0" notes="vařená"/>
+            <Ingredient name="máslo" netQuantityG="100.0" />
+            <Ingredient name="petrželová nať" netQuantityG="7.5" notes="vkládáme při expedici"/>
+        </Ingredients>
+    </Recipe>
+    <Recipe code="38" categoryId="PO" basePortions="10">
+        <Name>Drůbeží krém se zeleninou</Name>
+        <Ingredients>
+            <Ingredient name="drůbeží suroviny získané při těžení svaloviny" netQuantityG="750.0" />
+            <Ingredient name="voda pitná" netQuantityG="2000.0" />
+            <Ingredient name="sůl" netQuantityG="30.0" />
+            <Ingredient name="cibule" netQuantityG="42.5" />
+            <Ingredient name="zelenina kořenová" netQuantityG="200.0" />
+            <Ingredient name="máslo" netQuantityG="150.0" />
+            <Ingredient name="mouka hladká" netQuantityG="150.0" />
+            <Ingredient name="mléko" netQuantityG="500.0" />
+            <Ingredient name="muškátový ořísek" netQuantityG="0.5" />
+            <Ingredient name="fazolové lusky sterilované bez nálevu" netQuantityG="100.0" /> <Ingredient name="hrášek sterilovaný bez nálevu" netQuantityG="100.0" />
+        </Ingredients>
+    </Recipe>
+    <Recipe code="39" categoryId="PO" basePortions="10">
+        <Name>Slepičí polévka s nudlemi</Name>
+        <Ingredients>
+            <Ingredient name="slepice očištěná" netQuantityG="400.0" />
+            <Ingredient name="hovězí kosti řídké" netQuantityG="300.0" />
+            <Ingredient name="voda pitná" netQuantityG="3000.0" />
+            <Ingredient name="sůl" netQuantityG="30.0" />
+            <Ingredient name="nové koření" netQuantityG="0.2" />
+            <Ingredient name="celý pepř" netQuantityG="0.2" />
+            <Ingredient name="zelenina kořenová" netQuantityG="192.0" />
+            <Ingredient name="cibule" netQuantityG="63.7" />
+            <Ingredient name="nudle polévkové" netQuantityG="400.0" notes="vařené"/>
+            <Ingredient name="polévkové koření" netQuantityG="20.0" />
+            <Ingredient name="petrželová nať/pažitka" netQuantityG="7.5" notes="vkládáme při expedici"/>
+        </Ingredients>
+    </Recipe>
+    <Recipe code="40" categoryId="PO" basePortions="10">
+        <Name>Italská polévka</Name>
+        <Ingredients>
+            <Ingredient name="tuk" netQuantityG="100.0" />
+            <Ingredient name="mouka hladká" netQuantityG="150.0" />
+            <Ingredient name="vývar z bílých kostí" netQuantityG="3000.0" />
+            <Ingredient name="rajčatový protlak" netQuantityG="200.0" />
+            <Ingredient name="cukr" netQuantityG="40.0" />
+            <Ingredient name="polévkové koření" netQuantityG="20.0" />
+            <Ingredient name="sůl" netQuantityG="10.0" />
+            <Ingredient name="nudle polévkové" netQuantityG="120.0" notes="vařené"/>
+            <Ingredient name="petrželová nať/pažitka" netQuantityG="7.5" notes="vkládáme při expedici"/>
+        </Ingredients>
+    </Recipe>
+     <Recipe code="41" categoryId="PO" basePortions="10">
+        <Name>Polévka z jarní zeleniny</Name>
+        <Ingredients>
+            <Ingredient name="mrkev" netQuantityG="255.0" />
+            <Ingredient name="petržel" netQuantityG="80.0" />
+            <Ingredient name="celer" netQuantityG="80.0" />
+            <Ingredient name="pórek" netQuantityG="136.0" />
+            <Ingredient name="zelí hlávkové" netQuantityG="320.0" />
+            <Ingredient name="brambory loupané" netQuantityG="525.0" />
+            <Ingredient name="voda pitná" netQuantityG="2350.0" />
+            <Ingredient name="rajčata" netQuantityG="200.0" />
+            <Ingredient name="hrášek sterilovaný bez nálevu" netQuantityG="200.0" />
+            <Ingredient name="smetana" netQuantityG="200.0" />
+            <Ingredient name="mouka hladká" netQuantityG="40.0" />
+            <Ingredient name="sůl" netQuantityG="20.0" />
+            <Ingredient name="petrželová nať" netQuantityG="7.5" notes="vkládáme při expedici"/>
+        </Ingredients>
+    </Recipe>
+    <Recipe code="42" categoryId="PO" basePortions="10">
+        <Name>Zelná polévka s párkem</Name>
+        <Ingredients>
+            <Ingredient name="zelí hlávkové" netQuantityG="400.0" />
+            <Ingredient name="brambory loupané" netQuantityG="180.0" />
+            <Ingredient name="vývar z bílých kostí" netQuantityG="2500.0" />
+            <Ingredient name="kmín" netQuantityG="1.0" />
+            <Ingredient name="pepř mletý" netQuantityG="1.0" />
+            <Ingredient name="smetana" netQuantityG="300.0" />
+            <Ingredient name="mouka hladká" netQuantityG="100.0" />
+            <Ingredient name="sůl" netQuantityG="30.0" />
+            <Ingredient name="ocet" netQuantityG="30.0" />
+            <Ingredient name="slanina" netQuantityG="100.0" />
+            <Ingredient name="párky jemné" netQuantityG="237.5" />
+            <Ingredient name="máslo" netQuantityG="50.0" />
+        </Ingredients>
+    </Recipe>
+    <Recipe code="43" categoryId="PO" basePortions="10">
+        <Name>Polévka z fazolkových lusků na kyselo</Name>
+        <Ingredients>
+            <Ingredient name="fazolk. lusky sterilované s nálevem" netQuantityG="1000.0" />
+            <Ingredient name="tuk" netQuantityG="100.0" />
+            <Ingredient name="mouka hladká" netQuantityG="120.0" />
+            <Ingredient name="vývar z bílých kostí" netQuantityG="1700.0" />
+            <Ingredient name="mléko konzumní" netQuantityG="500.0" />
+            <Ingredient name="brambory loupané" netQuantityG="280.0" notes="uvařené zvlášť"/>
+            <Ingredient name="kopr" netQuantityG="15.0" />
+            <Ingredient name="ocet" netQuantityG="40.0" />
+            <Ingredient name="sůl" netQuantityG="20.0" />
+        </Ingredients>
+    </Recipe>
+     <Recipe code="44" categoryId="PO" basePortions="10">
+        <Name>Polévka frankfurtská s párkem a brambory</Name>
+        <Ingredients>
+            <Ingredient name="párky jemné" netQuantityG="300.0" />
+            <Ingredient name="brambory loupané" netQuantityG="360.0" />
+            <Ingredient name="sádlo škvařené" netQuantityG="100.0" />
+            <Ingredient name="cibule" netQuantityG="127.5" />
+            <Ingredient name="mouka hladká" netQuantityG="100.0" />
+            <Ingredient name="paprika mletá" netQuantityG="25.0" />
+            <Ingredient name="vývar z bílých kostí" netQuantityG="2800.0" />
+            <Ingredient name="česnek" netQuantityG="18.0" />
+            <Ingredient name="sůl" netQuantityG="20.0" />
+            <Ingredient name="pepř mletý" netQuantityG="2.0" />
+            <Ingredient name="slanina" netQuantityG="50.0" />
+            <Ingredient name="polévkové koření" netQuantityG="20.0" />
+            <Ingredient name="petrželová nať" netQuantityG="7.5" notes="vkládáme při expedici"/>
+        </Ingredients>
+    </Recipe>
+    <Recipe code="45" categoryId="PO" basePortions="10">
+        <Name>Polévka fazolová s párkem</Name>
+        <Ingredients>
+            <Ingredient name="fazole bílé" netQuantityG="1250.0" notes="vařené"/>
+            <Ingredient name="sádlo škvařené" netQuantityG="100.0" />
+            <Ingredient name="cibule" netQuantityG="85.0" />
+            <Ingredient name="česnek" netQuantityG="9.0" />
+            <Ingredient name="sůl" netQuantityG="10.0" />
+            <Ingredient name="celer" netQuantityG="40.0" />
+            <Ingredient name="mrkev" netQuantityG="40.0" />
+            <Ingredient name="petržel" netQuantityG="24.0" />
+            <Ingredient name="mouka hladká" netQuantityG="150.0" />
+            <Ingredient name="paprika mletá" netQuantityG="20.0" />
+            <Ingredient name="vývar z bílých kostí" netQuantityG="2200.0" />
+            <Ingredient name="párky jemné" netQuantityG="200.0" />
+            <Ingredient name="polévkové koření" netQuantityG="20.0" />
+        </Ingredients>
+    </Recipe>
+    <Recipe code="46" categoryId="PO" basePortions="10">
+        <Name>Frankfurtská</Name>
+        <Ingredients>
+            <Ingredient name="párky jemné" netQuantityG="200.0" />
+            <Ingredient name="tuk" netQuantityG="100.0" />
+            <Ingredient name="cibule" netQuantityG="85.0" />
+            <Ingredient name="mouka hladká" netQuantityG="200.0" />
+            <Ingredient name="paprika mletá" netQuantityG="20.0" />
+            <Ingredient name="vývar z bílých kostí" netQuantityG="3000.0" />
+            <Ingredient name="pepř mletý" netQuantityG="0.5" />
+            <Ingredient name="mléko konzumní" netQuantityG="250.0" />
+            <Ingredient name="polévkové koření" netQuantityG="20.0" />
+            <Ingredient name="petrželová nať" netQuantityG="7.5" />
+        </Ingredients>
+    </Recipe>
+    <Recipe code="47" categoryId="PO" basePortions="10">
+        <Name>Polévka čočková s párkem</Name>
+        <Ingredients>
+            <Ingredient name="čočka" netQuantityG="750.0" notes="vařená"/>
+            <Ingredient name="sádlo škvařené" netQuantityG="100.0" />
+            <Ingredient name="cibule" netQuantityG="85.0" />
+            <Ingredient name="mouka hladká" netQuantityG="150.0" />
+            <Ingredient name="paprika mletá" netQuantityG="10.0" />
+            <Ingredient name="vývar z bílých kostí" netQuantityG="2500.0" />
+            <Ingredient name="česnek" netQuantityG="18.0" />
+            <Ingredient name="sůl" netQuantityG="10.0" />
+            <Ingredient name="pepř mletý" netQuantityG="0.5" />
+            <Ingredient name="párky jemné" netQuantityG="200.0" />
+            <Ingredient name="polévkové koření" netQuantityG="20.0" />
+        </Ingredients>
+    </Recipe>
+    <Recipe code="48" categoryId="PO" basePortions="10">
+        <Name>Ruský boršč</Name>
+        <Ingredients>
+            <Ingredient name="hovězí maso přední b.k. nebo ořez" netQuantityG="500.0" />
+            <Ingredient name="vepřová plec b.k. nebo ořez" netQuantityG="150.0" />
+            <Ingredient name="kosti řídké" netQuantityG="300.0" />
+            <Ingredient name="voda pitná" netQuantityG="2500.0" />
+            <Ingredient name="sůl" netQuantityG="30.0" />
+            <Ingredient name="bobkový list" netQuantityG="0.2" />
+            <Ingredient name="nové koření" netQuantityG="0.2" />
+            <Ingredient name="cibule" netQuantityG="42.5" />
+            <Ingredient name="zelenina kořenová" netQuantityG="120.0" />
+            <Ingredient name="zelí hlávkové" netQuantityG="160.0" />
+            <Ingredient name="brambory loupané" netQuantityG="100.0" />
+            <Ingredient name="rajčata" netQuantityG="100.0" />
+            <Ingredient name="cukr" netQuantityG="10.0" />
+            <Ingredient name="slanina" netQuantityG="50.0" />
+            <Ingredient name="paprika mletá" netQuantityG="10.0" />
+            <Ingredient name="mouka hladká" netQuantityG="30.0" />
+            <Ingredient name="smetana" netQuantityG="100.0" />
+            <Ingredient name="červená řepa" netQuantityG="40.0" />
+            <Ingredient name="citron" netQuantityG="40.0" />
+        </Ingredients>
+    </Recipe>
+    <Recipe code="49" categoryId="PO" basePortions="10">
+        <Name>Polévka brokolicová</Name>
+        <Ingredients>
+            <Ingredient name="brokolice očištěná nebo zmrazena" netQuantityG="1000.0" />
+            <Ingredient name="sůl" netQuantityG="30.0" />
+            <Ingredient name="tuk" netQuantityG="100.0" />
+            <Ingredient name="mouka hladká" netQuantityG="150.0" />
+            <Ingredient name="voda pitná" netQuantityG="1500.0" />
+            <Ingredient name="mléko konzumní" netQuantityG="500.0" />
+            <Ingredient name="polévkové koření" netQuantityG="20.0" />
+            <Ingredient name="petrželová nať/pažitka" netQuantityG="7.5" notes="vkládáme při expedici"/>
+        </Ingredients>
+    </Recipe>
+    <Recipe code="50" categoryId="PO" basePortions="10">
+        <Name>Polský boršč se smetanou</Name>
+        <Ingredients>
+            <Ingredient name="vývar z hovězích kostí" netQuantityG="2100.0" />
+            <Ingredient name="červená řepa" netQuantityG="400.0" />
+            <Ingredient name="mrkev" netQuantityG="80.0" />
+            <Ingredient name="petržel" netQuantityG="80.0" />
+            <Ingredient name="celer" netQuantityG="42.5" />
+            <Ingredient name="bobkový list" netQuantityG="0.2" />
+            <Ingredient name="nové koření" netQuantityG="1.0" />
+            <Ingredient name="ocet" netQuantityG="30.0" />
+            <Ingredient name="smetana" netQuantityG="300.0" />
+            <Ingredient name="mouka hladká" netQuantityG="50.0" />
+            <Ingredient name="sůl" netQuantityG="20.0" />
+            <Ingredient name="brambory loupané" netQuantityG="850.0" />
+            <Ingredient name="slanina" netQuantityG="300.0" />
+            <Ingredient name="pažitka/čerstvý kopr" netQuantityG="11.3" notes="vkládáme při expedici"/>
+        </Ingredients>
+    </Recipe>
+    <Recipe code="D1-51" categoryId="PO" basePortions="10">
+        <Name>Krkonošská cibulačka s masem</Name>
+        <Ingredients>
+            <Ingredient name="hovězí přední" netQuantityG="300.0" />
+            <Ingredient name="bujón hovězí" netQuantityG="30.0" />
+            <Ingredient name="brambory kostky" netQuantityG="300.0" />
+            <Ingredient name="polévková směs" netQuantityG="200.0" />
+            <Ingredient name="žampiony čerstvé" netQuantityG="100.0" />
+            <Ingredient name="česneková pasta" netQuantityG="9.0" />
+            <Ingredient name="cibule" netQuantityG="425.0" />
+            <Ingredient name="kmín" netQuantityG="1.0" />
+            <Ingredient name="vaječná melanž" netQuantityG="200.0" />
+            <Ingredient name="sůl" netQuantityG="20.0" />
+            <Ingredient name="chléb" netQuantityG="200.0" />
+            <Ingredient name="petržel" netQuantityG="15.0" notes="vkládáme při expedici"/>
+        </Ingredients>
+    </Recipe>
+    <Recipe code="D1-52" categoryId="PO" basePortions="10">
+        <Name>Kuřecí vývar s bylinkovými krutóny</Name>
+        <Ingredients>
+            <Ingredient name="kuře celé" netQuantityG="800.0" />
+            <Ingredient name="sůl" netQuantityG="30.0" />
+            <Ingredient name="nové koření" netQuantityG="1.0" />
+            <Ingredient name="pepř celý" netQuantityG="1.0" />
+            <Ingredient name="polévková směs" netQuantityG="500.0" />
+            <Ingredient name="cibule loupaná" netQuantityG="85.0" />
+            <Ingredient name="polévkové koření Maggi" netQuantityG="15.0" />
+            <Ingredient name="petržel" netQuantityG="15.0" />
+            <Ingredient name="olej" netQuantityG="50.0" />
+            <Ingredient name="chléb nebo žemle" netQuantityG="200.0" />
+            <Ingredient name="bylinkové koření" netQuantityG="2.0" />
+        </Ingredients>
+    </Recipe>
+    <Recipe code="D1-53" categoryId="PO" basePortions="10">
+        <Name>Kuřecí vývar s masem a krupicovými noky</Name>
+        <Ingredients>
+            <Ingredient name="kuře celé" netQuantityG="800.0" />
+            <Ingredient name="sůl" netQuantityG="30.0" />
+            <Ingredient name="nové koření" netQuantityG="1.0" />
+            <Ingredient name="pepř celý" netQuantityG="1.0" />
+            <Ingredient name="polévková směs" netQuantityG="500.0" />
+            <Ingredient name="cibule loupaná" netQuantityG="85.0" />
+            <Ingredient name="polévkové koření Maggi" netQuantityG="15.0" />
+            <Ingredient name="petržel" netQuantityG="15.0" />
+            <Ingredient name="mléko" netQuantityG="2800.0" /> <Ingredient name="vaječná melanž" netQuantityG="50.0" />
+            <Ingredient name="krupice" netQuantityG="150.0" />
+        </Ingredients>
+    </Recipe>
+    <Recipe code="D1-54" categoryId="PO" basePortions="10">
+        <Name>Kuřecí vývar s tarhoňou</Name>
+        <Ingredients>
+            <Ingredient name="kuře celé" netQuantityG="800.0" />
+            <Ingredient name="sůl" netQuantityG="30.0" />
+            <Ingredient name="nové koření" netQuantityG="1.0" />
+            <Ingredient name="pepř celý" netQuantityG="1.0" />
+            <Ingredient name="polévková směs" netQuantityG="500.0" />
+            <Ingredient name="cibule loupaná" netQuantityG="85.0" />
+            <Ingredient name="polévkové koření Maggi" netQuantityG="15.0" />
+            <Ingredient name="tarhoňa" netQuantityG="150.0" />
+            <Ingredient name="olej" netQuantityG="50.0" />
+            <Ingredient name="petržel" netQuantityG="15.0" notes="vkládáme při expedici"/>
+        </Ingredients>
+    </Recipe>
+    <Recipe code="D1-55" categoryId="PO" basePortions="10">
+        <Name>Zelná s klobásou</Name>
+        <Ingredients>
+            <Ingredient name="zelí kysané" netQuantityG="800.0" />
+            <Ingredient name="olej" netQuantityG="100.0" />
+            <Ingredient name="cibule" netQuantityG="85.0" />
+            <Ingredient name="žampiony čerstvé" netQuantityG="10.0" /> <Ingredient name="bobkový list" netQuantityG="1.0" />
+            <Ingredient name="pepř mletý" netQuantityG="1.0" />
+            <Ingredient name="anglická slanina" netQuantityG="50.0" />
+            <Ingredient name="mouka hladká" netQuantityG="150.0" />
+            <Ingredient name="smetana na vaření" netQuantityG="50.0" />
+            <Ingredient name="česnek" netQuantityG="10.0" />
+            <Ingredient name="sůl" netQuantityG="20.0" />
+            <Ingredient name="klobása" netQuantityG="200.0" />
+            <Ingredient name="polévkové koření Maggi" netQuantityG="20.0" />
+        </Ingredients>
+    </Recipe>
+    <Recipe code="D1-56" categoryId="PO" basePortions="10">
+        <Name>Americká drůbeží polévka</Name>
+        <Ingredients>
+            <Ingredient name="slepice" netQuantityG="500.0" />
+            <Ingredient name="sůl" netQuantityG="20.0" />
+            <Ingredient name="uzená plec" netQuantityG="500.0" />
+            <Ingredient name="pepř" netQuantityG="1.0" />
+            <Ingredient name="rajčata" netQuantityG="200.0" />
+            <Ingredient name="cibule loupaná" netQuantityG="100.0" />
+            <Ingredient name="worcester" netQuantityG="20.0" />
+            <Ingredient name="rýže" netQuantityG="100.0" />
+            <Ingredient name="žampióny" netQuantityG="100.0" />
+            <Ingredient name="paprika čerstvá" netQuantityG="200.0" />
+            <Ingredient name="petrželka čerstvá" netQuantityG="20.0" notes="vkládáme při expedici"/>
+        </Ingredients>
+    </Recipe>
+    <Recipe code="D1-57" categoryId="PO" basePortions="10">
+        <Name>Uzená polévka s kuskusem</Name>
+        <Ingredients>
+            <Ingredient name="uzená plec" netQuantityG="150.0" />
+            <Ingredient name="sůl" netQuantityG="20.0" />
+            <Ingredient name="petrželka čerstvá" netQuantityG="1.0" />
+            <Ingredient name="kuskus" netQuantityG="100.0" />
+            <Ingredient name="uzený vývar" netQuantityG="30.0" /> <Ingredient name="cibule loupaná" netQuantityG="20.0" />
+        </Ingredients>
+    </Recipe>
+    <Recipe code="D2-58" categoryId="PO" basePortions="10">
+        <Name>Hrachová polévka s klobásou</Name>
+        <Ingredients>
+            <Ingredient name="hrách" netQuantityG="400.0" notes="vařený"/>
+            <Ingredient name="tuk" netQuantityG="100.0" />
+            <Ingredient name="cibule" netQuantityG="100.0" />
+            <Ingredient name="mouka hladká" netQuantityG="100.0" />
+            <Ingredient name="paprika mletá" netQuantityG="10.0" />
+            <Ingredient name="majoránka" netQuantityG="1.0" />
+            <Ingredient name="česnek mražený" netQuantityG="20.0" />
+            <Ingredient name="sůl" netQuantityG="30.0" />
+            <Ingredient name="klobása" netQuantityG="200.0" />
+            <Ingredient name="polévkové koření" netQuantityG="20.0" />
+            <Ingredient name="žemle (veka)" netQuantityG="100.0" notes="osmažená na tuku"/>
+            <Ingredient name="voda pitná" netQuantityG="2700.0" />
+        </Ingredients>
+    </Recipe>
+    <Recipe code="D3-59" categoryId="PO" basePortions="10">
+        <Name>Hovězí polévka se šunkovým svítkem</Name>
+        <Ingredients>
+            <Ingredient name="vývar z hovězích kostí" netQuantityG="3000.0" />
+            <Ingredient name="vaječná melanž žloutky" netQuantityG="60.0" />
+            <Ingredient name="muškátový květ" netQuantityG="1.0" />
+            <Ingredient name="sůl" netQuantityG="10.0" />
+            <Ingredient name="mouka polohrubá" netQuantityG="100.0" />
+            <Ingredient name="šunka" netQuantityG="50.0" />
+            <Ingredient name="olej" netQuantityG="20.0" />
+            <Ingredient name="polévková zelenina mražená" netQuantityG="150.0" />
+            <Ingredient name="vaječná melanž bílky" netQuantityG="60.0" />
+            <Ingredient name="polévkové koření" netQuantityG="20.0" />
+            <Ingredient name="petrželová nať/pažitka" netQuantityG="7.0" notes="vkládáme při expedici"/>
+        </Ingredients>
+    </Recipe>
+    <Recipe code="D3-60" categoryId="PO" basePortions="10">
+        <Name>Hovězí polévka se zeleninovým svítkem</Name>
+        <Ingredients>
+            <Ingredient name="vývar z hovězích kostí" netQuantityG="3000.0" />
+            <Ingredient name="polévková zelenina mražená" netQuantityG="80.0" />
+            <Ingredient name="vaječná melanž" netQuantityG="120.0" />
+            <Ingredient name="muškátový květ" netQuantityG="0.5" />
+            <Ingredient name="sůl" netQuantityG="10.0" />
+            <Ingredient name="mouka polohrubá" netQuantityG="100.0" />
+            <Ingredient name="hrášek sterilovaný" netQuantityG="35.0" />
+            <Ingredient name="olej" netQuantityG="10.0" />
+            <Ingredient name="polévkové koření" netQuantityG="20.0" />
+            <Ingredient name="petrželová nať/pažitka" netQuantityG="7.0" notes="vkládáme při expedici"/>
+        </Ingredients>
+    </Recipe>
+     <Recipe code="D3-61" categoryId="PO" basePortions="10">
+        <Name>Černá jelítková polévka</Name>
+        <Ingredients>
+            <Ingredient name="kroupy" netQuantityG="120.0" />
+            <Ingredient name="sušená krev" netQuantityG="100.0" />
+            <Ingredient name="česnek mražený" netQuantityG="30.0" />
+            <Ingredient name="sůl" netQuantityG="30.0" />
+            <Ingredient name="cibule" netQuantityG="120.0" />
+            <Ingredient name="vepřový bůček s.k." netQuantityG="400.0" />
+            <Ingredient name="majoránka" netQuantityG="1.2" />
+            <Ingredient name="nové koření" netQuantityG="1.2" />
+            <Ingredient name="pepř mletý" netQuantityG="1.2" />
+            <Ingredient name="polévkové koření" netQuantityG="20.0" />
+            <Ingredient name="voda pitná" netQuantityG="3000.0" />
+        </Ingredients>
+    </Recipe>
+    <Recipe code="D3-62" categoryId="PO" basePortions="10">
+        <Name>Kapustová polévka</Name>
+        <Ingredients>
+            <Ingredient name="vývar z bílých kostí" netQuantityG="2500.0" />
+            <Ingredient name="olej" netQuantityG="100.0" />
+            <Ingredient name="mouka hladká" netQuantityG="150.0" />
+            <Ingredient name="pepř mletý" netQuantityG="1.0" />
+            <Ingredient name="majoránka" netQuantityG="1.0" />
+            <Ingredient name="česnek mražený" netQuantityG="18.0" />
+            <Ingredient name="sůl" netQuantityG="20.0" />
+            <Ingredient name="kapusta hlávková" netQuantityG="600.0" />
+            <Ingredient name="cibule" netQuantityG="120.0" />
+            <Ingredient name="slanina uzená bez kůže" netQuantityG="50.0" />
+            <Ingredient name="polévkové koření" netQuantityG="20.0" />
+        </Ingredients>
+    </Recipe>
+     <Recipe code="D3-63" categoryId="PO" basePortions="10">
+        <Name>Špenátová polévka</Name>
+        <Ingredients>
+            <Ingredient name="vývar z drůbeže" netQuantityG="2300.0" />
+            <Ingredient name="sůl" netQuantityG="10.0" />
+            <Ingredient name="zeleninová směs pod svíčkovou zmražená" netQuantityG="150.0" />
+            <Ingredient name="mouka hladká" netQuantityG="100.0" />
+            <Ingredient name="mléko" netQuantityG="500.0" />
+            <Ingredient name="špenát mražený" netQuantityG="850.0" />
+            <Ingredient name="vaječná melanž" netQuantityG="40.0" />
+            <Ingredient name="máslo" netQuantityG="100.0" />
+        </Ingredients>
+    </Recipe>
+    <Recipe code="D4-64" categoryId="PO" basePortions="10">
+        <Name>Drůbeží vývar s kuskusem</Name>
+        <Ingredients>
+            <Ingredient name="vývar z drůbeže" netQuantityG="2500.0" />
+            <Ingredient name="zeleninová směs polévková zmražená" netQuantityG="200.0" />
+            <Ingredient name="olej" netQuantityG="50.0" />
+            <Ingredient name="sůl" netQuantityG="15.0" />
+            <Ingredient name="kuskus" netQuantityG="100.0" />
+            <Ingredient name="petrželová nať - kudrnka" netQuantityG="10.0" notes="vkládáme při expedici"/>
+        </Ingredients>
+    </Recipe>
+    <Recipe code="D4-65" categoryId="PO" basePortions="10">
+        <Name>Dýňová polévka se smetanou</Name>
+        <Ingredients>
+            <Ingredient name="dýně" netQuantityG="2500.0" notes="váha neočištěné dýně"/>
+            <Ingredient name="vývar z drůbeže" netQuantityG="1300.0" />
+            <Ingredient name="smetana na vaření" netQuantityG="200.0" />
+            <Ingredient name="česnek čerstvý" netQuantityG="1.0" />
+            <Ingredient name="sůl" netQuantityG="20.0" />
+            <Ingredient name="pepř mletý" netQuantityG="1.0" />
+            <Ingredient name="bylinky - bazalka" netQuantityG="1.0" notes="zdobíme při expedici"/>
+        </Ingredients>
+    </Recipe>
+    <Recipe code="D4-66" categoryId="PO" basePortions="10">
+        <Name>Krém z červené řepy se zeleninou</Name>
+        <Ingredients>
+            <Ingredient name="červená řepa pařená" netQuantityG="1300.0" />
+            <Ingredient name="cibule" netQuantityG="200.0" />
+            <Ingredient name="mrkev čerstvá" netQuantityG="110.0" />
+            <Ingredient name="petržel kořen" netQuantityG="100.0" />
+            <Ingredient name="cukr" netQuantityG="40.0" />
+            <Ingredient name="olej" netQuantityG="150.0" />
+            <Ingredient name="citronová šťáva" netQuantityG="80.0" />
+            <Ingredient name="petrželová nať - kudrnka" netQuantityG="40.0" notes="zdobíme při expedici"/>
+            <Ingredient name="sůl" netQuantityG="20.0" />
+            <Ingredient name="pepř mletý" netQuantityG="1.0" />
+            <Ingredient name="bobkový list" netQuantityG="1.0" />
+        </Ingredients>
+    </Recipe>
+    <Recipe code="D4-67" categoryId="PO" basePortions="10">
+        <Name>Zahradnická polévka s koprem</Name>
+        <Ingredients>
+            <Ingredient name="zelí kysané" netQuantityG="300.0" />
+            <Ingredient name="kmín" netQuantityG="1.0" />
+            <Ingredient name="sůl" netQuantityG="20.0" />
+            <Ingredient name="cibule" netQuantityG="100.0" />
+            <Ingredient name="pepř mletý" netQuantityG="1.0" />
+            <Ingredient name="olej" netQuantityG="80.0" />
+            <Ingredient name="smetana na vaření" netQuantityG="200.0" />
+            <Ingredient name="bylinky - kopr" netQuantityG="5.0" notes="vkládáme před expedicí"/>
+            <Ingredient name="brambory vařené" netQuantityG="400.0" />
+            <Ingredient name="mouka hladká" netQuantityG="100.0" />
+            <Ingredient name="vývar z hovězích kostí" netQuantityG="2500.0" />
+        </Ingredients>
+    </Recipe>
+    <Recipe code="D4-68" categoryId="PO" basePortions="10">
+        <Name>Bramborovo-pohanková polévka</Name>
+        <Ingredients>
+            <Ingredient name="brambory syrové" netQuantityG="250.0" />
+            <Ingredient name="pohanka" netQuantityG="150.0" />
+            <Ingredient name="olej" netQuantityG="70.0" />
+            <Ingredient name="cibule" netQuantityG="70.0" />
+            <Ingredient name="mouka hladká" netQuantityG="100.0" />
+            <Ingredient name="zeleninová směs polévková zmražená" netQuantityG="100.0" />
+            <Ingredient name="kmín" netQuantityG="1.0" />
+            <Ingredient name="majoránka" netQuantityG="1.0" />
+            <Ingredient name="pepř mletý" netQuantityG="1.0" />
+            <Ingredient name="česnek mražený" netQuantityG="10.0" />
+            <Ingredient name="sůl" netQuantityG="20.0" />
+            <Ingredient name="petrželová nať - kudrnka" netQuantityG="10.0" notes="zdobíme při expedici"/>
+        </Ingredients>
+    </Recipe>
+     <Recipe code="D4-69" categoryId="PO" basePortions="10">
+        <Name>Hovězí polévka s vaječnou jíškou</Name>
+        <Ingredients>
+            <Ingredient name="vývar z hovězích kostí" netQuantityG="3000.0" />
+            <Ingredient name="zeleninová směs polévková mražená" netQuantityG="300.0" />
+            <Ingredient name="máslový margarín Zela" netQuantityG="30.0" />
+            <Ingredient name="sádlo škvařené" netQuantityG="30.0" />
+            <Ingredient name="mouka hladká" netQuantityG="30.0" />
+            <Ingredient name="vaječná melanž" netQuantityG="120.0" />
+            <Ingredient name="droždí pekařské" netQuantityG="30.0" />
+            <Ingredient name="sůl" netQuantityG="20.0" />
+        </Ingredients>
+    </Recipe>
+    <Recipe code="D4-70" categoryId="PO" basePortions="10">
+        <Name>Česneková polévka se špenátovou rýží</Name>
+        <Ingredients>
+            <Ingredient name="zeleninový vývar" netQuantityG="2800.0" />
+            <Ingredient name="mléko" netQuantityG="300.0" />
+            <Ingredient name="tuk Rama" netQuantityG="50.0" />
+            <Ingredient name="sůl" netQuantityG="10.0" />
+            <Ingredient name="vaječná melanž" netQuantityG="80.0" />
+            <Ingredient name="krupice" netQuantityG="100.0" />
+            <Ingredient name="špenát mražený" netQuantityG="100.0" />
+            <Ingredient name="česnek mražený" netQuantityG="35.0" />
+            <Ingredient name="bylinky - pažitka" netQuantityG="30.0" notes="zdobíme při expedici"/>
+        </Ingredients>
+    </Recipe>
+    <Recipe code="D4-71" categoryId="PO" basePortions="10">
+        <Name>Francouzská polévka</Name>
+        <Ingredients>
+            <Ingredient name="vývar z hovězích kostí" netQuantityG="2800.0" />
+            <Ingredient name="těstoviny mušle" netQuantityG="170.0" />
+            <Ingredient name="směs mletého masa" netQuantityG="150.0" />
+            <Ingredient name="veka tuková" netQuantityG="30.0" />
+            <Ingredient name="mléko" netQuantityG="30.0" />
+            <Ingredient name="vaječná melanž" netQuantityG="30.0" />
+            <Ingredient name="olej" netQuantityG="10.0" />
+            <Ingredient name="strouhanka" netQuantityG="30.0" />
+            <Ingredient name="mouka hladká" netQuantityG="10.0" />
+            <Ingredient name="sůl" netQuantityG="10.0" />
+            <Ingredient name="pepř mletý" netQuantityG="1.0" />
+            <Ingredient name="zeleninová směs francouzská mražená" netQuantityG="300.0" />
+            <Ingredient name="petrželová nať - kudrnka" netQuantityG="20.0" notes="zdobíme při expedici"/>
+        </Ingredients>
+    </Recipe>
+    <Recipe code="1" categoryId="HJ" mealTypeId="M1" basePortions="10">
+        <Name>Vepřový řízek přírodní</Name>
+        <Ingredients>
+            <Ingredient name="vepřová kýta k.u." netQuantityG="1500.0" />
+            <Ingredient name="sůl" netQuantityG="30.0" />
+            <Ingredient name="tuk" netQuantityG="150.0" />
+            <Ingredient name="mouka hladká" netQuantityG="30.0" />
+            <Ingredient name="vývar z bílých kostí" netQuantityG="450.0" />
+            <Ingredient name="máslo" netQuantityG="100.0" />
+        </Ingredients>
+        <AllowedSideDishes>
+            <SideDish categoryId="P1" />
+        </AllowedSideDishes>
+    </Recipe>
+     <Recipe code="2" categoryId="HJ" mealTypeId="M1" basePortions="10">
+        <Name>Vepřové ražniči</Name>
+        <Ingredients>
+            <Ingredient name="vepřová kýta k.u." netQuantityG="1500.0" />
+            <Ingredient name="sůl" netQuantityG="30.0" />
+            <Ingredient name="pepř mletý" netQuantityG="1.5" />
+            <Ingredient name="tuk" netQuantityG="150.0" />
+            <Ingredient name="cibule" netQuantityG="170.0" />
+            <Ingredient name="hořčice" netQuantityG="200.0" />
+        </Ingredients>
+         <AllowedSideDishes>
+            <SideDish categoryId="P1" />
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="3" categoryId="HJ" mealTypeId="M1" basePortions="10">
+        <Name>Srbské ražniči</Name>
+        <Ingredients>
+            <Ingredient name="vepřová kýta k.u." netQuantityG="1500.0" />
+            <Ingredient name="cibule" netQuantityG="510.0" />
+            <Ingredient name="slanina" netQuantityG="150.0" />
+            <Ingredient name="sůl" netQuantityG="30.0" />
+            <Ingredient name="pepř mletý" netQuantityG="1.5" />
+            <Ingredient name="tuk" netQuantityG="150.0" />
+            <Ingredient name="lečo sterilované" netQuantityG="300.0" />
+        </Ingredients>
+         <AllowedSideDishes>
+            <SideDish categoryId="P1" />
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="4" categoryId="HJ" mealTypeId="M1" basePortions="10">
+        <Name>Vepřový řízek na žampionech</Name>
+        <Ingredients>
+            <Ingredient name="vepřová kýta k.u." netQuantityG="1500.0" />
+            <Ingredient name="sůl" netQuantityG="30.0" />
+            <Ingredient name="tuk" netQuantityG="150.0" />
+            <Ingredient name="žampiony" netQuantityG="285.0" />
+            <Ingredient name="vývar z bílých kostí" netQuantityG="300.0" />
+            <Ingredient name="máslo" netQuantityG="100.0" />
+        </Ingredients>
+        <AllowedSideDishes>
+            <SideDish categoryId="P1" />
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="5" categoryId="HJ" mealTypeId="M1" basePortions="10">
+        <Name>Vepřové žebírko přírodní</Name>
+        <Ingredients>
+            <Ingredient name="vepřová pečeně s k." netQuantityG="1800.0" />
+            <Ingredient name="sůl" netQuantityG="30.0" />
+            <Ingredient name="tuk" netQuantityG="150.0" />
+            <Ingredient name="mouka hladká" netQuantityG="30.0" />
+            <Ingredient name="vývar z bílých kostí" netQuantityG="450.0" />
+            <Ingredient name="máslo" netQuantityG="100.0" />
+        </Ingredients>
+        <AllowedSideDishes>
+            <SideDish categoryId="P1" />
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="7" categoryId="HJ" mealTypeId="M1" basePortions="10"> <Name>Vepřový řízek perštýnský</Name>
+        <Ingredients>
+            <Ingredient name="vepřová kýta k.u." netQuantityG="1500.0" />
+            <Ingredient name="sůl" netQuantityG="30.0" />
+            <Ingredient name="tuk" netQuantityG="100.0" />
+            <Ingredient name="slanina" netQuantityG="100.0" />
+            <Ingredient name="šunka výběrová" netQuantityG="93.0" />
+            <Ingredient name="cibule" netQuantityG="85.0" />
+            <Ingredient name="okurky sterilované bez nálevu" netQuantityG="20.0" />
+            <Ingredient name="žampiony sterilované bez nálevu" netQuantityG="100.0" />
+            <Ingredient name="pepř mletý" netQuantityG="1.0" />
+            <Ingredient name="vaječná melanž" netQuantityG="200.0" notes="srazit v míšenině"/>
+        </Ingredients>
+        <ServingNotes>opečené plátky masa překryté míchanou směsí ze slaniny, šunky, žampionů a okurek</ServingNotes>
+        <AllowedSideDishes>
+            <SideDish categoryId="P1" />
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="8" categoryId="HJ" mealTypeId="M1" basePortions="10">
+        <Name>Vepřové žebírko na žampionech</Name>
+        <Ingredients>
+            <Ingredient name="vepřová pečeně s k." netQuantityG="1800.0" />
+            <Ingredient name="sůl" netQuantityG="30.0" />
+            <Ingredient name="tuk" netQuantityG="150.0" />
+            <Ingredient name="žampiony" netQuantityG="285.0" />
+            <Ingredient name="vývar z bílých kostí" netQuantityG="300.0" />
+            <Ingredient name="máslo" netQuantityG="100.0" />
+        </Ingredients>
+        <AllowedSideDishes>
+            <SideDish categoryId="P1" />
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="9" categoryId="HJ" mealTypeId="M1" basePortions="10">
+        <Name>Vepřové žebírko podle rychtáře</Name>
+        <Ingredients>
+            <Ingredient name="vepřová pečeně s k." netQuantityG="1800.0" />
+            <Ingredient name="česnek" netQuantityG="45.0" />
+            <Ingredient name="sůl" netQuantityG="40.0" />
+            <Ingredient name="paprika mletá pálivá" netQuantityG="30.0" />
+            <Ingredient name="tuk" netQuantityG="200.0" />
+            <Ingredient name="slanina" netQuantityG="150.0" />
+            <Ingredient name="vepřová játra" netQuantityG="143.0" />
+            <Ingredient name="vejce 10ks (vařená)" netQuantityG="400.0" />
+            <Ingredient name="cibule" netQuantityG="170.0" />
+            <Ingredient name="okurky sterilované bez nálevu" netQuantityG="150.0" /> <Ingredient name="kapie sterilované bez nálevu" netQuantityG="60.0" />
+        </Ingredients>
+        <ServingNotes>Opečené vepřové žebírko přelité malým množstvím šťávy se směsí jater, slaniny a vajec, zdobené drobně krájenými okurkami, kapií a sypané kroužky smažené cibulky</ServingNotes>
+        <AllowedSideDishes>
+            <SideDish categoryId="P1" />
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="10" categoryId="HJ" mealTypeId="M1" basePortions="10">
+        <Name>Vepřové žebírko se šunkou a vejcem</Name>
+        <Ingredients>
+            <Ingredient name="vepřová pečeně s k." netQuantityG="1800.0" />
+            <Ingredient name="sůl" netQuantityG="30.0" />
+            <Ingredient name="pepř mletý" netQuantityG="1.0" />
+            <Ingredient name="tuk" netQuantityG="150.0" />
+            <Ingredient name="dušená šunka" netQuantityG="200.0" />
+            <Ingredient name="vejce 10 ks (sázené)" netQuantityG="400.0" />
+        </Ingredients>
+        <AllowedSideDishes>
+            <SideDish categoryId="P1" />
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="11" categoryId="HJ" mealTypeId="M1" basePortions="10">
+        <Name>Vepřové žebírko cikánské</Name>
+        <Ingredients>
+            <Ingredient name="vepřová pečeně s k." netQuantityG="1800.0" />
+            <Ingredient name="česnek" netQuantityG="18.0" />
+            <Ingredient name="sůl" netQuantityG="30.0" />
+            <Ingredient name="tuk" netQuantityG="100.0" />
+            <Ingredient name="slanina" netQuantityG="100.0" />
+            <Ingredient name="rajčatový protlak" netQuantityG="100.0" />
+            <Ingredient name="vývar z bílých kostí" netQuantityG="200.0" />
+        </Ingredients>
+        <AllowedSideDishes>
+            <SideDish categoryId="P1" />
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="12" categoryId="HJ" mealTypeId="M1" basePortions="10">
+        <Name>Srbské vepřové žebírko</Name>
+        <Ingredients>
+            <Ingredient name="vepřová pečeně s k." netQuantityG="1800.0" />
+            <Ingredient name="sůl" netQuantityG="30.0" />
+            <Ingredient name="tuk" netQuantityG="150.0" />
+            <Ingredient name="cibule" netQuantityG="170.0" />
+            <Ingredient name="rajčatový protlak" netQuantityG="100.0" />
+            <Ingredient name="vývar z bílých kostí" netQuantityG="800.0" />
+            <Ingredient name="paprika sterilovaná, řezaná, bez nálevu" netQuantityG="200.0" />
+        </Ingredients>
+        <AllowedSideDishes>
+            <SideDish categoryId="P1" />
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="14" categoryId="HJ" mealTypeId="M1" basePortions="10"> <Name>Vepřový steak pražského uzenáře</Name>
+        <Ingredients>
+            <Ingredient name="vepřová pečeně b.k." netQuantityG="1500.0" />
+            <Ingredient name="šunka" netQuantityG="100.0" />
+            <Ingredient name="pórek" netQuantityG="160.0" />
+            <Ingredient name="žampiony sterilované bez nálevu" netQuantityG="300.0" />
+            <Ingredient name="olej" netQuantityG="100.0" />
+            <Ingredient name="smetana ke šlehání" netQuantityG="200.0" />
+            <Ingredient name="sůl" netQuantityG="40.0" />
+            <Ingredient name="pepř mletý" netQuantityG="1.0" />
+            <Ingredient name="citron" netQuantityG="100.0" />
+            <Ingredient name="máslo" netQuantityG="120.0" />
+        </Ingredients>
+         <ServingNotes>plátek vepřové pečeně bez kosti, opečený po obou stranách, podlitý světlou smetanovou omáčkou s drobně krájenou šunkou, žampiony a pórkem</ServingNotes>
+        <AllowedSideDishes>
+            <SideDish categoryId="P1" />
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="15" categoryId="HJ" mealTypeId="M1" basePortions="10">
+        <Name>Vepřový steak podle moravského sklepmistra</Name>
+        <Ingredients>
+            <Ingredient name="vepřová pečeně b.k." netQuantityG="1500.0" />
+            <Ingredient name="sůl" netQuantityG="20.0" />
+            <Ingredient name="pepř mletý" netQuantityG="2.0" />
+            <Ingredient name="fenykl" netQuantityG="1.0" />
+            <Ingredient name="olej" netQuantityG="80.0" />
+            <Ingredient name="česnek" netQuantityG="9.0" />
+            <Ingredient name="víno červené" netQuantityG="250.0" />
+            <Ingredient name="kečup" netQuantityG="300.0" />
+            <Ingredient name="máslo" netQuantityG="120.0" />
+            <Ingredient name="sýr tvrdý" netQuantityG="190.0" notes="strouhaný na zdobení"/>
+        </Ingredients>
+        <AllowedSideDishes>
+            <SideDish categoryId="P1" />
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="16" categoryId="HJ" mealTypeId="M1" basePortions="10">
+        <Name>Vepřový steak s broskví zapečený</Name>
+        <Ingredients>
+            <Ingredient name="vepřová pečeně b.k." netQuantityG="1500.0" />
+            <Ingredient name="sůl" netQuantityG="30.0" />
+            <Ingredient name="olej" netQuantityG="120.0" />
+            <Ingredient name="vývar z bílých kostí" netQuantityG="150.0" />
+            <Ingredient name="máslo" netQuantityG="200.0" />
+            <Ingredient name="šunka" netQuantityG="300.0" />
+            <Ingredient name="broskve kompotované bez nálevu" netQuantityG="500.0" />
+            <Ingredient name="sýr tvrdý" netQuantityG="285.0" notes="k zapečení"/>
+        </Ingredients>
+         <AllowedSideDishes>
+            <SideDish categoryId="P1" />
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="17" categoryId="HJ" mealTypeId="M1" basePortions="10">
+        <Name>Vepřový řízek smažený</Name>
+        <Ingredients>
+            <Ingredient name="vepřová kýta k.u." netQuantityG="1500.0" />
+            <Ingredient name="sůl" netQuantityG="30.0" />
+            <Ingredient name="mouka hladká" netQuantityG="100.0" /> <Ingredient name="vaječná melanž" netQuantityG="80.0" />
+            <Ingredient name="mléko" netQuantityG="100.0" />
+            <Ingredient name="strouhanka" netQuantityG="200.0" />
+            <Ingredient name="tuk" netQuantityG="250.0" />
+        </Ingredients>
+         <AllowedSideDishes>
+            <SideDish categoryId="P2" specificNote="brambory, bramborový salát s majonézou"/>
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="18" categoryId="HJ" mealTypeId="M1" basePortions="10">
+        <Name>Vepřový steak s pomeranči</Name>
+        <Ingredients>
+            <Ingredient name="vepřová pečeně b.k." netQuantityG="1500.0" /> 
+            <Ingredient name="sůl" netQuantityG="20.0" /> 
+            <Ingredient name="cibule" netQuantityG="120.0" /> 
+            <Ingredient name="paprikové lusky" netQuantityG="160.0" /> 
+            <Ingredient name="česnek" netQuantityG="9.0" /> 
+            <Ingredient name="olej" netQuantityG="150.0" /> 
+            <Ingredient name="pepř mletý" netQuantityG="2.0" /> 
+            <Ingredient name="zázvor mletý" netQuantityG="1.0" /> 
+            <Ingredient name="víno bílé" netQuantityG="200.0" /> 
+            <Ingredient name="feferonky sterilované bez nálevu" netQuantityG="45.0" /> 
+            <Ingredient name="pomeranče plátky" netQuantityG="400.0" notes="ozdoba při expedici"/> 
+        </Ingredients>
+        <AllowedSideDishes>
+            <SideDish categoryId="P1" /> 
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="19" categoryId="HJ" mealTypeId="M1" basePortions="10">
+        <Name>Roštěná na roštu</Name>
+        <Ingredients>
+            <Ingredient name="hovězí roštěnec k.u." netQuantityG="1500.0" /> 
+            <Ingredient name="sůl" netQuantityG="30.0" /> 
+            <Ingredient name="pepř mletý" netQuantityG="1.0" /> 
+            <Ingredient name="tuk" netQuantityG="100.0" /> 
+            <Ingredient name="máslo" netQuantityG="120.0" /> 
+            <Ingredient name="vývar z bílých kostí" netQuantityG="500.0" /> 
+        </Ingredients>
+        <AllowedSideDishes>
+            <SideDish categoryId="P1" /> 
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="20" categoryId="HJ" mealTypeId="M1" basePortions="10">
+        <Name>Anglický rosbíf</Name>
+        <Ingredients>
+            <Ingredient name="hovězí roštěnec k.u." netQuantityG="1500.0" /> 
+            <Ingredient name="sůl" netQuantityG="30.0" /> 
+            <Ingredient name="pepř mletý" netQuantityG="1.0" /> 
+            <Ingredient name="olej stolní" netQuantityG="100.0" /> 
+            <Ingredient name="máslo" netQuantityG="50.0" /> 
+            <Ingredient name="vývar z bílých kostí" netQuantityG="200.0" /> 
+        </Ingredients>
+        <AllowedSideDishes>
+            <SideDish categoryId="P1" /> 
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="21" categoryId="HJ" mealTypeId="M1" basePortions="10">
+        <Name>Losos na roštu s bylinkovým máslem</Name>
+        <Ingredients>
+            <Ingredient name="losos" netQuantityG="1500.0" /> 
+            <Ingredient name="sůl" netQuantityG="30.0" /> 
+            <Ingredient name="olej stolní" netQuantityG="120.0" /> 
+            <Ingredient name="bylinkové máslo" netQuantityG="100.0" /> 
+        </Ingredients>
+        <AllowedSideDishes>
+            <SideDish categoryId="P1" /> 
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="23" categoryId="HJ" mealTypeId="M1" basePortions="10"> <Name>Pstruh pečený na kmíně</Name>
+        <Ingredients>
+            <Ingredient name="pstruh očištěný, vykuchaný" netQuantityG="1500.0" /> 
+            <Ingredient name="sůl" netQuantityG="30.0" /> 
+            <Ingredient name="kmín" netQuantityG="2.0" /> 
+            <Ingredient name="tuk" netQuantityG="100.0" /> 
+            <Ingredient name="máslo" netQuantityG="100.0" /> 
+        </Ingredients>
+        <AllowedSideDishes>
+            <SideDish categoryId="P2" specificNote="brambory"/> 
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="24" categoryId="HJ" mealTypeId="M1" basePortions="10">
+        <Name>Aljašská treska smažená v sýrovém těstíčku</Name>
+        <Ingredients>
+            <Ingredient name="aljašská treska rozmrazená" netQuantityG="1500.0" /> 
+            <Ingredient name="citron" netQuantityG="125.0" /> 
+            <Ingredient name="sůl" netQuantityG="40.0" /> 
+            <Ingredient name="vaječná melanž" netQuantityG="160.0" /> 
+            <Ingredient name="mléko" netQuantityG="220.0" /> 
+            <Ingredient name="mouka hrubá" netQuantityG="180.0" /> 
+            <Ingredient name="sýr tvrdý" netQuantityG="142.5" /> 
+            <Ingredient name="tuk" netQuantityG="300.0" /> 
+        </Ingredients>
+        <AllowedSideDishes>
+            <SideDish categoryId="P2" specificNote="brambory"/> 
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="25" categoryId="HJ" mealTypeId="M1" basePortions="10">
+        <Name>Ryba smažená</Name>
+        <Ingredients>
+            <Ingredient name="ryba (pangasius nebo tilápie) čerstvá nebo rozmrazená" netQuantityG="1500.0" /> 
+            <Ingredient name="citron" netQuantityG="125.0" /> 
+            <Ingredient name="sůl" netQuantityG="40.0" /> 
+            <Ingredient name="mouka hladká" netQuantityG="120.0" /> 
+            <Ingredient name="vaječná melanž" netQuantityG="120.0" /> 
+            <Ingredient name="mléko" netQuantityG="100.0" /> 
+            <Ingredient name="strouhanka" netQuantityG="250.0" /> 
+            <Ingredient name="tuk" netQuantityG="300.0" /> 
+        </Ingredients>
+         <AllowedSideDishes>
+            <SideDish categoryId="P2" specificNote="brambory, bramborový salát s majonézou"/> 
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="27" categoryId="HJ" mealTypeId="M1" basePortions="10"> <Name>Ryba po provensálsku</Name>
+        <Ingredients>
+            <Ingredient name="ryba (pangasius nebo tilápie) čerstvá nebo rozmrazená" netQuantityG="1500.00" /> 
+            <Ingredient name="sůl" netQuantityG="30.00" /> 
+            <Ingredient name="pepř mletý" netQuantityG="1.00" /> 
+            <Ingredient name="olej" netQuantityG="100.00" /> 
+            <Ingredient name="cibule" netQuantityG="85.00" /> 
+            <Ingredient name="česnek" netQuantityG="18.00" /> 
+            <Ingredient name="máslo" netQuantityG="200.00" /> 
+            <Ingredient name="rajčata" netQuantityG="130.00" /> 
+            <Ingredient name="rajčatový protlak" netQuantityG="200.00" /> 
+            <Ingredient name="voda pitná" netQuantityG="300.00" /> 
+            <Ingredient name="víno bílé" netQuantityG="200.00" /> 
+            <Ingredient name="petrželová nať/pažitka" netQuantityG="22.50" notes="ke zdobení při expedici"/> 
+        </Ingredients>
+         <AllowedSideDishes>
+            <SideDish categoryId="P2" specificNote="rýže"/> 
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="30" categoryId="HJ" mealTypeId="M1" basePortions="10"> <Name>Plátek z krůtích prsou na žampionech</Name>
+        <Ingredients>
+            <Ingredient name="krůtí řízky - čistá svalovina" netQuantityG="1500.0" /> 
+            <Ingredient name="sůl" netQuantityG="30.0" /> 
+            <Ingredient name="tuk" netQuantityG="100.0" notes="na opečení masa"/> 
+            <Ingredient name="žampiony" netQuantityG="190.0" /> 
+            <Ingredient name="máslo" netQuantityG="150.0" /> 
+            <Ingredient name="voda pitná" netQuantityG="200.0" /> 
+        </Ingredients>
+         <AllowedSideDishes>
+            <SideDish categoryId="P1" /> 
+            <SideDish categoryId="P2" specificNote="rýže, brambory"/> 
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="31" categoryId="HJ" mealTypeId="M1" basePortions="10">
+        <Name>Krůtí prsa smažená</Name>
+        <Ingredients>
+            <Ingredient name="krůtí řízky - čistá svalovina" netQuantityG="1500.0" /> 
+            <Ingredient name="sůl" netQuantityG="30.0" /> 
+            <Ingredient name="mouka hladká" netQuantityG="100.0" /> 
+            <Ingredient name="vaječná melanž" netQuantityG="80.0" /> 
+            <Ingredient name="mléko" netQuantityG="100.0" /> 
+            <Ingredient name="strouhanka" netQuantityG="200.0" /> 
+            <Ingredient name="tuk" netQuantityG="250.0" /> 
+            <Ingredient name="máslo" netQuantityG="50.0" /> 
+        </Ingredients>
+        <AllowedSideDishes>
+            <SideDish categoryId="P2" specificNote="brambory, bramborový salát s majonézou"/> 
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="32" categoryId="HJ" mealTypeId="M1" basePortions="10">
+        <Name>Medailón z krůtích prsou se sázeným vejcem</Name>
+        <Ingredients>
+            <Ingredient name="krůtí řízky - čistá svalovina" netQuantityG="1500.0" /> 
+            <Ingredient name="sůl" netQuantityG="20.0" /> 
+            <Ingredient name="tuk" netQuantityG="100.0" notes="na opečení masa"/> 
+            <Ingredient name="vejce 10 ks sázené" netQuantityG="400.0" /> 
+            <Ingredient name="máslo" netQuantityG="100.0" notes="k přípravě sázeného vejce"/> 
+        </Ingredients>
+        <AllowedSideDishes>
+            <SideDish categoryId="P1" /> 
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="33" categoryId="HJ" mealTypeId="M1" basePortions="10">
+        <Name>Plátek z krůtích prsou s ananasem</Name>
+        <Ingredients>
+            <Ingredient name="krůtí řízky - čistá svalovina" netQuantityG="1500.0" /> 
+            <Ingredient name="sůl" netQuantityG="20.0" /> 
+            <Ingredient name="tuk" netQuantityG="100.0" notes="na opečení masa"/> 
+            <Ingredient name="máslo" netQuantityG="150.0" /> 
+            <Ingredient name="ananasový kompot bez nálevu" netQuantityG="300.0" /> 
+            <Ingredient name="nálev z ananasu" netQuantityG="100.0" /> 
+        </Ingredients>
+        <AllowedSideDishes>
+            <SideDish categoryId="P1" /> 
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="34" categoryId="HJ" mealTypeId="M1" basePortions="10">
+        <Name>Sýr smažený</Name>
+        <Ingredients>
+            <Ingredient name="sýr tvrdý" netQuantityG="1200.0" /> 
+            <Ingredient name="mouka hladká" netQuantityG="60.0" /> 
+            <Ingredient name="vaječná melanž" netQuantityG="80.0" /> 
+            <Ingredient name="mléko" netQuantityG="150.0" /> 
+            <Ingredient name="strouhanka" netQuantityG="200.0" /> 
+            <Ingredient name="tuk" netQuantityG="200.0" /> 
+        </Ingredients>
+        <AllowedSideDishes>
+            <SideDish categoryId="P1" /> 
+            <SideDish categoryId="P2" specificNote="brambory"/> 
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="37" categoryId="HJ" mealTypeId="M1" basePortions="10"> <Name>Kuřecí maso pečené na másle s cibulí</Name>
+        <Ingredients>
+            <Ingredient name="čistá kuřecí svalovina" netQuantityG="1500.0" /> 
+            <Ingredient name="cibule" netQuantityG="255.0" /> 
+            <Ingredient name="tuk" netQuantityG="150.0" /> 
+            <Ingredient name="máslo" netQuantityG="200.0" /> 
+            <Ingredient name="sůl" netQuantityG="40.0" /> 
+        </Ingredients>
+        <AllowedSideDishes>
+            <SideDish categoryId="P1" /> 
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="38" categoryId="HJ" mealTypeId="M1" basePortions="10">
+        <Name>Kuřecí prsíčka na másle se šunkou</Name>
+        <Ingredients>
+            <Ingredient name="čistá kuřecí svalovina - prsíčka" netQuantityG="1500.0" /> 
+            <Ingredient name="sůl" netQuantityG="40.0" /> 
+            <Ingredient name="tuk" netQuantityG="150.0" /> 
+            <Ingredient name="máslo" netQuantityG="200.0" /> 
+            <Ingredient name="šunka" netQuantityG="300.0" /> 
+        </Ingredients>
+         <ServingNotes>drobnější plátky opečeného masa z kuřecích prsíček s plátky prohřáté šunky</ServingNotes> 
+        <AllowedSideDishes>
+            <SideDish categoryId="P1" /> 
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="39" categoryId="HJ" mealTypeId="M1" basePortions="10">
+        <Name>Kuřecí maso na smetaně se žampiony</Name>
+        <Ingredients>
+            <Ingredient name="čistá kuřecí svalovina" netQuantityG="1500.0" /> 
+            <Ingredient name="tuk" netQuantityG="150.0" /> 
+            <Ingredient name="mouka hladká" netQuantityG="20.0" /> 
+            <Ingredient name="máslo" netQuantityG="100.0" /> 
+            <Ingredient name="žampiony" netQuantityG="190.0" /> 
+            <Ingredient name="sůl" netQuantityG="40.0" /> 
+            <Ingredient name="voda pitná" netQuantityG="200.0" /> 
+            <Ingredient name="smetana" netQuantityG="1000.0" /> 
+            <Ingredient name="bílé víno" netQuantityG="100.0" /> 
+        </Ingredients>
+         <AllowedSideDishes>
+            <SideDish categoryId="P1" /> 
+            <SideDish categoryId="P2" specificNote="rýže"/> 
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="40" categoryId="HJ" mealTypeId="M1" basePortions="10">
+        <Name>Kuřecí prsíčka s jablky a šunkou</Name>
+        <Ingredients>
+            <Ingredient name="čistá kuřecí svalovina - prsíčka" netQuantityG="1500.00" /> 
+            <Ingredient name="sůl" netQuantityG="40.00" /> 
+            <Ingredient name="tuk" netQuantityG="150.00" /> 
+            <Ingredient name="máslo" netQuantityG="200.00" /> 
+            <Ingredient name="rozinky" netQuantityG="100.00" /> 
+            <Ingredient name="jablka (nakyslý druh)" netQuantityG="325.00" /> 
+            <Ingredient name="voda pitná" netQuantityG="200.00" /> 
+            <Ingredient name="šunka" netQuantityG="300.00" /> 
+        </Ingredients>
+        <AllowedSideDishes>
+            <SideDish categoryId="P1" /> 
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="41" categoryId="HJ" mealTypeId="M1" basePortions="10">
+        <Name>Kuřecí prsíčka s broskvemi</Name>
+        <Ingredients>
+            <Ingredient name="čistá kuřecí svalovina - prsíčka" netQuantityG="1500.00" /> 
+            <Ingredient name="sůl" netQuantityG="40.00" /> 
+            <Ingredient name="tuk" netQuantityG="150.00" /> 
+            <Ingredient name="máslo" netQuantityG="200.00" /> 
+            <Ingredient name="broskve půlené kompotované bez nálevu" netQuantityG="300.00" /> 
+            <Ingredient name="víno bílé" netQuantityG="150.00" /> 
+            <Ingredient name="jádra vlašských ořechů" netQuantityG="75.00" notes="ke zdobení při expedici"/> 
+        </Ingredients>
+        <AllowedSideDishes>
+            <SideDish categoryId="P1" /> 
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="43" categoryId="HJ" mealTypeId="M1" basePortions="10"> <Name>Kuřecí maso pikantní se šunkou</Name>
+        <Ingredients>
+            <Ingredient name="čistá kuřecí svalovina" netQuantityG="1500.00" /> 
+            <Ingredient name="cibule" netQuantityG="170.00" /> 
+            <Ingredient name="tuk" netQuantityG="200.00" /> 
+            <Ingredient name="mrkev" netQuantityG="80.00" /> 
+            <Ingredient name="celer" netQuantityG="80.00" /> 
+            <Ingredient name="máslo" netQuantityG="150.00" /> 
+            <Ingredient name="mouka hladká" netQuantityG="20.00" /> 
+            <Ingredient name="česnek" netQuantityG="27.00" /> 
+            <Ingredient name="rajčatový protlak" netQuantityG="200.00" /> 
+            <Ingredient name="víno bílé" netQuantityG="300.00" /> 
+            <Ingredient name="sůl" netQuantityG="40.00" /> 
+            <Ingredient name="šunka" netQuantityG="300.00" /> 
+        </Ingredients>
+         <AllowedSideDishes>
+            <SideDish categoryId="P1" /> 
+            <SideDish categoryId="P2" specificNote="rýže"/> 
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="46" categoryId="HJ" mealTypeId="M1" basePortions="10">
+        <Name>Kuřecí prsíčka smažená</Name>
+        <Ingredients>
+            <Ingredient name="čistá kuřecí svalovina - prsíčka" netQuantityG="1500.00" />
+            <Ingredient name="sůl" netQuantityG="30.00" />
+            <Ingredient name="mouka hladká" netQuantityG="100.00" />
+            <Ingredient name="vaječná melanž" netQuantityG="80.00" />
+            <Ingredient name="mléko" netQuantityG="100.00" />
+            <Ingredient name="strouhanka" netQuantityG="200.00" />
+            <Ingredient name="tuk" netQuantityG="250.00" />
+            <Ingredient name="máslo" netQuantityG="50.00" />
+        </Ingredients>
+        <AllowedSideDishes>
+            <SideDish categoryId="P2" specificNote="brambory, bramborový salát s majonézou"/>
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="47" categoryId="HJ" mealTypeId="M1" basePortions="10">
+        <Name>Kuřecí prsíčka smažená v těstíčku</Name>
+        <Ingredients>
+            <Ingredient name="čistá kuřecí svalovina - prsíčka" netQuantityG="1500.00" />
+            <Ingredient name="sůl" netQuantityG="30.00" />
+            <Ingredient name="vaječná melanž" netQuantityG="120.00" />
+            <Ingredient name="mouka hladká" netQuantityG="100.00" />
+            <Ingredient name="mléko" netQuantityG="100.00" />
+            <Ingredient name="tuk" netQuantityG="250.00" />
+            <Ingredient name="máslo" netQuantityG="50.00" />
+        </Ingredients>
+        <AllowedSideDishes>
+            <SideDish categoryId="P2" specificNote="brambory"/>
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="48" categoryId="HJ" mealTypeId="M1" basePortions="10">
+        <Name>Kyjevský kotlet</Name>
+        <Ingredients>
+            <Ingredient name="čistá kuřecí svalovina - prsíčka" netQuantityG="1500.00" />
+            <Ingredient name="sůl" netQuantityG="30.00" />
+            <Ingredient name="máslo" netQuantityG="200.00" />
+            <Ingredient name="mouka hladká" netQuantityG="100.00" />
+            <Ingredient name="vaječná melanž" netQuantityG="200.00" />
+            <Ingredient name="mléko" netQuantityG="50.00" />
+            <Ingredient name="strouhanka" netQuantityG="250.00" />
+            <Ingredient name="tuk" netQuantityG="300.00" />
+        </Ingredients>
+        <AllowedSideDishes>
+            <SideDish categoryId="P1" />
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="49" categoryId="HJ" mealTypeId="M1" basePortions="10">
+        <Name>Pikantní kuřecí steak</Name>
+        <Ingredients>
+            <Ingredient name="čistá kuřecí svalovina - prsíčka" netQuantityG="1500.00" />
+            <Ingredient name="vaječná melanž" netQuantityG="80.00" />
+            <Ingredient name="smetana ke šlehání" netQuantityG="200.00" />
+            <Ingredient name="pepř mletý" netQuantityG="5.00" />
+            <Ingredient name="zázvor mletý" netQuantityG="1.00" />
+            <Ingredient name="sůl" netQuantityG="20.00" />
+            <Ingredient name="citron" netQuantityG="100.00" />
+            <Ingredient name="cibule" netQuantityG="80.00" /> </Ingredients>
+        <AllowedSideDishes>
+            <SideDish categoryId="P1" />
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="50" categoryId="HJ" mealTypeId="M1" basePortions="10">
+        <Name>Kuřecí řízek na víně s mandlemi</Name>
+        <Ingredients>
+            <Ingredient name="čistá kuřecí svalovina - prsíčka" netQuantityG="1500.00" />
+            <Ingredient name="sůl" netQuantityG="30.00" />
+            <Ingredient name="pepř mletý" netQuantityG="1.00" />
+            <Ingredient name="česnek" netQuantityG="27.00" />
+            <Ingredient name="čili koření" netQuantityG="1.00" />
+            <Ingredient name="kari koření" netQuantityG="1.00" />
+            <Ingredient name="olej" netQuantityG="100.00" />
+            <Ingredient name="mouka hladká" netQuantityG="20.00" />
+            <Ingredient name="máslo" netQuantityG="50.00" />
+            <Ingredient name="víno bílé" netQuantityG="100.00" />
+            <Ingredient name="mandle (kousky)" netQuantityG="90.00" notes="ke zdobení při expedici"/>
+        </Ingredients>
+        <AllowedSideDishes>
+            <SideDish categoryId="P1" />
+            <SideDish categoryId="P2" specificNote="rýže"/>
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="D1-51" categoryId="HJ" mealTypeId="M1" basePortions="10">
+      <Name>Hanácká krkovička</Name>
+      <Ingredients>
+        <Ingredient name="vepřová krkovice b.k." netQuantityG="1500.00" />
+        <Ingredient name="sůl" netQuantityG="30.00" />
+        <Ingredient name="pepř mletý" netQuantityG="1.00" />
+        <Ingredient name="česnek" netQuantityG="18.00" />
+        <Ingredient name="mouka hladká" netQuantityG="20.00" />
+        <Ingredient name="olej" netQuantityG="150.00" />
+        <Ingredient name="cibule" netQuantityG="200.00" />
+        <Ingredient name="slanina" netQuantityG="300.00" />
+        <Ingredient name="měkký salám" netQuantityG="300.00" />
+      </Ingredients>
+      <AllowedSideDishes>
+          <SideDish categoryId="P1" />
+      </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="D1-52" categoryId="HJ" mealTypeId="M1" basePortions="10">
+        <Name>Konopišťské medailonky</Name>
+        <Ingredients>
+            <Ingredient name="vepřová pečeně b.k." netQuantityG="1500.00" />
+            <Ingredient name="sůl" netQuantityG="20.00" />
+            <Ingredient name="olej" netQuantityG="150.00" />
+            <Ingredient name="pepř mletý" netQuantityG="15.00" /> <Ingredient name="smetana na vaření 12%" netQuantityG="500.00" />
+            <Ingredient name="šunka" netQuantityG="500.00" />
+            <Ingredient name="pórek" netQuantityG="350.00" />
+            <Ingredient name="cibule" netQuantityG="200.00" />
+        </Ingredients>
+        <AllowedSideDishes>
+            <SideDish categoryId="P1" />
+            <SideDish categoryId="P2" specificNote="rýže"/>
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="D1-53" categoryId="HJ" mealTypeId="M1" basePortions="10">
+        <Name>Kovbojský kuřecí steak</Name>
+        <Ingredients>
+            <Ingredient name="kuřecí prsa" netQuantityG="1500.00" />
+            <Ingredient name="olej" netQuantityG="150.00" />
+            <Ingredient name="sůl" netQuantityG="25.00" />
+            <Ingredient name="pepřové koření" netQuantityG="4.00" />
+            <Ingredient name="cibule" netQuantityG="150.00" />
+            <Ingredient name="fazole red" netQuantityG="750.00" />
+            <Ingredient name="rajčatový protlak" netQuantityG="100.00" />
+            <Ingredient name="česnek" netQuantityG="50.00" />
+            <Ingredient name="chilli omáčka" netQuantityG="50.00" />
+            <Ingredient name="mouka hladká" netQuantityG="20.00" />
+        </Ingredients>
+        <AllowedSideDishes>
+            <SideDish categoryId="P1" />
+            <SideDish categoryId="P3" specificNote="rajčatová rýže"/>
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="D1-54" categoryId="HJ" mealTypeId="M1" basePortions="10">
+        <Name>Kuřecí maso po římsku</Name>
+        <Ingredients>
+            <Ingredient name="kuřecí prsa" netQuantityG="1500.00" />
+            <Ingredient name="zelí bílé hlávkové" netQuantityG="500.00" />
+            <Ingredient name="pórek" netQuantityG="300.00" />
+            <Ingredient name="mouka hladká" netQuantityG="50.00" />
+            <Ingredient name="cibule" netQuantityG="300.00" />
+            <Ingredient name="olej" netQuantityG="100.00" />
+            <Ingredient name="sůl" netQuantityG="15.00" />
+            <Ingredient name="pepř mletý" netQuantityG="7.50" />
+            <Ingredient name="mrkev kolečka" netQuantityG="500.00" />
+            <Ingredient name="zelené fazolky mražené" netQuantityG="300.00" />
+            <Ingredient name="koření Argentina" netQuantityG="50.00" />
+        </Ingredients>
+        <AllowedSideDishes>
+            <SideDish categoryId="P1" />
+            <SideDish categoryId="P2" specificNote="rýže"/>
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="D1-55" categoryId="HJ" mealTypeId="M1" basePortions="10">
+        <Name>Kuřecí prsa po lucembursku</Name>
+        <Ingredients>
+            <Ingredient name="kuřecí prsa" netQuantityG="1500.00" />
+            <Ingredient name="rajský protlak" netQuantityG="75.00" />
+            <Ingredient name="víno bílé" netQuantityG="300.00" />
+            <Ingredient name="žampióny čerstvé" netQuantityG="285.00" />
+            <Ingredient name="sůl" netQuantityG="30.00" />
+            <Ingredient name="olej" netQuantityG="225.00" />
+            <Ingredient name="mouka hladká" netQuantityG="45.00" />
+        </Ingredients>
+        <AllowedSideDishes>
+            <SideDish categoryId="P1" />
+            <SideDish categoryId="P2" specificNote="rýže"/>
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="D1-56" categoryId="HJ" mealTypeId="M1" basePortions="10">
+        <Name>Kuřecí prsa po portugalsku</Name>
+        <Ingredients>
+            <Ingredient name="kuřecí prsa" netQuantityG="1500.00" />
+            <Ingredient name="žampióny čerstvé" netQuantityG="885.00" />
+            <Ingredient name="smetana" netQuantityG="450.00" />
+            <Ingredient name="mouka hladká" netQuantityG="150.00" />
+            <Ingredient name="tuk Rama" netQuantityG="225.00" />
+            <Ingredient name="cibule" netQuantityG="270.00" />
+            <Ingredient name="olej" netQuantityG="300.00" />
+            <Ingredient name="sůl" netQuantityG="15.00" />
+            <Ingredient name="pepř mletý" netQuantityG="7.50" />
+            <Ingredient name="petrželová nať" netQuantityG="30.00" />
+            <Ingredient name="citronová šťáva" netQuantityG="150.00" />
+        </Ingredients>
+         <AllowedSideDishes>
+            <SideDish categoryId="P1" />
+            <SideDish categoryId="P2" specificNote="rýže"/>
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="D1-58" categoryId="HJ" mealTypeId="M1" basePortions="10"> <Name>Kuřecí steak po lovecku</Name>
+        <Ingredients>
+            <Ingredient name="kuřecí prsa" netQuantityG="1500.00" />
+            <Ingredient name="olej" netQuantityG="100.00" />
+            <Ingredient name="žampióny" netQuantityG="200.00" />
+            <Ingredient name="cibule" netQuantityG="100.00" />
+            <Ingredient name="česnek" netQuantityG="40.00" />
+            <Ingredient name="víno bílé" netQuantityG="100.00" />
+            <Ingredient name="ocet" netQuantityG="10.00" />
+            <Ingredient name="kuřecí vývar" netQuantityG="20.00" /> <Ingredient name="oregano" netQuantityG="1.00" />
+            <Ingredient name="šalvěj" netQuantityG="1.00" />
+            <Ingredient name="rajčata" netQuantityG="200.00" />
+            <Ingredient name="olivy" netQuantityG="100.00" />
+            <Ingredient name="petrželová nať" netQuantityG="10.00" />
+            <Ingredient name="sůl" netQuantityG="30.00" />
+            <Ingredient name="pepř mletý" netQuantityG="1.00" />
+        </Ingredients>
+        <AllowedSideDishes>
+            <SideDish categoryId="P1" />
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="D1-59" categoryId="HJ" mealTypeId="M1" basePortions="10">
+        <Name>Putimská krkovička</Name>
+        <Ingredients>
+            <Ingredient name="vepřová krkovice b.k." netQuantityG="1500.00" />
+            <Ingredient name="měkký salám" netQuantityG="300.00" />
+            <Ingredient name="okurky sterilované" netQuantityG="300.00" />
+            <Ingredient name="cibule" netQuantityG="200.00" />
+            <Ingredient name="mouka hladká" netQuantityG="40.00" />
+            <Ingredient name="olej" netQuantityG="150.00" />
+            <Ingredient name="vývar" netQuantityG="30.00" /> <Ingredient name="sůl" netQuantityG="20.00" />
+        </Ingredients>
+        <AllowedSideDishes>
+            <SideDish categoryId="P1" />
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="D1-60" categoryId="HJ" mealTypeId="M1" basePortions="10">
+        <Name>Strážnická krkovička</Name>
+        <Ingredients>
+            <Ingredient name="vepřová krkovice b.k." netQuantityG="1500.00" />
+            <Ingredient name="mouka hladká" netQuantityG="40.00" />
+            <Ingredient name="sůl" netQuantityG="20.00" />
+            <Ingredient name="olej" netQuantityG="150.00" />
+            <Ingredient name="pepř mletý" netQuantityG="2.00" />
+            <Ingredient name="vývar" netQuantityG="30.00" /> <Ingredient name="okurky sterilované" netQuantityG="300.00" />
+            <Ingredient name="cibule" netQuantityG="200.00" />
+            <Ingredient name="anglická slanina" netQuantityG="300.00" />
+        </Ingredients>
+        <AllowedSideDishes>
+            <SideDish categoryId="P1" />
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="D1-61" categoryId="HJ" mealTypeId="M1" basePortions="10">
+        <Name>Treska po řecku</Name>
+        <Ingredients>
+            <Ingredient name="treska aljašská" netQuantityG="1500.00" />
+            <Ingredient name="sůl" netQuantityG="30.00" />
+            <Ingredient name="olej" netQuantityG="120.00" />
+            <Ingredient name="mouka hladká" netQuantityG="40.00" />
+            <Ingredient name="cibule" netQuantityG="100.00" />
+            <Ingredient name="česnek" netQuantityG="72.00" />
+            <Ingredient name="olivy" netQuantityG="100.00" />
+            <Ingredient name="červená paprika" netQuantityG="150.00" />
+        </Ingredients>
+        <AllowedSideDishes>
+            <SideDish categoryId="P1" />
+            <SideDish categoryId="P2" specificNote="brambory vařené"/>
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="D1-62" categoryId="HJ" mealTypeId="M1" basePortions="10">
+        <Name>Vepřová krkovice na grilu</Name>
+        <Ingredients>
+            <Ingredient name="vepřová krkovice b.k." netQuantityG="1500.00" />
+            <Ingredient name="pepřové koření" netQuantityG="3.00" />
+            <Ingredient name="sůl" netQuantityG="3.00" />
+            <Ingredient name="olej" netQuantityG="30.00" />
+        </Ingredients>
+        <AllowedSideDishes>
+            <SideDish categoryId="P1" />
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="D1-64" categoryId="HJ" mealTypeId="M1" basePortions="10"> <Name>Kuřecí steak po vlámsku</Name>
+        <Ingredients>
+            <Ingredient name="kuřecí prsa" netQuantityG="1500.00" />
+            <Ingredient name="švestky sušené" netQuantityG="200.00" />
+            <Ingredient name="jablka" netQuantityG="160.00" />
+            <Ingredient name="šunka" netQuantityG="100.00" />
+            <Ingredient name="zázvor" netQuantityG="2.00" />
+            <Ingredient name="tymián" netQuantityG="2.00" />
+            <Ingredient name="pepř mletý" netQuantityG="2.00" />
+            <Ingredient name="olej" netQuantityG="150.00" />
+            <Ingredient name="sůl" netQuantityG="25.00" />
+            <Ingredient name="anglická slanina" netQuantityG="200.00" />
+            <Ingredient name="tuk Rama" netQuantityG="20.00" />
+            <Ingredient name="víno bílé" netQuantityG="100.00" />
+        </Ingredients>
+        <AllowedSideDishes>
+            <SideDish categoryId="P1" />
+            <SideDish categoryId="P2" specificNote="rýže"/>
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="D1-65" categoryId="HJ" mealTypeId="M1" basePortions="10">
+        <Name>Kuřecí steak s pomerančem a mandlemi</Name>
+        <Ingredients>
+            <Ingredient name="kuřecí prsa" netQuantityG="1500.00" />
+            <Ingredient name="koření Argentina gril" netQuantityG="40.00" />
+            <Ingredient name="olej" netQuantityG="150.00" />
+            <Ingredient name="pomeranč" netQuantityG="250.00" />
+            <Ingredient name="tuk Rama" netQuantityG="100.00" />
+            <Ingredient name="brusinkový kompot" netQuantityG="150.00" />
+            <Ingredient name="mandle" netQuantityG="50.00" />
+            <Ingredient name="kuřecí vývar" netQuantityG="30.00" /> <Ingredient name="cibule" netQuantityG="80.00" />
+            <Ingredient name="petrželová nať" netQuantityG="20.00" />
+        </Ingredients>
+        <AllowedSideDishes>
+            <SideDish categoryId="P1" />
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="D1-66" categoryId="HJ" mealTypeId="M1" basePortions="10">
+        <Name>Treska na egyptský způsob</Name>
+        <Ingredients>
+            <Ingredient name="treska aljašská" netQuantityG="1500.00" />
+            <Ingredient name="sůl" netQuantityG="30.00" />
+            <Ingredient name="olej" netQuantityG="120.00" />
+            <Ingredient name="mouka hladká" netQuantityG="40.00" />
+            <Ingredient name="paprika mletá" netQuantityG="30.00" />
+            <Ingredient name="česnek" netQuantityG="72.00" />
+        </Ingredients>
+        <AllowedSideDishes>
+            <SideDish categoryId="P1" />
+            <SideDish categoryId="P2" specificNote="brambory vařené"/>
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="D1-67" categoryId="HJ" mealTypeId="M1" basePortions="10">
+        <Name>Uherské vepřové žebírko</Name>
+        <Ingredients>
+            <Ingredient name="vepřová pečeně s k." netQuantityG="1800.00" />
+            <Ingredient name="olej" netQuantityG="144.00" />
+            <Ingredient name="paprika zelená" netQuantityG="240.00" />
+            <Ingredient name="rajský protlak" netQuantityG="60.00" />
+            <Ingredient name="paprika mletá" netQuantityG="24.00" />
+            <Ingredient name="mouka hladká" netQuantityG="24.00" />
+            <Ingredient name="sůl" netQuantityG="36.00" />
+        </Ingredients>
+         <AllowedSideDishes>
+            <SideDish categoryId="P1" />
+             <SideDish categoryId="P2" specificNote="brambory šťouchané"/>
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="D1-68" categoryId="HJ" mealTypeId="M1" basePortions="10">
+        <Name>Vepřové žebírko se špekovými fazolovými lusky</Name>
+        <Ingredients>
+            <Ingredient name="vepřová pečeně s k." netQuantityG="1800.00" />
+            <Ingredient name="sůl" netQuantityG="42.00" />
+            <Ingredient name="olej" netQuantityG="180.00" />
+            <Ingredient name="koření Argentina gril" netQuantityG="12.00" />
+            <Ingredient name="fazolové lusky mražené" netQuantityG="1800.00" />
+            <Ingredient name="anglická slanina" netQuantityG="360.00" />
+            <Ingredient name="majoránka" netQuantityG="2.40" />
+            <Ingredient name="hovězí bujón" netQuantityG="4.80" />
+            <Ingredient name="cibule" netQuantityG="300.00" />
+            <Ingredient name="pepř mletý" netQuantityG="2.40" />
+            <Ingredient name="mouka hladká" netQuantityG="60.00" />
+            <Ingredient name="česneková pasta bez soli" netQuantityG="3.60" />
+        </Ingredients>
+        <AllowedSideDishes>
+            <SideDish categoryId="P1" />
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="D2-69" categoryId="HJ" mealTypeId="M1" basePortions="10">
+        <Name>Selské kuřecí řízečky</Name>
+        <Ingredients>
+            <Ingredient name="kuřecí prsa" netQuantityG="1500.00" />
+            <Ingredient name="česneková pasta bez soli" netQuantityG="30.00" />
+            <Ingredient name="sůl" netQuantityG="20.00" />
+            <Ingredient name="vejce melanž" netQuantityG="80.00" />
+            <Ingredient name="mléko" netQuantityG="400.00" />
+            <Ingredient name="mouka hladká" netQuantityG="500.00" />
+            <Ingredient name="prášek do pečiva" netQuantityG="5.00" />
+            <Ingredient name="olej" netQuantityG="500.00" />
+        </Ingredients>
+        <AllowedSideDishes>
+            <SideDish categoryId="P1" />
+            <SideDish categoryId="P3" />
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="D2-70" categoryId="HJ" mealTypeId="M1" basePortions="10">
+        <Name>Filet Mahi-mahi na rajčatech</Name>
+        <Ingredients>
+            <Ingredient name="filet mahi-mahi" netQuantityG="1500.00" />
+            <Ingredient name="máslo" netQuantityG="42.00" />
+            <Ingredient name="olej" netQuantityG="180.00" />
+            <Ingredient name="mouka hladká" netQuantityG="12.00" />
+            <Ingredient name="cibule" netQuantityG="1800.00" /> <Ingredient name="rajčata loupaná" netQuantityG="360.00" />
+            <Ingredient name="petrželová nať" netQuantityG="2.40" />
+            <Ingredient name="sůl" netQuantityG="4.80" />
+            <Ingredient name="pepř mletý" netQuantityG="300.00" /> <Ingredient name="víno bílé" netQuantityG="2.40" /> </Ingredients>
+        <AllowedSideDishes>
+            <SideDish categoryId="P1" />
+            <SideDish categoryId="P2" />
+            <SideDish categoryId="P3" />
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="D2-71" categoryId="HJ" mealTypeId="M1" basePortions="10">
+        <Name>Filet Mahi-mahi na rozmarýnu</Name>
+        <Ingredients>
+            <Ingredient name="filet mahi-mahi" netQuantityG="1500.00" />
+            <Ingredient name="pepřové koření" netQuantityG="50.00" />
+            <Ingredient name="rozmarýn čerstvý" netQuantityG="20.00" />
+            <Ingredient name="citrónová šťáva" netQuantityG="50.00" />
+            <Ingredient name="sůl" netQuantityG="30.00" />
+            <Ingredient name="olej" netQuantityG="150.00" />
+            <Ingredient name="máslo" netQuantityG="50.00" />
+            <Ingredient name="mouka hladká" netQuantityG="100.00" />
+        </Ingredients>
+         <AllowedSideDishes>
+            <SideDish categoryId="P1" />
+            <SideDish categoryId="P3" />
+        </AllowedSideDishes>
+    </Recipe>
+     <Recipe code="D2-72" categoryId="HJ" mealTypeId="M1" basePortions="10">
+        <Name>Filet Mahi-mahi se zeleninou</Name>
+        <Ingredients>
+            <Ingredient name="filet mahi-mahi" netQuantityG="1500.00" />
+            <Ingredient name="sůl" netQuantityG="25.00" />
+            <Ingredient name="mouka hladká" netQuantityG="35.00" />
+            <Ingredient name="olej" netQuantityG="150.00" />
+            <Ingredient name="mrkev čerstvá" netQuantityG="960.00" />
+            <Ingredient name="máslo" netQuantityG="50.00" />
+            <Ingredient name="hrášek sterilovaný" netQuantityG="700.00" />
+        </Ingredients>
+        <AllowedSideDishes>
+            <SideDish categoryId="P1" />
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="D3-73" categoryId="HJ" mealTypeId="M1" basePortions="10">
+        <Name>Filet Mahi-mahi v těstíčku</Name>
+        <Ingredients>
+            <Ingredient name="filet mahi-mahi" netQuantityG="1500.00" />
+            <Ingredient name="mléko" netQuantityG="150.00" />
+            <Ingredient name="vaječná melanž" netQuantityG="150.00" />
+            <Ingredient name="mouka hladká" netQuantityG="150.00" />
+            <Ingredient name="olej" netQuantityG="300.00" />
+            <Ingredient name="sůl" netQuantityG="30.00" />
+        </Ingredients>
+        <AllowedSideDishes>
+            <SideDish categoryId="P1" />
+            <SideDish categoryId="P2" specificNote="vařené brambory, bramborová kaše"/>
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="D3-74" categoryId="HJ" mealTypeId="M1" basePortions="10">
+        <Name>Steak z vepřové krkovice s houbovým přelivem</Name>
+        <Ingredients>
+            <Ingredient name="vepřová krkovice b.k." netQuantityG="1500.00" />
+            <Ingredient name="sušené houby" netQuantityG="10.00" />
+            <Ingredient name="sůl" netQuantityG="20.00" />
+            <Ingredient name="olej" netQuantityG="100.00" />
+            <Ingredient name="kmín" netQuantityG="1.00" />
+            <Ingredient name="smetana na vaření" netQuantityG="100.00" />
+            <Ingredient name="solamyl" netQuantityG="20.00" />
+            <Ingredient name="pepř mletý" netQuantityG="1.00" />
+        </Ingredients>
+        <AllowedSideDishes>
+            <SideDish categoryId="P1" />
+        </AllowedSideDishes>
+    </Recipe>
+     <Recipe code="D3-75" categoryId="HJ" mealTypeId="M1" basePortions="10">
+        <Name>Vepřová játra na roštu</Name>
+        <Ingredients>
+            <Ingredient name="vepřová játra" netQuantityG="2000.00" />
+            <Ingredient name="olej" netQuantityG="150.00" />
+            <Ingredient name="pepř mletý" netQuantityG="1.00" />
+            <Ingredient name="sůl" netQuantityG="40.00" />
+        </Ingredients>
+        <AllowedSideDishes>
+            <SideDish categoryId="P1" />
+             <SideDish categoryId="P2" specificNote="vařené brambory"/>
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="D3-76" categoryId="HJ" mealTypeId="M1" basePortions="10">
+        <Name>Rybí file na páře s rajčetem a bazalkou (rozmarýnem)</Name>
+        <Ingredients>
+            <Ingredient name="rybí file mořská štika" netQuantityG="1500.00" />
+            <Ingredient name="olej" netQuantityG="50.00" />
+            <Ingredient name="rajčata čerstvá" netQuantityG="100.00" />
+            <Ingredient name="sůl" netQuantityG="20.00" />
+            <Ingredient name="bylinky - bazalka (rozmarýn)" netQuantityG="3.00" />
+        </Ingredients>
+        <AllowedSideDishes>
+            <SideDish categoryId="P1" />
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="D3-77" categoryId="HJ" mealTypeId="M1" basePortions="10">
+        <Name>Kuřecí prsa na páře se šalvějí</Name>
+        <Ingredients>
+            <Ingredient name="kuřecí prsa" netQuantityG="1500.00" />
+            <Ingredient name="máslo" netQuantityG="200.00" />
+            <Ingredient name="sůl" netQuantityG="10.00" />
+            <Ingredient name="bylinky - šalvěj" netQuantityG="2.00" />
+        </Ingredients>
+        <AllowedSideDishes>
+            <SideDish categoryId="P1" />
+            <SideDish categoryId="P3" specificNote="brokolicovo-bramborové pyré"/>
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="D3-78" categoryId="HJ" mealTypeId="M1" basePortions="10">
+        <Name>Kuřecí steak na provensálském koření</Name>
+        <Ingredients>
+            <Ingredient name="kuřecí prsa" netQuantityG="1500.00" />
+            <Ingredient name="olej" netQuantityG="100.00" />
+            <Ingredient name="provensálské koření" netQuantityG="5.00" />
+            <Ingredient name="sůl" netQuantityG="15.00" />
+            <Ingredient name="pepř mletý" netQuantityG="1.00" />
+            <Ingredient name="máslo" netQuantityG="15.00" />
+        </Ingredients>
+        <AllowedSideDishes>
+            <SideDish categoryId="P1" />
+            <SideDish categoryId="P2" specificNote="rýže (různé úpravy)"/>
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="D3-79" categoryId="HJ" mealTypeId="M1" basePortions="10">
+        <Name>Kuřecí steak špikovaný sušenými rajčaty</Name>
+        <Ingredients>
+            <Ingredient name="kuřecí prsa" netQuantityG="1500.00" />
+            <Ingredient name="rajčata sušená" netQuantityG="150.00" />
+            <Ingredient name="olej" netQuantityG="50.00" />
+            <Ingredient name="sůl" netQuantityG="15.00" />
+            <Ingredient name="pepř mletý" netQuantityG="1.00" />
+            <Ingredient name="provensálské koření" netQuantityG="1.00" />
+        </Ingredients>
+        <AllowedSideDishes>
+            <SideDish categoryId="P1" />
+            <SideDish categoryId="P2" specificNote="šťouchané brambory"/>
+            <SideDish categoryId="P3" specificNote="grilovaná červená řepa"/>
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="D3-80" categoryId="HJ" mealTypeId="M1" basePortions="10">
+        <Name>Kuřecí prsíčka smažená v sezamovém obalu</Name>
+        <Ingredients>
+            <Ingredient name="kuřecí prsa" netQuantityG="1500.00" />
+            <Ingredient name="sůl" netQuantityG="30.00" />
+            <Ingredient name="mouka hladká" netQuantityG="100.00" />
+            <Ingredient name="vaječná melanž" netQuantityG="80.00" />
+            <Ingredient name="mléko" netQuantityG="100.00" />
+            <Ingredient name="strouhanka" netQuantityG="200.00" />
+            <Ingredient name="olej" netQuantityG="250.00" />
+            <Ingredient name="tuk Rama" netQuantityG="50.00" />
+            <Ingredient name="sezam loupaný" netQuantityG="20.00" />
+        </Ingredients>
+         <AllowedSideDishes>
+            <SideDish categoryId="P1" />
+            <SideDish categoryId="P2" specificNote="bramborová kaše, vařené brambory"/>
+            <SideDish categoryId="P3" specificNote="karotková kaše"/>
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="D3-81" categoryId="HJ" mealTypeId="M1" basePortions="10">
+        <Name>Grilovaná krkovice s pepřovou omáčkou</Name>
+        <Ingredients>
+            <Ingredient name="vepřová krkovice b.k." netQuantityG="1500.00" />
+            <Ingredient name="bylinky - rozmarýn" netQuantityG="10.00" />
+            <Ingredient name="pepřové koření" netQuantityG="50.00" />
+            <Ingredient name="sůl" netQuantityG="20.00" />
+            <Ingredient name="smetana na vaření" netQuantityG="150.00" />
+            <Ingredient name="máslo" netQuantityG="50.00" />
+            <Ingredient name="olej rostlinný" netQuantityG="50.00" />
+            <Ingredient name="cibule" netQuantityG="100.00" />
+            <Ingredient name="mouka hladká" netQuantityG="50.00" />
+        </Ingredients>
+        <AllowedSideDishes>
+            <SideDish categoryId="P1" />
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="D3-82" categoryId="HJ" mealTypeId="M1" basePortions="10">
+        <Name>Grilované medailonky z panenské svíčkové</Name>
+        <Ingredients>
+            <Ingredient name="vepřová svíčková" netQuantityG="1500.00" />
+            <Ingredient name="olej" netQuantityG="100.00" />
+            <Ingredient name="koření Gril Argentina" netQuantityG="20.00" />
+        </Ingredients>
+         <AllowedSideDishes>
+            <SideDish categoryId="P1" />
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="D1-2" categoryId="HJ" mealTypeId="M6" basePortions="10"> <Name>Frankfurtský závitek</Name>
+        <Ingredients>
+            <Ingredient name="hovězí zadní" netQuantityG="1500.00" />
+            <Ingredient name="mleté maso směs" netQuantityG="500.00" />
+            <Ingredient name="sůl" netQuantityG="20.00" />
+            <Ingredient name="pepř" netQuantityG="1.00" />
+            <Ingredient name="párek" netQuantityG="200.00" />
+            <Ingredient name="olej" netQuantityG="100.00" />
+            <Ingredient name="cibule" netQuantityG="170.00" />
+            <Ingredient name="paprika" netQuantityG="20.00" /> <Ingredient name="mouka hladká" netQuantityG="100.00" />
+            <Ingredient name="smetana" netQuantityG="200.00" />
+        </Ingredients>
+         <AllowedSideDishes>
+            <SideDish categoryId="P2" specificNote="rýže"/>
+            <SideDish categoryId="P3" specificNote="staročeská rýže"/>
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="D1-3" categoryId="HJ" mealTypeId="M6" basePortions="10">
+        <Name>Gulášová masová směs v chlebové misce</Name>
+        <Ingredients>
+            <Ingredient name="hovězí maso" netQuantityG="1000.00" />
+            <Ingredient name="vepřové maso" netQuantityG="500.00" />
+            <Ingredient name="cibule" netQuantityG="250.00" />
+            <Ingredient name="paprika sladká mletá" netQuantityG="50.00" />
+            <Ingredient name="olej" netQuantityG="100.00" />
+            <Ingredient name="rajský protlak" netQuantityG="50.00" />
+            <Ingredient name="sůl" netQuantityG="30.00" />
+            <Ingredient name="mouka hladká" netQuantityG="50.00" />
+            <Ingredient name="majoránka" netQuantityG="1.00" />
+            <Ingredient name="česnek" netQuantityG="50.00" />
+            <Ingredient name="chléb kulatý" netQuantityG="2000.00" />
+            <Ingredient name="pepř" netQuantityG="1.00" />
+            <Ingredient name="kmín" netQuantityG="1.00" />
+        </Ingredients>
+        </Recipe>
+    <Recipe code="D1-4" categoryId="HJ" mealTypeId="M6" basePortions="10">
+        <Name>Kachní stehno pečené s jablky</Name>
+        <Ingredients>
+            <Ingredient name="kachní stehno" netQuantityG="2500.00" />
+            <Ingredient name="jablka" netQuantityG="1000.00" />
+            <Ingredient name="kmín" netQuantityG="1.00" />
+            <Ingredient name="majoránka" netQuantityG="1.00" />
+            <Ingredient name="sůl" netQuantityG="20.00" />
+            <Ingredient name="petrželová nať" netQuantityG="10.00" />
+        </Ingredients>
+        <AllowedSideDishes>
+            <SideDish categoryId="P2" specificNote="bramborové knedlíky, špekové knedlíky"/>
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="D1-5" categoryId="HJ" mealTypeId="M6" basePortions="10">
+        <Name>Rizoto z mořských plodů a krabího masa</Name>
+        <Ingredients>
+            <Ingredient name="rýže divoká" netQuantityG="1500.00" />
+            <Ingredient name="mořský koktejl" netQuantityG="750.00" />
+            <Ingredient name="krabí maso (tyčinky)" netQuantityG="500.00" />
+            <Ingredient name="kukuřice" netQuantityG="250.00" />
+            <Ingredient name="cibule" netQuantityG="200.00" />
+            <Ingredient name="žampióny sterilované" netQuantityG="250.00" />
+            <Ingredient name="paprika sterilovaná" netQuantityG="250.00" />
+            <Ingredient name="sůl" netQuantityG="20.00" />
+            <Ingredient name="olej" netQuantityG="150.00" />
+            <Ingredient name="vegeta" netQuantityG="50.00" />
+            <Ingredient name="pepř" netQuantityG="1.00" />
+            <Ingredient name="petrželka čerstvá" netQuantityG="20.0" notes="ke zdobení při expedici"/>
+        </Ingredients>
+        </Recipe>
+    <Recipe code="D1-6" categoryId="HJ" mealTypeId="M6" basePortions="10">
+        <Name>Rumunský hovězí kotlík</Name>
+        <Ingredients>
+            <Ingredient name="hovězí zadní" netQuantityG="1500.00" />
+            <Ingredient name="paprika mletá" netQuantityG="20.00" />
+            <Ingredient name="sůl" netQuantityG="20.00" />
+            <Ingredient name="pepř mletý" netQuantityG="1.00" />
+            <Ingredient name="česnek" netQuantityG="9.00" />
+            <Ingredient name="olej" netQuantityG="50.00" />
+            <Ingredient name="cibule" netQuantityG="170.00" />
+            <Ingredient name="paprika mix mražená" netQuantityG="150.00" />
+            <Ingredient name="mouka hladká" netQuantityG="100.00" />
+            <Ingredient name="rajčata" netQuantityG="100.00" />
+        </Ingredients>
+        <AllowedSideDishes>
+            <SideDish categoryId="P2" specificNote="rýže /různé úpravy/, bramborové knedlíky"/>
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="D1-7" categoryId="HJ" mealTypeId="M6" basePortions="10">
+        <Name>Srnčí ragú na víně</Name>
+        <Ingredients>
+            <Ingredient name="srnčí maso" netQuantityG="1500.00" />
+            <Ingredient name="směs pod svíčkovou" netQuantityG="150.00" />
+            <Ingredient name="cibule" netQuantityG="50.00" />
+            <Ingredient name="cukr" netQuantityG="50.00" />
+            <Ingredient name="olej" netQuantityG="150.00" />
+            <Ingredient name="rajský protlak" netQuantityG="50.00" />
+            <Ingredient name="sůl" netQuantityG="30.00" />
+            <Ingredient name="mouka hladká" netQuantityG="50.00" />
+            <Ingredient name="povidla švestková" netQuantityG="50.00" />
+            <Ingredient name="džem rybízový" netQuantityG="50.00" />
+            <Ingredient name="víno červené" netQuantityG="50.00" />
+            <Ingredient name="slanina" netQuantityG="100.00" />
+        </Ingredients>
+        <AllowedSideDishes>
+            <SideDish categoryId="P2" specificNote="bramborové knedlíky, rýže"/>
+        </AllowedSideDishes>
+    </Recipe>
+     <Recipe code="D1-9" categoryId="HJ" mealTypeId="M6" basePortions="10"> <Name>Kuře Arkansas</Name>
+        <Ingredients>
+            <Ingredient name="kuřecí stehno" netQuantityG="2400.00" />
+            <Ingredient name="slanina" netQuantityG="300.00" />
+            <Ingredient name="pepř" netQuantityG="1.00" />
+            <Ingredient name="olej" netQuantityG="100.00" />
+            <Ingredient name="paprika čerstvá" netQuantityG="250.00" />
+            <Ingredient name="majoránka" netQuantityG="0.50" />
+            <Ingredient name="žampióny sterilované" netQuantityG="150.00" />
+            <Ingredient name="sůl" netQuantityG="20.00" />
+            <Ingredient name="cibule" netQuantityG="100.00" />
+            <Ingredient name="solamyl" netQuantityG="50.00" />
+            <Ingredient name="sójová omáčka" netQuantityG="30.00" />
+        </Ingredients>
+         <AllowedSideDishes>
+            <SideDish categoryId="P1" />
+             <SideDish categoryId="P2" specificNote="brambory šťouchané"/>
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="D1-11" categoryId="HJ" mealTypeId="M6" basePortions="10"> <Name>Kuřecí medailónky v hořčičné omáčce</Name>
+        <Ingredients>
+            <Ingredient name="kuřecí prsa" netQuantityG="1500.00" />
+            <Ingredient name="hořčice plnotučná" netQuantityG="100.00" />
+            <Ingredient name="sůl" netQuantityG="15.00" />
+            <Ingredient name="pepř" netQuantityG="1.00" />
+            <Ingredient name="olej" netQuantityG="100.00" />
+            <Ingredient name="cibule" netQuantityG="200.00" />
+            <Ingredient name="mouka hladká" netQuantityG="20.00" />
+        </Ingredients>
+        <AllowedSideDishes>
+            <SideDish categoryId="P2" specificNote="rýže /různé úpravy/"/>
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="D1-12" categoryId="HJ" mealTypeId="M6" basePortions="10">
+        <Name>Mořská štika na kari</Name>
+        <Ingredients>
+            <Ingredient name="mořská štika" netQuantityG="1500.00" />
+            <Ingredient name="citrón" netQuantityG="8.00" />
+            <Ingredient name="sůl" netQuantityG="10.00" />
+            <Ingredient name="cibule" netQuantityG="80.00" />
+            <Ingredient name="olej" netQuantityG="80.00" />
+            <Ingredient name="mouka hladká" netQuantityG="20.00" />
+            <Ingredient name="kari" netQuantityG="6.00" />
+            <Ingredient name="máslo" netQuantityG="10.00" />
+        </Ingredients>
+         <AllowedSideDishes>
+            <SideDish categoryId="P1" />
+             <SideDish categoryId="P2" specificNote="brambory vařené"/>
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="D1-13" categoryId="HJ" mealTypeId="M6" basePortions="10">
+        <Name>Farářovo tajemství</Name>
+        <Ingredients>
+            <Ingredient name="vepřová kýta" netQuantityG="1500.00" />
+            <Ingredient name="sýr Eidam" netQuantityG="300.00" />
+            <Ingredient name="sůl" netQuantityG="20.00" />
+            <Ingredient name="pepř" netQuantityG="1.00" />
+            <Ingredient name="olej" netQuantityG="100.00" />
+            <Ingredient name="cibule" netQuantityG="250.00" />
+            <Ingredient name="mouka hladká" netQuantityG="20.00" />
+            <Ingredient name="paprika sladká" netQuantityG="15.00" />
+        </Ingredients>
+        <AllowedSideDishes>
+            <SideDish categoryId="P2" specificNote="brambory vařené"/>
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="D1-14" categoryId="HJ" mealTypeId="M6" basePortions="10">
+        <Name>Ševcovské nudličky</Name>
+        <Ingredients>
+            <Ingredient name="vepřová kýta" netQuantityG="1500.00" />
+            <Ingredient name="hořčice plnotučná" netQuantityG="100.00" />
+            <Ingredient name="sůl" netQuantityG="15.00" />
+            <Ingredient name="pepř" netQuantityG="1.00" />
+            <Ingredient name="olej" netQuantityG="100.00" />
+            <Ingredient name="mouka hladká" netQuantityG="15.00" />
+            <Ingredient name="okurky sterilované" netQuantityG="200.00" />
+        </Ingredients>
+        <AllowedSideDishes>
+            <SideDish categoryId="P2" specificNote="brambory šťouchané, rýže (různé úpravy)"/>
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="D1-15" categoryId="HJ" mealTypeId="M6" basePortions="10">
+        <Name>Vepřová kapsa po pražsku</Name>
+        <Ingredients>
+            <Ingredient name="vepřová kýta" netQuantityG="1500.00" />
+            <Ingredient name="šunka dušená" netQuantityG="100.00" />
+            <Ingredient name="sůl" netQuantityG="20.00" />
+            <Ingredient name="pepř" netQuantityG="1.00" />
+            <Ingredient name="olej" netQuantityG="100.00" />
+            <Ingredient name="cibule" netQuantityG="150.00" />
+            <Ingredient name="hrášek" netQuantityG="50.00" />
+            <Ingredient name="vejce vařené" netQuantityG="200.00" />
+            <Ingredient name="mouka hladká" netQuantityG="20.00" />
+        </Ingredients>
+        <AllowedSideDishes>
+            <SideDish categoryId="P1" />
+            <SideDish categoryId="P2" specificNote="brambory vařené"/>
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="D1-16" categoryId="HJ" mealTypeId="M6" basePortions="10">
+        <Name>Vepřové maso Flamendr</Name>
+        <Ingredients>
+            <Ingredient name="vepřová kýta" netQuantityG="1500.00" />
+            <Ingredient name="paprika sladká" netQuantityG="30.00" />
+            <Ingredient name="sůl" netQuantityG="10.00" />
+            <Ingredient name="pepř" netQuantityG="1.00" />
+            <Ingredient name="olej" netQuantityG="100.00" />
+            <Ingredient name="mouka hladká" netQuantityG="15.00" />
+            <Ingredient name="majoránka" netQuantityG="0.50" />
+            <Ingredient name="paprikové řezy mražené" netQuantityG="100.00" />
+            <Ingredient name="feferonky s nálevem" netQuantityG="80.00" />
+            <Ingredient name="rajský protlak" netQuantityG="90.00" />
+            <Ingredient name="kmín" netQuantityG="2.00" />
+            <Ingredient name="cibule" netQuantityG="100.00" />
+        </Ingredients>
+        <AllowedSideDishes>
+            <SideDish categoryId="P1" specificNote="brambory opečené"/>
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="D1-17" categoryId="HJ" mealTypeId="M6" basePortions="10">
+        <Name>Vepřová kotleta na pivě</Name>
+        <Ingredients>
+            <Ingredient name="vepřová pečeně s k." netQuantityG="1800.00" />
+            <Ingredient name="hořčice plnotučná" netQuantityG="50.00" />
+            <Ingredient name="sůl" netQuantityG="30.00" />
+            <Ingredient name="pepř" netQuantityG="1.00" />
+            <Ingredient name="olej" netQuantityG="100.00" />
+            <Ingredient name="cibule" netQuantityG="150.00" />
+            <Ingredient name="mouka hladká" netQuantityG="20.00" />
+            <Ingredient name="kečup" netQuantityG="50.00" />
+            <Ingredient name="pivo" netQuantityG="300.00" />
+            <Ingredient name="karpatský bujón" netQuantityG="3.00" />
+        </Ingredients>
+        <AllowedSideDishes>
+            <SideDish categoryId="P1" />
+            <SideDish categoryId="P2" specificNote="brambory vařené"/>
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="D1-18" categoryId="HJ" mealTypeId="M6" basePortions="10">
+        <Name>Vepřový steak s kořením Chorízo</Name>
+        <Ingredients>
+            <Ingredient name="vepřová kýta" netQuantityG="1500.00" />
+            <Ingredient name="sůl" netQuantityG="30.00" />
+            <Ingredient name="pepř" netQuantityG="2.00" />
+            <Ingredient name="olej" netQuantityG="100.00" />
+            <Ingredient name="cibule" netQuantityG="150.00" />
+            <Ingredient name="mouka hladká" netQuantityG="20.00" />
+            <Ingredient name="koření Chorízo" netQuantityG="100.00" />
+        </Ingredients>
+         <AllowedSideDishes>
+            <SideDish categoryId="P1" specificNote="brambory opečené"/>
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="D1-19" categoryId="HJ" mealTypeId="M6" basePortions="10">
+        <Name>Sváteční vinná klobása pečená</Name>
+        <Ingredients>
+            <Ingredient name="vinná klobása" netQuantityG="1500.00" />
+            <Ingredient name="sůl" netQuantityG="20.00" />
+            <Ingredient name="olej" netQuantityG="250.00" />
+            <Ingredient name="mouka hladká" netQuantityG="350.00" />
+        </Ingredients>
+        <AllowedSideDishes>
+            <SideDish categoryId="P2" specificNote="brambory šťouchané"/>
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="D1-20" categoryId="HJ" mealTypeId="M6" basePortions="10">
+        <Name>Kuřecí závitek se šunkou a nivou</Name>
+        <Ingredients>
+            <Ingredient name="kuřecí stehenní plátek" netQuantityG="1500.00" />
+            <Ingredient name="olej" netQuantityG="150.00" />
+            <Ingredient name="sůl" netQuantityG="20.00" />
+            <Ingredient name="mouka hladká" netQuantityG="350.00" />
+            <Ingredient name="niva" netQuantityG="300.00" />
+            <Ingredient name="šunka" netQuantityG="200.00" />
+            <Ingredient name="cibule" netQuantityG="150.00" />
+        </Ingredients>
+         <AllowedSideDishes>
+            <SideDish categoryId="P2" specificNote="bramborová kaše"/>
+        </AllowedSideDishes>
+    </Recipe>
+     <Recipe code="D1-21" categoryId="HJ" mealTypeId="M6" basePortions="10">
+        <Name>Mořská štika na másle</Name>
+        <Ingredients>
+            <Ingredient name="mořská štika" netQuantityG="1500.00" />
+            <Ingredient name="sůl" netQuantityG="20.00" />
+            <Ingredient name="máslo" netQuantityG="200.00" />
+        </Ingredients>
+        <AllowedSideDishes>
+            <SideDish categoryId="P1" />
+            <SideDish categoryId="P2" specificNote="brambory vařené, bramborová kaše"/>
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="D1-22" categoryId="HJ" mealTypeId="M6" basePortions="10">
+        <Name>Kapr na kmíně</Name>
+        <Ingredients>
+            <Ingredient name="kapr" netQuantityG="1800.00" notes="zvýšená čistá váha - vyšší objemová ztráta při úpravě, větší množství kostí"/>
+            <Ingredient name="sůl" netQuantityG="20.00" />
+            <Ingredient name="máslo" netQuantityG="200.00" />
+            <Ingredient name="kmín" netQuantityG="15.00" />
+        </Ingredients>
+         <AllowedSideDishes>
+            <SideDish categoryId="P2" specificNote="brambory vařené"/>
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="D1-23" categoryId="HJ" mealTypeId="M6" basePortions="10">
+        <Name>Cikánský hovězí plátek</Name>
+        <Ingredients>
+            <Ingredient name="hovězí zadní" netQuantityG="1500.00" />
+            <Ingredient name="paprika sladká" netQuantityG="30.00" />
+            <Ingredient name="sůl" netQuantityG="10.00" />
+            <Ingredient name="pepř" netQuantityG="1.00" />
+            <Ingredient name="olej" netQuantityG="100.00" />
+            <Ingredient name="mouka hladká" netQuantityG="15.00" />
+            <Ingredient name="okurky sterilované" netQuantityG="20.00" />
+            <Ingredient name="paprikové řezy mražené" netQuantityG="100.00" />
+            <Ingredient name="lečo sterilované" netQuantityG="120.00" />
+            <Ingredient name="protlak rajský" netQuantityG="90.00" />
+            <Ingredient name="kmín" netQuantityG="2.00" />
+            <Ingredient name="cibule" netQuantityG="100.00" />
+            <Ingredient name="česnek" netQuantityG="20.00" />
+            <Ingredient name="slanina" netQuantityG="30.00" />
+        </Ingredients>
+        <AllowedSideDishes>
+            <SideDish categoryId="P2" specificNote="brambory šťouchané"/>
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="D1-24" categoryId="HJ" mealTypeId="M6" basePortions="10">
+        <Name>Kuřecí prsní řízek na bazalce</Name>
+        <Ingredients>
+            <Ingredient name="kuřecí prsa" netQuantityG="1500.00" />
+            <Ingredient name="bazalka" netQuantityG="50.00" />
+            <Ingredient name="pepř" netQuantityG="1.00" />
+            <Ingredient name="olej" netQuantityG="100.00" />
+            <Ingredient name="cibule" netQuantityG="150.00" />
+            <Ingredient name="sůl" netQuantityG="30.00" />
+            <Ingredient name="mouka hladká" netQuantityG="20.00" />
+            <Ingredient name="máslo" netQuantityG="10.00" />
+        </Ingredients>
+         <AllowedSideDishes>
+            <SideDish categoryId="P1" />
+            <SideDish categoryId="P2" specificNote="rýže/různé úpravy/"/>
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="D1-25" categoryId="HJ" mealTypeId="M6" basePortions="10">
+        <Name>Štajgrova směs</Name>
+        <Ingredients>
+            <Ingredient name="vepřová kýta" netQuantityG="1500.00" />
+            <Ingredient name="paprika sterilovaná" netQuantityG="50.00" />
+            <Ingredient name="sůl" netQuantityG="10.00" />
+            <Ingredient name="pepř" netQuantityG="1.00" />
+            <Ingredient name="sádlo" netQuantityG="100.00" />
+            <Ingredient name="mouka hladká" netQuantityG="15.00" />
+            <Ingredient name="vejce vařené" netQuantityG="6.00" notes="počet ks"/> <Ingredient name="cibule" netQuantityG="100.00" />
+        </Ingredients>
+        <AllowedSideDishes>
+            <SideDish categoryId="P1" />
+            <SideDish categoryId="P2" specificNote="rýže/různé úpravy/"/>
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="D1-26" categoryId="HJ" mealTypeId="M6" basePortions="10">
+        <Name>Vepřová roláda</Name>
+        <Ingredients>
+            <Ingredient name="vepřová kýta" netQuantityG="1500.00" />
+            <Ingredient name="hořčice plnotučná" netQuantityG="100.00" />
+            <Ingredient name="sůl" netQuantityG="15.00" />
+            <Ingredient name="pepř" netQuantityG="1.00" />
+            <Ingredient name="olej" netQuantityG="100.00" />
+            <Ingredient name="mouka hladká" netQuantityG="15.00" />
+            <Ingredient name="vaječná melanž" netQuantityG="300.00" />
+            <Ingredient name="salám měkký" netQuantityG="80.00" />
+            <Ingredient name="hrášek sterilovaný" netQuantityG="50.00" />
+            <Ingredient name="cibule" netQuantityG="150.00" />
+        </Ingredients>
+        <AllowedSideDishes>
+            <SideDish categoryId="P2" specificNote="rýže/různé úpravy/, bramborová kaše"/>
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="D1-27" categoryId="HJ" mealTypeId="M6" basePortions="10">
+        <Name>Vepřový závitek s masovou náplní</Name>
+        <Ingredients>
+            <Ingredient name="vepřová kýta" netQuantityG="1500.00" />
+            <Ingredient name="mleté maso" netQuantityG="500.00" />
+            <Ingredient name="sůl" netQuantityG="20.00" />
+            <Ingredient name="pepř" netQuantityG="1.00" />
+            <Ingredient name="olej" netQuantityG="100.00" />
+            <Ingredient name="mouka hladká" netQuantityG="20.00" />
+            <Ingredient name="paprika mletá" netQuantityG="50.00" />
+            <Ingredient name="vaječná melanž" netQuantityG="100.00" />
+            <Ingredient name="cibule" netQuantityG="150.00" />
+        </Ingredients>
+        <AllowedSideDishes>
+            <SideDish categoryId="P2" specificNote="rýže/různé úpravy/"/>
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="D1-28" categoryId="HJ" mealTypeId="M6" basePortions="10">
+        <Name>Kuřecí řízek Ondráš</Name>
+        <Ingredients>
+            <Ingredient name="kuřecí prsa" netQuantityG="1500.00" />
+            <Ingredient name="rostlinný tuk" netQuantityG="250.00" />
+            <Ingredient name="sůl" netQuantityG="20.00" />
+            <Ingredient name="mouka hladká" netQuantityG="250.00" />
+            <Ingredient name="brambory syrové" netQuantityG="600.00" notes="očištěné"/>
+            <Ingredient name="mléko" netQuantityG="100.00" />
+            <Ingredient name="vaječná melanž" netQuantityG="80.00" />
+            <Ingredient name="česnek" netQuantityG="10.00" />
+            <Ingredient name="majoránka" netQuantityG="0.50" />
+        </Ingredients>
+         </Recipe>
+    <Recipe code="D1-29" categoryId="HJ" mealTypeId="M6" basePortions="10">
+        <Name>Kuřecí špíz</Name>
+        <Ingredients>
+            <Ingredient name="kuřecí stehenní plátek" netQuantityG="1500.00" />
+            <Ingredient name="slanina" netQuantityG="200.00" />
+            <Ingredient name="sůl" netQuantityG="15.00" />
+            <Ingredient name="pepř" netQuantityG="1.00" />
+            <Ingredient name="olej" netQuantityG="100.00" />
+            <Ingredient name="mouka hladká" netQuantityG="10.00" />
+            <Ingredient name="grilovací koření" netQuantityG="20.00" />
+            <Ingredient name="paprika čerstvá" netQuantityG="250.00" />
+            <Ingredient name="cibule" netQuantityG="200.00" />
+        </Ingredients>
+        <AllowedSideDishes>
+            <SideDish categoryId="P1" />
+            <SideDish categoryId="P2" specificNote="brambory vařené"/>
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="D1-30" categoryId="HJ" mealTypeId="M6" basePortions="10">
+        <Name>Přírodní kuřecí steak s uzeným sýrem</Name>
+        <Ingredients>
+            <Ingredient name="kuřecí prsa" netQuantityG="1500.00" />
+            <Ingredient name="uzený sýr" netQuantityG="200.00" />
+            <Ingredient name="sůl" netQuantityG="30.00" />
+            <Ingredient name="pepř" netQuantityG="1.00" />
+            <Ingredient name="olej" netQuantityG="100.00" />
+            <Ingredient name="mouka hladká" netQuantityG="20.00" />
+            <Ingredient name="cibule" netQuantityG="150.00" />
+        </Ingredients>
+         <AllowedSideDishes>
+            <SideDish categoryId="P1" />
+            <SideDish categoryId="P2" specificNote="rýže /různé úpravy/"/>
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="D1-31" categoryId="HJ" mealTypeId="M6" basePortions="10">
+        <Name>Kuřecí stehno plněné žampiónovo-rýžovou fáší</Name>
+        <Ingredients>
+            <Ingredient name="kuřecí stehna" netQuantityG="2400.00" />
+            <Ingredient name="žampióny čerstvé" netQuantityG="250.00" />
+            <Ingredient name="sůl" netQuantityG="30.00" />
+            <Ingredient name="pepř" netQuantityG="1.00" />
+            <Ingredient name="olej" netQuantityG="100.00" />
+            <Ingredient name="rýže" netQuantityG="450.00" />
+            <Ingredient name="kmín" netQuantityG="10.00" />
+            <Ingredient name="mouka hladká" netQuantityG="20.00" />
+            <Ingredient name="cibule" netQuantityG="150.00" />
+        </Ingredients>
+         <AllowedSideDishes>
+            <SideDish categoryId="P2" specificNote="brambory šťouchané"/>
+            <SideDish categoryId="P3" specificNote="brokolicovo-bramborové pyré"/>
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="D2-32" categoryId="HJ" mealTypeId="M6" basePortions="10">
+        <Name>Hovězí směs Sweet &amp; Sour</Name> <Ingredients>
+            <Ingredient name="hovězí maso zadní" netQuantityG="1500.00" />
+            <Ingredient name="rajský protlak" netQuantityG="500.00" />
+            <Ingredient name="pepř mletý" netQuantityG="1.00" />
+            <Ingredient name="sůl" netQuantityG="30.00" />
+            <Ingredient name="mouka hladká" netQuantityG="100.00" />
+            <Ingredient name="paprika mletá" netQuantityG="20.00" />
+            <Ingredient name="olej" netQuantityG="150.00" />
+            <Ingredient name="cibule" netQuantityG="200.00" />
+            <Ingredient name="ananas kompotovaný" netQuantityG="200.00" />
+            <Ingredient name="kukuřice mražená" netQuantityG="200.00" />
+            <Ingredient name="cukr krupice" netQuantityG="50.00" />
+            <Ingredient name="pepřové koření" netQuantityG="1.00" /> </Ingredients>
+         <AllowedSideDishes>
+            <SideDish categoryId="P2" specificNote="rýže (různé úpravy)"/>
+            <SideDish categoryId="P3" specificNote="rajčatová rýže"/>
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="D2-33" categoryId="HJ" mealTypeId="M6" basePortions="10">
+        <Name>Hovězí soté po stroganovsku</Name>
+        <Ingredients>
+            <Ingredient name="hovězí maso zadní" netQuantityG="1500.00" />
+            <Ingredient name="sůl" netQuantityG="20.00" />
+            <Ingredient name="pepř mletý" netQuantityG="1.00" />
+            <Ingredient name="olej" netQuantityG="100.00" />
+            <Ingredient name="cibule" netQuantityG="125.00" />
+            <Ingredient name="mouka hladká" netQuantityG="40.00" />
+            <Ingredient name="rajský protlak" netQuantityG="50.00" />
+            <Ingredient name="máslo" netQuantityG="50.00" />
+            <Ingredient name="smetana na vaření 12%" netQuantityG="150.00" />
+            <Ingredient name="citrony" netQuantityG="50.00" />
+            <Ingredient name="okurky sterilované" netQuantityG="120.00" />
+            <Ingredient name="žampiony čerstvé" netQuantityG="150.00" />
+            <Ingredient name="víno bílé" netQuantityG="100.00" />
+        </Ingredients>
+        <AllowedSideDishes>
+            <SideDish categoryId="P2" specificNote="rýže (různé úpravy)"/>
+            <SideDish categoryId="P3" specificNote="staročeská rýže"/>
+        </AllowedSideDishes>
+    </Recipe>
+    <Recipe code="D2-34" categoryId="HJ" mealTypeId="M6" basePortions="10">
+        <Name>Aztécký vepřový plátek</Name>
+        <Ingredients>
+            <Ingredient name="vepřová kýta" netQuantityG="1500.00" />
+            <Ingredient name="olej" netQuantityG="150.00" />
+            <Ingredient name="paprika čerstvá" netQuantityG="600.00" />
+            <Ingredient name="sýr Eidam" netQuantityG="250.00" />
+            <Ingredient name="česnek čerstvý" netQuantityG="50.00" />
+            <Ingredient name="slanina" netQuantityG="60.00" />
+            <Ingredient name="sůl" netQuantityG="30.00" />
+            <Ingredient name="cibule" netQuantityG="85.00" />
+            <Ingredient name="mouka hladká" netQuantityG="50.00" />
+        </Ingredients>
+         <AllowedSideDishes>
+            <SideDish categoryId="P1" />
+            <SideDish categoryId="P2" specificNote="brambory šťouchané"/>
+        </AllowedSideDishes>
+    </Recipe>
+    </Recipes>
+</RecipeBook>

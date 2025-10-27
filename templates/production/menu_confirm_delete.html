@@ -1,0 +1,52 @@
+{% extends 'base.html' %}
+
+{% block title %}Smazat jídelníček{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-danger text-white">
+                    <h4 class="card-title mb-0">
+                        <i class="fas fa-trash me-2"></i>
+                        Smazat jídelníček
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Pozor!</strong> Tato akce je nevratná.
+                    </div>
+                    
+                    <p>Opravdu chcete smazat jídelníček <strong>"{{ object.name }}"</strong>?</p>
+                    
+                    <div class="mb-3">
+                        <strong>Detaily jídelníčku:</strong><br>
+                        <i class="fas fa-building me-1 text-muted"></i>Jídelna: {{ object.canteen.name }}<br>
+                        <i class="fas fa-calendar me-1 text-muted"></i>Období: {{ object.date_from|date:"d.m.Y" }} - {{ object.date_to|date:"d.m.Y" }}<br>
+                        <i class="fas fa-list me-1 text-muted"></i>Počet jídel: {{ object.production_orders.count }}
+                    </div>
+
+                    {% if object.production_orders.count > 0 %}
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle me-2"></i>
+                            Smazáním jídelníčku se smažou i všechna přidružená jídla ({{ object.production_orders.count }} položek).
+                        </div>
+                    {% endif %}
+
+                    <form method="post" class="d-flex justify-content-between">
+                        {% csrf_token %}
+                        <a href="{% url 'production:menu_detail' object.pk %}" class="btn btn-outline-secondary">
+                            <i class="fas fa-arrow-left me-1"></i> Zpět
+                        </a>
+                        <button type="submit" class="btn btn-danger">
+                            <i class="fas fa-trash me-1"></i> Ano, smazat jídelníček
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

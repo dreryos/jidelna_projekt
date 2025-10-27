@@ -1,0 +1,219 @@
+{% extends 'base.html' %}
+{% load bootstrap5 %}
+
+{% block title %}Výdejka na {{ picking_date|date:"d.m.Y" }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-12">
+            <!-- Header s informacemi -->
+            <div class="card mb-4">
+                <div class="card-header bg-success text-white">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h3 class="mb-0">
+                            <i class="fas fa-clipboard-list me-2"></i>
+                            Výdejka na {{ picking_date|date:"l d.m.Y" }}
+                        </h3>
+                        <div class="btn-group">
+                            <a href="{% url 'production:menu_list' %}" class="btn btn-light btn-sm">
+                                <i class="fas fa-arrow-left me-1"></i> Zpět
+                            </a>
+                            <a href="?date={{ picking_date|date:'Y-m-d' }}{% if selected_canteen %}&canteen={{ selected_canteen.id }}{% endif %}&format=pdf" class="btn btn-outline-light btn-sm" target="_blank">
+                                <i class="fas fa-file-pdf me-1"></i> PDF
+                            </a>
+                            <button onclick="window.print()" class="btn btn-outline-light btn-sm">
+                                <i class="fas fa-print me-1"></i> Tisk
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <strong>Datum:</strong><br>
+                            <i class="fas fa-calendar me-1 text-muted"></i>{{ picking_date|date:"d.m.Y" }}
+                        </div>
+                        <div class="col-md-3">
+                            <strong>Jídelna:</strong><br>
+                            <i class="fas fa-building me-1 text-muted"></i>
+                            {% if selected_canteen %}{{ selected_canteen.name }}{% else %}Všechny jídelny{% endif %}
+                        </div>
+                        <div class="col-md-3">
+                            <strong>Počet jídel:</strong><br>
+                            <i class="fas fa-utensils me-1 text-muted"></i>{{ total_orders }}
+                        </div>
+                        <div class="col-md-3">
+                            <strong>Celkem porcí:</strong><br>
+                            <i class="fas fa-users me-1 text-muted"></i>{{ total_portions }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {% if ingredient_totals %}
+                <!-- Seznam surovin -->
+                <div class="card mb-4">
+                    <div class="card-header bg-primary text-white">
+                        <h4 class="mb-0">
+                            <i class="fas fa-list me-2"></i>
+                            Seznam surovin k vychystání
+                        </h4>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-striped mb-0">
+                                <thead class="table-dark">
+                                    <tr>
+                                        <th width="5%">#</th>
+                                        <th width="40%">Surovina</th>
+                                        <th width="15%">Množství</th>
+                                        <th width="15%">Jednotka</th>
+                                        <th width="25%">Poznámka</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for item in ingredient_totals %}
+                                        <tr>
+                                            <td class="fw-bold">{{ forloop.counter }}.</td>
+                                            <td>
+                                                <strong>{{ item.ingredient.name }}</strong>
+                                                {% if item.ingredient.description %}
+                                                    <br><small class="text-muted">{{ item.ingredient.description }}</small>
+                                                {% endif %}
+                                            </td>
+                                            <td class="fw-bold text-primary">{{ item.amount|floatformat:2 }}</td>
+                                            <td>{{ item.ingredient.unit }}</td>
+                                            <td>
+                                                <button type="button" class="btn btn-outline-info btn-sm" data-bs-toggle="collapse" data-bs-target="#detail-{{ forloop.counter }}">
+                                                    <i class="fas fa-info-circle me-1"></i> Detail
+                                                </button>
+                                            </td>
+                                        </tr>
+                                        <tr class="collapse" id="detail-{{ forloop.counter }}">
+                                            <td colspan="5" class="bg-light">
+                                                <div class="p-2">
+                                                    <small class="fw-bold text-muted">Použití v receptech:</small>
+                                                    <ul class="list-unstyled mb-0 mt-1">
+                                                        {% for order_info in item.orders %}
+                                                            <li>
+                                                                <span class="badge bg-secondary me-1">{{ order_info.portions }}</span>
+                                                                <strong>{{ order_info.recipe }}</strong> 
+                                                                ({{ order_info.canteen }}) - 
+                                                                <em>{{ order_info.amount|floatformat:2 }} {{ item.ingredient.unit }}</em>
+                                                            </li>
+                                                        {% endfor %}
+                                                    </ul>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="card-footer">
+                        <small class="text-muted">
+                            <i class="fas fa-info-circle me-1"></i>
+                            Kliknutím na "Detail" zobrazíte rozpis použití suroviny v jednotlivých receptech.
+                        </small>
+                    </div>
+                </div>
+
+                <!-- Přehled jídel -->
+                <div class="card">
+                    <div class="card-header bg-warning text-dark">
+                        <h4 class="mb-0">
+                            <i class="fas fa-utensils me-2"></i>
+                            Přehled jídel na tento den
+                        </h4>
+                    </div>
+                    <div class="card-body">
+                        {% if orders %}
+                            <div class="row">
+                                {% for order in orders %}
+                                    <div class="col-lg-6 col-xl-4 mb-3">
+                                        <div class="card border-warning">
+                                            <div class="card-body">
+                                                <h6 class="card-title">
+                                                    <i class="fas fa-utensils me-1 text-warning"></i>
+                                                    {{ order.recipe.name }}
+                                                </h6>
+                                                <p class="card-text mb-1">
+                                                    <small class="text-muted">
+                                                        <i class="fas fa-building me-1"></i>{{ order.canteen.name|default:"Bez jídelny" }}
+                                                    </small>
+                                                </p>
+                                                <div class="d-flex justify-content-between">
+                                                    <span class="badge bg-primary">{{ order.portions_adult|default:0 }} dospělých</span>
+                                                    <span class="badge bg-info">{{ order.portions_child|default:0 }} dětských</span>
+                                                </div>
+                                                {% if order.menu_plan %}
+                                                    <div class="mt-2">
+                                                        <small class="text-muted">
+                                                            <i class="fas fa-calendar me-1"></i>{{ order.menu_plan.name }}
+                                                        </small>
+                                                    </div>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <div class="alert alert-info">
+                                <i class="fas fa-info-circle me-2"></i>
+                                Na tento den nejsou naplánována žádná jídla.
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            {% else %}
+                <div class="alert alert-warning text-center">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <h4>Žádná jídla nenalezena</h4>
+                    <p>Na datum {{ picking_date|date:"d.m.Y" }}{% if selected_canteen %} pro jídelnu "{{ selected_canteen.name }}"{% endif %} nejsou naplánována žádná jídla.</p>
+                    <div class="mt-3">
+                        <a href="{% url 'production:menu_list' %}" class="btn btn-primary">
+                            <i class="fas fa-arrow-left me-1"></i> Zpět na jídelníčky
+                        </a>
+                        <a href="{% url 'production:menu_create' %}" class="btn btn-success">
+                            <i class="fas fa-plus me-1"></i> Vytvořit jídelníček
+                        </a>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Tiskový styl -->
+<style>
+@media print {
+    .btn, .btn-group, .card-header .btn {
+        display: none !important;
+    }
+    .card {
+        border: none !important;
+        box-shadow: none !important;
+    }
+    .card-header {
+        background-color: #f8f9fa !important;
+        color: #000 !important;
+        border: 1px solid #000 !important;
+    }
+    .table {
+        font-size: 12px;
+    }
+    .table th, .table td {
+        border: 1px solid #000 !important;
+    }
+    .collapse {
+        display: table-row !important;
+    }
+    .card-footer {
+        display: none !important;
+    }
+}
+</style>
+{% endblock %}

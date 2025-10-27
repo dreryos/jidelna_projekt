@@ -1,0 +1,80 @@
+{% extends 'base.html' %}
+{% load bootstrap5 %}
+
+{% block title %}Suroviny - Jídelna{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h1>
+    <i class="fas fa-seedling me-2"></i>Suroviny
+  </h1>
+  <a href="{% url 'core:ingredient_add' %}" class="btn btn-success">
+    <i class="fas fa-plus me-2"></i>Přidat surovinu
+  </a>
+</div>
+
+{% if ingredients %}
+  <div class="card">
+    <div class="card-body">
+      <div class="table-responsive">
+        <table class="table table-striped table-hover">
+          <thead class="table-dark">
+            <tr>
+              <th><i class="fas fa-tag me-1"></i>Název</th>
+              <th><i class="fas fa-balance-scale me-1"></i>Jednotka</th>
+              <th><i class="fas fa-utensils me-1"></i>Použito v receptech</th>
+              <th class="text-end"><i class="fas fa-cogs me-1"></i>Akce</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for ingredient in ingredients %}
+              <tr>
+                <td>
+                  <strong>{{ ingredient.name }}</strong>
+                </td>
+                <td>
+                  <span class="badge bg-secondary">{{ ingredient.unit }}</span>
+                </td>
+                <td>
+                  {% with recipe_count=ingredient.recipe_set.count %}
+                    {% if recipe_count > 0 %}
+                      <span class="badge bg-info">{{ recipe_count }} receptů</span>
+                    {% else %}
+                      <span class="text-muted">Nepoužito</span>
+                    {% endif %}
+                  {% endwith %}
+                </td>
+                <td class="text-end">
+                  <div class="btn-group" role="group">
+                    <a href="{% url 'core:ingredient_edit' ingredient.pk %}" class="btn btn-sm btn-outline-primary">
+                      <i class="fas fa-edit"></i>
+                    </a>
+                    <a href="{% url 'core:ingredient_delete' ingredient.pk %}" class="btn btn-sm btn-outline-danger">
+                      <i class="fas fa-trash"></i>
+                    </a>
+                  </div>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+{% else %}
+  <div class="text-center py-5">
+    <i class="fas fa-seedling fa-3x text-muted mb-3"></i>
+    <h4 class="text-muted">Zatím nemáte žádné suroviny</h4>
+    <p class="text-muted">Začněte přidáním základních surovin pro vaše recepty.</p>
+    <a href="{% url 'core:ingredient_add' %}" class="btn btn-success">
+      <i class="fas fa-plus me-2"></i>Přidat první surovinu
+    </a>
+  </div>
+{% endif %}
+
+<div class="mt-4">
+  <a href="{% url 'core:recipe_list' %}" class="btn btn-outline-primary">
+    <i class="fas fa-book-open me-2"></i>Zpět na recepty
+  </a>
+</div>
+{% endblock %}

@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Výdejka na {{ picking_date|date:"d.m.Y" }}</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            font-size: 12px;
+            line-height: 1.4;
+        }
+        
+        .header {
+            text-align: center;
+            border-bottom: 2px solid #000;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .header h1 {
+            font-size: 20px;
+            margin: 0;
+            color: #333;
+        }
+        
+        .info-section {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            padding: 10px;
+            background-color: #f5f5f5;
+            border: 1px solid #ddd;
+        }
+        
+        .info-item {
+            flex: 1;
+            text-align: center;
+        }
+        
+        .info-item strong {
+            display: block;
+            font-size: 10px;
+            color: #666;
+            text-transform: uppercase;
+        }
+        
+        .info-item span {
+            font-size: 14px;
+            font-weight: bold;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        
+        th, td {
+            border: 1px solid #333;
+            padding: 8px;
+            text-align: left;
+        }
+        
+        th {
+            background-color: #333;
+            color: white;
+            font-weight: bold;
+            text-align: center;
+        }
+        
+        .ingredient-name {
+            font-weight: bold;
+        }
+        
+        .amount {
+            text-align: right;
+            font-weight: bold;
+            color: #0066cc;
+        }
+        
+        .unit {
+            text-align: center;
+        }
+        
+        .checkbox {
+            width: 20px;
+            text-align: center;
+        }
+        
+        .meals-section {
+            margin-top: 30px;
+            page-break-inside: avoid;
+        }
+        
+        .meals-header {
+            background-color: #f0f0f0;
+            padding: 10px;
+            border: 1px solid #333;
+            margin-bottom: 10px;
+            font-weight: bold;
+            text-align: center;
+        }
+        
+        .meal-item {
+            border: 1px solid #ddd;
+            padding: 8px;
+            margin-bottom: 5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .meal-name {
+            font-weight: bold;
+        }
+        
+        .meal-details {
+            font-size: 10px;
+            color: #666;
+        }
+        
+        .portions {
+            font-weight: bold;
+            color: #0066cc;
+        }
+        
+        .footer {
+            margin-top: 30px;
+            border-top: 1px solid #ddd;
+            padding-top: 10px;
+            text-align: center;
+            font-size: 10px;
+            color: #666;
+        }
+        
+        .signature-section {
+            margin-top: 40px;
+            display: flex;
+            justify-content: space-between;
+        }
+        
+        .signature-box {
+            width: 200px;
+            text-align: center;
+        }
+        
+        .signature-line {
+            border-bottom: 1px solid #333;
+            height: 30px;
+            margin-bottom: 5px;
+        }
+        
+        @media print {
+            body { margin: 0; }
+            .page-break { page-break-before: always; }
+        }
+        
+        .counter {
+            text-align: center;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>VÝDEJKA SUROVIN</h1>
+        <div style="margin-top: 10px;">
+            <strong>Datum: {{ picking_date|date:"d.m.Y" }}</strong>
+            {% if selected_canteen %} | Jídelna: {{ selected_canteen.name }}{% endif %}
+        </div>
+    </div>
+
+    <div class="info-section">
+        <div class="info-item">
+            <strong>Datum</strong>
+            <span>{{ picking_date|date:"d.m.Y" }}</span>
+        </div>
+        <div class="info-item">
+            <strong>Jídelna</strong>
+            <span>{% if selected_canteen %}{{ selected_canteen.name }}{% else %}Všechny{% endif %}</span>
+        </div>
+        <div class="info-item">
+            <strong>Počet jídel</strong>
+            <span>{{ total_orders }}</span>
+        </div>
+        <div class="info-item">
+            <strong>Celkem porcí</strong>
+            <span>{{ total_portions }}</span>
+        </div>
+    </div>
+
+    {% if ingredient_totals %}
+        <table>
+            <thead>
+                <tr>
+                    <th width="5%">#</th>
+                    <th width="50%">SUROVINA</th>
+                    <th width="15%">MNOŽSTVÍ</th>
+                    <th width="12%">JEDNOTKA</th>
+                    <th width="8%">HOTOVO</th>
+                    <th width="10%">POZNÁMKA</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in ingredient_totals %}
+                    <tr>
+                        <td class="counter">{{ forloop.counter }}.</td>
+                        <td class="ingredient-name">
+                            {{ item.ingredient.name }}
+                            {% if item.ingredient.description %}
+                                <br><small style="color: #666;">{{ item.ingredient.description }}</small>
+                            {% endif %}
+                        </td>
+                        <td class="amount">{{ item.amount|floatformat:2 }}</td>
+                        <td class="unit">{{ item.ingredient.unit }}</td>
+                        <td class="checkbox">☐</td>
+                        <td></td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <div class="meals-section">
+            <div class="meals-header">
+                PŘEHLED JÍDEL NA {{ picking_date|date:"d.m.Y" }}
+            </div>
+            {% for order in orders %}
+                <div class="meal-item">
+                    <div>
+                        <div class="meal-name">{{ order.recipe.name }}</div>
+                        <div class="meal-details">
+                            {{ order.canteen.name|default:"Bez jídelny" }}
+                            {% if order.menu_plan %} | {{ order.menu_plan.name }}{% endif %}
+                        </div>
+                    </div>
+                    <div class="portions">
+                        {{ order.portions_adult|default:0 }} + {{ order.portions_child|default:0 }} porcí
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+
+        <div class="signature-section">
+            <div class="signature-box">
+                <div class="signature-line"></div>
+                <small>Vydal</small>
+            </div>
+            <div class="signature-box">
+                <div class="signature-line"></div>
+                <small>Převzal</small>
+            </div>
+            <div class="signature-box">
+                <div class="signature-line"></div>
+                <small>Datum a čas</small>
+            </div>
+        </div>
+
+    {% else %}
+        <div style="text-align: center; padding: 50px; border: 2px dashed #ccc; margin: 20px 0;">
+            <h3>Žádná jídla nenalezena</h3>
+            <p>Na datum {{ picking_date|date:"d.m.Y" }}{% if selected_canteen %} pro jídelnu "{{ selected_canteen.name }}"{% endif %} nejsou naplánována žádná jídla.</p>
+        </div>
+    {% endif %}
+
+    <div class="footer">
+        Vygenerováno {{ "now"|date:"d.m.Y H:i" }} | Systém správy jídelny
+    </div>
+</body>
+</html>

@@ -1,0 +1,28 @@
+from django.urls import path
+from . import views
+
+app_name = 'production'
+
+urlpatterns = [
+    # Jídelníčky - nový systém
+    path('', views.MenuPlanListView.as_view(), name='menu_list'),
+    path('jidelnicky/', views.MenuPlanListView.as_view(), name='menu_list'),
+    path('jidelnicky/novy/', views.MenuPlanCreateView.as_view(), name='menu_create'),
+    path('jidelnicky/<int:pk>/', views.MenuPlanDetailView.as_view(), name='menu_detail'),
+    path('jidelnicky/<int:pk>/smazat/', views.MenuPlanDeleteView.as_view(), name='menu_delete'),
+    
+    # AJAX endpointy pro jídelníčky
+    path('jidelnicky/<int:menu_pk>/pridat-jidlo/', views.add_meal_to_menu, name='add_meal_to_menu'),
+    path('jidelnicky/<int:menu_pk>/upravit-porce/', views.update_portions_bulk, name='update_portions_bulk'),
+    
+    # Denní výdejky
+    path('vydejka-dne/', views.daily_picking_list, name='daily_picking_list'),
+    
+    # Původní výrobní příkazy (pro zpětnou kompatibilitu)
+    path('prikazy/', views.ProductionOrderListView.as_view(), name='order_list'),
+    path('prikazy/novy/', views.ProductionOrderCreateView.as_view(), name='order_add'),
+    path('prikazy/<int:pk>/', views.production_order_detail, name='order_detail'),
+    path('prikazy/<int:pk>/upravit/', views.ProductionOrderUpdateView.as_view(), name='order_edit'),
+    path('prikazy/<int:pk>/smazat/', views.ProductionOrderDeleteView.as_view(), name='order_delete'),
+    path('prikazy/<int:order_pk>/vydejka/', views.picking_list_print, name='picking_list_print'),
+]

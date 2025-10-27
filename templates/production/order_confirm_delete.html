@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+{% load bootstrap5 %}
+
+{% block title %}Smazat výrobní příkaz - {{ object.recipe.name }} - Jídelna{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-6">
+    <div class="card shadow border-danger">
+      <div class="card-header bg-danger text-white">
+        <h4 class="mb-0">
+          <i class="fas fa-exclamation-triangle me-2"></i>Smazat výrobní příkaz
+        </h4>
+      </div>
+      <div class="card-body">
+        <div class="alert alert-danger" role="alert">
+          <i class="fas fa-warning me-2"></i>
+          <strong>Varování!</strong> Tato akce je nevratná. Smaže se i celá výdejka surovin.
+        </div>
+        
+        <p class="lead">
+          Opravdu chcete smazat výrobní příkaz pro <strong>"{{ object.recipe.name }}"</strong>?
+        </p>
+        
+        <div class="bg-light p-3 rounded mb-3">
+          <h6><i class="fas fa-info-circle me-1"></i>Informace o příkazu:</h6>
+          <ul class="mb-0">
+            <li><strong>Recept:</strong> {{ object.recipe.name }}</li>
+            <li><strong>Jídelna:</strong> {{ object.canteen.name }}</li>
+            <li><strong>Datum vaření:</strong> {{ object.date|date:"d.m.Y" }}</li>
+            <li><strong>Dospělé porce:</strong> {{ object.portions_adult }}</li>
+            <li><strong>Dětské porce:</strong> {{ object.portions_child }}</li>
+            <li><strong>Celkem porcí:</strong> {{ object.portions_adult|add:object.portions_child }}</li>
+            <li><strong>Počet surovin ve výdejce:</strong> {{ object.picking_list_items.count }}</li>
+          </ul>
+        </div>
+        
+        {% if object.recipe.description %}
+        <div class="border-left border-3 border-secondary ps-3 mb-3">
+          <small class="text-muted">{{ object.recipe.description|truncatewords:20 }}</small>
+        </div>
+        {% endif %}
+        
+        <form method="post">
+          {% csrf_token %}
+          <div class="d-flex justify-content-between">
+            <a href="{% url 'production:order_detail' object.pk %}" class="btn btn-secondary">
+              <i class="fas fa-arrow-left me-2"></i>Zpět na detail
+            </a>
+            <button type="submit" class="btn btn-danger btn-lg">
+              <i class="fas fa-trash me-2"></i>Ano, smazat výrobní příkaz
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

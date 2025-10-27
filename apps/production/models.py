@@ -9,7 +9,8 @@ from apps.inventory.models import StockItem
 
 """
 Tento modul obsahuje logiku pro plánování a provádění výroby:
-- ProductionOrder: reprezentuje plánované vaření (recept + počty porcí + jídelna)
+- MenuPlan: jídelníček pro určité období
+- ProductionOrder: reprezentuje plánované vaření (recept + počty porcí + jídelna) - nyní součást jídelníčku
 - generate_picking_list: vytvoří položky výdejky podle norem receptu
 - PickingList: položka výdejky obsahující plánované a skutečné množství, sklad a stav
 
@@ -18,8 +19,38 @@ Pokud položka v daném skladu neexistuje, vytvoří se záznam se záporným mn
 """
 
 
+class MenuPlan(models.Model):
+    """Jídelníček pro určité období"""
+    name = models.CharField(max_length=200, verbose_name="Název jídelníčku")
+    canteen = models.ForeignKey(Canteen, on_delete=models.PROTECT, verbose_name="Jídelna")
+    date_from = models.DateField(verbose_name="Datum od")
+    date_to = models.DateField(verbose_name="Datum do")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Vytvořeno")
+    
+    # Výchozí počty porcí pro nová jídla
+    default_portions_adult = models.PositiveIntegerField(default=50, verbose_name="Výchozí počet dospělých porcí")
+    default_portions_child = models.PositiveIntegerField(default=30, verbose_name="Výchozí počet dětských porcí")
+
+    def __str__(self):
+        return f"{self.name} ({self.canteen.name})"
+    
+    def get_days_count(self):
+        """Vrátí počet dní v jídelníčku"""
+        return (self.date_to - self.date_from).days + 1
+    
+    def get_total_orders(self):
+        """Vrátí celkový počet jídel v jídelníčku"""
+        return self.production_orders.count()
+
+    class Meta:
+        verbose_name = "Jídelníček"
+        verbose_name_plural = "Jídelníčky"
+        ordering = ['-created_at']
+
+
 class ProductionOrder(models.Model):
-    """Výrobní příkaz"""
+    """Výrobní příkaz - nyní součást jídelníčku"""
+    menu_plan = models.ForeignKey(MenuPlan, on_delete=models.CASCADE, related_name='production_orders', verbose_name="Jídelníček", null=True, blank=True)
     recipe = models.ForeignKey(Recipe, on_delete=models.PROTECT, verbose_name="Recept")
     canteen = models.ForeignKey(Canteen, on_delete=models.PROTECT, verbose_name="Jídelna")
     portions_adult = models.PositiveIntegerField(verbose_name="Počet dospělých porcí")
@@ -62,6 +93,30 @@ class ProductionOrder(models.Model):
                 quantity_planned=quantity_planned,
                 warehouse=prefilled_warehouse
             )
+
+    def get_required_ingredients(self):
+        """Vrátí seznam surovin potřebných pro tento výrobní příkaz"""
+        ingredients = []
+        if not self.recipe:
+            return ingredients
+        
+        for recipe_ingredient in self.recipe.recipeingredient_set.all():
+            adult_amount = recipe_ingredient.quantity_adult * (self.portions_adult or 0)
+            child_amount = recipe_ingredient.quantity_child * (self.portions_child or 0)
+            total_amount = adult_amount + child_amount
+            
+            ingredients.append({
+                'ingredient': recipe_ingredient.ingredient,
+                'amount': total_amount,
+                'unit': recipe_ingredient.ingredient.unit
+            })
+        
+        return ingredients
+
+    @property
+    def total_portions(self):
+        """Celkový počet porcí"""
+        return (self.portions_adult or 0) + (self.portions_child or 0)
 
     def __str__(self):
         return f"Výroba: {self.recipe.name} pro {self.canteen.name} na den {self.date.strftime('%d.%m.%Y')}"

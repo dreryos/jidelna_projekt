@@ -1,0 +1,62 @@
+{% extends 'base.html' %}
+{% load bootstrap5 %}
+
+{% block title %}
+  {% if form.instance.pk %}Upravit jídelnu{% else %}Nová jídelna{% endif %} - Správa
+{% endblock %}
+
+{% block content %}
+<div class="row">
+  <div class="col-md-8 offset-md-2">
+    <div class="card shadow-sm">
+      <div class="card-header bg-success text-white">
+        <h3 class="mb-0">
+          <i class="fas fa-utensils me-2"></i>
+          {% if form.instance.pk %}
+            Upravit jídelnu
+          {% else %}
+            Nová jídelna
+          {% endif %}
+        </h3>
+      </div>
+      <div class="card-body">
+        <form method="post">
+          {% csrf_token %}
+          {% bootstrap_form form %}
+          
+          {% if form.instance.pk %}
+          <div class="alert alert-info mt-3">
+            <h6><i class="fas fa-info-circle me-2"></i>Informace o jídelně</h6>
+            <ul class="mb-0">
+              <li>Počet skladů: <strong>{{ form.instance.warehouses.count }}</strong></li>
+              <li>Celkem skladových položek: 
+                <strong>
+                  {% for warehouse in form.instance.warehouses.all %}
+                    {{ warehouse.stock_items.count }}
+                    {% if not forloop.last %}+{% endif %}
+                  {% endfor %}
+                </strong>
+              </li>
+            </ul>
+            <small class="text-muted mt-2 d-block">
+              <i class="fas fa-lightbulb me-1"></i>
+              Tip: Pro správu skladů přejděte na 
+              <a href="{% url 'inventory:warehouse_list' %}" class="alert-link">Správu skladů</a>
+            </small>
+          </div>
+          {% endif %}
+          
+          <div class="d-flex justify-content-between mt-4">
+            <a href="{% url 'inventory:canteen_list' %}" class="btn btn-secondary">
+              <i class="fas fa-times me-2"></i>Zrušit
+            </a>
+            <button type="submit" class="btn btn-success">
+              <i class="fas fa-save me-2"></i>Uložit
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
