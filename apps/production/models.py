@@ -28,7 +28,7 @@ class MenuPlan(models.Model):
     date_to = models.DateField(verbose_name="Datum do")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Vytvořeno")
     
-    # Výchozí počty porcí pro nová jídla
+    # Zachováno pro zpětnou kompatibilitu
     default_portions_adult = models.PositiveIntegerField(default=50, verbose_name="Výchozí počet dospělých porcí")
     default_portions_child = models.PositiveIntegerField(default=30, verbose_name="Výchozí počet dětských porcí")
 
@@ -42,11 +42,37 @@ class MenuPlan(models.Model):
     def get_total_orders(self):
         """Vrátí celkový počet jídel v jídelníčku"""
         return self.production_orders.count()
+    
+    def get_default_coefficients(self):
+        """Vrátí seznam výchozích koeficientů seřazených podle pořadí"""
+        return self.default_coefficients.order_by('order')
 
     class Meta:
         verbose_name = "Jídelníček"
         verbose_name_plural = "Jídelníčky"
         ordering = ['-created_at']
+
+
+class MenuPlanCoefficient(models.Model):
+    """Výchozí koeficient porce pro jídelníček"""
+    menu_plan = models.ForeignKey(MenuPlan, on_delete=models.CASCADE, related_name='default_coefficients', verbose_name="Jídelníček")
+    name = models.CharField(max_length=100, verbose_name="Název", help_text="Např. 'Normální porce', 'Malá porce', 'Velká porce'")
+    coefficient = models.DecimalField(
+        max_digits=5, 
+        decimal_places=2, 
+        default=Decimal('1.0'),
+        verbose_name="Koeficient",
+        help_text="Např. 1.0 = normální, 0.5 = poloviční, 1.5 = větší"
+    )
+    order = models.PositiveIntegerField(default=0, verbose_name="Pořadí", help_text="Pořadí zobrazení (nižší číslo = dříve)")
+    
+    def __str__(self):
+        return f"{self.name} ({self.coefficient})"
+    
+    class Meta:
+        verbose_name = "Výchozí koeficient"
+        verbose_name_plural = "Výchozí koeficienty"
+        ordering = ['menu_plan', 'order']
 
 
 class ProductionOrder(models.Model):
@@ -77,10 +103,21 @@ class ProductionOrder(models.Model):
         if is_new:
             self.generate_picking_list()
 
+    def get_portion_variants(self):
+        """Vrátí všechny varianty porcí pro tento výrobní příkaz"""
+        return self.portion_variants.all()
+    
+    def get_total_effective_portions(self):
+        """Vrátí celkový počet efektivních porcí ze všech variant"""
+        total = Decimal('0')
+        for variant in self.portion_variants.all():
+            total += variant.portions * variant.coefficient
+        return total
+
     def generate_picking_list(self):
         """
         Vygeneruje položky na výdejce na základě norem receptu.
-        Množství se počítá s použitím koeficientu a převádí na základní jednotky (kg).
+        Množství se počítá ze všech variant porcí a převádí na základní jednotky (kg).
         Předvyplní sklad, který patří k jídelně a má danou surovinu.
         """
         if not self.recipe:
@@ -89,11 +126,24 @@ class ProductionOrder(models.Model):
         recipe_ingredients = self.recipe.recipeingredient_set.all()
 
         for item in recipe_ingredients:
-            # Vypočítáme množství v základních jednotkách (kg, l) pomocí nové metody
-            quantity_planned = item.get_quantity_in_base_unit(
-                portions=self.total_portions,
-                coefficient=float(self.portion_coefficient)
-            )
+            # Vypočítáme celkové množství ze všech variant
+            total_quantity = Decimal('0')
+            
+            # Pokud existují varianty, použijeme je
+            variants = self.portion_variants.all()
+            if variants.exists():
+                for variant in variants:
+                    quantity = item.get_quantity_in_base_unit(
+                        portions=variant.portions,
+                        coefficient=float(variant.coefficient)
+                    )
+                    total_quantity += quantity
+            else:
+                # Fallback na staré pole (pro zpětnou kompatibilitu)
+                total_quantity = item.get_quantity_in_base_unit(
+                    portions=self.total_portions,
+                    coefficient=float(self.portion_coefficient)
+                )
 
             # Najdeme sklad, který patří k jídelně a má danou surovinu
             stock_item = StockItem.objects.filter(
@@ -107,28 +157,51 @@ class ProductionOrder(models.Model):
             PickingList.objects.create(
                 production_order=self,
                 ingredient=item.ingredient,
-                quantity_planned=quantity_planned,
+                quantity_planned=total_quantity,
                 warehouse=prefilled_warehouse
             )
 
     def get_required_ingredients(self):
-        """Vrátí seznam surovin potřebných pro tento výrobní příkaz s použitím koeficientu"""
+        """Vrátí seznam surovin potřebných pro tento výrobní příkaz s použitím všech variant"""
         ingredients = []
         if not self.recipe:
             return ingredients
         
         for recipe_ingredient in self.recipe.recipeingredient_set.all():
-            # Použijeme novou metodu pro výpočet množství v základních jednotkách
-            amount_base_unit = recipe_ingredient.get_quantity_in_base_unit(
-                portions=self.total_portions,
-                coefficient=float(self.portion_coefficient)
-            )
+            # Vypočítáme celkové množství ze všech variant
+            total_amount = Decimal('0')
+            total_amount_recipe_unit = Decimal('0')
+            
+            variants = self.portion_variants.all()
+            if variants.exists():
+                for variant in variants:
+                    amount = recipe_ingredient.get_quantity_in_base_unit(
+                        portions=variant.portions,
+                        coefficient=float(variant.coefficient)
+                    )
+                    total_amount += amount
+                    total_amount_recipe_unit += (
+                        recipe_ingredient.quantity_per_portion * 
+                        variant.portions * 
+                        variant.coefficient
+                    )
+            else:
+                # Fallback na staré pole
+                total_amount = recipe_ingredient.get_quantity_in_base_unit(
+                    portions=self.total_portions,
+                    coefficient=float(self.portion_coefficient)
+                )
+                total_amount_recipe_unit = (
+                    recipe_ingredient.quantity_per_portion * 
+                    self.total_portions * 
+                    self.portion_coefficient
+                )
             
             ingredients.append({
                 'ingredient': recipe_ingredient.ingredient,
-                'amount': amount_base_unit,
+                'amount': total_amount,
                 'unit': recipe_ingredient.ingredient.base_unit,
-                'amount_recipe_unit': recipe_ingredient.quantity_per_portion * self.total_portions * self.portion_coefficient,
+                'amount_recipe_unit': total_amount_recipe_unit,
                 'recipe_unit': recipe_ingredient.ingredient.recipe_unit
             })
         
@@ -136,7 +209,10 @@ class ProductionOrder(models.Model):
 
     @property
     def total_portions(self):
-        """Celkový počet porcí"""
+        """Celkový počet porcí - součet ze všech variant nebo fallback na staré pole"""
+        variants = self.portion_variants.all()
+        if variants.exists():
+            return sum(variant.portions for variant in variants)
         return (self.portions_adult or 0) + (self.portions_child or 0)
 
     def __str__(self):
@@ -145,6 +221,45 @@ class ProductionOrder(models.Model):
     class Meta:
         verbose_name = "Výrobní příkaz"
         verbose_name_plural = "Výrobní příkazy"
+
+
+class ProductionOrderPortionVariant(models.Model):
+    """Varianta porce pro výrobní příkaz (kombinace koeficientu a počtu porcí)"""
+    production_order = models.ForeignKey(
+        ProductionOrder, 
+        on_delete=models.CASCADE, 
+        related_name='portion_variants', 
+        verbose_name="Výrobní příkaz"
+    )
+    coefficient = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal('1.0'),
+        verbose_name="Koeficient",
+        help_text="Např. 1.0 = normální, 0.75 = menší"
+    )
+    portions = models.PositiveIntegerField(
+        verbose_name="Počet porcí",
+        help_text="Kolik porcí s tímto koeficientem"
+    )
+    order = models.PositiveIntegerField(
+        default=0,
+        verbose_name="Pořadí",
+        help_text="Pořadí zobrazení"
+    )
+    
+    def __str__(self):
+        return f"{self.portions}× (koef. {self.coefficient})"
+    
+    @property
+    def effective_portions(self):
+        """Efektivní počet porcí (porce × koeficient)"""
+        return self.portions * self.coefficient
+    
+    class Meta:
+        verbose_name = "Varianta porce"
+        verbose_name_plural = "Varianty porcí"
+        ordering = ['production_order', 'order']
 
 
 class PickingList(models.Model):

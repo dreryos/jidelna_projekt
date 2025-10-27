@@ -7,6 +7,17 @@ a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+### Changed
+- **Přidávání jídel do jídelníčku**: Při přidávání nového jídla do jídelníčku lze nyní rovnou definovat více variant porcí (např. malé a velké porce)
+  - Nový modal `addMealModal` s podporou dynamického přidávání variant
+  - Upravený view `add_meal_to_menu` podporuje pole variant místo jednoho koeficientu
+  - Automatické vytvoření všech variant `ProductionOrderPortionVariant` při přidání jídla
+- **Generování výdejky dne**: Aktualizováno pro práci s novým systémem variant porcí
+  - View `daily_picking_list` počítá množství surovin ze všech variant porcí každého výrobního příkazu
+  - Šablony `daily_picking_list.html` a `daily_picking_list_pdf.html` zobrazují varianty porcí místo `portions_adult` a `portions_child`
+  - Celkový počet porcí je nyní součet efektivních porcí ze všech variant
+  - Detail použití suroviny zobrazuje varianty ve formátu "30×1.0 + 20×0.75"
+
 ## [1.2.0] - 2025-10-27
 
 ### Added

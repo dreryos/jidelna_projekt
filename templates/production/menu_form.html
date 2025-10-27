@@ -8,7 +8,7 @@
 {% block content %}
 <div class="container-fluid mt-4">
     <div class="row justify-content-center">
-        <div class="col-lg-8">
+        <div class="col-lg-10">
             <div class="card">
                 <div class="card-header bg-primary text-white">
                     <h4 class="card-title mb-0">
@@ -19,6 +19,10 @@
                 <div class="card-body">
                     <form method="post" novalidate>
                         {% csrf_token %}
+                        
+                        <h5 class="mb-3">
+                            <i class="fas fa-info-circle me-2"></i>Základní údaje
+                        </h5>
                         
                         <div class="row mb-3">
                             <div class="col-12">
@@ -38,7 +42,7 @@
                             </div>
                         </div>
 
-                        <div class="row mb-3">
+                        <div class="row mb-4">
                             <div class="col-md-6">
                                 <label for="{{ form.date_from.id_for_label }}" class="form-label">
                                     <i class="fas fa-calendar-day me-1"></i>Od data:
@@ -54,25 +58,75 @@
                         </div>
 
                         <div class="row mb-4">
-                            <div class="col-md-6">
-                                <label for="{{ form.default_portions_adult.id_for_label }}" class="form-label">
-                                    <i class="fas fa-users me-1"></i>Výchozí porce - dospělí:
+                            <div class="col-12">
+                                <label for="{{ form.default_total_portions.id_for_label }}" class="form-label">
+                                    <i class="fas fa-users me-1"></i>Výchozí počet porcí:
                                 </label>
-                                {% bootstrap_field form.default_portions_adult show_label=False %}
-                            </div>
-                            <div class="col-md-6">
-                                <label for="{{ form.default_portions_child.id_for_label }}" class="form-label">
-                                    <i class="fas fa-child me-1"></i>Výchozí porce - děti:
-                                </label>
-                                {% bootstrap_field form.default_portions_child show_label=False %}
+                                {% bootstrap_field form.default_total_portions show_label=False %}
                             </div>
                         </div>
 
+                        <hr class="my-4">
+
+                        <h5 class="mb-3">
+                            <i class="fas fa-balance-scale me-2"></i>Výchozí koeficienty porcí
+                        </h5>
+                        
                         <div class="alert alert-info">
                             <i class="fas fa-info-circle me-2"></i>
-                            <strong>Tip:</strong> Po vytvoření jídelníčku budete moci přidávat konkrétní jídla pro jednotlivé dny.
-                            Výchozí počet porcí bude automaticky doplněn, ale můžete ho upravit u každého jídla individuálně.
+                            <strong>Tip:</strong> Definujte různé velikosti porcí, které budete používat při plánování jídel.
+                            Například: "Normální porce" (koef. 1,0), "Malá porce" (koef. 0,5), "Velká porce" (koef. 1,5).
                         </div>
+
+                        {{ coefficient_formset.management_form }}
+                        
+                        <div id="coefficient-forms">
+                            {% for coef_form in coefficient_formset %}
+                                <div class="coefficient-form-row border rounded p-3 mb-3" data-form-index="{{ forloop.counter0 }}">
+                                    <div class="row">
+                                        <div class="col-md-1 d-flex align-items-center">
+                                            <span class="badge bg-secondary fs-6 row-number">{{ forloop.counter }}</span>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label small">Název:</label>
+                                            {{ coef_form.name }}
+                                            {{ coef_form.name.errors }}
+                                        </div>
+                                        <div class="col-md-3">
+                                            <label class="form-label small">Koeficient:</label>
+                                            {{ coef_form.coefficient }}
+                                            {{ coef_form.coefficient.errors }}
+                                        </div>
+                                        <div class="col-md-2">
+                                            <label class="form-label small">Pořadí:</label>
+                                            {{ coef_form.order }}
+                                            {{ coef_form.order.errors }}
+                                        </div>
+                                        <div class="col-md-2 d-flex align-items-end justify-content-end">
+                                            <button type="button" class="btn btn-sm btn-outline-danger remove-coefficient-btn" title="Odebrat koeficient">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    {{ coef_form.id }}
+                                    <div style="display:none;">{{ coef_form.DELETE }}</div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                        
+                        <div class="mb-3">
+                            <button type="button" class="btn btn-outline-success btn-sm" id="add-coefficient-btn">
+                                <i class="fas fa-plus me-1"></i> Přidat další koeficient
+                            </button>
+                        </div>
+
+                        <div class="alert alert-warning mt-3">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            <strong>Poznámka:</strong> Po vytvoření jídelníčku budete moci přidávat konkrétní jídla pro jednotlivé dny
+                            a vybírat z těchto výchozích koeficientů.
+                        </div>
+
+                        <hr class="my-4">
 
                         <div class="d-flex justify-content-between">
                             <a href="{% url 'production:menu_list' %}" class="btn btn-outline-secondary">
@@ -118,6 +172,141 @@ document.addEventListener('DOMContentLoaded', function() {
             validateDates();
         }
     });
+    
+    // ===== DYNAMICKÉ PŘIDÁVÁNÍ/ODEBÍRÁNÍ KOEFICIENTŮ =====
+    
+    const coefficientFormsContainer = document.getElementById('coefficient-forms');
+    const addCoefficientBtn = document.getElementById('add-coefficient-btn');
+    const totalFormsInput = document.querySelector('input[name="default_coefficients-TOTAL_FORMS"]');
+    
+    // Funkce pro přečíslování řádků
+    function updateRowNumbers() {
+        const rows = coefficientFormsContainer.querySelectorAll('.coefficient-form-row');
+        rows.forEach((row, index) => {
+            const badge = row.querySelector('.row-number');
+            if (badge) {
+                badge.textContent = index + 1;
+            }
+            
+            // Aktualizace pořadí
+            const orderInput = row.querySelector('input[name$="-order"]');
+            if (orderInput && !orderInput.value) {
+                orderInput.value = index;
+            }
+        });
+    }
+    
+    // Funkce pro získání HTML nového formuláře
+    function getEmptyFormHtml(index) {
+        // Získáme prázdný formulář z management formu
+        const emptyFormTemplate = document.querySelector('#coefficient-forms .coefficient-form-row:last-child');
+        if (!emptyFormTemplate) {
+            // Pokud neexistuje žádný formulář, vytvoříme základní strukturu
+            return `
+                <div class="coefficient-form-row border rounded p-3 mb-3" data-form-index="${index}">
+                    <div class="row">
+                        <div class="col-md-1 d-flex align-items-center">
+                            <span class="badge bg-secondary fs-6 row-number">${index + 1}</span>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small">Název:</label>
+                            <input type="text" name="default_coefficients-${index}-name" class="form-control" placeholder='Např. "Normální porce"'>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small">Koeficient:</label>
+                            <input type="number" name="default_coefficients-${index}-coefficient" class="form-control" step="0.01" min="0.1" max="5.0" placeholder="1,0" value="1.0">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label small">Pořadí:</label>
+                            <input type="number" name="default_coefficients-${index}-order" class="form-control" min="0" placeholder="0" value="${index}">
+                        </div>
+                        <div class="col-md-2 d-flex align-items-end justify-content-end">
+                            <button type="button" class="btn btn-sm btn-outline-danger remove-coefficient-btn" title="Odebrat koeficient">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                            <input type="checkbox" name="default_coefficients-${index}-DELETE" style="display:none;">
+                        </div>
+                    </div>
+                    <input type="hidden" name="default_coefficients-${index}-id">
+                </div>
+            `;
+        }
+        
+        // Klonujeme existující formulář a upravíme indexy
+        const clone = emptyFormTemplate.cloneNode(true);
+        clone.setAttribute('data-form-index', index);
+        
+        // Aktualizujeme všechny name atributy
+        const inputs = clone.querySelectorAll('input, select, textarea');
+        inputs.forEach(input => {
+            const name = input.getAttribute('name');
+            if (name) {
+                const newName = name.replace(/default_coefficients-\d+-/, `default_coefficients-${index}-`);
+                input.setAttribute('name', newName);
+                input.setAttribute('id', `id_${newName}`);
+                // Vymažeme hodnoty kromě pořadí
+                if (!name.includes('-order')) {
+                    input.value = '';
+                } else {
+                    input.value = index;
+                }
+            }
+        });
+        
+        return clone.outerHTML;
+    }
+    
+    // Přidání nového koeficientu
+    addCoefficientBtn.addEventListener('click', function() {
+        const currentTotal = parseInt(totalFormsInput.value);
+        const newFormHtml = getEmptyFormHtml(currentTotal);
+        
+        coefficientFormsContainer.insertAdjacentHTML('beforeend', newFormHtml);
+        totalFormsInput.value = currentTotal + 1;
+        
+        updateRowNumbers();
+        attachRemoveHandlers();
+    });
+    
+    // Funkce pro připojení event handlerů k tlačítkům pro odebrání
+    function attachRemoveHandlers() {
+        const removeButtons = document.querySelectorAll('.remove-coefficient-btn');
+        removeButtons.forEach(btn => {
+            // Odstraníme staré handlery
+            btn.replaceWith(btn.cloneNode(true));
+        });
+        
+        // Připojíme nové handlery
+        document.querySelectorAll('.remove-coefficient-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const row = this.closest('.coefficient-form-row');
+                const deleteCheckbox = row.querySelector('input[name$="-DELETE"]');
+                
+                if (deleteCheckbox) {
+                    // Pokud má formulář ID (existující objekt), označíme ho pro smazání
+                    const idInput = row.querySelector('input[name$="-id"]');
+                    if (idInput && idInput.value) {
+                        deleteCheckbox.checked = true;
+                        row.style.display = 'none';
+                    } else {
+                        // Nový formulář - prostě ho odstraníme z DOM
+                        row.remove();
+                        // Snížíme počet formulářů
+                        totalFormsInput.value = parseInt(totalFormsInput.value) - 1;
+                    }
+                } else {
+                    row.remove();
+                    totalFormsInput.value = parseInt(totalFormsInput.value) - 1;
+                }
+                
+                updateRowNumbers();
+            });
+        });
+    }
+    
+    // Inicializace
+    updateRowNumbers();
+    attachRemoveHandlers();
 });
 </script>
 {% endblock %}

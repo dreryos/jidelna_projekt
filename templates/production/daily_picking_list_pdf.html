@@ -1,3 +1,5 @@
+{% load core_filters %}
+
 <!DOCTYPE html>
 <html lang="cs">
 <head>
@@ -213,8 +215,8 @@
                                 <br><small style="color: #666;">{{ item.ingredient.description }}</small>
                             {% endif %}
                         </td>
-                        <td class="amount">{{ item.amount|floatformat:2 }}</td>
-                        <td class="unit">{{ item.ingredient.unit }}</td>
+                        <td class="amount">{{ item.amount|format_decimal }}</td>
+                        <td class="unit">{{ item.ingredient.base_unit }}</td>
                         <td class="checkbox">☐</td>
                         <td></td>
                     </tr>
@@ -236,7 +238,15 @@
                         </div>
                     </div>
                     <div class="portions">
-                        {{ order.portions_adult|default:0 }} + {{ order.portions_child|default:0 }} porcí
+                        {% if order.portion_variants.exists %}
+                            {% for variant in order.portion_variants.all %}
+                                {{ variant.portions }}×{{ variant.coefficient|format_decimal }}
+                                {% if not forloop.last %}+{% endif %}
+                            {% endfor %}
+                            = {{ order.get_total_effective_portions|format_decimal }} ef. porcí
+                        {% else %}
+                            {{ order.total_portions|default:0 }} porcí × {{ order.portion_coefficient|format_decimal }}
+                        {% endif %}
                     </div>
                 </div>
             {% endfor %}

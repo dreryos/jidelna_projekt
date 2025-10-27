@@ -75,3 +75,22 @@ def format_price(value):
         return f"{value:.2f}".replace('.', ',')
     except (ValueError, TypeError, ArithmeticError):
         return value
+
+
+@register.filter(name='mul')
+def multiply(value, arg):
+    """
+    Vynásobí dvě hodnoty.
+    
+    Použití:
+        {{ value|mul:2 }}
+        {{ value|mul:other_value }}
+    """
+    try:
+        if not isinstance(value, Decimal):
+            value = Decimal(str(value))
+        if not isinstance(arg, Decimal):
+            arg = Decimal(str(arg))
+        return value * arg
+    except (ValueError, TypeError, ArithmeticError):
+        return value

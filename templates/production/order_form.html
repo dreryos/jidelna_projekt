@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% load bootstrap5 %}
+{% load core_filters %}
 
 {% block title %}{% if object %}Upravit{% else %}Nový{% endif %} výrobní příkaz - Jídelna{% endblock %}
 
@@ -43,18 +44,18 @@
               <div class="form-text">Kdy se bude vařit</div>
             </div>
             <div class="col-md-4">
-              <label for="{{ form.portions_adult.id_for_label }}" class="form-label">
-                <i class="fas fa-user me-1"></i>Dospělé porce: <span class="text-danger">*</span>
+              <label for="{{ form.total_portions.id_for_label }}" class="form-label">
+                <i class="fas fa-users me-1"></i>Celkový počet porcí: <span class="text-danger">*</span>
               </label>
-              {% bootstrap_field form.portions_adult show_label=False %}
-              <div class="form-text">Počet porcí pro dospělé</div>
+              {% bootstrap_field form.total_portions show_label=False %}
+              <div class="form-text">Celkový počet všech porcí</div>
             </div>
             <div class="col-md-4">
-              <label for="{{ form.portions_child.id_for_label }}" class="form-label">
-                <i class="fas fa-child me-1"></i>Dětské porce: <span class="text-danger">*</span>
+              <label for="{{ form.portion_coefficient.id_for_label }}" class="form-label">
+                <i class="fas fa-balance-scale me-1"></i>Koeficient porce: <span class="text-danger">*</span>
               </label>
-              {% bootstrap_field form.portions_child show_label=False %}
-              <div class="form-text">Počet porcí pro děti</div>
+              {% bootstrap_field form.portion_coefficient show_label=False %}
+              <div class="form-text">1,0 = normální, 0,5 = poloviční</div>
             </div>
           </div>
 
@@ -81,27 +82,28 @@
             </div>
             <div class="card-body">
               <div class="row text-center">
-                <div class="col-md-4">
+                <div class="col-md-6">
                   <div class="border rounded p-3 bg-white">
-                    <i class="fas fa-user fa-2x text-primary mb-2"></i>
-                    <div class="fw-bold fs-4" id="adult-count">0</div>
-                    <small class="text-muted">Dospělé porce</small>
+                    <i class="fas fa-users fa-2x text-primary mb-2"></i>
+                    <div class="fw-bold fs-4" id="total-portions">0</div>
+                    <small class="text-muted">Celkový počet porcí</small>
                   </div>
                 </div>
-                <div class="col-md-4">
-                  <div class="border rounded p-3 bg-white">
-                    <i class="fas fa-child fa-2x text-warning mb-2"></i>
-                    <div class="fw-bold fs-4" id="child-count">0</div>
-                    <small class="text-muted">Dětské porce</small>
-                  </div>
-                </div>
-                <div class="col-md-4">
+                <div class="col-md-6">
                   <div class="border rounded p-3 bg-success bg-opacity-25">
-                    <i class="fas fa-utensils fa-2x text-success mb-2"></i>
-                    <div class="fw-bold fs-4" id="total-count">0</div>
-                    <small class="text-muted">Celkem porcí</small>
+                    <i class="fas fa-weight fa-2x text-success mb-2"></i>
+                    <div class="fw-bold fs-4" id="effective-portions">0</div>
+                    <small class="text-muted">Efektivní počet porcí (× koeficient)</small>
                   </div>
                 </div>
+              </div>
+              <div class="mt-3 p-3 bg-light rounded">
+                <small class="text-muted">
+                  <i class="fas fa-info-circle me-1"></i>
+                  <strong>Tip:</strong> Koeficient 1,0 znamená normální velikost porce. 
+                  Pokud vaříte pro děti, použijte např. 0,6 (60% normální porce).
+                  Pro větší porce použijte hodnoty nad 1,0.
+                </small>
               </div>
             </div>
           </div>
@@ -129,37 +131,37 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const adultInput = document.getElementById('{{ form.portions_adult.id_for_label }}');
-    const childInput = document.getElementById('{{ form.portions_child.id_for_label }}');
-    const adultCount = document.getElementById('adult-count');
-    const childCount = document.getElementById('child-count');
-    const totalCount = document.getElementById('total-count');
+    const portionsInput = document.getElementById('{{ form.total_portions.id_for_label }}');
+    const coefficientInput = document.getElementById('{{ form.portion_coefficient.id_for_label }}');
+    const totalPortions = document.getElementById('total-portions');
+    const effectivePortions = document.getElementById('effective-portions');
 
-    function updateCounts() {
-        const adultVal = parseInt(adultInput.value) || 0;
-        const childVal = parseInt(childInput.value) || 0;
-        const total = adultVal + childVal;
+    function updateCalculator() {
+        const portions = parseFloat(portionsInput?.value) || 0;
+        const coefficient = parseFloat(coefficientInput?.value.replace(',', '.')) || 1.0;
+        const effective = portions * coefficient;
 
-        adultCount.textContent = adultVal;
-        childCount.textContent = childVal;
-        totalCount.textContent = total;
+        if (totalPortions) totalPortions.textContent = portions;
+        if (effectivePortions) effectivePortions.textContent = effective.toFixed(1).replace('.', ',');
 
         // Změna barvy podle počtu
-        if (total === 0) {
-            totalCount.parentElement.className = 'border rounded p-3 bg-light';
-        } else if (total < 20) {
-            totalCount.parentElement.className = 'border rounded p-3 bg-warning bg-opacity-25';
-        } else {
-            totalCount.parentElement.className = 'border rounded p-3 bg-success bg-opacity-25';
+        if (effectivePortions?.parentElement) {
+            if (effective === 0) {
+                effectivePortions.parentElement.className = 'border rounded p-3 bg-light';
+            } else if (effective < 20) {
+                effectivePortions.parentElement.className = 'border rounded p-3 bg-warning bg-opacity-25';
+            } else {
+                effectivePortions.parentElement.className = 'border rounded p-3 bg-success bg-opacity-25';
+            }
         }
     }
 
     // Event listenery
-    if (adultInput) adultInput.addEventListener('input', updateCounts);
-    if (childInput) childInput.addEventListener('input', updateCounts);
+    if (portionsInput) portionsInput.addEventListener('input', updateCalculator);
+    if (coefficientInput) coefficientInput.addEventListener('input', updateCalculator);
 
     // Inicializace
-    updateCounts();
+    updateCalculator();
 
     // Nastavení minimálního data na dnes
     const dateInput = document.getElementById('{{ form.date.id_for_label }}');

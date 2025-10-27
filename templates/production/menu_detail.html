@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% load bootstrap5 %}
+{% load core_filters %}
 
 {% block title %}{{ menu_plan.name }} - Detail jídelníčku{% endblock %}
 
@@ -70,12 +71,12 @@
                             <i class="fas fa-calendar me-1 text-muted"></i>{{ menu_plan.date_from|date:"d.m.Y" }} - {{ menu_plan.date_to|date:"d.m.Y" }}
                         </div>
                         <div class="col-md-3">
-                            <strong>Výchozí porce dospělí:</strong><br>
-                            <i class="fas fa-users me-1 text-muted"></i>{{ menu_plan.default_portions_adult }}
+                            <strong>Výchozí počet porcí:</strong><br>
+                            <i class="fas fa-users me-1 text-muted"></i>{{ menu_plan.default_portions_adult|add:menu_plan.default_portions_child }}
                         </div>
                         <div class="col-md-3">
-                            <strong>Výchozí porce děti:</strong><br>
-                            <i class="fas fa-child me-1 text-muted"></i>{{ menu_plan.default_portions_child }}
+                            <strong>Vytvořeno:</strong><br>
+                            <i class="fas fa-clock me-1 text-muted"></i>{{ menu_plan.created_at|date:"d.m.Y H:i" }}
                         </div>
                     </div>
                 </div>
@@ -102,27 +103,61 @@
                                 <div class="meals-for-date" data-date="{{ date|date:'Y-m-d' }}">
                                     {% for order in menu_plan.production_orders.all %}
                                         {% if order.date == date %}
-                                            <div class="meal-item p-3 mb-2">
+                                            <div class="meal-item p-3 mb-2 border rounded" data-order-id="{{ order.id }}">
                                                 <div class="d-flex justify-content-between align-items-start">
                                                     <div class="flex-grow-1">
-                                                        <h6 class="mb-1">
+                                                        <h6 class="mb-2">
                                                             <i class="fas fa-utensils me-1 text-primary"></i>
                                                             {{ order.recipe.name }}
                                                         </h6>
-                                                        <div class="portions-info">
-                                                            <span class="badge bg-primary portions-badge me-1">
-                                                                {{ order.portions_adult }} dospělých
-                                                            </span>
-                                                            <span class="badge bg-info portions-badge">
-                                                                {{ order.portions_child }} dětských
-                                                            </span>
-                                                        </div>
+                                                        
+                                                        <!-- Varianty porcí -->
+                                                        {% if order.portion_variants.exists %}
+                                                            <div class="portion-variants-list mb-2">
+                                                                <small class="text-muted d-block mb-1">Varianty porcí:</small>
+                                                                <table class="table table-sm table-bordered mb-0">
+                                                                    <thead class="table-light">
+                                                                        <tr>
+                                                                            <th>Koeficient</th>
+                                                                            <th>Počet porcí</th>
+                                                                            <th>Efektivně</th>
+                                                                        </tr>
+                                                                    </thead>
+                                                                    <tbody class="portion-variants-body">
+                                                                        {% for variant in order.portion_variants.all %}
+                                                                            <tr>
+                                                                                <td>{{ variant.coefficient|format_decimal }}</td>
+                                                                                <td>{{ variant.portions }}</td>
+                                                                                <td class="text-muted">{{ variant.effective_portions|format_decimal:1 }}</td>
+                                                                            </tr>
+                                                                        {% endfor %}
+                                                                    </tbody>
+                                                                    <tfoot class="table-light">
+                                                                        <tr>
+                                                                            <th colspan="2">Celkem:</th>
+                                                                            <th>{{ order.get_total_effective_portions|format_decimal:1 }} porcí</th>
+                                                                        </tr>
+                                                                    </tfoot>
+                                                                </table>
+                                                            </div>
+                                                        {% else %}
+                                                            <!-- Starý formát (fallback) -->
+                                                            <div class="portions-info">
+                                                                <span class="badge bg-primary portions-badge me-1">
+                                                                    <i class="fas fa-users me-1"></i>{{ order.total_portions }} porcí
+                                                                </span>
+                                                                <span class="badge bg-success portions-badge">
+                                                                    <i class="fas fa-balance-scale me-1"></i>koef. {{ order.portion_coefficient|format_decimal }}
+                                                                </span>
+                                                            </div>
+                                                            <small class="text-muted">
+                                                                Efektivně: {{ order.total_portions|mul:order.portion_coefficient|format_decimal:1 }} porcí
+                                                            </small>
+                                                        {% endif %}
                                                     </div>
                                                     <div class="btn-group btn-group-sm">
                                                         <button type="button" class="btn btn-outline-primary edit-portions-btn" 
-                                                                data-order-id="{{ order.id }}"
-                                                                data-adult="{{ order.portions_adult }}"
-                                                                data-child="{{ order.portions_child }}">
+                                                                data-order-id="{{ order.id }}">
                                                             <i class="fas fa-edit"></i>
                                                         </button>
                                                         <button type="button" class="btn btn-outline-danger delete-meal-btn" 
@@ -136,38 +171,12 @@
                                     {% endfor %}
                                 </div>
 
-                                <!-- Formulář pro přidání nového jídla -->
+                                <!-- Tlačítko pro přidání nového jídla -->
                                 <div class="add-meal-section p-3 mt-3">
-                                    <h6 class="mb-2">
+                                    <button type="button" class="btn btn-primary btn-sm w-100 open-add-meal-modal" 
+                                            data-date="{{ date|date:'Y-m-d' }}">
                                         <i class="fas fa-plus me-1"></i> Přidat jídlo
-                                    </h6>
-                                    <form class="add-meal-form" data-date="{{ date|date:'Y-m-d' }}">
-                                        <div class="mb-2">
-                                            <select class="form-select recipe-select" name="recipe_id" required>
-                                                <option value="">Vyberte recept...</option>
-                                                {% for recipe in recipes %}
-                                                    <option value="{{ recipe.id }}">{{ recipe.name }}</option>
-                                                {% endfor %}
-                                            </select>
-                                        </div>
-                                        <div class="row mb-2">
-                                            <div class="col-6">
-                                                <input type="number" class="form-control form-control-sm" 
-                                                       name="portions_adult" 
-                                                       value="{{ menu_plan.default_portions_adult }}"
-                                                       placeholder="Dospělí" min="0">
-                                            </div>
-                                            <div class="col-6">
-                                                <input type="number" class="form-control form-control-sm" 
-                                                       name="portions_child" 
-                                                       value="{{ menu_plan.default_portions_child }}"
-                                                       placeholder="Děti" min="0">
-                                            </div>
-                                        </div>
-                                        <button type="submit" class="btn btn-primary btn-sm w-100">
-                                            <i class="fas fa-plus me-1"></i> Přidat jídlo
-                                        </button>
-                                    </form>
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -178,25 +187,87 @@
     </div>
 </div>
 
-<!-- Modal pro úpravu porcí -->
-<div class="modal fade" id="editPortionsModal" tabindex="-1">
-    <div class="modal-dialog">
+<!-- Modal pro přidání jídla -->
+<div class="modal fade" id="addMealModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Upravit počet porcí</h5>
+                <h5 class="modal-title">Přidat jídlo</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="addMealForm">
+                    <input type="hidden" id="addMealDate">
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Recept:</label>
+                        <select class="form-select" id="addMealRecipe" required>
+                            <option value="">Vyberte recept...</option>
+                            {% for recipe in recipes %}
+                                <option value="{{ recipe.id }}">{{ recipe.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <hr class="my-3">
+                    
+                    <p class="text-muted mb-3">
+                        <i class="fas fa-info-circle me-1"></i>
+                        Definujte různé varianty porcí pro toto jídlo (např. malé a velké porce).
+                    </p>
+                    
+                    <div id="add-meal-variants-container">
+                        <!-- Varianty budou přidány JavaScriptem -->
+                    </div>
+                    
+                    <button type="button" class="btn btn-sm btn-outline-success" id="add-meal-variant-btn">
+                        <i class="fas fa-plus me-1"></i>Přidat variantu
+                    </button>
+                    
+                    <hr class="my-3">
+                    
+                    <div class="alert alert-info mb-0">
+                        <strong>Celkem efektivních porcí:</strong> <span id="addMealTotalEffective">0</span>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Zrušit</button>
+                <button type="button" class="btn btn-primary" id="saveAddMeal">Přidat jídlo</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal pro úpravu porcí -->
+<div class="modal fade" id="editPortionsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Upravit varianty porcí</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <form id="editPortionsForm">
-                    <div class="row">
-                        <div class="col-6">
-                            <label class="form-label">Dospělí:</label>
-                            <input type="number" class="form-control" id="editAdultPortions" min="0">
-                        </div>
-                        <div class="col-6">
-                            <label class="form-label">Děti:</label>
-                            <input type="number" class="form-control" id="editChildPortions" min="0">
-                        </div>
+                    <input type="hidden" id="editOrderId">
+                    
+                    <p class="text-muted mb-3">
+                        <i class="fas fa-info-circle me-1"></i>
+                        Definujte různé varianty porcí pro toto jídlo (např. malé a velké porce).
+                    </p>
+                    
+                    <div id="portion-variants-container">
+                        <!-- Varianty budou přidány JavaScriptem -->
+                    </div>
+                    
+                    <button type="button" class="btn btn-sm btn-outline-success" id="add-variant-btn">
+                        <i class="fas fa-plus me-1"></i>Přidat variantu
+                    </button>
+                    
+                    <hr class="my-3">
+                    
+                    <div class="alert alert-info mb-0">
+                        <strong>Celkem efektivních porcí:</strong> <span id="totalEffectivePortions">0</span>
                     </div>
                 </form>
             </div>
@@ -217,17 +288,23 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <p>Nastavit počet porcí pro všechna jídla v den: <strong id="bulkDate"></strong></p>
+                <p>Nastavit porce pro všechna jídla v den: <strong id="bulkDate"></strong></p>
                 <form id="bulkPortionsForm">
-                    <div class="row">
-                        <div class="col-6">
-                            <label class="form-label">Dospělí:</label>
-                            <input type="number" class="form-control" id="bulkAdultPortions" min="0">
-                        </div>
-                        <div class="col-6">
-                            <label class="form-label">Děti:</label>
-                            <input type="number" class="form-control" id="bulkChildPortions" min="0">
-                        </div>
+                    <div class="mb-3">
+                        <label class="form-label">Počet porcí:</label>
+                        <input type="number" class="form-control" id="bulkTotalPortions" min="1" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Velikost porce:</label>
+                        <select class="form-select" id="bulkPortionCoefficient" required>
+                            {% for coef in menu_plan.default_coefficients.all %}
+                                <option value="{{ coef.coefficient }}">
+                                    {{ coef.name }} ({{ coef.coefficient|format_decimal }})
+                                </option>
+                            {% empty %}
+                                <option value="1.0">Normální porce (1,0)</option>
+                            {% endfor %}
+                        </select>
                     </div>
                 </form>
             </div>
@@ -244,59 +321,342 @@ const menuPlanId = {{ menu_plan.pk }};
 const csrfToken = '{{ csrf_token }}';
 
 document.addEventListener('DOMContentLoaded', function() {
-    // Přidání jídla
-    document.querySelectorAll('.add-meal-form').forEach(form => {
-        form.addEventListener('submit', function(e) {
-            e.preventDefault();
+    // Funkce pro konverzi desetinných čísel z českého formátu
+    function parseDecimal(value) {
+        if (typeof value === 'string') {
+            return value.replace(',', '.');
+        }
+        return value;
+    }
+    
+    // Funkce pro formátování desetinných čísel do českého formátu
+    function formatDecimal(value) {
+        return parseFloat(value).toLocaleString('cs-CZ', {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 2
+        });
+    }
+    
+    // Náhled efektivních porcí v modálním okně
+    function updateEffectivePortions() {
+        const total = parseFloat(document.getElementById('editTotalPortions').value) || 0;
+        const coef = parseFloat(parseDecimal(document.getElementById('editPortionCoefficient').value)) || 1;
+        const effective = total * coef;
+        document.getElementById('effectivePortionsPreview').textContent = formatDecimal(effective);
+    }
+    
+    const editTotalInput = document.getElementById('editTotalPortions');
+    const editCoefInput = document.getElementById('editPortionCoefficient');
+    if (editTotalInput && editCoefInput) {
+        editTotalInput.addEventListener('input', updateEffectivePortions);
+        editCoefInput.addEventListener('input', updateEffectivePortions);
+    }
+    
+    // Přidání jídla - nový modal s variantami
+    let addMealDate = null;
+    
+    document.querySelectorAll('.open-add-meal-modal').forEach(btn => {
+        btn.addEventListener('click', function() {
+            addMealDate = this.dataset.date;
+            document.getElementById('addMealDate').value = addMealDate;
+            document.getElementById('addMealRecipe').value = '';
             
-            const formData = new FormData(form);
-            const date = form.dataset.date;
+            // Vyčistíme a přidáme výchozí variantu
+            const container = document.getElementById('add-meal-variants-container');
+            container.innerHTML = '';
             
-            const data = {
-                recipe_id: formData.get('recipe_id'),
-                date: date,
-                portions_adult: formData.get('portions_adult'),
-                portions_child: formData.get('portions_child')
-            };
+            // Přidáme výchozí variantu s prvním koeficientem
+            const defaultCoef = defaultCoefficients.length > 0 ? defaultCoefficients[0].value : '1.0';
+            const defaultPortions = {{ menu_plan.default_portions_adult|add:menu_plan.default_portions_child }};
+            container.insertAdjacentHTML('beforeend', createAddMealVariantRow(0, defaultCoef, defaultPortions));
             
-            fetch(`/production/jidelnicky/${menuPlanId}/pridat-jidlo/`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': csrfToken
-                },
-                body: JSON.stringify(data)
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    location.reload(); // Obnovíme stránku
-                } else {
-                    alert('Chyba při přidávání jídla: ' + data.error);
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('Nastala chyba při přidávání jídla.');
-            });
+            attachAddMealVariantHandlers();
+            updateAddMealTotalEffective();
+            
+            new bootstrap.Modal(document.getElementById('addMealModal')).show();
         });
     });
     
-    // Úprava porcí jednotlivého jídla
+    function createAddMealVariantRow(index, coefficient = '', portions = '') {
+        return `
+            <div class="add-meal-variant-row border rounded p-3 mb-2" data-index="${index}">
+                <div class="row align-items-center">
+                    <div class="col-md-5">
+                        <label class="form-label small">Koeficient:</label>
+                        <select class="form-select form-select-sm add-meal-variant-coefficient" required>
+                            ${defaultCoefficients.map(coef => 
+                                `<option value="${coef.value}" ${coef.value == coefficient ? 'selected' : ''}>
+                                    ${coef.name} (${coef.value})
+                                </option>`
+                            ).join('')}
+                        </select>
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label small">Počet porcí:</label>
+                        <input type="number" class="form-control form-control-sm add-meal-variant-portions" 
+                               value="${portions}" min="1" required>
+                    </div>
+                    <div class="col-md-2 d-flex align-items-end">
+                        <button type="button" class="btn btn-sm btn-outline-danger remove-add-meal-variant-btn w-100" title="Odebrat variantu">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    function updateAddMealTotalEffective() {
+        let total = 0;
+        document.querySelectorAll('.add-meal-variant-row').forEach(row => {
+            const coef = parseFloat(parseDecimal(row.querySelector('.add-meal-variant-coefficient').value)) || 0;
+            const portions = parseInt(row.querySelector('.add-meal-variant-portions').value) || 0;
+            total += coef * portions;
+        });
+        document.getElementById('addMealTotalEffective').textContent = formatDecimal(total);
+    }
+    
+    function attachAddMealVariantHandlers() {
+        // Remove handlers
+        document.querySelectorAll('.remove-add-meal-variant-btn').forEach(btn => {
+            btn.replaceWith(btn.cloneNode(true));
+        });
+        
+        document.querySelectorAll('.remove-add-meal-variant-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                // Musí zůstat aspoň jedna varianta
+                if (document.querySelectorAll('.add-meal-variant-row').length > 1) {
+                    const row = this.closest('.add-meal-variant-row');
+                    row.remove();
+                    updateAddMealTotalEffective();
+                } else {
+                    alert('Musí zůstat aspoň jedna varianta porcí.');
+                }
+            });
+        });
+        
+        // Update total on change
+        document.querySelectorAll('.add-meal-variant-coefficient, .add-meal-variant-portions').forEach(input => {
+            input.addEventListener('input', updateAddMealTotalEffective);
+            input.addEventListener('change', updateAddMealTotalEffective);
+        });
+    }
+    
+    document.getElementById('add-meal-variant-btn')?.addEventListener('click', function() {
+        const container = document.getElementById('add-meal-variants-container');
+        const currentCount = container.querySelectorAll('.add-meal-variant-row').length;
+        const defaultCoef = defaultCoefficients.length > 0 ? defaultCoefficients[0].value : '1.0';
+        container.insertAdjacentHTML('beforeend', createAddMealVariantRow(currentCount, defaultCoef, ''));
+        attachAddMealVariantHandlers();
+        updateAddMealTotalEffective();
+    });
+    
+    document.getElementById('saveAddMeal')?.addEventListener('click', function() {
+        const recipeId = document.getElementById('addMealRecipe').value;
+        const date = document.getElementById('addMealDate').value;
+        
+        if (!recipeId) {
+            alert('Vyberte prosím recept.');
+            return;
+        }
+        
+        // Získáme všechny varianty
+        const variants = [];
+        document.querySelectorAll('.add-meal-variant-row').forEach((row, index) => {
+            const coefficient = parseDecimal(row.querySelector('.add-meal-variant-coefficient').value);
+            const portions = parseInt(row.querySelector('.add-meal-variant-portions').value);
+            variants.push({
+                coefficient: coefficient,
+                portions: portions,
+                order: index
+            });
+        });
+        
+        if (variants.length === 0) {
+            alert('Přidejte aspoň jednu variantu porcí.');
+            return;
+        }
+        
+        fetch(`/production/jidelnicky/${menuPlanId}/pridat-jidlo/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify({
+                recipe_id: recipeId,
+                date: date,
+                variants: variants
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert('Chyba při přidávání jídla: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Nastala chyba při přidávání jídla.');
+        });
+    });
+    
+    // Úprava porcí jednotlivého jídla - s podporou více variant
     let currentOrderId = null;
+    let portionVariants = [];
+    
+    // Výchozí koeficienty z jídelníčku
+    const defaultCoefficients = [
+        {% for coef in menu_plan.default_coefficients.all %}
+            { name: "{{ coef.name }}", value: "{{ coef.coefficient }}" },
+        {% empty %}
+            { name: "Normální porce", value: "1.0" }
+        {% endfor %}
+    ];
+    
+    function createVariantRow(index, coefficient = '', portions = '', variantId = null) {
+        return `
+            <div class="variant-row border rounded p-3 mb-2" data-index="${index}" data-variant-id="${variantId || ''}">
+                <div class="row align-items-center">
+                    <div class="col-md-5">
+                        <label class="form-label small">Koeficient:</label>
+                        <select class="form-select form-select-sm variant-coefficient" required>
+                            ${defaultCoefficients.map(coef => 
+                                `<option value="${coef.value}" ${coef.value == coefficient ? 'selected' : ''}>
+                                    ${coef.name} (${coef.value})
+                                </option>`
+                            ).join('')}
+                        </select>
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label small">Počet porcí:</label>
+                        <input type="number" class="form-control form-control-sm variant-portions" 
+                               value="${portions}" min="1" required>
+                    </div>
+                    <div class="col-md-2 d-flex align-items-end">
+                        <button type="button" class="btn btn-sm btn-outline-danger remove-variant-btn w-100" title="Odebrat variantu">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    function updateTotalEffective() {
+        let total = 0;
+        document.querySelectorAll('.variant-row').forEach(row => {
+            const coef = parseFloat(parseDecimal(row.querySelector('.variant-coefficient').value)) || 0;
+            const portions = parseInt(row.querySelector('.variant-portions').value) || 0;
+            total += coef * portions;
+        });
+        document.getElementById('totalEffectivePortions').textContent = formatDecimal(total);
+    }
+    
+    function attachVariantHandlers() {
+        // Remove handlers
+        document.querySelectorAll('.remove-variant-btn').forEach(btn => {
+            btn.replaceWith(btn.cloneNode(true));
+        });
+        
+        document.querySelectorAll('.remove-variant-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const row = this.closest('.variant-row');
+                row.remove();
+                updateTotalEffective();
+            });
+        });
+        
+        // Update total on change
+        document.querySelectorAll('.variant-coefficient, .variant-portions').forEach(input => {
+            input.addEventListener('input', updateTotalEffective);
+            input.addEventListener('change', updateTotalEffective);
+        });
+    }
     
     document.querySelectorAll('.edit-portions-btn').forEach(btn => {
         btn.addEventListener('click', function() {
             currentOrderId = this.dataset.orderId;
-            document.getElementById('editAdultPortions').value = this.dataset.adult;
-            document.getElementById('editChildPortions').value = this.dataset.child;
+            document.getElementById('editOrderId').value = currentOrderId;
+            
+            const container = document.getElementById('portion-variants-container');
+            container.innerHTML = '';
+            
+            // Načteme existující varianty z DOM
+            const mealItem = document.querySelector(`[data-order-id="${currentOrderId}"]`);
+            const variantRows = mealItem ? mealItem.querySelectorAll('.portion-variants-body tr') : [];
+            
+            if (variantRows.length > 0) {
+                // Máme varianty
+                variantRows.forEach((row, index) => {
+                    const cells = row.querySelectorAll('td');
+                    if (cells.length >= 2) {
+                        const coefficient = cells[0].textContent.trim().replace(',', '.');
+                        const portions = cells[1].textContent.trim();
+                        container.insertAdjacentHTML('beforeend', createVariantRow(index, coefficient, portions));
+                    }
+                });
+            } else {
+                // Nemáme varianty - vytvoříme jednu výchozí
+                const defaultTotal = {{ menu_plan.default_portions_adult|add:menu_plan.default_portions_child }};
+                container.insertAdjacentHTML('beforeend', createVariantRow(0, '1.0', defaultTotal));
+            }
+            
+            attachVariantHandlers();
+            updateTotalEffective();
             new bootstrap.Modal(document.getElementById('editPortionsModal')).show();
         });
     });
     
+    document.getElementById('add-variant-btn').addEventListener('click', function() {
+        const container = document.getElementById('portion-variants-container');
+        const currentCount = container.querySelectorAll('.variant-row').length;
+        const defaultTotal = {{ menu_plan.default_portions_adult|add:menu_plan.default_portions_child }};
+        container.insertAdjacentHTML('beforeend', createVariantRow(currentCount, '1.0', defaultTotal));
+        attachVariantHandlers();
+    });
+    
     document.getElementById('savePortions').addEventListener('click', function() {
-        // Tuto funkcionalitu implementujeme později přes AJAX
-        alert('Funkce bude implementována v další verzi');
+        const orderId = document.getElementById('editOrderId').value;
+        const variants = [];
+        
+        document.querySelectorAll('.variant-row').forEach((row, index) => {
+            const coefficient = parseDecimal(row.querySelector('.variant-coefficient').value);
+            const portions = parseInt(row.querySelector('.variant-portions').value);
+            const variantId = row.dataset.variantId || null;
+            
+            variants.push({
+                id: variantId,
+                coefficient: coefficient,
+                portions: portions,
+                order: index
+            });
+        });
+        
+        fetch(`/production/vyrobni-prikazy/${orderId}/upravit-varianty/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify({
+                variants: variants
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert('Chyba při úpravě porcí: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Nastala chyba při úpravě porcí.');
+        });
     });
     
     // Hromadná úprava porcí
@@ -306,15 +666,16 @@ document.addEventListener('DOMContentLoaded', function() {
         btn.addEventListener('click', function() {
             currentDate = this.dataset.date;
             document.getElementById('bulkDate').textContent = new Date(currentDate).toLocaleDateString('cs-CZ');
-            document.getElementById('bulkAdultPortions').value = {{ menu_plan.default_portions_adult }};
-            document.getElementById('bulkChildPortions').value = {{ menu_plan.default_portions_child }};
+            const defaultTotal = {{ menu_plan.default_portions_adult|add:menu_plan.default_portions_child }};
+            document.getElementById('bulkTotalPortions').value = defaultTotal;
+            document.getElementById('bulkPortionCoefficient').value = '1,0';
             new bootstrap.Modal(document.getElementById('bulkPortionsModal')).show();
         });
     });
     
     document.getElementById('saveBulkPortions').addEventListener('click', function() {
-        const adultPortions = document.getElementById('bulkAdultPortions').value;
-        const childPortions = document.getElementById('bulkChildPortions').value;
+        const totalPortions = document.getElementById('bulkTotalPortions').value;
+        const coefficient = parseDecimal(document.getElementById('bulkPortionCoefficient').value);
         
         fetch(`/production/jidelnicky/${menuPlanId}/upravit-porce/`, {
             method: 'POST',
@@ -324,8 +685,8 @@ document.addEventListener('DOMContentLoaded', function() {
             },
             body: JSON.stringify({
                 date: currentDate,
-                portions_adult: adultPortions,
-                portions_child: childPortions
+                total_portions: totalPortions,
+                portion_coefficient: coefficient
             })
         })
         .then(response => response.json())
@@ -346,8 +707,25 @@ document.addEventListener('DOMContentLoaded', function() {
     document.querySelectorAll('.delete-meal-btn').forEach(btn => {
         btn.addEventListener('click', function() {
             if (confirm('Opravdu chcete smazat toto jídlo?')) {
-                // Implementujeme později
-                alert('Funkce bude implementována v další verzi');
+                const orderId = this.dataset.orderId;
+                fetch(`/production/vyrobni-prikazy/${orderId}/smazat/`, {
+                    method: 'DELETE',
+                    headers: {
+                        'X-CSRFToken': csrfToken
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        location.reload();
+                    } else {
+                        alert('Chyba při mazání jídla: ' + data.error);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Nastala chyba při mazání jídla.');
+                });
             }
         });
     });

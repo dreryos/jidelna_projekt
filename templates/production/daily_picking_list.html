@@ -97,11 +97,17 @@
                                                     <small class="fw-bold text-muted">Použití v receptech:</small>
                                                     <ul class="list-unstyled mb-0 mt-1">
                                                         {% for order_info in item.orders %}
-                                                            <li>
-                                                                <span class="badge bg-secondary me-1">{{ order_info.portions }}</span>
+                                                            <li class="mb-1">
+                                                                <span class="badge bg-success me-1" title="Efektivní porce">
+                                                                    {{ order_info.effective_portions|format_decimal }}
+                                                                </span>
                                                                 <strong>{{ order_info.recipe }}</strong> 
-                                                                ({{ order_info.canteen }}) - 
-                                                                <em>{{ order_info.amount|format_decimal }} {{ item.ingredient.unit }}</em>
+                                                                ({{ order_info.canteen }})
+                                                                <br>
+                                                                <small class="text-muted ms-4">
+                                                                    Varianty: {{ order_info.portions }} → 
+                                                                    <em>{{ order_info.amount|format_decimal }} {{ item.ingredient.base_unit }}</em>
+                                                                </small>
                                                             </li>
                                                         {% endfor %}
                                                     </ul>
@@ -140,15 +146,37 @@
                                                     <i class="fas fa-utensils me-1 text-warning"></i>
                                                     {{ order.recipe.name }}
                                                 </h6>
-                                                <p class="card-text mb-1">
+                                                <p class="card-text mb-2">
                                                     <small class="text-muted">
                                                         <i class="fas fa-building me-1"></i>{{ order.canteen.name|default:"Bez jídelny" }}
                                                     </small>
                                                 </p>
-                                                <div class="d-flex justify-content-between">
-                                                    <span class="badge bg-primary">{{ order.portions_adult|default:0 }} dospělých</span>
-                                                    <span class="badge bg-info">{{ order.portions_child|default:0 }} dětských</span>
-                                                </div>
+                                                
+                                                {% if order.portion_variants.exists %}
+                                                    <div class="mb-2">
+                                                        <small class="fw-bold text-muted">Varianty porcí:</small>
+                                                        <div class="mt-1">
+                                                            {% for variant in order.portion_variants.all %}
+                                                                <span class="badge bg-info me-1 mb-1">
+                                                                    {{ variant.portions }} × {{ variant.coefficient|format_decimal }}
+                                                                    <small>({{ variant.effective_portions|format_decimal }})</small>
+                                                                </span>
+                                                            {% endfor %}
+                                                        </div>
+                                                    </div>
+                                                    <div class="alert alert-success py-1 px-2 mb-0">
+                                                        <small>
+                                                            <strong>Celkem efektivních porcí:</strong> 
+                                                            {{ order.get_total_effective_portions|format_decimal }}
+                                                        </small>
+                                                    </div>
+                                                {% else %}
+                                                    <div class="d-flex justify-content-between">
+                                                        <span class="badge bg-primary">{{ order.total_portions|default:0 }} porcí</span>
+                                                        <span class="badge bg-secondary">{{ order.portion_coefficient|format_decimal }}×</span>
+                                                    </div>
+                                                {% endif %}
+                                                
                                                 {% if order.menu_plan %}
                                                     <div class="mt-2">
                                                         <small class="text-muted">

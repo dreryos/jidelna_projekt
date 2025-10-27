@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import ProductionOrder, PickingList, MenuPlan
+from .models import ProductionOrder, PickingList, MenuPlan, MenuPlanCoefficient
 
 # Tento admin modul umožňuje správu výrobních příkazů a zobrazení souvisejících výdejek.
 # Výpočty cen používají metodu `calculate_portion_price` z modelu Recipe.
@@ -15,8 +15,17 @@ class PickingListInline(admin.TabularInline):
     def has_add_permission(self, request, obj=None):
         return False
 
+
+class MenuPlanCoefficientInline(admin.TabularInline):
+    model = MenuPlanCoefficient
+    fields = ('name', 'coefficient', 'order')
+    extra = 1
+    ordering = ['order']
+
+
 @admin.register(MenuPlan)
 class MenuPlanAdmin(admin.ModelAdmin):
+    inlines = [MenuPlanCoefficientInline]
     list_display = ('name', 'canteen', 'date_from', 'date_to', 'get_days_count', 'get_total_orders')
     list_filter = ('canteen', 'date_from', 'date_to')
     search_fields = ('name',)
@@ -26,8 +35,9 @@ class MenuPlanAdmin(admin.ModelAdmin):
         (None, {
             'fields': ('name', 'canteen', 'date_from', 'date_to')
         }),
-        ('Výchozí počty porcí', {
+        ('Výchozí počty porcí (pro zpětnou kompatibilitu)', {
             'fields': ('default_portions_adult', 'default_portions_child'),
+            'classes': ('collapse',),
         }),
     )
 

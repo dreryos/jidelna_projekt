@@ -15,6 +15,11 @@ urlpatterns = [
     path('jidelnicky/<int:menu_pk>/pridat-jidlo/', views.add_meal_to_menu, name='add_meal_to_menu'),
     path('jidelnicky/<int:menu_pk>/upravit-porce/', views.update_portions_bulk, name='update_portions_bulk'),
     
+    # AJAX endpointy pro jednotlivé výrobní příkazy
+    path('vyrobni-prikazy/<int:order_pk>/upravit-porce/', views.update_order_portions, name='update_order_portions'),
+    path('vyrobni-prikazy/<int:order_pk>/upravit-varianty/', views.update_order_variants, name='update_order_variants'),
+    path('vyrobni-prikazy/<int:order_pk>/smazat/', views.delete_order_ajax, name='delete_order_ajax'),
+    
     # Denní výdejky
     path('vydejka-dne/', views.daily_picking_list, name='daily_picking_list'),
     
