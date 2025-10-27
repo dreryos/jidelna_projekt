@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% load bootstrap5 %}
+{% load core_filters %}
 
 {% block title %}Výdejka na {{ picking_date|date:"d.m.Y" }}{% endblock %}
 
@@ -82,7 +83,7 @@
                                                     <br><small class="text-muted">{{ item.ingredient.description }}</small>
                                                 {% endif %}
                                             </td>
-                                            <td class="fw-bold text-primary">{{ item.amount|floatformat:2 }}</td>
+                                            <td class="fw-bold text-primary">{{ item.amount|format_decimal }}</td>
                                             <td>{{ item.ingredient.unit }}</td>
                                             <td>
                                                 <button type="button" class="btn btn-outline-info btn-sm" data-bs-toggle="collapse" data-bs-target="#detail-{{ forloop.counter }}">
@@ -100,7 +101,7 @@
                                                                 <span class="badge bg-secondary me-1">{{ order_info.portions }}</span>
                                                                 <strong>{{ order_info.recipe }}</strong> 
                                                                 ({{ order_info.canteen }}) - 
-                                                                <em>{{ order_info.amount|floatformat:2 }} {{ item.ingredient.unit }}</em>
+                                                                <em>{{ order_info.amount|format_decimal }} {{ item.ingredient.unit }}</em>
                                                             </li>
                                                         {% endfor %}
                                                     </ul>

@@ -1,6 +1,7 @@
 from django.db import models
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from decimal import Decimal
 
 from apps.core.models import Recipe, Ingredient
 from apps.canteens.models import Canteen, Warehouse
@@ -53,8 +54,20 @@ class ProductionOrder(models.Model):
     menu_plan = models.ForeignKey(MenuPlan, on_delete=models.CASCADE, related_name='production_orders', verbose_name="Jídelníček", null=True, blank=True)
     recipe = models.ForeignKey(Recipe, on_delete=models.PROTECT, verbose_name="Recept")
     canteen = models.ForeignKey(Canteen, on_delete=models.PROTECT, verbose_name="Jídelna")
-    portions_adult = models.PositiveIntegerField(verbose_name="Počet dospělých porcí")
-    portions_child = models.PositiveIntegerField(verbose_name="Počet dětských porcí")
+    
+    # Počty porcí - zachováno pro kompatibilitu
+    portions_adult = models.PositiveIntegerField(verbose_name="Počet dospělých porcí", default=0)
+    portions_child = models.PositiveIntegerField(verbose_name="Počet dětských porcí", default=0)
+    
+    # Nové pole - koeficient velikosti porce
+    portion_coefficient = models.DecimalField(
+        max_digits=5, 
+        decimal_places=2, 
+        default=Decimal('1.0'),
+        verbose_name="Koeficient porce",
+        help_text="Koeficient velikosti porce (1.0 = normální, 0.5 = poloviční, 1.5 = větší)"
+    )
+    
     date = models.DateField(verbose_name="Datum vaření")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Vytvořeno")
 
@@ -67,6 +80,7 @@ class ProductionOrder(models.Model):
     def generate_picking_list(self):
         """
         Vygeneruje položky na výdejce na základě norem receptu.
+        Množství se počítá s použitím koeficientu a převádí na základní jednotky (kg).
         Předvyplní sklad, který patří k jídelně a má danou surovinu.
         """
         if not self.recipe:
@@ -75,8 +89,11 @@ class ProductionOrder(models.Model):
         recipe_ingredients = self.recipe.recipeingredient_set.all()
 
         for item in recipe_ingredients:
-            quantity_planned = (item.quantity_adult * self.portions_adult) + \
-                               (item.quantity_child * self.portions_child)
+            # Vypočítáme množství v základních jednotkách (kg, l) pomocí nové metody
+            quantity_planned = item.get_quantity_in_base_unit(
+                portions=self.total_portions,
+                coefficient=float(self.portion_coefficient)
+            )
 
             # Najdeme sklad, který patří k jídelně a má danou surovinu
             stock_item = StockItem.objects.filter(
@@ -95,20 +112,24 @@ class ProductionOrder(models.Model):
             )
 
     def get_required_ingredients(self):
-        """Vrátí seznam surovin potřebných pro tento výrobní příkaz"""
+        """Vrátí seznam surovin potřebných pro tento výrobní příkaz s použitím koeficientu"""
         ingredients = []
         if not self.recipe:
             return ingredients
         
         for recipe_ingredient in self.recipe.recipeingredient_set.all():
-            adult_amount = recipe_ingredient.quantity_adult * (self.portions_adult or 0)
-            child_amount = recipe_ingredient.quantity_child * (self.portions_child or 0)
-            total_amount = adult_amount + child_amount
+            # Použijeme novou metodu pro výpočet množství v základních jednotkách
+            amount_base_unit = recipe_ingredient.get_quantity_in_base_unit(
+                portions=self.total_portions,
+                coefficient=float(self.portion_coefficient)
+            )
             
             ingredients.append({
                 'ingredient': recipe_ingredient.ingredient,
-                'amount': total_amount,
-                'unit': recipe_ingredient.ingredient.unit
+                'amount': amount_base_unit,
+                'unit': recipe_ingredient.ingredient.base_unit,
+                'amount_recipe_unit': recipe_ingredient.quantity_per_portion * self.total_portions * self.portion_coefficient,
+                'recipe_unit': recipe_ingredient.ingredient.recipe_unit
             })
         
         return ingredients

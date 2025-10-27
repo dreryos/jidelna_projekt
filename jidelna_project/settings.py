@@ -118,7 +118,24 @@ TIME_ZONE = 'Europe/Prague'
 
 USE_I18N = True
 
+USE_L10N = True
+
 USE_TZ = True
+
+# Formátování čísel - použití české lokalizace (čárka jako desetinný oddělovač)
+USE_THOUSAND_SEPARATOR = True
+DECIMAL_SEPARATOR = ','
+THOUSAND_SEPARATOR = ' '
+
+# Cesta k lokalizačním souborům
+LOCALE_PATHS = [
+    BASE_DIR / 'locale',
+]
+
+# Povolit formátování čísel ve formulářích
+FORMAT_MODULE_PATH = [
+    'jidelna_project.formats',
+]
 
 
 # Static files (CSS, JavaScript, Images)

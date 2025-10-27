@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% load bootstrap5 %}
+{% load core_filters %}
 
 {% block title %}Sklady - Jídelna{% endblock %}
 
@@ -107,13 +108,13 @@
               </td>
               <td>
                 <span class="badge {% if item.quantity <= 0 %}bg-danger{% elif item.quantity <= 10 %}bg-warning text-dark{% else %}bg-success{% endif %}">
-                  {{ item.quantity|floatformat:1 }} {{ item.ingredient.unit }}
+                  {{ item.quantity|format_decimal }} {{ item.ingredient.unit }}
                 </span>
               </td>
-              <td>{{ item.price|floatformat:2 }} Kč</td>
+              <td>{{ item.price|format_price }} Kč</td>
               <td>
                 {% widthratio item.quantity 1 item.price as total_value %}
-                <strong>{{ total_value|floatformat:2 }} Kč</strong>
+                <strong>{{ total_value|format_price }} Kč</strong>
               </td>
               <td>
                 <div class="btn-group btn-group-sm" role="group">

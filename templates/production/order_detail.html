@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% load bootstrap5 %}
+{% load core_filters %}
 
 {% block title %}{{ order.recipe.name }} - Detail výrobního příkazu - Jídelna{% endblock %}
 
@@ -71,7 +72,7 @@
     <div class="card bg-info text-white">
       <div class="card-body text-center">
         <i class="fas fa-coins fa-2x mb-2"></i>
-        <h4>{{ total_price|floatformat:2 }}</h4>
+        <h4>{{ total_price|format_price }}</h4>
         <small>Celková cena (Kč)</small>
       </div>
     </div>
@@ -122,13 +123,13 @@
               </td>
               <td>
                 <span class="badge bg-info">
-                  {{ item.quantity_planned|floatformat:2 }} {{ item.ingredient.unit }}
+                  {{ item.quantity_planned|format_decimal }} {{ item.ingredient.unit }}
                 </span>
               </td>
               <td>
                 {% if item.quantity_actual %}
                   <span class="badge bg-success">
-                    {{ item.quantity_actual|floatformat:2 }} {{ item.ingredient.unit }}
+                    {{ item.quantity_actual|format_decimal }} {{ item.ingredient.unit }}
                   </span>
                 {% else %}
                   <span class="text-muted">-</span>

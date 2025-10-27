@@ -8,6 +8,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.forms import inlineformset_factory
 
 from apps.core.models import Recipe, RecipeIngredient, Ingredient
+from apps.core.forms import RecipeIngredientForm, RecipeForm, IngredientForm
 
 """
 Tento modul je místo pro view funkce související s jádrem aplikace (recepty, suroviny).
@@ -38,12 +39,18 @@ class RecipeListView(LoginRequiredMixin, ListView):
 	template_name = 'core/recipe_list.html'
 
 
-RecipeIngredientFormSet = inlineformset_factory(Recipe, RecipeIngredient, fields=('ingredient','quantity_adult','quantity_child'), extra=1, can_delete=True)
+RecipeIngredientFormSet = inlineformset_factory(
+    Recipe, 
+    RecipeIngredient, 
+    form=RecipeIngredientForm,
+    extra=1, 
+    can_delete=True
+)
 
 
 class RecipeCreateView(LoginRequiredMixin, CreateView):
 	model = Recipe
-	fields = ['name', 'description']
+	form_class = RecipeForm
 	template_name = 'core/recipe_form.html'
 	success_url = reverse_lazy('core:recipe_list')
 
@@ -68,7 +75,7 @@ class RecipeCreateView(LoginRequiredMixin, CreateView):
 
 class RecipeUpdateView(LoginRequiredMixin, UpdateView):
 	model = Recipe
-	fields = ['name', 'description']
+	form_class = RecipeForm
 	template_name = 'core/recipe_form.html'
 	success_url = reverse_lazy('core:recipe_list')
 
@@ -108,14 +115,14 @@ class IngredientListView(LoginRequiredMixin, ListView):
 
 class IngredientCreateView(LoginRequiredMixin, CreateView):
 	model = Ingredient
-	fields = ['name', 'unit']
+	form_class = IngredientForm
 	template_name = 'core/ingredient_form.html'
 	success_url = reverse_lazy('core:ingredient_list')
 
 
 class IngredientUpdateView(LoginRequiredMixin, UpdateView):
 	model = Ingredient
-	fields = ['name', 'unit']
+	form_class = IngredientForm
 	template_name = 'core/ingredient_form.html'
 	success_url = reverse_lazy('core:ingredient_list')
 
