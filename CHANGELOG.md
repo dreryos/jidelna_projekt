@@ -7,6 +7,17 @@ a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+### Added
+- **Select2 autocomplete pro výběr receptů**: Implementace vyhledávacího pole s našeptávačem v modulu tvorby jídelníčku
+  - Integrace knihovny Select2 4.1.0 s Bootstrap 5 témem
+  - Česká lokalizace vyhledávacího pole
+  - Výrazně zlepšená použitelnost při práci s velkým množstvím receptů (171+)
+  - Okamžité vyhledávání podle názvu receptu
+  - Klávesová navigace a podpora mobilních zařízení
+- **Rozšiřitelnost base šablony**: Přidány bloky `extra_css` a `extra_js` do `base.html`
+  - Umožňuje snadné přidání dalších CSS a JavaScript knihoven do jednotlivých šablon
+  - Bloky vloženy za Bootstrap CSS a JavaScript pro správné pořadí načítání
+
 ### Fixed
 - **Formuláře pro jídelníčky a výrobní příkazy**: Opravena chyba při vytváření nového jídelníčku
   - Formuláře `MenuPlanForm`, `ProductionOrderForm` a `ProductionOrderFormAdvanced` nyní správně přijímají argument `user`

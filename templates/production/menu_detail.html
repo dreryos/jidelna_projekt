@@ -5,6 +5,9 @@
 {% block title %}{{ menu_plan.name }} - Detail jídelníčku{% endblock %}
 
 {% block extra_css %}
+<!-- Select2 CSS -->
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet" />
 <style>
 .meal-day-card {
     border-left: 4px solid #007bff;
@@ -315,12 +318,33 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<!-- jQuery (vyžadováno pro Select2) - musí být načteno PŘED hlavním scriptem -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<!-- Select2 JavaScript -->
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<!-- Select2 Czech localization -->
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/i18n/cs.js"></script>
 
 <script>
 const menuPlanId = {{ menu_plan.pk }};
 const csrfToken = '{{ csrf_token }}';
 
 document.addEventListener('DOMContentLoaded', function() {
+    // Inicializace Select2 pro výběr receptu
+    if (typeof jQuery !== 'undefined' && typeof jQuery.fn.select2 !== 'undefined') {
+        jQuery('#addMealRecipe').select2({
+            theme: 'bootstrap-5',
+            language: 'cs',
+            placeholder: 'Vyberte recept...',
+            allowClear: false,
+            width: '100%',
+            dropdownParent: jQuery('#addMealModal')
+        });
+    }
+    
     // Funkce pro konverzi desetinných čísel z českého formátu
     function parseDecimal(value) {
         if (typeof value === 'string') {
@@ -359,7 +383,13 @@ document.addEventListener('DOMContentLoaded', function() {
         btn.addEventListener('click', function() {
             addMealDate = this.dataset.date;
             document.getElementById('addMealDate').value = addMealDate;
-            document.getElementById('addMealRecipe').value = '';
+            
+            // Reset Select2 hodnoty
+            if (typeof jQuery !== 'undefined' && jQuery('#addMealRecipe').data('select2')) {
+                jQuery('#addMealRecipe').val(null).trigger('change');
+            } else {
+                document.getElementById('addMealRecipe').value = '';
+            }
             
             // Vyčistíme a přidáme výchozí variantu
             const container = document.getElementById('add-meal-variants-container');
@@ -452,7 +482,14 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     document.getElementById('saveAddMeal')?.addEventListener('click', function() {
-        const recipeId = document.getElementById('addMealRecipe').value;
+        // Získáme hodnotu receptu (podporuje jak Select2, tak standardní select)
+        let recipeId;
+        if (typeof jQuery !== 'undefined' && jQuery('#addMealRecipe').data('select2')) {
+            recipeId = jQuery('#addMealRecipe').val();
+        } else {
+            recipeId = document.getElementById('addMealRecipe').value;
+        }
+        
         const date = document.getElementById('addMealDate').value;
         
         if (!recipeId) {
@@ -732,3 +769,4 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 {% endblock %}
+
