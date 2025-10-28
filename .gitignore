@@ -135,3 +135,4 @@ cython_debug/
 
 # own files
 AIprompts.md
+.github/*

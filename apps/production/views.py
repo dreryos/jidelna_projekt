@@ -11,11 +11,93 @@ from django.forms import inlineformset_factory, modelformset_factory
 from django.http import JsonResponse
 from decimal import Decimal, InvalidOperation
 import json
+import logging
+from functools import wraps
+from typing import Any, Dict, Type, TYPE_CHECKING, cast
+
+from django.db import models
+from django.db.models.query import QuerySet
+from django.http import HttpRequest, HttpResponse
+from django.core.exceptions import PermissionDenied, ObjectDoesNotExist
+from django.http import JsonResponse, Http404
+from django.db import transaction
 
 from .models import ProductionOrder, PickingList, MenuPlan
 from .forms import ProductionOrderForm, ProductionOrderFormAdvanced, MenuPlanForm, MenuPlanCoefficientFormSet
 from apps.core.models import Recipe
 from apps.canteens.models import Canteen
+
+if TYPE_CHECKING:
+    from django.contrib.auth.models import User
+    from apps.core.models import UserProfile
+
+logger = logging.getLogger(__name__)
+
+# --- Authorization Helpers ---
+
+class CanteenOwnerMixin(LoginRequiredMixin):
+    """
+    Ensures the user can only access objects related to their assigned canteens
+    by checking the relationship through the UserProfile model.
+    """
+    model: Type[models.Model]
+    request: HttpRequest
+
+    def get_queryset(self) -> QuerySet:
+        queryset = super().get_queryset()  # type: ignore
+        user = cast('User', self.request.user)
+        if not user.is_superuser:
+            try:
+                # Filter objects by the canteens assigned to the user's profile
+                user_canteens = user.profile.canteens.all() # type: ignore
+                queryset = queryset.filter(canteen__in=user_canteens)
+            except ObjectDoesNotExist:
+                # If profile doesn't exist, deny access
+                return queryset.none()
+        return queryset
+
+def user_can_access_canteen_object(model: Type[models.Model]):
+    """
+    Decorator for function-based views to check if a user has permission
+    to access an object based on their assigned canteens via their profile.
+    """
+    def decorator(view_func):
+        @wraps(view_func)
+        def _wrapped_view(request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+            pk = kwargs.get('pk') or kwargs.get('menu_pk') or kwargs.get('order_pk')
+            if pk is None:
+                logger.error("Authorization check failed: No PK found in kwargs.")
+                return JsonResponse({'success': False, 'error': 'Primary key not provided.'}, status=400)
+
+            try:
+                obj = get_object_or_404(model, pk=pk)
+            except Http404:
+                return JsonResponse({'success': False, 'error': 'Object not found.'}, status=404)
+
+            user = cast('User', request.user)
+            if not user.is_superuser:
+                try:
+                    user_canteens = user.profile.canteens.all() # type: ignore
+                    canteen = getattr(obj, 'canteen', None)
+                    if not canteen and hasattr(obj, 'menu_plan'):
+                        canteen = obj.menu_plan.canteen
+
+                    if canteen not in user_canteens:
+                        logger.warning(
+                            f"Permission denied for user {user.id} on {model.__name__} {pk}." # type: ignore
+                        )
+                        return JsonResponse({'success': False, 'error': 'Permission denied.'}, status=403)
+                except ObjectDoesNotExist:
+                    logger.warning(f"User {user.id} has no profile, denying access.") # type: ignore
+                    return JsonResponse({'success': False, 'error': 'Permission denied.'}, status=403)
+            
+            setattr(request, 'instance', obj)
+            return view_func(request, *args, **kwargs)
+        return _wrapped_view
+    return decorator
+
+
+# --- Views ---
 
 """
 Viewy pro plánování výroby, vytváření jídelníčků a správu výdejek.
@@ -24,7 +106,7 @@ Viewy pro plánování výroby, vytváření jídelníčků a správu výdejek.
 
 # Formset pro správu jídel v jídelníčku
 ProductionOrderFormSet = inlineformset_factory(
-    MenuPlan, 
+    MenuPlan,
     ProductionOrder,
     fields=['recipe', 'date', 'portions_adult', 'portions_child', 'portion_coefficient'],
     extra=0,
@@ -39,35 +121,52 @@ ProductionOrderFormSet = inlineformset_factory(
 )
 
 
-class MenuPlanListView(LoginRequiredMixin, ListView):
+class MenuPlanListView(CanteenOwnerMixin, ListView):
     model = MenuPlan
     template_name = 'production/menu_list.html'
     context_object_name = 'menu_plans'
     paginate_by = 10
     
-    def get_queryset(self):
-        queryset = MenuPlan.objects.select_related('canteen').prefetch_related('production_orders').order_by('-created_at')
+    def get_queryset(self) -> QuerySet[MenuPlan]:
+        queryset = super().get_queryset().select_related('canteen').prefetch_related('production_orders').order_by('-created_at')
         
-        # Filtrování podle jídelny
         canteen_filter = self.request.GET.get('canteen')
         if canteen_filter:
-            queryset = queryset.filter(canteen_id=canteen_filter)
+            user = cast('User', self.request.user)
+            try:
+                if user.is_superuser or user.profile.canteens.filter(pk=canteen_filter).exists(): # type: ignore
+                    queryset = queryset.filter(canteen_id=canteen_filter)
+            except ObjectDoesNotExist:
+                return queryset.none()
             
         return queryset
     
-    def get_context_data(self, **kwargs):
+    def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
         context = super().get_context_data(**kwargs)
-        context['canteens'] = Canteen.objects.all()
+        user = cast('User', self.request.user)
+        if user.is_superuser:
+            context['canteens'] = Canteen.objects.all()
+        else:
+            try:
+                context['canteens'] = user.profile.canteens.all() # type: ignore
+            except ObjectDoesNotExist:
+                context['canteens'] = Canteen.objects.none()
         context['selected_canteen'] = self.request.GET.get('canteen', '')
         context['today'] = date.today()
         return context
 
 
-class MenuPlanCreateView(LoginRequiredMixin, CreateView):
+class MenuPlanCreateView(CanteenOwnerMixin, CreateView):
     model = MenuPlan
     form_class = MenuPlanForm
     template_name = 'production/menu_form.html'
     
+    def get_form_kwargs(self):
+        """Pass the current user to the form."""
+        kwargs = super().get_form_kwargs()
+        kwargs['user'] = self.request.user
+        return kwargs
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         if self.request.POST:
@@ -76,6 +175,7 @@ class MenuPlanCreateView(LoginRequiredMixin, CreateView):
             context['coefficient_formset'] = MenuPlanCoefficientFormSet(instance=self.object)
         return context
     
+    @transaction.atomic
     def form_valid(self, form):
         context = self.get_context_data()
         coefficient_formset = context['coefficient_formset']
@@ -93,12 +193,18 @@ class MenuPlanCreateView(LoginRequiredMixin, CreateView):
         return reverse_lazy('production:menu_detail', kwargs={'pk': self.object.pk})
 
 
-class MenuPlanDetailView(LoginRequiredMixin, UpdateView):
+class MenuPlanDetailView(CanteenOwnerMixin, UpdateView):
     model = MenuPlan
     form_class = MenuPlanForm
     template_name = 'production/menu_detail.html'
     context_object_name = 'menu_plan'
     
+    def get_form_kwargs(self):
+        """Pass the current user to the form."""
+        kwargs = super().get_form_kwargs()
+        kwargs['user'] = self.request.user
+        return kwargs
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         if self.request.POST:
@@ -119,6 +225,7 @@ class MenuPlanDetailView(LoginRequiredMixin, UpdateView):
             current_date += timedelta(days=1)
         return dates
     
+    @transaction.atomic
     def form_valid(self, form):
         context = self.get_context_data()
         orders_formset = context['orders_formset']
@@ -127,7 +234,6 @@ class MenuPlanDetailView(LoginRequiredMixin, UpdateView):
             self.object = form.save()
             orders_formset.instance = self.object
             
-            # Nastavíme jídelnu pro všechny příkazy
             for order_form in orders_formset:
                 if order_form.cleaned_data and not order_form.cleaned_data.get('DELETE', False):
                     order_form.instance.canteen = self.object.canteen
@@ -144,60 +250,61 @@ class MenuPlanDetailView(LoginRequiredMixin, UpdateView):
         return reverse_lazy('production:menu_detail', kwargs={'pk': self.object.pk})
 
 
-class MenuPlanDeleteView(LoginRequiredMixin, DeleteView):
+class MenuPlanDeleteView(CanteenOwnerMixin, DeleteView):
     model = MenuPlan
     template_name = 'production/menu_confirm_delete.html'
     success_url = reverse_lazy('production:menu_list')
     
+    @transaction.atomic
     def delete(self, request, *args, **kwargs):
         self.object = self.get_object()
         menu_name = self.object.name
+        response = super().delete(request, *args, **kwargs)
         messages.success(request, f'Jídelníček "{menu_name}" byl smazán.')
-        return super().delete(request, *args, **kwargs)
+        return response
 
 
 @login_required
-def add_meal_to_menu(request, menu_pk):
+@user_can_access_canteen_object(MenuPlan)
+def add_meal_to_menu(request, menu_pk, *args, **kwargs):
     """AJAX view pro přidání jídla do jídelníčku"""
     from .models import ProductionOrderPortionVariant
     
-    menu_plan = get_object_or_404(MenuPlan, pk=menu_pk)
+    menu_plan = request.instance  # Object from decorator
     
-    if request.method == 'POST':
-        try:
-            data = json.loads(request.body)
-            recipe_id = data.get('recipe_id')
-            meal_date = data.get('date')
-            variants = data.get('variants', [])
-            
-            recipe = get_object_or_404(Recipe, pk=recipe_id)
-            
-            # Vytvoříme nový výrobní příkaz
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Invalid request method.'}, status=405)
+
+    try:
+        data = json.loads(request.body)
+        recipe_id = data['recipe_id']
+        meal_date = data['date']
+        variants = data.get('variants', [])
+        
+        recipe = get_object_or_404(Recipe, pk=recipe_id)
+        
+        with transaction.atomic():
             order = ProductionOrder.objects.create(
                 menu_plan=menu_plan,
                 recipe=recipe,
                 canteen=menu_plan.canteen,
                 date=meal_date,
-                portions_adult=0,  # Nyní používáme varianty
+                portions_adult=0,
                 portions_child=0,
                 portion_coefficient=Decimal('1.0')
             )
             
-            # Vytvoříme všechny varianty porcí
             if variants:
                 for variant_data in variants:
                     ProductionOrderPortionVariant.objects.create(
                         production_order=order,
-                        coefficient=Decimal(str(variant_data.get('coefficient', '1.0'))),
-                        portions=int(variant_data.get('portions', 0)),
+                        coefficient=Decimal(str(variant_data['coefficient'])),
+                        portions=int(variant_data['portions']),
                         order=int(variant_data.get('order', 0))
                     )
             else:
-                # Fallback: pokud nejsou varianty, vytvoříme výchozí
-                total_portions = int(data.get('total_portions', 
-                                             menu_plan.default_portions_adult + menu_plan.default_portions_child))
+                total_portions = int(data.get('total_portions', 0))
                 portion_coefficient = Decimal(str(data.get('portion_coefficient', '1.0')))
-                
                 ProductionOrderPortionVariant.objects.create(
                     production_order=order,
                     coefficient=portion_coefficient,
@@ -205,39 +312,35 @@ def add_meal_to_menu(request, menu_pk):
                     order=0
                 )
             
-            # Vygenerujeme picking list
-            order.picking_list_items.all().delete()
             order.generate_picking_list()
             
-            return JsonResponse({
-                'success': True,
-                'order_id': order.id,
-                'recipe_name': recipe.name
-            })
+        return JsonResponse({
+            'success': True,
+            'order_id': order.id,
+            'recipe_name': recipe.name
+        })
             
-        except Exception as e:
-            return JsonResponse({
-                'success': False,
-                'error': str(e)
-            }, status=400)
-    
-    return JsonResponse({'success': False, 'error': 'Invalid request'}, status=400)
+    except (json.JSONDecodeError, KeyError, TypeError, ValueError, InvalidOperation, ObjectDoesNotExist) as e:
+        logger.error(f"Error in add_meal_to_menu for menu_plan {menu_pk}: {e}", exc_info=True)
+        return JsonResponse({'success': False, 'error': 'Invalid data provided.'}, status=400)
 
 
 @login_required
-def update_portions_bulk(request, menu_pk):
+@user_can_access_canteen_object(MenuPlan)
+def update_portions_bulk(request, menu_pk, *args, **kwargs):
     """AJAX view pro hromadnou úpravu porcí"""
-    menu_plan = get_object_or_404(MenuPlan, pk=menu_pk)
+    menu_plan = request.instance
     
-    if request.method == 'POST':
-        try:
-            data = json.loads(request.body)
-            total_portions = int(data.get('total_portions', 0))
-            portion_coefficient = Decimal(str(data.get('portion_coefficient', '1.0')))
-            meal_date = data.get('date')
-            
-            # Aktualizujeme všechna jídla pro dané datum
-            # Backward compatibility: total_portions jde do portions_adult, portions_child = 0
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Invalid request method.'}, status=405)
+
+    try:
+        data = json.loads(request.body)
+        total_portions = int(data['total_portions'])
+        portion_coefficient = Decimal(str(data['portion_coefficient']))
+        meal_date = data['date']
+        
+        with transaction.atomic():
             orders = menu_plan.production_orders.filter(date=meal_date)
             updated_count = orders.update(
                 portions_adult=total_portions,
@@ -245,67 +348,58 @@ def update_portions_bulk(request, menu_pk):
                 portion_coefficient=portion_coefficient
             )
             
-            return JsonResponse({
-                'success': True,
-                'updated_count': updated_count
-            })
+        return JsonResponse({'success': True, 'updated_count': updated_count})
             
-        except Exception as e:
-            return JsonResponse({
-                'success': False,
-                'error': str(e)
-            }, status=400)
-    
-    return JsonResponse({'success': False, 'error': 'Invalid request'}, status=400)
+    except (json.JSONDecodeError, KeyError, TypeError, ValueError, InvalidOperation) as e:
+        logger.error(f"Error in update_portions_bulk for menu_plan {menu_pk}: {e}", exc_info=True)
+        return JsonResponse({'success': False, 'error': 'Invalid data provided.'}, status=400)
 
 
 @login_required
-def update_order_portions(request, order_pk):
+@user_can_access_canteen_object(ProductionOrder)
+def update_order_portions(request, order_pk, *args, **kwargs):
     """AJAX view pro úpravu porcí jednoho výrobního příkazu"""
-    order = get_object_or_404(ProductionOrder, pk=order_pk)
+    order = request.instance
     
-    if request.method == 'POST':
-        try:
-            data = json.loads(request.body)
-            total_portions = int(data.get('total_portions', 0))
-            portion_coefficient = Decimal(str(data.get('portion_coefficient', '1.0')))
-            
-            # Backward compatibility: total_portions jde do portions_adult, portions_child = 0
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Invalid request method.'}, status=405)
+
+    try:
+        data = json.loads(request.body)
+        total_portions = int(data['total_portions'])
+        portion_coefficient = Decimal(str(data['portion_coefficient']))
+        
+        with transaction.atomic():
             order.portions_adult = total_portions
             order.portions_child = 0
             order.portion_coefficient = portion_coefficient
             order.save()
             
-            return JsonResponse({
-                'success': True,
-                'order_id': order.id
-            })
+        return JsonResponse({'success': True, 'order_id': order.id})
             
-        except Exception as e:
-            return JsonResponse({
-                'success': False,
-                'error': str(e)
-            }, status=400)
-    
-    return JsonResponse({'success': False, 'error': 'Invalid request'}, status=400)
+    except (json.JSONDecodeError, KeyError, TypeError, ValueError, InvalidOperation) as e:
+        logger.error(f"Error in update_order_portions for order {order_pk}: {e}", exc_info=True)
+        return JsonResponse({'success': False, 'error': 'Invalid data provided.'}, status=400)
 
 
 @login_required
-def update_order_variants(request, order_pk):
+@user_can_access_canteen_object(ProductionOrder)
+def update_order_variants(request, order_pk, *args, **kwargs):
     """AJAX view pro úpravu variant porcí výrobního příkazu"""
     from .models import ProductionOrderPortionVariant
     
-    order = get_object_or_404(ProductionOrder, pk=order_pk)
+    order = request.instance
     
-    if request.method == 'POST':
-        try:
-            data = json.loads(request.body)
-            variants_data = data.get('variants', [])
-            
-            # Smažeme staré varianty
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Invalid request method.'}, status=405)
+
+    try:
+        data = json.loads(request.body)
+        variants_data = data['variants']
+        
+        with transaction.atomic():
             order.portion_variants.all().delete()
             
-            # Vytvoříme nové varianty
             for variant_info in variants_data:
                 ProductionOrderPortionVariant.objects.create(
                     production_order=order,
@@ -314,111 +408,118 @@ def update_order_variants(request, order_pk):
                     order=int(variant_info.get('order', 0))
                 )
             
-            # Přegenerujeme picking list
-            order.picking_list_items.all().delete()
             order.generate_picking_list()
             
-            return JsonResponse({
-                'success': True,
-                'order_id': order.id
-            })
+        return JsonResponse({'success': True, 'order_id': order.id})
             
-        except Exception as e:
-            return JsonResponse({
-                'success': False,
-                'error': str(e)
-            }, status=400)
-    
-    return JsonResponse({'success': False, 'error': 'Invalid request'}, status=400)
+    except (json.JSONDecodeError, KeyError, TypeError, ValueError, InvalidOperation) as e:
+        logger.error(f"Error in update_order_variants for order {order_pk}: {e}", exc_info=True)
+        return JsonResponse({'success': False, 'error': 'Invalid data provided.'}, status=400)
 
 
 @login_required
-def delete_order_ajax(request, order_pk):
+@user_can_access_canteen_object(ProductionOrder)
+def delete_order_ajax(request, order_pk, *args, **kwargs):
     """AJAX view pro smazání výrobního příkazu"""
-    order = get_object_or_404(ProductionOrder, pk=order_pk)
+    order = request.instance
     
-    if request.method == 'DELETE':
-        try:
+    if request.method != 'DELETE':
+        return JsonResponse({'success': False, 'error': 'Invalid request method.'}, status=405)
+
+    try:
+        with transaction.atomic():
             order_id = order.id
             order.delete()
+        
+        return JsonResponse({'success': True, 'order_id': order_id})
             
-            return JsonResponse({
-                'success': True,
-                'order_id': order_id
-            })
-            
-        except Exception as e:
-            return JsonResponse({
-                'success': False,
-                'error': str(e)
-            }, status=400)
-    
-    return JsonResponse({'success': False, 'error': 'Invalid request'}, status=400)
+    except Exception as e: # Catch potential db integrity errors
+        logger.error(f"Error deleting order {order_pk}: {e}", exc_info=True)
+        return JsonResponse({'success': False, 'error': 'Could not delete the order.'}, status=500)
 
 
 # Původní views pro jednotlivé výrobní příkazy (zachováváme pro zpětnou kompatibilitu)
 
-class ProductionOrderListView(LoginRequiredMixin, ListView):
+class ProductionOrderListView(CanteenOwnerMixin, ListView):
     model = ProductionOrder
     template_name = 'production/order_list.html'
     context_object_name = 'orders'
     paginate_by = 20
     
-    def get_queryset(self):
-        queryset = ProductionOrder.objects.select_related('recipe', 'canteen', 'menu_plan').order_by('-date', 'recipe__name')
+    def get_queryset(self) -> QuerySet[ProductionOrder]:
+        queryset = super().get_queryset().select_related('recipe', 'canteen', 'menu_plan').order_by('-date', 'recipe__name')
         
-        # Filtrování podle receptu
         recipe_filter = self.request.GET.get('recipe')
         if recipe_filter:
             queryset = queryset.filter(recipe_id=recipe_filter)
         
-        # Filtrování podle jídelny
         canteen_filter = self.request.GET.get('canteen')
+        user = cast('User', self.request.user)
         if canteen_filter:
-            queryset = queryset.filter(canteen_id=canteen_filter)
+            try:
+                if user.is_superuser or user.profile.canteens.filter(pk=canteen_filter).exists(): # type: ignore
+                    queryset = queryset.filter(canteen_id=canteen_filter)
+            except ObjectDoesNotExist:
+                return queryset.none()
             
-        # Filtrování podle data
         date_filter = self.request.GET.get('date')
         if date_filter:
             queryset = queryset.filter(date=date_filter)
             
         return queryset
     
-    def get_context_data(self, **kwargs):
+    def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
         context = super().get_context_data(**kwargs)
         context['recipes'] = Recipe.objects.all()
-        context['canteens'] = Canteen.objects.all()
+        user = cast('User', self.request.user)
+        if user.is_superuser:
+            context['canteens'] = Canteen.objects.all()
+        else:
+            try:
+                context['canteens'] = user.profile.canteens.all() # type: ignore
+            except ObjectDoesNotExist:
+                context['canteens'] = Canteen.objects.none()
         context['selected_recipe'] = self.request.GET.get('recipe', '')
         context['selected_canteen'] = self.request.GET.get('canteen', '')
         context['selected_date'] = self.request.GET.get('date', '')
         return context
 
 
-class ProductionOrderCreateView(LoginRequiredMixin, CreateView):
+class ProductionOrderCreateView(CanteenOwnerMixin, CreateView):
     model = ProductionOrder
     form_class = ProductionOrderForm
     template_name = 'production/order_form.html'
     success_url = reverse_lazy('production:order_list')
     
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['user'] = self.request.user
+        return kwargs
+
     def form_valid(self, form):
         response = super().form_valid(form)
         messages.success(self.request, f'Výrobní příkaz pro recept "{self.object.recipe.name}" byl vytvořen.')
         return response
 
 
-class ProductionOrderUpdateView(LoginRequiredMixin, UpdateView):
+class ProductionOrderUpdateView(CanteenOwnerMixin, UpdateView):
     model = ProductionOrder
     form_class = ProductionOrderForm
     template_name = 'production/order_form.html'
     success_url = reverse_lazy('production:order_list')
     
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['user'] = self.request.user
+        return kwargs
+
     def form_valid(self, form):
         response = super().form_valid(form)
         messages.success(self.request, f'Výrobní příkaz pro recept "{self.object.recipe.name}" byl upraven.')
         return response
 
 
-class ProductionOrderDeleteView(LoginRequiredMixin, DeleteView):
+class ProductionOrderDeleteView(CanteenOwnerMixin, DeleteView):
     model = ProductionOrder
     template_name = 'production/order_confirm_delete.html'
     success_url = reverse_lazy('production:order_list')
@@ -426,16 +527,17 @@ class ProductionOrderDeleteView(LoginRequiredMixin, DeleteView):
     def delete(self, request, *args, **kwargs):
         self.object = self.get_object()
         recipe_name = self.object.recipe.name
+        response = super().delete(request, *args, **kwargs)
         messages.success(request, f'Výrobní příkaz pro recept "{recipe_name}" byl smazán.')
-        return super().delete(request, *args, **kwargs)
+        return response
 
 
 @login_required
-def production_order_detail(request, pk):
+@user_can_access_canteen_object(ProductionOrder)
+def production_order_detail(request, pk, *args, **kwargs):
     """Detailní pohled na výrobní příkaz s výdejkou."""
-    order = get_object_or_404(ProductionOrder, pk=pk)
+    order = request.instance
     
-    # Vytvoříme nebo získáme výdejku pro tento příkaz
     picking_list, created = PickingList.objects.get_or_create(production_order=order)
     
     context = {
@@ -465,26 +567,40 @@ def daily_picking_list(request):
         messages.error(request, 'Neplatné datum.')
         return redirect('production:menu_list')
     
-    # Získáme všechny výrobní příkazy pro daný den
+    user = cast('User', request.user)
     orders_query = ProductionOrder.objects.filter(date=picking_date)
     
+    # Filter by user's accessible canteens
+    if not user.is_superuser:
+        try:
+            user_canteens = user.profile.canteens.all() # type: ignore
+            orders_query = orders_query.filter(canteen__in=user_canteens)
+        except ObjectDoesNotExist:
+            orders_query = orders_query.none()
+
+    selected_canteen = None
     if canteen_id:
-        orders_query = orders_query.filter(canteen_id=canteen_id)
-        selected_canteen = get_object_or_404(Canteen, pk=canteen_id)
-    else:
-        selected_canteen = None
-    
+        try:
+            # Ensure the user can access the selected canteen
+            if user.is_superuser or user.profile.canteens.filter(pk=canteen_id).exists(): # type: ignore
+                orders_query = orders_query.filter(canteen_id=canteen_id)
+                selected_canteen = get_object_or_404(Canteen, pk=canteen_id)
+            else:
+                messages.error(request, 'Nemáte oprávnění pro přístup k této jídelně.')
+                return redirect('production:menu_list')
+        except ObjectDoesNotExist:
+            messages.error(request, 'Nemáte oprávnění pro přístup k této jídelně.')
+            return redirect('production:menu_list')
+
     orders = orders_query.select_related('recipe', 'canteen', 'menu_plan').prefetch_related(
         'recipe__recipeingredient_set__ingredient',
         'portion_variants'
     )
     
-    # Agregujeme potřebné suroviny
     ingredient_totals = {}
     total_portions = Decimal('0')
     
     for order in orders:
-        # Získáme celkový počet efektivních porcí pro tento výrobní příkaz
         effective_portions = order.get_total_effective_portions()
         total_portions += effective_portions
         
@@ -492,13 +608,10 @@ def daily_picking_list(request):
             ingredient = recipe_ingredient.ingredient
             key = (ingredient.id, ingredient.name, ingredient.base_unit)
             
-            # Vypočítáme celkovou potřebu suroviny pro tento příkaz
-            # Použijeme varianty pokud existují
             variants = order.portion_variants.all()
             needed_amount = Decimal('0')
             
             if variants.exists():
-                # Nová struktura - sčítáme ze všech variant
                 for variant in variants:
                     variant_amount = recipe_ingredient.get_quantity_in_base_unit(
                         portions=variant.portions,
@@ -506,13 +619,11 @@ def daily_picking_list(request):
                     )
                     needed_amount += variant_amount
                 
-                # Pro popis porcí
                 portions_desc = " + ".join([
-                    f"{variant.portions}×{variant.coefficient}" 
+                    f"{variant.portions}×{variant.coefficient}"
                     for variant in variants
                 ])
             else:
-                # Fallback na starou strukturu (zpětná kompatibilita)
                 needed_amount = recipe_ingredient.get_quantity_in_base_unit(
                     portions=order.total_portions,
                     coefficient=float(order.portion_coefficient)
@@ -541,7 +652,6 @@ def daily_picking_list(request):
                     }]
                 }
     
-    # Seřadíme suroviny podle názvu
     sorted_ingredients = sorted(ingredient_totals.values(), key=lambda x: x['ingredient'].name)
     
     context = {
@@ -554,17 +664,16 @@ def daily_picking_list(request):
     }
     
     if format_type == 'pdf':
-        # Pro PDF použijeme odlišnou šablonu optimalizovanou pro tisk
         return render(request, 'production/daily_picking_list_pdf.html', context)
     else:
-        # Pro HTML zobrazení
         return render(request, 'production/daily_picking_list.html', context)
 
 
 @login_required
-def picking_list_print(request, order_pk):
+@user_can_access_canteen_object(ProductionOrder)
+def picking_list_print(request, order_pk, *args, **kwargs):
     """Zobrazení výdejky pro tisk."""
-    order = get_object_or_404(ProductionOrder, pk=order_pk)
+    order = request.instance
     picking_list, created = PickingList.objects.get_or_create(production_order=order)
     
     context = {

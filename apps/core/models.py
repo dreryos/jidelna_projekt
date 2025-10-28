@@ -1,5 +1,11 @@
 from django.db import models
 from decimal import Decimal
+from django.conf import settings
+from django.contrib.auth import get_user_model
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+
+from apps.canteens.models import Canteen
 
 # Create your models here.
 
@@ -141,7 +147,7 @@ class Recipe(models.Model):
 
 class RecipeIngredient(models.Model):
     """Norma pro recept (spojovací tabulka) - množství na 1 porci"""
-    recipe = models.ForeignKey(Recipe, on_delete=models.CASCADE, verbose_name="Recept")
+    recipe = models.ForeignKey(Recipe, on_delete=models.CASCADE, verbose_name="Recept", related_name="recipeingredient_set")
     ingredient = models.ForeignKey(Ingredient, on_delete=models.CASCADE, verbose_name="Surovina")
     
     # Nová struktura - pouze množství na 1 porci v receptových jednotkách (obvykle gramy)
@@ -185,3 +191,42 @@ class RecipeIngredient(models.Model):
         verbose_name = "Norma receptu"
         verbose_name_plural = "Normy receptů"
         unique_together = ('recipe', 'ingredient')
+
+
+class UserProfile(models.Model):
+    """
+    Rozšiřuje výchozí model User o pole specifická pro aplikaci.
+    Tento profil propojuje uživatele s jídelnami, které smí spravovat.
+    """
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='profile',
+        verbose_name="Uživatel"
+    )
+    canteens = models.ManyToManyField(
+        Canteen,
+        blank=True,
+        verbose_name="Přiřazené jídelny",
+        help_text="Jídelny, které může tento uživatel spravovat."
+    )
+
+    def __str__(self):
+        return f"Profil pro {self.user.username}"
+
+    class Meta:
+        verbose_name = "Uživatelský profil"
+        verbose_name_plural = "Uživatelské profily"
+
+
+@receiver(post_save, sender=settings.AUTH_USER_MODEL)
+def create_or_update_user_profile(sender, instance, created, **kwargs):
+    """
+    Signál, který automaticky vytvoří nebo aktualizuje profil uživatele
+    při uložení objektu User.
+    """
+    if created:
+        UserProfile.objects.create(user=instance)
+    else:
+        # Zajistí vytvoření profilu, pokud neexistuje (pro starší uživatele)
+        UserProfile.objects.get_or_create(user=instance)

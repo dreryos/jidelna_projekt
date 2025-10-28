@@ -54,7 +54,26 @@ class ProductionOrderForm(forms.ModelForm):
         }
     
     def __init__(self, *args, **kwargs):
+        # Extrahujeme user argument před voláním super().__init__
+        user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
+        
+        # Filtrujeme jídelny podle oprávnění uživatele
+        if user:
+            from apps.canteens.models import Canteen
+            from django.core.exceptions import ObjectDoesNotExist
+            
+            if not user.is_superuser:
+                try:
+                    # Zobrazíme pouze jídelny přiřazené k uživateli
+                    self.fields['canteen'].queryset = user.profile.canteens.all()
+                except ObjectDoesNotExist:
+                    # Pokud profil neexistuje, nezobrazíme žádné jídelny
+                    self.fields['canteen'].queryset = Canteen.objects.none()
+            else:
+                # Superuživatel vidí všechny jídelny
+                self.fields['canteen'].queryset = Canteen.objects.all()
+        
         self.fields['recipe'].empty_label = "Vyberte recept"
         self.fields['canteen'].empty_label = "Vyberte jídelnu"
         
@@ -136,7 +155,26 @@ class ProductionOrderFormAdvanced(forms.ModelForm):
         }
     
     def __init__(self, *args, **kwargs):
+        # Extrahujeme user argument před voláním super().__init__
+        user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
+        
+        # Filtrujeme jídelny podle oprávnění uživatele
+        if user:
+            from apps.canteens.models import Canteen
+            from django.core.exceptions import ObjectDoesNotExist
+            
+            if not user.is_superuser:
+                try:
+                    # Zobrazíme pouze jídelny přiřazené k uživateli
+                    self.fields['canteen'].queryset = user.profile.canteens.all()
+                except ObjectDoesNotExist:
+                    # Pokud profil neexistuje, nezobrazíme žádné jídelny
+                    self.fields['canteen'].queryset = Canteen.objects.none()
+            else:
+                # Superuživatel vidí všechny jídelny
+                self.fields['canteen'].queryset = Canteen.objects.all()
+        
         self.fields['recipe'].empty_label = "Vyberte recept"
         self.fields['canteen'].empty_label = "Vyberte jídelnu"
         
@@ -191,7 +229,26 @@ class MenuPlanForm(forms.ModelForm):
         }
     
     def __init__(self, *args, **kwargs):
+        # Extrahujeme user argument před voláním super().__init__
+        user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
+        
+        # Filtrujeme jídelny podle oprávnění uživatele
+        if user:
+            from apps.canteens.models import Canteen
+            from django.core.exceptions import ObjectDoesNotExist
+            
+            if not user.is_superuser:
+                try:
+                    # Zobrazíme pouze jídelny přiřazené k uživateli
+                    self.fields['canteen'].queryset = user.profile.canteens.all()
+                except ObjectDoesNotExist:
+                    # Pokud profil neexistuje, nezobrazíme žádné jídelny
+                    self.fields['canteen'].queryset = Canteen.objects.none()
+            else:
+                # Superuživatel vidí všechny jídelny
+                self.fields['canteen'].queryset = Canteen.objects.all()
+        
         self.fields['canteen'].empty_label = "Vyberte jídelnu"
         
         # Nastavíme výchozí data

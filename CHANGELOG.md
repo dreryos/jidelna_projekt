@@ -7,6 +7,27 @@ a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+### Fixed
+- **Formuláře pro jídelníčky a výrobní příkazy**: Opravena chyba při vytváření nového jídelníčku
+  - Formuláře `MenuPlanForm`, `ProductionOrderForm` a `ProductionOrderFormAdvanced` nyní správně přijímají argument `user`
+  - Implementována filtrace jídelen podle uživatelských oprávnění přímo ve formulářích
+  - Uživatelé vidí v select boxech pouze jídelny, ke kterým mají přístup
+
+### Added
+- **Uživatelské profily s přiřazením jídelen**: Nový model `UserProfile` pro správu oprávnění uživatelů
+  - Model `UserProfile` propojuje uživatele s jídelnami, které smí spravovat
+  - Automatické vytváření profilu při registraci uživatele pomocí Django signálů
+  - Many-to-Many vztah mezi uživateli a jídelnami
+- **Autorizační systém pro jídelny**: Kompletní systém kontroly přístupu k datům podle přiřazených jídelen
+  - `CanteenOwnerMixin` - mixin pro class-based views s automatickou filtrací podle jídelen
+  - `user_can_access_canteen_object()` - dekorátor pro function-based views
+  - Superuživatelé mají přístup ke všem jídelnám
+  - Běžní uživatelé vidí pouze data z přiřazených jídelen
+- **Strukturované logování**: Implementace loggeru pro sledování chyb a bezpečnostních událostí
+  - Logování autorizačních selhání
+  - Logování chyb v AJAX endpointech
+  - Detailní záznamy s traceback pro debugging
+
 ### Changed
 - **Přidávání jídel do jídelníčku**: Při přidávání nového jídla do jídelníčku lze nyní rovnou definovat více variant porcí (např. malé a velké porce)
   - Nový modal `addMealModal` s podporou dynamického přidávání variant
@@ -17,6 +38,41 @@ a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
   - Šablony `daily_picking_list.html` a `daily_picking_list_pdf.html` zobrazují varianty porcí místo `portions_adult` a `portions_child`
   - Celkový počet porcí je nyní součet efektivních porcí ze všech variant
   - Detail použití suroviny zobrazuje varianty ve formátu "30×1.0 + 20×0.75"
+- **Všechny views modulu production**: Přepracovány pro podporu víceuživatelského prostředí
+  - `MenuPlanListView`, `MenuPlanCreateView`, `MenuPlanDetailView`, `MenuPlanDeleteView` - použití `CanteenOwnerMixin`
+  - `ProductionOrderListView`, `ProductionOrderCreateView`, `ProductionOrderUpdateView`, `ProductionOrderDeleteView` - použití `CanteenOwnerMixin`
+  - AJAX views - použití `@user_can_access_canteen_object` dekorátoru
+  - Filtrace jídelen v seznamech podle uživatelských oprávnění
+  - Předávání uživatele do formulářů pro validaci přístupu
+- **RecipeIngredient model**: Přidán explicitní `related_name="recipeingredient_set"`
+  - Umožňuje přímý přístup k normám receptu: `recipe.recipeingredient_set.all()`
+  - Zlepšuje čitelnost a kompatibilitu kódu
+- **Transakční bezpečnost**: Přidány `@transaction.atomic` dekorátory pro všechny operace měnící data
+  - Zajišťuje konzistenci dat při selhání části operace
+  - Ochrana před částečnými změnami v databázi
+- **Zpracování chyb v AJAX views**: Přepracováno pro lepší robustnost
+  - Explicitní validace HTTP metod
+  - Specifické zachytávání výjimek místo obecného `Exception`
+  - Strukturované error handling s logging
+  - Konzistentní JSON error responses
+
+### Security
+- **Kontrola přístupu k jídelnám**: Implementována granulární kontrola přístupu na úrovni objektů
+  - Uživatelé nemohou zobrazit ani upravovat data z jiných jídelen
+  - Ochrana na úrovni views i querysetů
+  - Validace oprávnění před každou operací
+- **AJAX endpoint security**: Všechny AJAX endpointy chráněny autorizací
+  - Validace přístupu k menu plánům a výrobním příkazům
+  - HTTP 403 response při pokusu o neoprávněný přístup
+  - Logging bezpečnostních událostí
+
+### Technical Details
+- **Type hints**: Přidány type hints pro lepší type safety
+  - Použití `TYPE_CHECKING` pro import typů
+  - Anotace návratových typů metod
+  - Cast operace pro Django User objekt
+- **Migrace databáze**:
+  - `0003_alter_recipeingredient_recipe_userprofile.py` - vytvoření UserProfile modelu a úprava RecipeIngredient
 
 ## [1.2.0] - 2025-10-27
 
