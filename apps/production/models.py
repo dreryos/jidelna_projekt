@@ -154,11 +154,14 @@ class ProductionOrder(models.Model):
             
             prefilled_warehouse = stock_item.warehouse if stock_item else None
 
-            PickingList.objects.create(
+            # Použijeme update_or_create místo create pro prevenci duplicit
+            PickingList.objects.update_or_create(
                 production_order=self,
                 ingredient=item.ingredient,
-                quantity_planned=total_quantity,
-                warehouse=prefilled_warehouse
+                defaults={
+                    'quantity_planned': total_quantity,
+                    'warehouse': prefilled_warehouse
+                }
             )
 
     def get_required_ingredients(self):
