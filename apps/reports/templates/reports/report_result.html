@@ -48,7 +48,7 @@
     <div class="card bg-primary text-white">
       <div class="card-body text-center">
         <i class="fas fa-list-ul fa-2x mb-2"></i>
-        <h4>{{ report.items|length }}</h4>
+        <h4>{{ report.total_items }}</h4>
         <small>Celkem surovin</small>
       </div>
     </div>
@@ -57,9 +57,7 @@
     <div class="card bg-success text-white">
       <div class="card-body text-center">
         <i class="fas fa-check-circle fa-2x mb-2"></i>
-        <h4>
-          {% for item in report.items %}{% if item.stock >= item.needed %}{{ forloop.counter0|add:1 }}{% endif %}{% empty %}0{% endfor %}
-        </h4>
+        <h4>{{ report.items_in_stock }}</h4>
         <small>Dostačující zásoby</small>
       </div>
     </div>
@@ -68,9 +66,7 @@
     <div class="card bg-warning text-dark">
       <div class="card-body text-center">
         <i class="fas fa-shopping-cart fa-2x mb-2"></i>
-        <h4>
-          {% for item in report.items %}{% if item.to_order > 0 %}{{ forloop.counter0|add:1 }}{% endif %}{% empty %}0{% endfor %}
-        </h4>
+        <h4>{{ report.items_to_order }}</h4>
         <small>K objednání</small>
       </div>
     </div>

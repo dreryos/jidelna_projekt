@@ -15,11 +15,22 @@
       <i class="fas fa-calendar me-1"></i>{{ order.date|date:"d.m.Y" }} |
       <i class="fas fa-clock me-1"></i>Vytvořeno: {{ order.created_at|date:"d.m.Y H:i" }}
     </p>
+    {% if order.menu_plan %}
+    <p class="text-muted mb-0">
+      <i class="fas fa-book me-1"></i>Jídelníček: <strong>{{ order.menu_plan.name }}</strong>
+    </p>
+    {% endif %}
   </div>
   <div class="btn-group">
+    {% if order.menu_plan %}
+    <a href="{% url 'production:menu_detail' order.menu_plan.pk %}" class="btn btn-outline-info">
+      <i class="fas fa-book me-1"></i>Jídelníček
+    </a>
+    {% else %}
     <a href="{% url 'production:order_list' %}" class="btn btn-outline-secondary">
       <i class="fas fa-arrow-left me-1"></i>Zpět
     </a>
+    {% endif %}
     <a href="{% url 'production:order_edit' order.pk %}" class="btn btn-outline-primary">
       <i class="fas fa-edit me-1"></i>Upravit
     </a>
@@ -29,54 +40,67 @@
   </div>
 </div>
 
-<!-- Přehled porcí a cen -->
+<!-- Přehled porcí -->
 <div class="row mb-4">
-  <div class="col-md-3">
-    <div class="card bg-primary text-white">
-      <div class="card-body text-center">
-        <i class="fas fa-user fa-2x mb-2"></i>
-        <h4>{{ order.portions_adult }}</h4>
-        <small>Dospělé porce</small>
-        {% if price_info.adult %}
+  {% with variants=order.portion_variants.all %}
+  {% if variants %}
+    <!-- Nový systém s variantami -->
+    {% for variant in variants %}
+    <div class="col-md-{% if variants|length == 1 %}12{% elif variants|length == 2 %}6{% elif variants|length == 3 %}4{% else %}3{% endif %} mb-3">
+      <div class="card {% cycle 'bg-primary' 'bg-info' 'bg-success' 'bg-warning' %} text-white">
+        <div class="card-body text-center">
+          <i class="fas fa-users fa-2x mb-2"></i>
+          <h4>{{ variant.portions }}× ({{ variant.coefficient }})</h4>
+          <small>Varianta {{ forloop.counter }}</small>
           <div class="mt-2">
-            <small>{{ price_info.adult }} Kč/porce</small>
+            <small>Efektivně: {{ variant.portions }} × {{ variant.coefficient }} = {{ variant.portions|floatformat:0 }} porcí</small>
           </div>
-        {% endif %}
+        </div>
       </div>
     </div>
-  </div>
-  <div class="col-md-3">
-    <div class="card bg-warning text-dark">
-      <div class="card-body text-center">
-        <i class="fas fa-child fa-2x mb-2"></i>
-        <h4>{{ order.portions_child }}</h4>
-        <small>Dětské porce</small>
-        {% if price_info.child %}
-          <div class="mt-2">
-            <small>{{ price_info.child }} Kč/porce</small>
-          </div>
-        {% endif %}
+    {% endfor %}
+    
+    <!-- Celkem -->
+    <div class="col-md-{% if variants|length < 4 %}{% if variants|length == 1 %}12{% elif variants|length == 2 %}12{% else %}12{% endif %}{% else %}12{% endif %}">
+      <div class="card bg-dark text-white">
+        <div class="card-body text-center">
+          <i class="fas fa-calculator fa-2x mb-2"></i>
+          <h4>{{ order.total_effective_portions|floatformat:0 }}</h4>
+          <small>Celkem efektivních porcí</small>
+        </div>
       </div>
     </div>
-  </div>
-  <div class="col-md-3">
-    <div class="card bg-success text-white">
-      <div class="card-body text-center">
-        <i class="fas fa-utensils fa-2x mb-2"></i>
-        <h4>{{ order.portions_adult|add:order.portions_child }}</h4>
-        <small>Celkem porcí</small>
+  {% else %}
+    <!-- Fallback na starou strukturu -->
+    <div class="col-md-4">
+      <div class="card bg-primary text-white">
+        <div class="card-body text-center">
+          <i class="fas fa-utensils fa-2x mb-2"></i>
+          <h4>{{ order.total_effective_portions|floatformat:0 }}</h4>
+          <small>Celkem efektivních porcí</small>
+        </div>
       </div>
     </div>
-  </div>
-  <div class="col-md-3">
-    <div class="card bg-info text-white">
-      <div class="card-body text-center">
-        <i class="fas fa-coins fa-2x mb-2"></i>
-        <h4>{{ total_price|format_price }}</h4>
-        <small>Celková cena (Kč)</small>
+    <div class="col-md-4">
+      <div class="card bg-info text-white">
+        <div class="card-body text-center">
+          <i class="fas fa-sliders-h fa-2x mb-2"></i>
+          <h4>{{ order.portion_coefficient }}</h4>
+          <small>Koeficient porce</small>
+        </div>
       </div>
     </div>
-  </div>
+    <div class="col-md-4">
+      <div class="card bg-success text-white">
+        <div class="card-body text-center">
+          <i class="fas fa-coins fa-2x mb-2"></i>
+          <h4>{{ total_price|format_price }}</h4>
+          <small>Celková cena (Kč)</small>
+        </div>
+      </div>
+    </div>
+  {% endif %}
+  {% endwith %}
 </div>
 
 <!-- Popis receptu -->

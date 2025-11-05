@@ -74,9 +74,32 @@ def generate_order_report(canteen, date_from, date_to):
         # Pro každý recept vezmeme normy
         for ri in order.recipe.recipeingredient_set.all():
             ing_id = ri.ingredient_id
-            needed = (ri.quantity_adult * order.portions_adult) + (ri.quantity_child * order.portions_child)
-            needs.setdefault(ing_id, {'ingredient': ri.ingredient, 'unit': ri.ingredient.unit, 'needed': 0})
-            needs[ing_id]['needed'] += float(needed)
+            
+            # Vypočítáme celkové množství ze všech variant porcí
+            total_quantity = 0
+            variants = order.portion_variants.all()
+            
+            if variants.exists():
+                # Pokud existují varianty, použijeme je
+                for variant in variants:
+                    quantity = ri.get_quantity_in_base_unit(
+                        portions=variant.portions,
+                        coefficient=float(variant.coefficient)
+                    )
+                    total_quantity += float(quantity)
+            else:
+                # Fallback - pokud neexistují varianty, použijeme staré pole portions_adult/child
+                # s výchozím koeficientem
+                total_portions = order.portions_adult + order.portions_child
+                if total_portions > 0:
+                    quantity = ri.get_quantity_in_base_unit(
+                        portions=total_portions,
+                        coefficient=float(order.portion_coefficient)
+                    )
+                    total_quantity = float(quantity)
+            
+            needs.setdefault(ing_id, {'ingredient': ri.ingredient, 'unit': ri.ingredient.base_unit, 'needed': 0})
+            needs[ing_id]['needed'] += total_quantity
 
     # Porovnáme s aktuálním stavem ve skladech jídelny
     for data in needs.values():
@@ -84,16 +107,27 @@ def generate_order_report(canteen, date_from, date_to):
         # simple sum across all warehouses of the canteen
         stock_qs = StockItem.objects.filter(ingredient=ing, warehouse__canteen=canteen)
         total_stock = sum(float(s.quantity) for s in stock_qs)
-        data['stock'] = total_stock
-        data['to_order'] = max(0, round(data['needed'] - total_stock, 3))
+        
+        # Zaokrouhlíme všechny hodnoty na 2 desetinná místa pro lepší čitelnost
+        data['needed'] = round(data['needed'], 2)
+        data['stock'] = round(total_stock, 2)
+        data['to_order'] = max(0, round(data['needed'] - total_stock, 2))
 
     items = sorted(needs.values(), key=lambda x: x['ingredient'].name)
+
+    # Spočítáme statistiky
+    total_items = len(items)
+    items_in_stock = sum(1 for item in items if item['stock'] >= item['needed'])
+    items_to_order = sum(1 for item in items if item['to_order'] > 0)
 
     return {
         'canteen': canteen,
         'date_from': date_from,
         'date_to': date_to,
         'items': items,
+        'total_items': total_items,
+        'items_in_stock': items_in_stock,
+        'items_to_order': items_to_order,
     }
 
 

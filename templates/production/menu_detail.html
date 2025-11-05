@@ -154,7 +154,7 @@
                                                                 </span>
                                                             </div>
                                                             <small class="text-muted">
-                                                                Efektivně: {{ order.total_portions|mul:order.portion_coefficient|format_decimal:1 }} porcí
+                                                                Efektivně: {{ order.total_effective_portions|floatformat:1 }} porcí
                                                             </small>
                                                         {% endif %}
                                                     </div>

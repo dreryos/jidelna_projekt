@@ -106,13 +106,6 @@ class ProductionOrder(models.Model):
     def get_portion_variants(self):
         """Vrátí všechny varianty porcí pro tento výrobní příkaz"""
         return self.portion_variants.all()
-    
-    def get_total_effective_portions(self):
-        """Vrátí celkový počet efektivních porcí ze všech variant"""
-        total = Decimal('0')
-        for variant in self.portion_variants.all():
-            total += variant.portions * variant.coefficient
-        return total
 
     def generate_picking_list(self):
         """
@@ -154,11 +147,14 @@ class ProductionOrder(models.Model):
             
             prefilled_warehouse = stock_item.warehouse if stock_item else None
 
-            PickingList.objects.create(
+            # Použijeme get_or_create pro prevenci duplicit
+            PickingList.objects.get_or_create(
                 production_order=self,
                 ingredient=item.ingredient,
-                quantity_planned=total_quantity,
-                warehouse=prefilled_warehouse
+                defaults={
+                    'quantity_planned': total_quantity,
+                    'warehouse': prefilled_warehouse
+                }
             )
 
     def get_required_ingredients(self):
@@ -212,8 +208,21 @@ class ProductionOrder(models.Model):
         """Celkový počet porcí - součet ze všech variant nebo fallback na staré pole"""
         variants = self.portion_variants.all()
         if variants.exists():
+            # Pro varianty vrátíme prostý součet počtů porcí (bez koeficientů)
             return sum(variant.portions for variant in variants)
         return (self.portions_adult or 0) + (self.portions_child or 0)
+    
+    @property
+    def total_effective_portions(self):
+        """Celkový počet efektivních porcí (počet × koeficient) ze všech variant"""
+        variants = self.portion_variants.all()
+        if variants.exists():
+            total = Decimal('0')
+            for variant in variants:
+                total += variant.portions * variant.coefficient
+            return float(total)
+        # Pro staré příkazy bez variant
+        return float((self.portions_adult or 0) + (self.portions_child or 0)) * float(self.portion_coefficient)
 
     def __str__(self):
         return f"Výroba: {self.recipe.name} pro {self.canteen.name} na den {self.date.strftime('%d.%m.%Y')}"

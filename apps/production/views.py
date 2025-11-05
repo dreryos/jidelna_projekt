@@ -482,6 +482,41 @@ class ProductionOrderListView(CanteenOwnerMixin, ListView):
         context['selected_recipe'] = self.request.GET.get('recipe', '')
         context['selected_canteen'] = self.request.GET.get('canteen', '')
         context['selected_date'] = self.request.GET.get('date', '')
+        
+        # Seskupení příkazů podle jídelníčků a dní
+        orders = context['orders'] if 'orders' in context else self.get_queryset()
+        grouped_data = {}
+        standalone_orders = []
+        
+        for order in orders:
+            if order.menu_plan:
+                # Příkazy s jídelníčkem
+                menu_key = order.menu_plan.id
+                if menu_key not in grouped_data:
+                    grouped_data[menu_key] = {
+                        'menu': order.menu_plan,
+                        'days': {}
+                    }
+                
+                date_key = order.date
+                if date_key not in grouped_data[menu_key]['days']:
+                    grouped_data[menu_key]['days'][date_key] = []
+                
+                grouped_data[menu_key]['days'][date_key].append(order)
+            else:
+                # Samostatné příkazy bez jídelníčku
+                standalone_orders.append(order)
+        
+        # Seřadíme dny v každém jídelníčku a přidáme statistiky
+        for menu_data in grouped_data.values():
+            menu_data['days'] = dict(sorted(menu_data['days'].items()))
+            # Spočítáme celkový počet jídel v jídelníčku
+            total_meals = sum(len(orders) for orders in menu_data['days'].values())
+            menu_data['total_meals'] = total_meals
+        
+        context['grouped_menus'] = grouped_data
+        context['standalone_orders'] = standalone_orders
+        
         return context
 
 
@@ -538,13 +573,34 @@ def production_order_detail(request, pk, *args, **kwargs):
     """Detailní pohled na výrobní příkaz s výdejkou."""
     order = request.instance
     
-    picking_list, created = PickingList.objects.get_or_create(production_order=order)
+    # Načteme výdejku (všechny položky picking listu pro tento příkaz)
+    picking_list = order.picking_list_items.all().select_related('ingredient', 'warehouse')
+    
+    # Vypočítáme celkovou cenu (pokud jsou dostupné ceny surovin)
+    total_price = Decimal('0')
+    try:
+        from apps.inventory.models import StockItem
+        for ingredient_info in order.get_required_ingredients():
+            ing = ingredient_info['ingredient']
+            amount = ingredient_info['amount']
+            
+            # Najdeme průměrnou cenu suroviny ve skladech jídelny
+            avg_price_data = StockItem.objects.filter(
+                ingredient=ing,
+                warehouse__canteen=order.canteen
+            ).aggregate(avg_price=models.Avg('price'))
+            
+            avg_price = avg_price_data.get('avg_price') or Decimal('0')
+            total_price += amount * avg_price
+    except Exception as e:
+        logger.warning(f"Chyba při výpočtu ceny pro příkaz {pk}: {e}")
     
     context = {
         'order': order,
         'picking_list': picking_list,
         'total_portions': order.total_portions,
         'required_ingredients': order.get_required_ingredients(),
+        'total_price': round(total_price, 2),
     }
     
     return render(request, 'production/order_detail.html', context)
