@@ -147,8 +147,8 @@ class ProductionOrder(models.Model):
             
             prefilled_warehouse = stock_item.warehouse if stock_item else None
 
-            # Použijeme get_or_create pro prevenci duplicit
-            PickingList.objects.get_or_create(
+            # Použijeme update_or_create místo create pro prevenci duplicit
+            PickingList.objects.update_or_create(
                 production_order=self,
                 ingredient=item.ingredient,
                 defaults={
