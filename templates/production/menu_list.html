@@ -17,49 +17,6 @@
                 </a>
             </div>
 
-            <!-- Rychlé stažení výdejky na dnešní/konkrétní den -->
-            <div class="card mb-4 border-success">
-                <div class="card-header bg-success text-white">
-                    <h5 class="card-title mb-0">
-                        <i class="fas fa-download me-2"></i>Stáhnout výdejku na konkrétní den
-                    </h5>
-                </div>
-                <div class="card-body">
-                    <form method="get" action="{% url 'production:daily_picking_list' %}" class="row g-3">
-                        <div class="col-md-3">
-                            <label for="picking_date" class="form-label">Datum:</label>
-                            <input type="date" name="date" id="picking_date" class="form-control" value="{{ today|date:'Y-m-d' }}" required>
-                        </div>
-                        <div class="col-md-3">
-                            <label for="picking_canteen" class="form-label">Jídelna:</label>
-                            <select name="canteen" id="picking_canteen" class="form-select">
-                                <option value="">Všechny jídelny</option>
-                                {% for canteen in canteens %}
-                                    <option value="{{ canteen.id }}">{{ canteen.name }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        <div class="col-md-3 d-flex align-items-end">
-                            <button type="submit" name="format" value="html" class="btn btn-success me-2">
-                                <i class="fas fa-eye me-1"></i> Zobrazit
-                            </button>
-                            <button type="submit" name="format" value="pdf" class="btn btn-outline-success">
-                                <i class="fas fa-file-pdf me-1"></i> PDF
-                            </button>
-                        </div>
-                        <div class="col-md-3 d-flex align-items-end">
-                            <button type="button" class="btn btn-info btn-sm" onclick="setToday()">
-                                <i class="fas fa-calendar-day me-1"></i> Dnes
-                            </button>
-                        </div>
-                    </form>
-                    <small class="text-muted mt-2 d-block">
-                        <i class="fas fa-info-circle me-1"></i>
-                        Vygeneruje seznam všech surovin potřebných pro výrobu jídel na vybraný den.
-                    </small>
-                </div>
-            </div>
-
             <!-- Filtrování jídelníčků -->
             <div class="card mb-4">
                 <div class="card-header">
@@ -185,11 +142,4 @@
     </div>
 </div>
 
-<script>
-function setToday() {
-    const today = new Date();
-    const dateStr = today.toISOString().split('T')[0];
-    document.getElementById('picking_date').value = dateStr;
-}
-</script>
 {% endblock %}

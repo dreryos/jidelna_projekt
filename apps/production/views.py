@@ -213,7 +213,20 @@ class MenuPlanDetailView(CanteenOwnerMixin, UpdateView):
             context['orders_formset'] = ProductionOrderFormSet(instance=self.object)
         
         context['recipes'] = Recipe.objects.all()
-        context['date_range'] = self.get_date_range()
+        
+        # Vytvoříme datum range a seskupíme příkazy podle dní
+        date_range = self.get_date_range()
+        orders_by_date = {}
+        
+        for order in self.object.production_orders.all().select_related('recipe', 'recipe__category').prefetch_related('portion_variants'):
+            date_key = order.date
+            if date_key not in orders_by_date:
+                orders_by_date[date_key] = []
+            orders_by_date[date_key].append(order)
+        
+        context['date_range'] = date_range
+        context['orders_by_date'] = orders_by_date
+        
         return context
     
     def get_date_range(self):

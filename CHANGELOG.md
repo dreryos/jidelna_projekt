@@ -7,6 +7,42 @@ a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+### Removed
+- **Rychlé stažení výdejky ze seznamu jídelníčků**: Odstraněna sekce pro stažení výdejky na konkrétní den
+  - Odstraněn formulář s výběrem data a jídelny z `menu_list.html`
+  - Odstraněna JavaScript funkce `setToday()`
+  - Funkce je stále dostupná v jiných částech aplikace
+
+### Fixed
+- **Zobrazení efektivních porcí**: Opraveno zobrazení počtu efektivních porcí v tabulce jídelníčku
+  - Přidána `@property total_effective_portions` do modelu `ProductionOrder` (dříve jen metoda `get_total_effective_portions()`)
+  - Aktualizovány šablony `daily_picking_list.html` a `daily_picking_list_pdf.html` na použití property místo metody
+  - Nyní se správně zobrazuje číslo, ne jen text "porcí"
+- **Tlačítko pro přidání jídla k dni**: Opravena CSS třída v JavaScript handleru
+  - Handler hledal `.open-add-meal-modal`, ale HTML používalo `.add-meal-to-day-btn`
+  - Změna selektoru v `menu_detail.html` na řádku ~412
+  - Odstraněno nefunkční tlačítko `bulkAddMealBtn` z hlavičky (funkce duplikována tlačítky u jednotlivých dnů)
+
+### Added
+- **Template filtr `get_item`**: Nový filtr pro získání hodnoty ze slovníku v Django šablonách
+  - Umístění: `apps/core/templatetags/core_filters.py`
+  - Použití: `{{ dictionary|get_item:key }}`
+  - Vrací prázdný list pokud klíč neexistuje nebo slovník je None
+
+### Changed
+- **Redesign stránky editace jídelníčku**: Předělání z kartové struktury na tabulkovou
+  - Stránka `/production/jidelnicky/<id>/` nyní používá tabulkový layout konzistentní se seznamem výrobních příkazů
+  - **MenuPlanDetailView** (`apps/production/views.py`):
+    - Přidána logika pro seskupení výrobních příkazů podle data
+    - Nový context `orders_by_date` - slovník ve formátu `{datum: [seznam příkazů]}`
+    - Optimalizace dotazů pomocí `select_related('recipe', 'menu_plan')` a `prefetch_related('portion_variants')`
+  - **Šablona `menu_detail.html`**:
+    - Změna z karet na tabulku s 5 sloupci: Den (rowspan), Jídlo, Varianty porcí, Efektivně, Akce
+    - Zjednodušené CSS - odstraněny styly specifické pro karty
+    - Prázdné dny se zobrazují s tlačítkem "Přidat" napříč celým řádkem
+    - Vizuální oddělovače mezi dny
+    - Zachování všech JavaScript handlerů s původními CSS třídami
+
 ### Added
 - **Select2 autocomplete pro výběr receptů**: Implementace vyhledávacího pole s našeptávačem v modulu tvorby jídelníčku
   - Integrace knihovny Select2 4.1.0 s Bootstrap 5 témem

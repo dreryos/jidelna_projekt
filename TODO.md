@@ -7,7 +7,9 @@ Tento soubor sleduje hlavní úkoly, bugy a nápady pro projekt. Pro detailněj�
 ## 🚀 Priorita / Urgentní
 *Věci, které je třeba vyřešit co nejdříve (např. blokující chyby).*
 
-- [ ] Při editaci jídelníčku možnost upravit koeficient porce přímo v řádku.
+- [ ] Předělat tvorbu výrobních příkazů podle nové logiky plánování jídelníčku.
+- [ ] Výrobní příkaz by měl mít na začátku seznam jídel z jídelníčku na daný den. A dále pokračovat seznamem surovin, které je potřeba vykladnit, vedle toho by kuchař napsal kolik doopravdy spotřeboval.
+- [x] Při editaci jídelníčku možnost upravit koeficient porce přímo v řádku.
 - [ ] Po uložení jídelníčku rezervovat skladové suroviny, pokud není dostatek, zobrazit upozornění na objednávku.
 
 ---
@@ -15,7 +17,7 @@ Tento soubor sleduje hlavní úkoly, bugy a nápady pro projekt. Pro detailněj�
 ## 🐛 Bugy (Chyby)
 *Nalezené chyby, které neblokují hlavní funkčnost, ale je třeba je opravit.*
 
-- [ ] Opravit přidávání jídla do jídelníčku, nelze přidat.
+- [x] Opravit přidávání jídla do jídelníčku, nelze přidat.
 
 ---
 

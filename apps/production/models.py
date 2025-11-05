@@ -217,6 +217,18 @@ class ProductionOrder(models.Model):
         if variants.exists():
             return sum(variant.portions for variant in variants)
         return (self.portions_adult or 0) + (self.portions_child or 0)
+    
+    @property
+    def total_effective_portions(self):
+        """Celkový počet efektivních porcí (počet × koeficient) ze všech variant"""
+        variants = self.portion_variants.all()
+        if variants.exists():
+            total = Decimal('0')
+            for variant in variants:
+                total += variant.portions * variant.coefficient
+            return float(total)
+        # Fallback na staré pole (pro zpětnou kompatibilitu)
+        return float((self.portions_adult or 0) + (self.portions_child or 0)) * float(self.portion_coefficient)
 
     def __str__(self):
         return f"Výroba: {self.recipe.name} pro {self.canteen.name} na den {self.date.strftime('%d.%m.%Y')}"

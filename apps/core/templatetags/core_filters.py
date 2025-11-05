@@ -94,3 +94,18 @@ def multiply(value, arg):
         return value * arg
     except (ValueError, TypeError, ArithmeticError):
         return value
+
+
+@register.filter(name='get_item')
+def get_item(dictionary, key):
+    """
+    Získá hodnotu ze slovníku podle klíče.
+    
+    Použití:
+        {{ my_dict|get_item:key }}
+    """
+    if dictionary is None:
+        return []
+    if not isinstance(dictionary, dict):
+        return []
+    return dictionary.get(key, [])

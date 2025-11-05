@@ -243,7 +243,7 @@
                                 {{ variant.portions }}×{{ variant.coefficient|format_decimal }}
                                 {% if not forloop.last %}+{% endif %}
                             {% endfor %}
-                            = {{ order.get_total_effective_portions|format_decimal }} ef. porcí
+                            = {{ order.total_effective_portions|format_decimal }} ef. porcí
                         {% else %}
                             {{ order.total_portions|default:0 }} porcí × {{ order.portion_coefficient|format_decimal }}
                         {% endif %}
