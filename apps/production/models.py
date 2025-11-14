@@ -83,13 +83,18 @@ class ProductionOrder(models.Model):
     date = models.DateField(verbose_name="Datum vaření")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Vytvořeno")
     
+    @property
+    def resolved_canteen(self):
+        """Vrátí jídelnu - buď z FK nebo z menu_plan (centralizovaná logika)"""
+        return self.canteen or getattr(self.menu_plan, 'canteen', None)
+    
     def get_canteen(self):
-        """Vrátí jídelnu - buď z FK nebo z menu_plan"""
-        if self.canteen:
-            return self.canteen
-        if self.menu_plan:
-            return self.menu_plan.canteen
-        return None
+        """Vrátí jídelnu - deprecated, použijte resolved_canteen"""
+        return self.resolved_canteen
+    
+    def _sum_variants(self, fn):
+        """Pomocná metoda pro sčítání hodnot přes všechny varianty porcí"""
+        return sum(fn(v) for v in self.portion_variants.all())
 
     def save(self, *args, **kwargs):
         # Automaticky nastav canteen z menu_plan pokud není nastavena
@@ -121,28 +126,21 @@ class ProductionOrder(models.Model):
         if not self.recipe:
             return
 
-        recipe_ingredients = self.recipe.recipeingredient_set.all()
-
-        for item in recipe_ingredients:
+        for item in self.recipe.recipeingredient_set.all():
             # Vypočítáme celkové množství ze všech variant
-            total_quantity = Decimal('0')
-            
-            for variant in self.portion_variants.all():
-                quantity = item.get_quantity_in_base_unit(
-                    portions=variant.portions,
-                    coefficient=float(variant.coefficient)
+            total_quantity = self._sum_variants(
+                lambda v: item.get_quantity_in_base_unit(
+                    portions=v.portions,
+                    coefficient=float(v.coefficient)
                 )
-                total_quantity += quantity
+            )
 
-            # Najdeme sklad, který patří k jídelně a má danou surovinu
-            canteen = self.get_canteen()
-            stock_item = None
-            if canteen:
-                stock_item = StockItem.objects.filter(
-                    ingredient=item.ingredient,
-                    warehouse__canteen=canteen,
-                    quantity__gt=0
-                ).first()
+            # Najdeme sklad, který patří k jídelně a má danou surovinu (s kladnou zásobou)
+            stock_item = StockItem.objects.filter(
+                ingredient=item.ingredient,
+                warehouse__canteen=self.resolved_canteen,
+                quantity__gt=0
+            ).first() if self.resolved_canteen else None
             
             prefilled_warehouse = stock_item.warehouse if stock_item else None
 
@@ -191,16 +189,13 @@ class ProductionOrder(models.Model):
 
     @property
     def total_portions(self):
-        """Celkový počet porcí - součet ze všech variant"""
-        return sum(variant.portions for variant in self.portion_variants.all())
-    
+        """Vrátí celkový počet porcí ze všech variant (bez koeficientů)"""
+        return self._sum_variants(lambda v: v.portions)
+
     @property
     def total_effective_portions(self):
-        """Celkový počet efektivních porcí (počet × koeficient) ze všech variant"""
-        total = Decimal('0')
-        for variant in self.portion_variants.all():
-            total += variant.portions * variant.coefficient
-        return float(total)
+        """Vrátí celkový počet efektivních porcí ze všech variant (s aplikací koeficientů)"""
+        return float(self._sum_variants(lambda v: v.portions * v.coefficient))
 
     def __str__(self):
         canteen = self.get_canteen()

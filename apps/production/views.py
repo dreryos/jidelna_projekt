@@ -104,9 +104,9 @@ Viewy pro plánování výroby, vytváření jídelníčků a správu výdejek.
 """
 
 
-# Poznámka: ProductionOrderFormSet byl odstraněn - jídla se nyní přidávají pouze přes AJAX endpoint
-# Zachováno pro zpětnou kompatibilitu, ale není používáno v šablonách
-# TODO: Úplně odstranit v další verzi
+# ProductionOrderFormSet byl odstraněn – jídla se nyní přidávají pouze přes AJAX endpoint (add_meal_to_menu).
+# Formset není součástí kódu a neměl by být používán.
+# Pro historickou referenci viz git commit před migrací 0010_remove_deprecated_fields.
 
 
 class MenuPlanListView(CanteenOwnerMixin, ListView):
@@ -269,10 +269,7 @@ def add_meal_to_menu(request, menu_pk, *args, **kwargs):
             order = ProductionOrder.objects.create(
                 menu_plan=menu_plan,
                 recipe=recipe,
-                date=meal_date,
-                portions_adult=0,
-                portions_child=0,
-                portion_coefficient=Decimal('1.0')
+                date=meal_date
             )
             
             if variants:
