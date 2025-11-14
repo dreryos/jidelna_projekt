@@ -77,27 +77,25 @@ class MenuPlanCoefficient(models.Model):
 
 class ProductionOrder(models.Model):
     """Výrobní příkaz - nyní součást jídelníčku"""
-    menu_plan = models.ForeignKey(MenuPlan, on_delete=models.CASCADE, related_name='production_orders', verbose_name="Jídelníček", null=True, blank=True)
+    menu_plan = models.ForeignKey(MenuPlan, on_delete=models.CASCADE, related_name='production_orders', verbose_name="Jídelníček", null=False, blank=False)
     recipe = models.ForeignKey(Recipe, on_delete=models.PROTECT, verbose_name="Recept")
-    canteen = models.ForeignKey(Canteen, on_delete=models.PROTECT, verbose_name="Jídelna")
-    
-    # Počty porcí - zachováno pro kompatibilitu
-    portions_adult = models.PositiveIntegerField(verbose_name="Počet dospělých porcí", default=0)
-    portions_child = models.PositiveIntegerField(verbose_name="Počet dětských porcí", default=0)
-    
-    # Nové pole - koeficient velikosti porce
-    portion_coefficient = models.DecimalField(
-        max_digits=5, 
-        decimal_places=2, 
-        default=Decimal('1.0'),
-        verbose_name="Koeficient porce",
-        help_text="Koeficient velikosti porce (1.0 = normální, 0.5 = poloviční, 1.5 = větší)"
-    )
-    
+    canteen = models.ForeignKey(Canteen, on_delete=models.PROTECT, verbose_name="Jídelna", null=True, blank=True)
     date = models.DateField(verbose_name="Datum vaření")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Vytvořeno")
+    
+    def get_canteen(self):
+        """Vrátí jídelnu - buď z FK nebo z menu_plan"""
+        if self.canteen:
+            return self.canteen
+        if self.menu_plan:
+            return self.menu_plan.canteen
+        return None
 
     def save(self, *args, **kwargs):
+        # Automaticky nastav canteen z menu_plan pokud není nastavena
+        if self.menu_plan and not self.canteen:
+            self.canteen = self.menu_plan.canteen
+        
         is_new = self._state.adding
         super().save(*args, **kwargs)
         if is_new:
@@ -129,28 +127,22 @@ class ProductionOrder(models.Model):
             # Vypočítáme celkové množství ze všech variant
             total_quantity = Decimal('0')
             
-            # Pokud existují varianty, použijeme je
-            variants = self.portion_variants.all()
-            if variants.exists():
-                for variant in variants:
-                    quantity = item.get_quantity_in_base_unit(
-                        portions=variant.portions,
-                        coefficient=float(variant.coefficient)
-                    )
-                    total_quantity += quantity
-            else:
-                # Fallback na staré pole (pro zpětnou kompatibilitu)
-                total_quantity = item.get_quantity_in_base_unit(
-                    portions=self.total_portions,
-                    coefficient=float(self.portion_coefficient)
+            for variant in self.portion_variants.all():
+                quantity = item.get_quantity_in_base_unit(
+                    portions=variant.portions,
+                    coefficient=float(variant.coefficient)
                 )
+                total_quantity += quantity
 
             # Najdeme sklad, který patří k jídelně a má danou surovinu
-            stock_item = StockItem.objects.filter(
-                ingredient=item.ingredient,
-                warehouse__canteen=self.canteen,
-                quantity__gt=0
-            ).first()
+            canteen = self.get_canteen()
+            stock_item = None
+            if canteen:
+                stock_item = StockItem.objects.filter(
+                    ingredient=item.ingredient,
+                    warehouse__canteen=canteen,
+                    quantity__gt=0
+                ).first()
             
             prefilled_warehouse = stock_item.warehouse if stock_item else None
 
@@ -175,29 +167,16 @@ class ProductionOrder(models.Model):
             total_amount = Decimal('0')
             total_amount_recipe_unit = Decimal('0')
             
-            variants = self.portion_variants.all()
-            if variants.exists():
-                for variant in variants:
-                    amount = recipe_ingredient.get_quantity_in_base_unit(
-                        portions=variant.portions,
-                        coefficient=float(variant.coefficient)
-                    )
-                    total_amount += amount
-                    total_amount_recipe_unit += (
-                        recipe_ingredient.quantity_per_portion * 
-                        variant.portions * 
-                        variant.coefficient
-                    )
-            else:
-                # Fallback na staré pole
-                total_amount = recipe_ingredient.get_quantity_in_base_unit(
-                    portions=self.total_portions,
-                    coefficient=float(self.portion_coefficient)
+            for variant in self.portion_variants.all():
+                amount = recipe_ingredient.get_quantity_in_base_unit(
+                    portions=variant.portions,
+                    coefficient=float(variant.coefficient)
                 )
-                total_amount_recipe_unit = (
+                total_amount += amount
+                total_amount_recipe_unit += (
                     recipe_ingredient.quantity_per_portion * 
-                    self.total_portions * 
-                    self.portion_coefficient
+                    variant.portions * 
+                    variant.coefficient
                 )
             
             ingredients.append({
@@ -212,26 +191,21 @@ class ProductionOrder(models.Model):
 
     @property
     def total_portions(self):
-        """Celkový počet porcí - součet ze všech variant nebo fallback na staré pole"""
-        variants = self.portion_variants.all()
-        if variants.exists():
-            return sum(variant.portions for variant in variants)
-        return (self.portions_adult or 0) + (self.portions_child or 0)
+        """Celkový počet porcí - součet ze všech variant"""
+        return sum(variant.portions for variant in self.portion_variants.all())
     
     @property
     def total_effective_portions(self):
         """Celkový počet efektivních porcí (počet × koeficient) ze všech variant"""
-        variants = self.portion_variants.all()
-        if variants.exists():
-            total = Decimal('0')
-            for variant in variants:
-                total += variant.portions * variant.coefficient
-            return float(total)
-        # Fallback na staré pole (pro zpětnou kompatibilitu)
-        return float((self.portions_adult or 0) + (self.portions_child or 0)) * float(self.portion_coefficient)
+        total = Decimal('0')
+        for variant in self.portion_variants.all():
+            total += variant.portions * variant.coefficient
+        return float(total)
 
     def __str__(self):
-        return f"Výroba: {self.recipe.name} pro {self.canteen.name} na den {self.date.strftime('%d.%m.%Y')}"
+        canteen = self.get_canteen()
+        canteen_name = canteen.name if canteen else 'Bez jídelny'
+        return f"Výroba: {self.recipe.name} pro {canteen_name} na den {self.date.strftime('%d.%m.%Y')}"
 
     class Meta:
         verbose_name = "Výrobní příkaz"
@@ -295,8 +269,9 @@ class PickingList(models.Model):
 
     def clean(self):
         # Kontrola, zda sklad patří ke správné jídelně
-        if self.warehouse and self.warehouse.canteen != self.production_order.canteen:
-            raise ValidationError(f"Sklad '{self.warehouse}' nepatří k jídelně '{self.production_order.canteen}'.")
+        order_canteen = self.production_order.get_canteen()
+        if self.warehouse and order_canteen and self.warehouse.canteen != order_canteen:
+            raise ValidationError(f"Sklad '{self.warehouse}' nepatří k jídelně '{order_canteen}'.")
         
         # Kontrola, zda je vyplněno skutečné množství při dokončení
         if self.status == self.Status.COMPLETED and self.quantity_actual is None:

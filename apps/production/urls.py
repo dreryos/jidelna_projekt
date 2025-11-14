@@ -23,11 +23,7 @@ urlpatterns = [
     # Denní výdejky
     path('vydejka-dne/', views.daily_picking_list, name='daily_picking_list'),
     
-    # Původní výrobní příkazy (pro zpětnou kompatibilitu)
-    path('prikazy/', views.ProductionOrderListView.as_view(), name='order_list'),
-    path('prikazy/novy/', views.ProductionOrderCreateView.as_view(), name='order_add'),
-    path('prikazy/<int:pk>/', views.production_order_detail, name='order_detail'),
-    path('prikazy/<int:pk>/upravit/', views.ProductionOrderUpdateView.as_view(), name='order_edit'),
-    path('prikazy/<int:pk>/smazat/', views.ProductionOrderDeleteView.as_view(), name='order_delete'),
-    path('prikazy/<int:order_pk>/vydejka/', views.picking_list_print, name='picking_list_print'),
+    # Detail výrobního příkazu (read-only, přístupný z jídelníčku)
+    path('jidlo/<int:pk>/', views.production_order_detail, name='order_detail'),
+    path('jidlo/<int:order_pk>/vydejka/', views.picking_list_print, name='picking_list_print'),
 ]

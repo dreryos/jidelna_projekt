@@ -23,7 +23,7 @@ from django.http import JsonResponse, Http404
 from django.db import transaction
 
 from .models import ProductionOrder, PickingList, MenuPlan
-from .forms import ProductionOrderForm, ProductionOrderFormAdvanced, MenuPlanForm, MenuPlanCoefficientFormSet
+from .forms import MenuPlanForm, MenuPlanCoefficientFormSet
 from apps.core.models import Recipe
 from apps.canteens.models import Canteen
 
@@ -104,21 +104,9 @@ Viewy pro plánování výroby, vytváření jídelníčků a správu výdejek.
 """
 
 
-# Formset pro správu jídel v jídelníčku
-ProductionOrderFormSet = inlineformset_factory(
-    MenuPlan,
-    ProductionOrder,
-    fields=['recipe', 'date', 'portions_adult', 'portions_child', 'portion_coefficient'],
-    extra=0,
-    can_delete=True,
-    widgets={
-        'date': forms.DateInput(attrs={'type': 'date', 'class': 'form-control meal-date'}),
-        'portions_adult': forms.NumberInput(attrs={'min': '0', 'class': 'form-control portions-adult'}),
-        'portions_child': forms.NumberInput(attrs={'min': '0', 'class': 'form-control portions-child'}),
-        'portion_coefficient': forms.NumberInput(attrs={'step': '0.01', 'min': '0.1', 'class': 'form-control portion-coefficient'}),
-        'recipe': forms.Select(attrs={'class': 'form-control'}),
-    }
-)
+# Poznámka: ProductionOrderFormSet byl odstraněn - jídla se nyní přidávají pouze přes AJAX endpoint
+# Zachováno pro zpětnou kompatibilitu, ale není používáno v šablonách
+# TODO: Úplně odstranit v další verzi
 
 
 class MenuPlanListView(CanteenOwnerMixin, ListView):
@@ -207,10 +195,6 @@ class MenuPlanDetailView(CanteenOwnerMixin, UpdateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        if self.request.POST:
-            context['orders_formset'] = ProductionOrderFormSet(self.request.POST, instance=self.object)
-        else:
-            context['orders_formset'] = ProductionOrderFormSet(instance=self.object)
         
         context['recipes'] = Recipe.objects.all()
         
@@ -240,24 +224,9 @@ class MenuPlanDetailView(CanteenOwnerMixin, UpdateView):
     
     @transaction.atomic
     def form_valid(self, form):
-        context = self.get_context_data()
-        orders_formset = context['orders_formset']
-        
-        if orders_formset.is_valid():
-            self.object = form.save()
-            orders_formset.instance = self.object
-            
-            for order_form in orders_formset:
-                if order_form.cleaned_data and not order_form.cleaned_data.get('DELETE', False):
-                    order_form.instance.canteen = self.object.canteen
-            
-            orders_formset.save()
-            
-            messages.success(self.request, 'Jídelníček byl úspěšně aktualizován.')
-            return redirect('production:menu_detail', pk=self.object.pk)
-        else:
-            messages.error(self.request, 'Opravte chyby ve formuláři.')
-            return self.render_to_response(self.get_context_data(form=form))
+        self.object = form.save()
+        messages.success(self.request, 'Jídelníček byl úspěšně aktualizován.')
+        return redirect('production:menu_detail', pk=self.object.pk)
     
     def get_success_url(self):
         return reverse_lazy('production:menu_detail', kwargs={'pk': self.object.pk})
@@ -300,7 +269,6 @@ def add_meal_to_menu(request, menu_pk, *args, **kwargs):
             order = ProductionOrder.objects.create(
                 menu_plan=menu_plan,
                 recipe=recipe,
-                canteen=menu_plan.canteen,
                 date=meal_date,
                 portions_adult=0,
                 portions_child=0,
@@ -451,99 +419,7 @@ def delete_order_ajax(request, order_pk, *args, **kwargs):
         return JsonResponse({'success': False, 'error': 'Could not delete the order.'}, status=500)
 
 
-# Původní views pro jednotlivé výrobní příkazy (zachováváme pro zpětnou kompatibilitu)
-
-class ProductionOrderListView(CanteenOwnerMixin, ListView):
-    model = ProductionOrder
-    template_name = 'production/order_list.html'
-    context_object_name = 'orders'
-    paginate_by = 20
-    
-    def get_queryset(self) -> QuerySet[ProductionOrder]:
-        queryset = super().get_queryset().select_related('recipe', 'canteen', 'menu_plan').order_by('-date', 'recipe__name')
-        
-        recipe_filter = self.request.GET.get('recipe')
-        if recipe_filter:
-            queryset = queryset.filter(recipe_id=recipe_filter)
-        
-        canteen_filter = self.request.GET.get('canteen')
-        user = cast('User', self.request.user)
-        if canteen_filter:
-            try:
-                if user.is_superuser or user.profile.canteens.filter(pk=canteen_filter).exists(): # type: ignore
-                    queryset = queryset.filter(canteen_id=canteen_filter)
-            except ObjectDoesNotExist:
-                return queryset.none()
-            
-        date_filter = self.request.GET.get('date')
-        if date_filter:
-            queryset = queryset.filter(date=date_filter)
-            
-        return queryset
-    
-    def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
-        context = super().get_context_data(**kwargs)
-        context['recipes'] = Recipe.objects.all()
-        user = cast('User', self.request.user)
-        if user.is_superuser:
-            context['canteens'] = Canteen.objects.all()
-        else:
-            try:
-                context['canteens'] = user.profile.canteens.all() # type: ignore
-            except ObjectDoesNotExist:
-                context['canteens'] = Canteen.objects.none()
-        context['selected_recipe'] = self.request.GET.get('recipe', '')
-        context['selected_canteen'] = self.request.GET.get('canteen', '')
-        context['selected_date'] = self.request.GET.get('date', '')
-        return context
-
-
-class ProductionOrderCreateView(CanteenOwnerMixin, CreateView):
-    model = ProductionOrder
-    form_class = ProductionOrderForm
-    template_name = 'production/order_form.html'
-    success_url = reverse_lazy('production:order_list')
-    
-    def get_form_kwargs(self):
-        kwargs = super().get_form_kwargs()
-        kwargs['user'] = self.request.user
-        return kwargs
-
-    def form_valid(self, form):
-        response = super().form_valid(form)
-        messages.success(self.request, f'Výrobní příkaz pro recept "{self.object.recipe.name}" byl vytvořen.')
-        return response
-
-
-class ProductionOrderUpdateView(CanteenOwnerMixin, UpdateView):
-    model = ProductionOrder
-    form_class = ProductionOrderForm
-    template_name = 'production/order_form.html'
-    success_url = reverse_lazy('production:order_list')
-    
-    def get_form_kwargs(self):
-        kwargs = super().get_form_kwargs()
-        kwargs['user'] = self.request.user
-        return kwargs
-
-    def form_valid(self, form):
-        response = super().form_valid(form)
-        messages.success(self.request, f'Výrobní příkaz pro recept "{self.object.recipe.name}" byl upraven.')
-        return response
-
-
-class ProductionOrderDeleteView(CanteenOwnerMixin, DeleteView):
-    model = ProductionOrder
-    template_name = 'production/order_confirm_delete.html'
-    success_url = reverse_lazy('production:order_list')
-    
-    def delete(self, request, *args, **kwargs):
-        self.object = self.get_object()
-        recipe_name = self.object.recipe.name
-        response = super().delete(request, *args, **kwargs)
-        messages.success(request, f'Výrobní příkaz pro recept "{recipe_name}" byl smazán.')
-        return response
-
+# Detail výrobního příkazu (read-only, přístupný z jídelníčku)
 
 @login_required
 @user_can_access_canteen_object(ProductionOrder)
@@ -647,7 +523,7 @@ def daily_picking_list(request):
                 ingredient_totals[key]['amount'] += needed_amount
                 ingredient_totals[key]['orders'].append({
                     'recipe': order.recipe.name,
-                    'canteen': order.canteen.name if order.canteen else 'Bez jídelny',
+                    'canteen': order.get_canteen().name if order.get_canteen() else 'Bez jídelny',
                     'portions': portions_desc,
                     'effective_portions': effective_portions,
                     'amount': needed_amount
@@ -658,7 +534,7 @@ def daily_picking_list(request):
                     'amount': needed_amount,
                     'orders': [{
                         'recipe': order.recipe.name,
-                        'canteen': order.canteen.name if order.canteen else 'Bez jídelny',
+                        'canteen': order.get_canteen().name if order.get_canteen() else 'Bez jídelny',
                         'portions': portions_desc,
                         'effective_portions': effective_portions,
                         'amount': needed_amount
