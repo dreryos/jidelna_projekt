@@ -10,10 +10,10 @@
 ### Změny v modelu ProductionOrder:
 - ✅ Změněno pole `canteen` na `null=True, blank=True`
 - ✅ Přidána metoda `get_canteen()` která vrací canteen z FK nebo z menu_plan
-- ✅ Aktualizována `save()` metoda aby automaticky nastavila canteen z menu_plan
-- ✅ Aktualizován `__str__()` aby používal `get_canteen()`
-- ✅ Aktualizována `generate_picking_list()` aby používala `get_canteen()`
-- ✅ Aktualizována `PickingList.clean()` aby používala `get_canteen()`
+- ✅ Aktualizována `save()` metoda, aby automaticky nastavila canteen z menu_plan
+- ✅ Aktualizován `__str__()`, aby používal `get_canteen()`
+- ✅ Aktualizována `generate_picking_list()`, aby používala `get_canteen()`
+- ✅ Aktualizována `PickingList.clean()`, aby používala `get_canteen()`
 
 ### Změny ve views:
 - ✅ Odstraněno explicitní nastavení `canteen=menu_plan.canteen` při vytváření order
