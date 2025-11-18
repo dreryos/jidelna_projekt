@@ -23,6 +23,11 @@ urlpatterns = [
     # Denní výdejky
     path('vydejka-dne/', views.daily_picking_list, name='daily_picking_list'),
     
+    # Generátor výdejek
+    path('vydejky/', views.picking_list_generator, name='picking_list_generator'),
+    path('vydejky/<int:document_id>/edit/', views.picking_list_edit, name='picking_list_edit'),
+    path('vydejky/<int:document_id>/pdf/', views.picking_list_pdf, name='picking_list_pdf'),
+    
     # Detail výrobního příkazu (read-only, přístupný z jídelníčku)
     path('jidlo/<int:pk>/', views.production_order_detail, name='order_detail'),
     path('jidlo/<int:order_pk>/vydejka/', views.picking_list_print, name='picking_list_print'),

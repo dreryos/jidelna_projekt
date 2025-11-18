@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import ProductionOrder, PickingList, MenuPlan, MenuPlanCoefficient
+from .models import ProductionOrder, PickingList, MenuPlan, MenuPlanCoefficient, PickingListDocument
 
 # Tento admin modul umožňuje správu výrobních příkazů a zobrazení souvisejících výdejek.
 # Výpočty cen používají metodu `calculate_portion_price` z modelu Recipe.
@@ -82,5 +82,29 @@ class ProductionOrderAdmin(admin.ModelAdmin):
             return f"{prices['total']} Kč"
         return "N/A"
     total_price.short_description = "Celková cena výroby"
+
+
+@admin.register(PickingListDocument)
+class PickingListDocumentAdmin(admin.ModelAdmin):
+    list_display = ('name', 'canteen', 'date_from', 'date_to', 'created_at', 'created_by')
+    list_filter = ('canteen', 'date_from', 'created_at')
+    search_fields = ('name', 'canteen__name')
+    readonly_fields = ('created_at', 'created_by')
+    autocomplete_fields = ['canteen']
+    
+    fieldsets = (
+        (None, {
+            'fields': ('name', 'canteen', 'date_from', 'date_to')
+        }),
+        ('Metadata', {
+            'fields': ('created_at', 'created_by'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def save_model(self, request, obj, form, change):
+        if not change:  # Pokud je nový objekt
+            obj.created_by = request.user
+        super().save_model(request, obj, form, change)
 
 # admin.site.register(PickingList)

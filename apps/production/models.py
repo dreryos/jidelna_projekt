@@ -246,6 +246,24 @@ class ProductionOrderPortionVariant(models.Model):
         ordering = ['production_order', 'order']
 
 
+class PickingListDocument(models.Model):
+    """Vygenerovaná výdejka jako dokument"""
+    name = models.CharField(max_length=100, verbose_name="Název výdejky")
+    canteen = models.ForeignKey('canteens.Canteen', on_delete=models.PROTECT, verbose_name="Jídelna")
+    date_from = models.DateField(verbose_name="Datum od")
+    date_to = models.DateField(verbose_name="Datum do")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Vytvořeno")
+    created_by = models.ForeignKey('auth.User', on_delete=models.PROTECT, verbose_name="Vytvořil")
+    
+    def __str__(self):
+        return f"{self.name} - {self.canteen.name}"
+    
+    class Meta:
+        verbose_name = "Dokument výdejky"
+        verbose_name_plural = "Dokumenty výdejek"
+        ordering = ['-created_at']
+
+
 class PickingList(models.Model):
     """Výdejka surovin"""
     class Status(models.TextChoices):
@@ -253,6 +271,7 @@ class PickingList(models.Model):
         COMPLETED = 'COMPLETED', 'Vydáno'
 
     production_order = models.ForeignKey(ProductionOrder, on_delete=models.CASCADE, related_name='picking_list_items', verbose_name="Výrobní příkaz")
+    document = models.ForeignKey(PickingListDocument, on_delete=models.CASCADE, related_name='items', verbose_name="Dokument výdejky", null=True, blank=True)
     warehouse = models.ForeignKey(Warehouse, on_delete=models.PROTECT, verbose_name="Sklad", help_text="Sklad, ze kterého se má surovina vydat.", null=True, blank=False)
     ingredient = models.ForeignKey(Ingredient, on_delete=models.PROTECT, verbose_name="Surovina")
     quantity_planned = models.DecimalField(max_digits=10, decimal_places=3, verbose_name="Plánované množství")

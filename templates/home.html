@@ -129,9 +129,12 @@
         </h5>
       </div>
       <div class="card-body">
-        <p class="card-text">Generování reportů objednávek a dalších přehledů.</p>
+        <p class="card-text">Generování reportů objednávek, výdejek a dalších přehledů.</p>
         <div class="d-grid gap-2">
-          <a href="{% url 'reports:order_report' %}" class="btn btn-info">
+          <a href="{% url 'production:picking_list_generator' %}" class="btn btn-info">
+            <i class="fas fa-file-pdf me-2"></i>Výdejky (PDF)
+          </a>
+          <a href="{% url 'reports:order_report' %}" class="btn btn-outline-info">
             <i class="fas fa-file-alt me-2"></i>Report objednávek
           </a>
           <a href="{% url 'reports:order_report_download' %}" class="btn btn-outline-info">
