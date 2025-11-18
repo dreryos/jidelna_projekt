@@ -122,6 +122,7 @@ class ProductionOrder(models.Model):
         Vygeneruje položky na výdejce na základě norem receptu.
         Množství se počítá ze všech variant porcí a převádí na základní jednotky (kg).
         Předvyplní sklad, který patří k jídelně a má danou surovinu.
+        Zajistí, že všechny potřebné suroviny existují ve skladu s minimálně 0 ks.
         """
         if not self.recipe:
             return
@@ -141,6 +142,26 @@ class ProductionOrder(models.Model):
                 warehouse__canteen=self.resolved_canteen,
                 quantity__gt=0
             ).first() if self.resolved_canteen else None
+            
+            # Pokud surovina neexistuje v žádném skladu jídelny, vytvoříme ji s 0 ks
+            if not stock_item and self.resolved_canteen:
+                # Zkontrolujeme, zda surovina existuje v jakémkoliv skladu této jídelny
+                existing_stock = StockItem.objects.filter(
+                    ingredient=item.ingredient,
+                    warehouse__canteen=self.resolved_canteen
+                ).first()
+                
+                if not existing_stock:
+                    # Najdeme první sklad této jídelny
+                    warehouse = self.resolved_canteen.warehouses.first()
+                    if warehouse:
+                        # Vytvoříme záznam suroviny s 0 ks
+                        stock_item = StockItem.objects.create(
+                            ingredient=item.ingredient,
+                            warehouse=warehouse,
+                            quantity=Decimal('0'),
+                            price=Decimal('0')
+                        )
             
             prefilled_warehouse = stock_item.warehouse if stock_item else None
 

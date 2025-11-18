@@ -8,6 +8,12 @@ a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
 ## [Unreleased]
 
 ### Added
+- **Automatické vytváření surovin ve skladu**: Při vytvoření výrobního příkazu s receptem obsahujícím novou surovinu
+  - Surovina je automaticky vytvořena ve skladu s množstvím 0 ks, pokud ve skladu jídelny ještě neexistuje
+  - Cena je nastavena na 0 (není známa)
+  - Surovina je vytvořena v prvním skladu jídelny
+  - Prevence vytváření záznamů se zápornými hodnotami
+  - Zajištění, že všechny potřebné suroviny jsou viditelné v inventáři
 - **Tabulka vygenerovaných výdejek**: Přidána tabulka na stránku `production/vydejky/` pro trvalý přístup k vygenerovaným výdejkám
   - Umožňuje snadnější editaci reálně vydaných položek
   - Zachování historie vygenerovaných výdejek pro budoucí reference
