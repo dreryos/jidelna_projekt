@@ -122,9 +122,7 @@ class ProductionOrder(models.Model):
         Vygeneruje položky na výdejce na základě norem receptu.
         Množství se počítá ze všech variant porcí a převádí na základní jednotky (kg).
         Předvyplní sklad, který patří k jídelně a má danou surovinu.
-        
-        Pokud surovina není ve skladu, vytvoří se skladová položka s nulovou zásobou
-        aby mohla probíhat blokace a případně odepsání do mínusu.
+        Zajistí, že všechny potřebné suroviny existují ve skladu s minimálně 0 ks.
         """
         if not self.recipe:
             return
@@ -140,38 +138,27 @@ class ProductionOrder(models.Model):
 
             prefilled_warehouse = None
             
-            if self.resolved_canteen:
-                # Nejprve se pokusíme najít sklad s kladnou zásobou
-                stock_item = StockItem.objects.filter(
+            # Pokud surovina neexistuje v žádném skladu jídelny, vytvoříme ji s 0 ks
+            if not stock_item and self.resolved_canteen:
+                # Zkontrolujeme, zda surovina existuje v jakémkoliv skladu této jídelny
+                existing_stock = StockItem.objects.filter(
                     ingredient=item.ingredient,
-                    warehouse__canteen=self.resolved_canteen,
-                    quantity__gt=0
+                    warehouse__canteen=self.resolved_canteen
                 ).first()
                 
-                if stock_item:
-                    prefilled_warehouse = stock_item.warehouse
-                else:
-                    # Pokud není žádná skladová položka (ani s nulovou zásobou), vytvoříme ji
-                    existing_stock = StockItem.objects.filter(
-                        ingredient=item.ingredient,
-                        warehouse__canteen=self.resolved_canteen
-                    ).first()
-                    
-                    if existing_stock:
-                        # Existuje skladová položka s nulovou nebo zápornou zásobou - použijeme ji
-                        prefilled_warehouse = existing_stock.warehouse
-                    else:
-                        # Neexistuje žádná skladová položka - vytvoříme novou s nulovou zásobou
-                        from apps.canteens.models import Warehouse
-                        warehouse = Warehouse.objects.filter(canteen=self.resolved_canteen).first()
-                        if warehouse:
-                            StockItem.objects.create(
-                                warehouse=warehouse,
-                                ingredient=item.ingredient,
-                                quantity=Decimal('0.000'),
-                                price=Decimal('0.00')
-                            )
-                            prefilled_warehouse = warehouse
+                if not existing_stock:
+                    # Najdeme první sklad této jídelny
+                    warehouse = self.resolved_canteen.warehouses.first()
+                    if warehouse:
+                        # Vytvoříme záznam suroviny s 0 ks
+                        stock_item = StockItem.objects.create(
+                            ingredient=item.ingredient,
+                            warehouse=warehouse,
+                            quantity=Decimal('0'),
+                            price=Decimal('0')
+                        )
+            
+            prefilled_warehouse = stock_item.warehouse if stock_item else None
 
             # Použijeme update_or_create místo create pro prevenci duplicit
             PickingList.objects.update_or_create(
