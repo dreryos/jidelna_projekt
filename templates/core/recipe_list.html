@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load bootstrap5 %}
+{% load django_bootstrap5 %}
 
 {% block title %}Recepty - Jídelna{% endblock %}
 
@@ -18,15 +18,45 @@
   </div>
 </div>
 
+<div class="card mb-4">
+  <div class="card-body">
+    <h5 class="card-title mb-3">
+      <i class="fas fa-filter me-2"></i>Filtrovat podle kategorie
+    </h5>
+    <div class="btn-group flex-wrap" role="group">
+      <a href="{% url 'core:recipe_list' %}" 
+         class="btn btn-{% if not selected_category %}primary{% else %}outline-primary{% endif %}">
+        <i class="fas fa-th me-1"></i>Vše
+      </a>
+      {% for category in categories %}
+        <a href="?category={{ category.id }}" 
+           class="btn btn-{% if selected_category == category.id|stringformat:'s' %}primary{% else %}outline-primary{% endif %}">
+          {{ category.code }} - {{ category.name }}
+        </a>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
 {% if object_list %}
   <div class="row">
     {% for recipe in object_list %}
       <div class="col-md-6 col-lg-4 mb-4">
         <div class="card h-100 shadow-sm">
           <div class="card-header bg-light">
-            <h5 class="card-title mb-0">
-              <i class="fas fa-utensils me-2"></i>{{ recipe.name }}
-            </h5>
+            <div class="d-flex justify-content-between align-items-start">
+              <h5 class="card-title mb-0">
+                <i class="fas fa-utensils me-2"></i>{{ recipe.name }}
+              </h5>
+              {% if recipe.code %}
+              <span class="badge bg-primary">{{ recipe.code }}</span>
+              {% endif %}
+            </div>
+            {% if recipe.category %}
+            <small class="text-muted">
+              <i class="fas fa-folder me-1"></i>{{ recipe.category.name }}
+            </small>
+            {% endif %}
           </div>
           <div class="card-body">
             {% if recipe.description %}
@@ -42,6 +72,10 @@
             <small class="text-muted">
               <i class="fas fa-list me-1"></i>
               {{ recipe.ingredients.count }} surovin
+              <span class="ms-2">
+                <i class="fas fa-users me-1"></i>
+                {{ recipe.base_portions }} porcí
+              </span>
             </small>
           </div>
           <div class="card-footer bg-transparent">

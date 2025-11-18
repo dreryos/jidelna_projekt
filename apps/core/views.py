@@ -37,6 +37,20 @@ def logout_view(request):
 class RecipeListView(LoginRequiredMixin, ListView):
 	model = Recipe
 	template_name = 'core/recipe_list.html'
+	
+	def get_queryset(self):
+		queryset = super().get_queryset().select_related('category')
+		category_id = self.request.GET.get('category')
+		if category_id:
+			queryset = queryset.filter(category_id=category_id)
+		return queryset.order_by('category__code', 'code')
+	
+	def get_context_data(self, **kwargs):
+		context = super().get_context_data(**kwargs)
+		from apps.core.models import Category
+		context['categories'] = Category.objects.all()
+		context['selected_category'] = self.request.GET.get('category', '')
+		return context
 
 
 RecipeIngredientFormSet = inlineformset_factory(
@@ -60,7 +74,19 @@ class RecipeCreateView(LoginRequiredMixin, CreateView):
 			data['ingredients'] = RecipeIngredientFormSet(self.request.POST)
 		else:
 			data['ingredients'] = RecipeIngredientFormSet()
-		data['all_ingredients'] = Ingredient.objects.all()
+		
+		# Připravíme data surovin pro autocomplete jako JSON
+		import json
+		ingredients_list = [
+			{
+				'id': ing.id, 
+				'name': ing.name,
+				'unit': ing.recipe_unit,
+				'base_unit': ing.base_unit
+			} 
+			for ing in Ingredient.objects.all().order_by('name')
+		]
+		data['all_ingredients'] = json.dumps(ingredients_list)
 		return data
 
 	def form_valid(self, form):
@@ -85,7 +111,19 @@ class RecipeUpdateView(LoginRequiredMixin, UpdateView):
 			data['ingredients'] = RecipeIngredientFormSet(self.request.POST, instance=self.object)
 		else:
 			data['ingredients'] = RecipeIngredientFormSet(instance=self.object)
-		data['all_ingredients'] = Ingredient.objects.all()
+		
+		# Připravíme data surovin pro autocomplete jako JSON
+		import json
+		ingredients_list = [
+			{
+				'id': ing.id, 
+				'name': ing.name,
+				'unit': ing.recipe_unit,
+				'base_unit': ing.base_unit
+			} 
+			for ing in Ingredient.objects.all().order_by('name')
+		]
+		data['all_ingredients'] = json.dumps(ingredients_list)
 		return data
 
 	def form_valid(self, form):
@@ -132,9 +170,47 @@ class IngredientDeleteView(LoginRequiredMixin, DeleteView):
 	template_name = 'core/ingredient_confirm_delete.html'
 	success_url = reverse_lazy('core:ingredient_list')
 
-"""
-Tento modul je místo pro view funkce související s jádrem aplikace (recepty, suroviny).
-V současné době používáme hlavně Django admin pro CRUD operace, proto zde nejsou implementovány konkrétní view.
-"""
 
-# Create your views here.
+from django.http import JsonResponse
+from django.views.decorators.http import require_POST
+from decimal import Decimal
+
+
+@login_required
+@require_POST
+def ajax_add_ingredient(request):
+	"""AJAX endpoint pro přidání nové suroviny z modálního okna"""
+	try:
+		name = request.POST.get('name', '').strip()
+		base_unit = request.POST.get('base_unit', 'kg')
+		recipe_unit = request.POST.get('recipe_unit', 'g')
+		conversion_factor = request.POST.get('conversion_factor', '1000')
+		
+		if not name:
+			return JsonResponse({'success': False, 'error': 'Název suroviny je povinný'}, status=400)
+		
+		# Kontrola, zda surovina již neexistuje
+		if Ingredient.objects.filter(name__iexact=name).exists():
+			return JsonResponse({'success': False, 'error': f'Surovina "{name}" již existuje'}, status=400)
+		
+		# Vytvoření nové suroviny
+		ingredient = Ingredient.objects.create(
+			name=name,
+			unit=base_unit,  # Pro zpětnou kompatibilitu
+			base_unit=base_unit,
+			recipe_unit=recipe_unit,
+			conversion_factor=Decimal(conversion_factor)
+		)
+		
+		return JsonResponse({
+			'success': True,
+			'ingredient': {
+				'id': ingredient.id,
+				'name': ingredient.name,
+				'unit': ingredient.recipe_unit,
+				'base_unit': ingredient.base_unit
+			}
+		})
+		
+	except Exception as e:
+		return JsonResponse({'success': False, 'error': str(e)}, status=500)

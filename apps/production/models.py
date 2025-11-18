@@ -77,27 +77,30 @@ class MenuPlanCoefficient(models.Model):
 
 class ProductionOrder(models.Model):
     """Výrobní příkaz - nyní součást jídelníčku"""
-    menu_plan = models.ForeignKey(MenuPlan, on_delete=models.CASCADE, related_name='production_orders', verbose_name="Jídelníček", null=True, blank=True)
+    menu_plan = models.ForeignKey(MenuPlan, on_delete=models.CASCADE, related_name='production_orders', verbose_name="Jídelníček", null=False, blank=False)
     recipe = models.ForeignKey(Recipe, on_delete=models.PROTECT, verbose_name="Recept")
-    canteen = models.ForeignKey(Canteen, on_delete=models.PROTECT, verbose_name="Jídelna")
-    
-    # Počty porcí - zachováno pro kompatibilitu
-    portions_adult = models.PositiveIntegerField(verbose_name="Počet dospělých porcí", default=0)
-    portions_child = models.PositiveIntegerField(verbose_name="Počet dětských porcí", default=0)
-    
-    # Nové pole - koeficient velikosti porce
-    portion_coefficient = models.DecimalField(
-        max_digits=5, 
-        decimal_places=2, 
-        default=Decimal('1.0'),
-        verbose_name="Koeficient porce",
-        help_text="Koeficient velikosti porce (1.0 = normální, 0.5 = poloviční, 1.5 = větší)"
-    )
-    
+    canteen = models.ForeignKey(Canteen, on_delete=models.PROTECT, verbose_name="Jídelna", null=True, blank=True)
     date = models.DateField(verbose_name="Datum vaření")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Vytvořeno")
+    
+    @property
+    def resolved_canteen(self):
+        """Vrátí jídelnu - buď z FK nebo z menu_plan (centralizovaná logika)"""
+        return self.canteen or getattr(self.menu_plan, 'canteen', None)
+    
+    def get_canteen(self):
+        """Vrátí jídelnu - deprecated, použijte resolved_canteen"""
+        return self.resolved_canteen
+    
+    def _sum_variants(self, fn):
+        """Pomocná metoda pro sčítání hodnot přes všechny varianty porcí"""
+        return sum(fn(v) for v in self.portion_variants.all())
 
     def save(self, *args, **kwargs):
+        # Automaticky nastav canteen z menu_plan pokud není nastavena
+        if self.menu_plan and not self.canteen:
+            self.canteen = self.menu_plan.canteen
+        
         is_new = self._state.adding
         super().save(*args, **kwargs)
         if is_new:
@@ -119,40 +122,56 @@ class ProductionOrder(models.Model):
         Vygeneruje položky na výdejce na základě norem receptu.
         Množství se počítá ze všech variant porcí a převádí na základní jednotky (kg).
         Předvyplní sklad, který patří k jídelně a má danou surovinu.
+        
+        Pokud surovina není ve skladu, vytvoří se skladová položka s nulovou zásobou
+        aby mohla probíhat blokace a případně odepsání do mínusu.
         """
         if not self.recipe:
             return
 
-        recipe_ingredients = self.recipe.recipeingredient_set.all()
-
-        for item in recipe_ingredients:
+        for item in self.recipe.recipeingredient_set.all():
             # Vypočítáme celkové množství ze všech variant
-            total_quantity = Decimal('0')
-            
-            # Pokud existují varianty, použijeme je
-            variants = self.portion_variants.all()
-            if variants.exists():
-                for variant in variants:
-                    quantity = item.get_quantity_in_base_unit(
-                        portions=variant.portions,
-                        coefficient=float(variant.coefficient)
-                    )
-                    total_quantity += quantity
-            else:
-                # Fallback na staré pole (pro zpětnou kompatibilitu)
-                total_quantity = item.get_quantity_in_base_unit(
-                    portions=self.total_portions,
-                    coefficient=float(self.portion_coefficient)
+            total_quantity = self._sum_variants(
+                lambda v: item.get_quantity_in_base_unit(
+                    portions=v.portions,
+                    coefficient=float(v.coefficient)
                 )
+            )
 
-            # Najdeme sklad, který patří k jídelně a má danou surovinu
-            stock_item = StockItem.objects.filter(
-                ingredient=item.ingredient,
-                warehouse__canteen=self.canteen,
-                quantity__gt=0
-            ).first()
+            prefilled_warehouse = None
             
-            prefilled_warehouse = stock_item.warehouse if stock_item else None
+            if self.resolved_canteen:
+                # Nejprve se pokusíme najít sklad s kladnou zásobou
+                stock_item = StockItem.objects.filter(
+                    ingredient=item.ingredient,
+                    warehouse__canteen=self.resolved_canteen,
+                    quantity__gt=0
+                ).first()
+                
+                if stock_item:
+                    prefilled_warehouse = stock_item.warehouse
+                else:
+                    # Pokud není žádná skladová položka (ani s nulovou zásobou), vytvoříme ji
+                    existing_stock = StockItem.objects.filter(
+                        ingredient=item.ingredient,
+                        warehouse__canteen=self.resolved_canteen
+                    ).first()
+                    
+                    if existing_stock:
+                        # Existuje skladová položka s nulovou nebo zápornou zásobou - použijeme ji
+                        prefilled_warehouse = existing_stock.warehouse
+                    else:
+                        # Neexistuje žádná skladová položka - vytvoříme novou s nulovou zásobou
+                        from apps.canteens.models import Warehouse
+                        warehouse = Warehouse.objects.filter(canteen=self.resolved_canteen).first()
+                        if warehouse:
+                            StockItem.objects.create(
+                                warehouse=warehouse,
+                                ingredient=item.ingredient,
+                                quantity=Decimal('0.000'),
+                                price=Decimal('0.00')
+                            )
+                            prefilled_warehouse = warehouse
 
             # Použijeme update_or_create místo create pro prevenci duplicit
             PickingList.objects.update_or_create(
@@ -175,29 +194,16 @@ class ProductionOrder(models.Model):
             total_amount = Decimal('0')
             total_amount_recipe_unit = Decimal('0')
             
-            variants = self.portion_variants.all()
-            if variants.exists():
-                for variant in variants:
-                    amount = recipe_ingredient.get_quantity_in_base_unit(
-                        portions=variant.portions,
-                        coefficient=float(variant.coefficient)
-                    )
-                    total_amount += amount
-                    total_amount_recipe_unit += (
-                        recipe_ingredient.quantity_per_portion * 
-                        variant.portions * 
-                        variant.coefficient
-                    )
-            else:
-                # Fallback na staré pole
-                total_amount = recipe_ingredient.get_quantity_in_base_unit(
-                    portions=self.total_portions,
-                    coefficient=float(self.portion_coefficient)
+            for variant in self.portion_variants.all():
+                amount = recipe_ingredient.get_quantity_in_base_unit(
+                    portions=variant.portions,
+                    coefficient=float(variant.coefficient)
                 )
-                total_amount_recipe_unit = (
+                total_amount += amount
+                total_amount_recipe_unit += (
                     recipe_ingredient.quantity_per_portion * 
-                    self.total_portions * 
-                    self.portion_coefficient
+                    variant.portions * 
+                    variant.coefficient
                 )
             
             ingredients.append({
@@ -212,26 +218,18 @@ class ProductionOrder(models.Model):
 
     @property
     def total_portions(self):
-        """Celkový počet porcí - součet ze všech variant nebo fallback na staré pole"""
-        variants = self.portion_variants.all()
-        if variants.exists():
-            return sum(variant.portions for variant in variants)
-        return (self.portions_adult or 0) + (self.portions_child or 0)
-    
+        """Vrátí celkový počet porcí ze všech variant (bez koeficientů)"""
+        return self._sum_variants(lambda v: v.portions)
+
     @property
     def total_effective_portions(self):
-        """Celkový počet efektivních porcí (počet × koeficient) ze všech variant"""
-        variants = self.portion_variants.all()
-        if variants.exists():
-            total = Decimal('0')
-            for variant in variants:
-                total += variant.portions * variant.coefficient
-            return float(total)
-        # Fallback na staré pole (pro zpětnou kompatibilitu)
-        return float((self.portions_adult or 0) + (self.portions_child or 0)) * float(self.portion_coefficient)
+        """Vrátí celkový počet efektivních porcí ze všech variant (s aplikací koeficientů)"""
+        return float(self._sum_variants(lambda v: v.portions * v.coefficient))
 
     def __str__(self):
-        return f"Výroba: {self.recipe.name} pro {self.canteen.name} na den {self.date.strftime('%d.%m.%Y')}"
+        canteen = self.get_canteen()
+        canteen_name = canteen.name if canteen else 'Bez jídelny'
+        return f"Výroba: {self.recipe.name} pro {canteen_name} na den {self.date.strftime('%d.%m.%Y')}"
 
     class Meta:
         verbose_name = "Výrobní příkaz"
@@ -277,6 +275,30 @@ class ProductionOrderPortionVariant(models.Model):
         ordering = ['production_order', 'order']
 
 
+class PickingListDocument(models.Model):
+    """Vygenerovaná výdejka jako dokument"""
+    name = models.CharField(max_length=100, verbose_name="Název výdejky")
+    canteen = models.ForeignKey('canteens.Canteen', on_delete=models.PROTECT, verbose_name="Jídelna")
+    date_from = models.DateField(verbose_name="Datum od")
+    date_to = models.DateField(verbose_name="Datum do")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Vytvořeno")
+    created_by = models.ForeignKey('auth.User', on_delete=models.PROTECT, verbose_name="Vytvořil")
+    archived = models.BooleanField(default=False, verbose_name="Archivováno")
+    archived_at = models.DateTimeField(null=True, blank=True, verbose_name="Archivováno dne")
+    
+    def can_be_archived(self):
+        """Kontroluje, zda mohou být všechny položky archivovány (všechny mají status COMPLETED)"""
+        return self.items.exists() and not self.items.exclude(status=PickingList.Status.COMPLETED).exists()
+    
+    def __str__(self):
+        return f"{self.name} - {self.canteen.name}"
+    
+    class Meta:
+        verbose_name = "Dokument výdejky"
+        verbose_name_plural = "Dokumenty výdejek"
+        ordering = ['-created_at']
+
+
 class PickingList(models.Model):
     """Výdejka surovin"""
     class Status(models.TextChoices):
@@ -284,6 +306,7 @@ class PickingList(models.Model):
         COMPLETED = 'COMPLETED', 'Vydáno'
 
     production_order = models.ForeignKey(ProductionOrder, on_delete=models.CASCADE, related_name='picking_list_items', verbose_name="Výrobní příkaz")
+    document = models.ForeignKey(PickingListDocument, on_delete=models.CASCADE, related_name='items', verbose_name="Dokument výdejky", null=True, blank=True)
     warehouse = models.ForeignKey(Warehouse, on_delete=models.PROTECT, verbose_name="Sklad", help_text="Sklad, ze kterého se má surovina vydat.", null=True, blank=False)
     ingredient = models.ForeignKey(Ingredient, on_delete=models.PROTECT, verbose_name="Surovina")
     quantity_planned = models.DecimalField(max_digits=10, decimal_places=3, verbose_name="Plánované množství")
@@ -295,8 +318,9 @@ class PickingList(models.Model):
 
     def clean(self):
         # Kontrola, zda sklad patří ke správné jídelně
-        if self.warehouse and self.warehouse.canteen != self.production_order.canteen:
-            raise ValidationError(f"Sklad '{self.warehouse}' nepatří k jídelně '{self.production_order.canteen}'.")
+        order_canteen = self.production_order.get_canteen()
+        if self.warehouse and order_canteen and self.warehouse.canteen != order_canteen:
+            raise ValidationError(f"Sklad '{self.warehouse}' nepatří k jídelně '{order_canteen}'.")
         
         # Kontrola, zda je vyplněno skutečné množství při dokončení
         if self.status == self.Status.COMPLETED and self.quantity_actual is None:
@@ -311,8 +335,28 @@ class PickingList(models.Model):
             original_state = PickingList.objects.get(pk=self.pk)
 
         super().save(*args, **kwargs)
+        
+        # Logika pro blokování množství při přiřazení k dokumentu
+        # Když je položka přidána k dokumentu, zablokujeme plánované množství
+        if self.document and self.warehouse and (original_state is None or original_state.document is None):
+            try:
+                with transaction.atomic():
+                    stock_item = StockItem.objects.select_for_update().get(
+                        warehouse=self.warehouse,
+                        ingredient=self.ingredient
+                    )
+                    stock_item.block_quantity(self.quantity_planned)
+            except StockItem.DoesNotExist:
+                # Vytvoříme skladovou položku s nulovou zásobou a zablokovaným množstvím
+                StockItem.objects.create(
+                    warehouse=self.warehouse,
+                    ingredient=self.ingredient,
+                    quantity=Decimal('0'),
+                    quantity_blocked=self.quantity_planned,
+                    price=Decimal('0')
+                )
 
-        # Logika pro odečtení ze skladu
+        # Logika pro odečtení ze skladu a uvolnění blokace
         # Spustí se pouze pokud je status změněn na COMPLETED
         if self.status == self.Status.COMPLETED and (original_state is None or original_state.status != self.Status.COMPLETED):
             if self.quantity_actual is not None and self.warehouse is not None:
@@ -322,16 +366,19 @@ class PickingList(models.Model):
                             warehouse=self.warehouse,
                             ingredient=self.ingredient
                         )
+                        # Uvolníme blokované množství
+                        stock_item.unblock_quantity(self.quantity_planned)
+                        # Odečteme skutečně vydané množství ze skladu
                         stock_item.quantity -= self.quantity_actual
                         stock_item.save()
                 except StockItem.DoesNotExist:
-                    # Případ, kdy položka ve skladu neexistuje - můžeme zalogovat chybu
-                    # nebo vytvořit položku se záporným stavem
+                    # Případ, kdy položka ve skladu neexistuje - vytvoříme ji se záporným stavem
                     StockItem.objects.create(
                         warehouse=self.warehouse,
                         ingredient=self.ingredient,
                         quantity=-self.quantity_actual,
-                        price=0 # Nemáme info o ceně, nutno dořešit
+                        quantity_blocked=Decimal('0'),
+                        price=Decimal('0')
                     )
 
     class Meta:

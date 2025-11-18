@@ -11,6 +11,7 @@ Tento soubor sleduje hlavní úkoly, bugy a nápady pro projekt. Pro detailněj�
 - [ ] Výrobní příkaz by měl mít na začátku seznam jídel z jídelníčku na daný den. A dále pokračovat seznamem surovin, které je potřeba vykladnit, vedle toho by kuchař napsal kolik doopravdy spotřeboval.
 - [x] Při editaci jídelníčku možnost upravit koeficient porce přímo v řádku.
 - [ ] Po uložení jídelníčku rezervovat skladové suroviny, pokud není dostatek, zobrazit upozornění na objednávku.
+- [ ] Umožnit generovat výdejky na suroviny, asi nový modul "výdejky", zde se nastaví čas a sklad, a vygenerují se výdejky na všechny suroviny potřebné pro jídelníčky v daném časovém rozmezí a danou jídelnu. Vydané suroviny "rezervovat" ve skladu, po uvaření odečíst skutečnou spotřebu.
 
 ---
 

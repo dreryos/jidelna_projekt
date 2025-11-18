@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import ProductionOrder, PickingList, MenuPlan, MenuPlanCoefficient
+from .models import ProductionOrder, PickingList, MenuPlan, MenuPlanCoefficient, PickingListDocument
 
 # Tento admin modul umožňuje správu výrobních příkazů a zobrazení souvisejících výdejek.
 # Výpočty cen používají metodu `calculate_portion_price` z modelu Recipe.
@@ -35,16 +35,12 @@ class MenuPlanAdmin(admin.ModelAdmin):
         (None, {
             'fields': ('name', 'canteen', 'date_from', 'date_to')
         }),
-        ('Výchozí počty porcí (pro zpětnou kompatibilitu)', {
-            'fields': ('default_portions_adult', 'default_portions_child'),
-            'classes': ('collapse',),
-        }),
     )
 
 @admin.register(ProductionOrder)
 class ProductionOrderAdmin(admin.ModelAdmin):
     inlines = [PickingListInline]
-    list_display = ('recipe', 'canteen', 'date', 'total_portions', 'portion_coefficient', 'created_at')
+    list_display = ('recipe', 'canteen', 'date', 'total_portions', 'created_at')
     list_filter = ('canteen', 'date', 'menu_plan')
     autocomplete_fields = ['recipe', 'canteen', 'menu_plan']
     readonly_fields = ('price_per_portion', 'total_price')
@@ -53,12 +49,9 @@ class ProductionOrderAdmin(admin.ModelAdmin):
         (None, {
             'fields': ('menu_plan', 'recipe', 'canteen', 'date')
         }),
-        ('Počty porcí', {
-            'fields': ('portions_adult', 'portions_child', 'portion_coefficient'),
-            'description': 'Koeficient porce: 1.0 = normální porce, 0.5 = poloviční, 1.5 = větší'
-        }),
         ('Vypočtené ceny', {
             'fields': ('price_per_portion', 'total_price'),
+            'description': 'Ceny jsou počítány ze všech variant porcí'
         }),
     )
 
@@ -68,10 +61,11 @@ class ProductionOrderAdmin(admin.ModelAdmin):
 
     def price_per_portion(self, obj):
         if obj.recipe and obj.canteen:
+            # Průměrná cena na porci (bez koeficientů)
             prices = obj.recipe.calculate_portion_price(
                 obj.canteen, 
                 portions=1,
-                portion_coefficient=float(obj.portion_coefficient)
+                portion_coefficient=1.0
             )
             return f"{prices['per_portion']} Kč"
         return "N/A"
@@ -79,13 +73,38 @@ class ProductionOrderAdmin(admin.ModelAdmin):
 
     def total_price(self, obj):
         if obj.recipe and obj.canteen:
+            # Celková cena ze všech efektivních porcí (s koeficienty)
             prices = obj.recipe.calculate_portion_price(
                 obj.canteen,
-                portions=obj.total_portions,
-                portion_coefficient=float(obj.portion_coefficient)
+                portions=int(obj.total_effective_portions),
+                portion_coefficient=1.0
             )
             return f"{prices['total']} Kč"
         return "N/A"
     total_price.short_description = "Celková cena výroby"
+
+
+@admin.register(PickingListDocument)
+class PickingListDocumentAdmin(admin.ModelAdmin):
+    list_display = ('name', 'canteen', 'date_from', 'date_to', 'created_at', 'created_by')
+    list_filter = ('canteen', 'date_from', 'created_at')
+    search_fields = ('name', 'canteen__name')
+    readonly_fields = ('created_at', 'created_by')
+    autocomplete_fields = ['canteen']
+    
+    fieldsets = (
+        (None, {
+            'fields': ('name', 'canteen', 'date_from', 'date_to')
+        }),
+        ('Metadata', {
+            'fields': ('created_at', 'created_by'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def save_model(self, request, obj, form, change):
+        if not change:  # Pokud je nový objekt
+            obj.created_by = request.user
+        super().save_model(request, obj, form, change)
 
 # admin.site.register(PickingList)

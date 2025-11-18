@@ -1,0 +1,183 @@
+{% extends "base.html" %}
+{% load django_bootstrap5 %}
+
+{% block title %}Editace výdejky {{ document.name }} - Jídelna{% endblock %}
+
+{% block extra_css %}
+<style>
+.table tbody tr.table-danger {
+    background-color: #f8d7da;
+}
+.table tbody tr.table-warning {
+    background-color: #fff3cd;
+}
+.table tbody tr small {
+    line-height: 1.4;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+  <div class="col-12">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+      <h2><i class="fas fa-edit me-2"></i>Editace výdejky: {{ document.name }}</h2>
+      <a href="{% url 'production:picking_list_generator' %}" class="btn btn-secondary">
+        <i class="fas fa-arrow-left me-2"></i>Zpět na seznam
+      </a>
+    </div>
+  </div>
+</div>
+
+<div class="row mb-3">
+  <div class="col-12">
+    <div class="card">
+      <div class="card-body">
+        <div class="row">
+          <div class="col-md-3">
+            <strong>Jídelna:</strong><br>
+            {{ document.canteen.name }}
+          </div>
+          <div class="col-md-3">
+            <strong>Období:</strong><br>
+            {{ document.date_from|date:"d.m.Y" }} - {{ document.date_to|date:"d.m.Y" }}
+          </div>
+          <div class="col-md-3">
+            <strong>Vytvořeno:</strong><br>
+            {{ document.created_at|date:"d.m.Y H:i" }}
+          </div>
+          <div class="col-md-3">
+            <strong>Vytvořil:</strong><br>
+            {{ document.created_by.get_full_name|default:document.created_by.username }}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-12">
+    <div class="card shadow">
+      <div class="card-header bg-primary text-white">
+        <h5 class="mb-0"><i class="fas fa-clipboard-list me-2"></i>Položky výdejky</h5>
+      </div>
+      <div class="card-body">
+        <div class="alert alert-info">
+          <i class="fas fa-info-circle me-2"></i>
+          <strong>Instrukce:</strong> Vyplňte skutečně vydaná množství a změňte status na "Vydáno" 
+          pro automatické odečtení ze skladu.
+        </div>
+
+        <form method="post">
+          {% csrf_token %}
+          
+          <div class="table-responsive">
+            <table class="table table-hover">
+              <thead class="table-light">
+                <tr>
+                  <th style="width: 4%;">№</th>
+                  <th style="width: 28%;">Surovina</th>
+                  <th style="width: 28%;">Použití (recepty a porce)</th>
+                  <th style="width: 10%; text-align: center;">Plánováno</th>
+                  <th style="width: 7%; text-align: center;">Jednotka</th>
+                  <th style="width: 11%; text-align: center;">Skutečně vydáno</th>
+                  <th style="width: 12%;">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for item in ingredient_totals %}
+                <tr class="{% if not item.has_stock %}table-danger{% elif not item.is_sufficient %}table-warning{% endif %}">
+                  <td style="text-align: center; font-weight: bold;">
+                    {% if not item.has_stock %}
+                        <i class="fas fa-times-circle text-danger" title="Není na skladě"></i> {{ forloop.counter }}
+                    {% elif not item.is_sufficient %}
+                        <i class="fas fa-exclamation-triangle text-warning" title="Nedostatečné množství"></i> {{ forloop.counter }}
+                    {% else %}
+                        {{ forloop.counter }}
+                    {% endif %}
+                  </td>
+                  <td>
+                    <strong>{{ item.ingredient.name }}</strong>
+                    {% if item.warehouses_info %}
+                    <br><small class="text-muted">
+                      <i class="fas fa-warehouse me-1"></i>Skladem: 
+                      {% for wh_name, qty, blocked, available in item.warehouses_info %}
+                        {{ wh_name }} (celkem {{ qty|floatformat:1 }}, blokováno {{ blocked|floatformat:1 }}, dostupné {{ available|floatformat:1 }}){% if not forloop.last %}, {% endif %}
+                      {% endfor %}
+                    </small>
+                    {% endif %}
+                  </td>
+                  <td>
+                    <small>
+                      {% for order in item.orders %}
+                      <div class="mb-1">
+                        • {{ order.date|date:"d.m." }} - <strong>{{ order.recipe }}</strong> 
+                        ({{ order.portions }} porc./{{ order.effective_portions|floatformat:1 }} ef.: {{ order.quantity|floatformat:2 }} {{ item.unit }})
+                      </div>
+                      {% endfor %}
+                    </small>
+                  </td>
+                  <td style="text-align: center; font-weight: bold; font-size: 1.1rem;">
+                    {{ item.planned|floatformat:2 }}
+                  </td>
+                  <td style="text-align: center;">
+                    {{ item.unit }}
+                  </td>
+                  <td>
+                    <input type="number" 
+                           step="0.01" 
+                           class="form-control form-control-sm" 
+                           name="quantity_actual_ingredient_{{ item.ingredient.id }}"
+                           value="{% if item.quantity_actual %}{{ item.quantity_actual }}{% endif %}"
+                           placeholder="0.00">
+                  </td>
+                  <td>
+                    <select class="form-select form-select-sm" name="status_ingredient_{{ item.ingredient.id }}">
+                      <option value="PENDING" {% if item.status == 'PENDING' %}selected{% endif %}>
+                        Čeká
+                      </option>
+                      <option value="COMPLETED" {% if item.status == 'COMPLETED' %}selected{% endif %}>
+                        Vydáno
+                      </option>
+                    </select>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+
+          <div class="d-flex justify-content-between mt-4">
+            <a href="{% url 'production:picking_list_pdf' document.id %}" 
+               class="btn btn-outline-danger" 
+               target="_blank">
+              <i class="fas fa-file-pdf me-2"></i>Stáhnout PDF
+            </a>
+            <button type="submit" class="btn btn-primary btn-lg">
+              <i class="fas fa-save me-2"></i>Uložit změny
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row mt-4">
+  <div class="col-12">
+    <div class="card">
+      <div class="card-body">
+        <h6 class="card-title">
+          <i class="fas fa-question-circle me-2"></i>Co se stane po uložení?
+        </h6>
+        <ul>
+          <li>Položky se stavem <strong>"Čeká na vydání"</strong> - suroviny zůstanou zablokovány</li>
+          <li>Položky se stavem <strong>"Vydáno"</strong> - skutečné množství se automaticky odečte ze skladu</li>
+          <li>Ujistěte se, že máte vyplněno skutečné množství před změnou statusu na "Vydáno"</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

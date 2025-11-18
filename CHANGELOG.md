@@ -7,13 +7,39 @@ a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
-### Removed
-- **Rychlé stažení výdejky ze seznamu jídelníčků**: Odstraněna sekce pro stažení výdejky na konkrétní den
-  - Odstraněn formulář s výběrem data a jídelny z `menu_list.html`
-  - Odstraněna JavaScript funkce `setToday()`
-  - Funkce je stále dostupná v jiných částech aplikace
+### Added
+- **Blokování skladových zásob**: Implementován systém rezervace surovin při generování výdejek
+  - Nové pole `quantity_blocked` v modelu `StockItem` pro sledování rezervovaných množství
+  - Property `quantity_available` pro výpočet skutečně dostupného množství (quantity - quantity_blocked)
+  - Metody `block_quantity()` a `unblock_quantity()` pro správu rezervací
+  - Automatické blokování plánovaného množství při přiřazení položky k dokumentu výdejky
+  - Uvolnění blokace a odečtení skutečného množství při dokončení výdeje
+  - Prevence dvojité alokace - blokované množství není dostupné pro další výdejky
+  - Migrace databáze `inventory/0002_add_quantity_blocked.py`
+  - Kompletní sada testů pro ověření funkčnosti blokování (9 test cases)
+- **Tabulka vygenerovaných výdejek**: Přidána tabulka na stránku `production/vydejky/` pro trvalý přístup k vygenerovaným výdejkám
+  - Umožňuje snadnější editaci reálně vydaných položek
+  - Zachování historie vygenerovaných výdejek pro budoucí reference
+  - Rychlý přehled všech výdejek v systému
+
+### Changed
+- **PDF výdejky optimalizované pro černobílý tisk**: Upraveno generování PDF dokumentů výdejek
+  - Veškeré prvky generovány pouze v černobílých barvách
+  - Zajištění dobré čitelnosti i na černobílých tiskárnách
+  - Optimalizace kontrastu a čitelnosti textu pro ČB tisk
+- **Vylepšená čitelnost sekce "Skutečně vydáno"**: Změněn vzhled PDF výdejek
+  - Odstraněno pruhované pozadí v sekci "Skutečně vydáno" pro lepší čitelnost
+  - Jednodušší a přehlednější layout pro vyplňování skutečně vydaných množství
+- **Filtrování položek podle skladu jídelny**: Při generování PDF výdejky se nyní filtrují položky
+  - Blokují se pouze položky ze skladu přidruženého k dané jídelně
+  - Ostatní sklady se při generování výdejky neberou v úvahu
+  - Přesnější řízení zásob podle jednotlivých jídelen
 
 ### Fixed
+- **Ošetření nedostupných položek na skladě**: Implementováno řešení pro případ, kdy položky na blokaci nejsou na skladě
+  - Systém korektně zpracovává situace s nedostatečnými zásobami
+  - Upozornění nebo alternativní handling při nedostupnosti surovin
+  - Prevence chyb při generování výdejek s chybějícími položkami
 - **Zobrazení efektivních porcí**: Opraveno zobrazení počtu efektivních porcí v tabulce jídelníčku
   - Přidána `@property total_effective_portions` do modelu `ProductionOrder` (dříve jen metoda `get_total_effective_portions()`)
   - Aktualizovány šablony `daily_picking_list.html` a `daily_picking_list_pdf.html` na použití property místo metody
@@ -22,6 +48,12 @@ a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
   - Handler hledal `.open-add-meal-modal`, ale HTML používalo `.add-meal-to-day-btn`
   - Změna selektoru v `menu_detail.html` na řádku ~412
   - Odstraněno nefunkční tlačítko `bulkAddMealBtn` z hlavičky (funkce duplikována tlačítky u jednotlivých dnů)
+
+### Removed
+- **Rychlé stažení výdejky ze seznamu jídelníčků**: Odstraněna sekce pro stažení výdejky na konkrétní den
+  - Odstraněn formulář s výběrem data a jídelny z `menu_list.html`
+  - Odstraněna JavaScript funkce `setToday()`
+  - Funkce je stále dostupná v jiných částech aplikace
 
 ### Added
 - **Template filtr `get_item`**: Nový filtr pro získání hodnoty ze slovníku v Django šablonách
@@ -120,6 +152,13 @@ a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
   - Cast operace pro Django User objekt
 - **Migrace databáze**:
   - `0003_alter_recipeingredient_recipe_userprofile.py` - vytvoření UserProfile modelu a úprava RecipeIngredient
+  - `0008_migrate_orders_to_menu_plans.py` - migrace na menu-first architekturu
+    - Automatická migrace všech `ProductionOrder` bez `menu_plan` do nově vytvořených jídelníčků
+    - Seskupení výrobních příkazů podle kombinace (jídelna, datum)
+    - Validace existence `canteen` u všech migrovaných záznamů
+    - Management command `check_orphan_orders` pro kontrolu dat před migrací
+    - Podpora rollback s automatickým vymazáním vytvořených jídelníčků
+    - Detailní dokumentace v `apps/production/migrations/MIGRATION_0008_README.md`
 
 ## [1.2.0] - 2025-10-27
 
