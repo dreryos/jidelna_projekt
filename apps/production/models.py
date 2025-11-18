@@ -367,17 +367,33 @@ class PickingList(models.Model):
                             ingredient=self.ingredient
                         )
                         # Uvolníme blokované množství
-                        stock_item.unblock_quantity(self.quantity_planned)
-                        # Odečteme skutečně vydané množství ze skladu
-                        stock_item.quantity -= self.quantity_actual
-                        
-                        # Pokud je množství velmi blízko nule (< 0.001), nastavíme ho na přesně 0
-                        if abs(stock_item.quantity) < Decimal('0.001'):
-                            stock_item.quantity = Decimal('0')
-                        
-                        stock_item.save()
-                except StockItem.DoesNotExist:
-                    # Případ, kdy položka ve skladu neexistuje - vytvoříme ji se záporným stavem
+        if self.status == self.Status.COMPLETED and (original_state is None or original_state.status != self.Status.COMPLETED) and (self.quantity_actual is not None and self.warehouse is not None):
+            try:
+                with transaction.atomic():
+                    stock_item = StockItem.objects.select_for_update().get(
+                        warehouse=self.warehouse,
+                        ingredient=self.ingredient
+                    )
+                    # Uvolníme blokované množství
+                    stock_item.unblock_quantity(self.quantity_planned)
+                    # Odečteme skutečně vydané množství ze skladu
+                    stock_item.quantity -= self.quantity_actual
+
+                    # Pokud je množství velmi blízko nule (< 0.001), nastavíme ho na přesně 0
+                    if abs(stock_item.quantity) < Decimal('0.001'):
+                        stock_item.quantity = Decimal('0')
+
+                    stock_item.save()
+            except StockItem.DoesNotExist:
+                # Případ, kdy položka ve skladu neexistuje - vytvoříme ji se záporným stavem
+                StockItem.objects.create(
+                    warehouse=self.warehouse,
+                    ingredient=self.ingredient,
+                    quantity=-self.quantity_actual,
+                    quantity_blocked=Decimal('0'),
+                    price=Decimal('0')
+                )
+
                     StockItem.objects.create(
                         warehouse=self.warehouse,
                         ingredient=self.ingredient,
