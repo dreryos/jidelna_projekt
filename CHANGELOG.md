@@ -31,14 +31,6 @@ a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
   - Systém korektně zpracovává situace s nedostatečnými zásobami
   - Upozornění nebo alternativní handling při nedostupnosti surovin
   - Prevence chyb při generování výdejek s chybějícími položkami
-
-### Removed
-- **Rychlé stažení výdejky ze seznamu jídelníčků**: Odstraněna sekce pro stažení výdejky na konkrétní den
-  - Odstraněn formulář s výběrem data a jídelny z `menu_list.html`
-  - Odstraněna JavaScript funkce `setToday()`
-  - Funkce je stále dostupná v jiných částech aplikace
-
-### Fixed
 - **Zobrazení efektivních porcí**: Opraveno zobrazení počtu efektivních porcí v tabulce jídelníčku
   - Přidána `@property total_effective_portions` do modelu `ProductionOrder` (dříve jen metoda `get_total_effective_portions()`)
   - Aktualizovány šablony `daily_picking_list.html` a `daily_picking_list_pdf.html` na použití property místo metody
@@ -47,6 +39,12 @@ a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
   - Handler hledal `.open-add-meal-modal`, ale HTML používalo `.add-meal-to-day-btn`
   - Změna selektoru v `menu_detail.html` na řádku ~412
   - Odstraněno nefunkční tlačítko `bulkAddMealBtn` z hlavičky (funkce duplikována tlačítky u jednotlivých dnů)
+
+### Removed
+- **Rychlé stažení výdejky ze seznamu jídelníčků**: Odstraněna sekce pro stažení výdejky na konkrétní den
+  - Odstraněn formulář s výběrem data a jídelny z `menu_list.html`
+  - Odstraněna JavaScript funkce `setToday()`
+  - Funkce je stále dostupná v jiných částech aplikace
 
 ### Added
 - **Template filtr `get_item`**: Nový filtr pro získání hodnoty ze slovníku v Django šablonách
