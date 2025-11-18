@@ -252,16 +252,16 @@
                 <th style="width: 35%;">Použití (recepty a porce)</th>
                 <th style="width: 10%; text-align: center;">Plánováno</th>
                 <th style="width: 10%; text-align: center;">Jednotka</th>
-                <th style="width: 10%; text-align: center; background-color: #e8e8e8;">Skutečně<br>vydáno</th>
+                <th style="width: 10%; text-align: center; background-color: #e8e8e8; color: #000;">Skutečně<br>vydáno</th>
             </tr>
         </thead>
         <tbody>
             {% for item in ingredient_totals %}
-                        <tr class="{% if item.available_quantity == 0 %}missing{% elif item.available_quantity < item.total_quantity %}insufficient{% endif %}">
+            <tr class="{% if not item.has_stock %}missing{% elif not item.is_sufficient %}insufficient{% endif %}">
                 <td style="text-align: center; font-weight: bold;">
-                    {% if item.available_quantity == 0 %}
+                    {% if not item.has_stock %}
                         ✖ {{ forloop.counter }}
-                    {% elif item.available_quantity < item.total_quantity %}
+                    {% elif not item.is_sufficient %}
                         ⚠ {{ forloop.counter }}
                     {% else %}
                         {{ forloop.counter }}

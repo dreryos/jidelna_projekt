@@ -3,6 +3,20 @@
 
 {% block title %}Editace výdejky {{ document.name }} - Jídelna{% endblock %}
 
+{% block extra_css %}
+<style>
+.table tbody tr.table-danger {
+    background-color: #f8d7da;
+}
+.table tbody tr.table-warning {
+    background-color: #fff3cd;
+}
+.table tbody tr small {
+    line-height: 1.4;
+}
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="row">
   <div class="col-12">
@@ -59,52 +73,69 @@
           {% csrf_token %}
           
           <div class="table-responsive">
-            <table class="table table-striped table-hover">
-              <thead>
+            <table class="table table-hover">
+              <thead class="table-light">
                 <tr>
-                  <th style="width: 5%;">№</th>
-                  <th style="width: 25%;">Surovina</th>
-                  <th style="width: 20%;">Výrobní příkaz</th>
-                  <th style="width: 12%; text-align: center;">Plánováno</th>
-                  <th style="width: 8%; text-align: center;">Jednotka</th>
-                  <th style="width: 15%; text-align: center;">Skutečně vydáno</th>
-                  <th style="width: 15%;">Status</th>
+                  <th style="width: 4%;">№</th>
+                  <th style="width: 28%;">Surovina</th>
+                  <th style="width: 28%;">Použití (recepty a porce)</th>
+                  <th style="width: 10%; text-align: center;">Plánováno</th>
+                  <th style="width: 7%; text-align: center;">Jednotka</th>
+                  <th style="width: 11%; text-align: center;">Skutečně vydáno</th>
+                  <th style="width: 12%;">Status</th>
                 </tr>
               </thead>
               <tbody>
-                {% for item in picking_items %}
-                <tr>
-                  <td style="text-align: center;">{{ forloop.counter }}</td>
+                {% for item in ingredient_totals %}
+                <tr class="{% if not item.has_stock %}table-danger{% elif not item.is_sufficient %}table-warning{% endif %}">
+                  <td style="text-align: center; font-weight: bold;">
+                    {% if not item.has_stock %}
+                        <i class="fas fa-times-circle text-danger" title="Není na skladě"></i> {{ forloop.counter }}
+                    {% elif not item.is_sufficient %}
+                        <i class="fas fa-exclamation-triangle text-warning" title="Nedostatečné množství"></i> {{ forloop.counter }}
+                    {% else %}
+                        {{ forloop.counter }}
+                    {% endif %}
+                  </td>
                   <td>
                     <strong>{{ item.ingredient.name }}</strong>
-                    {% if item.warehouse %}
-                    <br><small class="text-muted">Sklad: {{ item.warehouse.name }}</small>
+                    {% if item.warehouses_info %}
+                    <br><small class="text-muted">
+                      <i class="fas fa-warehouse me-1"></i>Skladem: 
+                      {% for wh_name, qty in item.warehouses_info %}
+                        {{ wh_name }} ({{ qty|floatformat:1 }}){% if not forloop.last %}, {% endif %}
+                      {% endfor %}
+                    </small>
                     {% endif %}
                   </td>
                   <td>
                     <small>
-                      {{ item.production_order.date|date:"d.m.Y" }}<br>
-                      {{ item.production_order.recipe.name }}
+                      {% for order in item.orders %}
+                      <div class="mb-1">
+                        • {{ order.date|date:"d.m." }} - <strong>{{ order.recipe }}</strong> 
+                        ({{ order.portions }} porc./{{ order.effective_portions|floatformat:1 }} ef.: {{ order.quantity|floatformat:2 }} {{ item.unit }})
+                      </div>
+                      {% endfor %}
                     </small>
                   </td>
-                  <td style="text-align: center; font-weight: bold;">
-                    {{ item.quantity_planned|floatformat:2 }}
+                  <td style="text-align: center; font-weight: bold; font-size: 1.1rem;">
+                    {{ item.planned|floatformat:2 }}
                   </td>
                   <td style="text-align: center;">
-                    {{ item.ingredient.base_unit }}
+                    {{ item.unit }}
                   </td>
                   <td>
                     <input type="number" 
                            step="0.01" 
                            class="form-control form-control-sm" 
-                           name="quantity_actual_{{ item.id }}"
+                           name="quantity_actual_ingredient_{{ item.ingredient.id }}"
                            value="{% if item.quantity_actual %}{{ item.quantity_actual }}{% endif %}"
                            placeholder="0.00">
                   </td>
                   <td>
-                    <select class="form-select form-select-sm" name="status_{{ item.id }}">
+                    <select class="form-select form-select-sm" name="status_ingredient_{{ item.ingredient.id }}">
                       <option value="PENDING" {% if item.status == 'PENDING' %}selected{% endif %}>
-                        Čeká na vydání
+                        Čeká
                       </option>
                       <option value="COMPLETED" {% if item.status == 'COMPLETED' %}selected{% endif %}>
                         Vydáno

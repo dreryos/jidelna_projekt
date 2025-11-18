@@ -823,28 +823,112 @@ def picking_list_edit(request, document_id):
         if request.method == 'POST':
             # Zpracování formuláře s editací skutečných množství
             updated_count = 0
-            for item in picking_items:
-                quantity_key = f'quantity_actual_{item.id}'
-                status_key = f'status_{item.id}'
-                
-                if quantity_key in request.POST:
-                    quantity_str = request.POST.get(quantity_key, '').strip()
+            
+            # Zpracujeme agregované položky (po ingrediencích)
+            for key, value in request.POST.items():
+                if key.startswith('quantity_actual_ingredient_'):
+                    ingredient_id = int(key.replace('quantity_actual_ingredient_', ''))
+                    status_key = f'status_ingredient_{ingredient_id}'
+                    
+                    quantity_str = value.strip()
                     if quantity_str:
                         try:
-                            item.quantity_actual = Decimal(quantity_str.replace(',', '.'))
-                            if status_key in request.POST:
-                                item.status = request.POST.get(status_key)
-                            item.save()
-                            updated_count += 1
+                            quantity = Decimal(quantity_str.replace(',', '.'))
+                            status = request.POST.get(status_key, 'PENDING')
+                            
+                            # Aktualizujeme všechny picking list items pro tuto surovinu
+                            items = picking_items.filter(ingredient_id=ingredient_id)
+                            for item in items:
+                                # Rozpočítáme množství proporcionálně podle plánovaného množství
+                                total_planned = items.aggregate(total=models.Sum('quantity_planned'))['total']
+                                if total_planned > 0:
+                                    proportion = item.quantity_planned / total_planned
+                                    item.quantity_actual = quantity * proportion
+                                else:
+                                    item.quantity_actual = quantity / items.count()
+                                
+                                item.status = status
+                                item.save()
+                                updated_count += 1
                         except (ValueError, InvalidOperation):
-                            messages.error(request, f'Neplatné množství pro {item.ingredient.name}')
+                            from apps.core.models import Ingredient
+                            try:
+                                ingredient = Ingredient.objects.get(id=ingredient_id)
+                                messages.error(request, f'Neplatné množství pro {ingredient.name}')
+                            except Ingredient.DoesNotExist:
+                                messages.error(request, f'Neplatné množství pro surovinu ID {ingredient_id}')
             
             messages.success(request, f'Aktualizováno {updated_count} položek.')
             return redirect('production:picking_list_edit', document_id=document_id)
         
+        # Agregujeme suroviny stejně jako v PDF
+        orders = ProductionOrder.objects.filter(
+            picking_list_items__document=document
+        ).distinct().select_related('recipe', 'canteen').order_by('date', 'recipe__name')
+        
+        ingredient_totals = {}
+        
+        for order in orders:
+            for item in order.picking_list_items.filter(document=document):
+                key = item.ingredient.id
+                
+                if key in ingredient_totals:
+                    ingredient_totals[key]['planned'] += item.quantity_planned
+                    ingredient_totals[key]['orders'].append({
+                        'date': order.date,
+                        'recipe': order.recipe.name,
+                        'portions': order.total_portions,
+                        'effective_portions': order.total_effective_portions,
+                        'quantity': item.quantity_planned,
+                        'item_id': item.id
+                    })
+                    # Aktualizujeme quantity_actual a status (vezmeme poslední hodnotu)
+                    if item.quantity_actual:
+                        ingredient_totals[key]['quantity_actual'] = (
+                            ingredient_totals[key].get('quantity_actual', Decimal('0')) + item.quantity_actual
+                        )
+                    if item.status != 'PENDING':
+                        ingredient_totals[key]['status'] = item.status
+                else:
+                    # Zkontrolujeme dostupnost na skladech
+                    from apps.inventory.models import StockItem
+                    available_stock = StockItem.objects.filter(
+                        ingredient=item.ingredient,
+                        warehouse__canteen=document.canteen,
+                        quantity__gt=0
+                    ).aggregate(total=models.Sum('quantity'))['total'] or Decimal('0')
+                    
+                    warehouses_with_stock = list(StockItem.objects.filter(
+                        ingredient=item.ingredient,
+                        warehouse__canteen=document.canteen,
+                        quantity__gt=0
+                    ).values_list('warehouse__name', 'quantity'))
+                    
+                    ingredient_totals[key] = {
+                        'ingredient': item.ingredient,
+                        'planned': item.quantity_planned,
+                        'quantity_actual': item.quantity_actual or Decimal('0'),
+                        'unit': item.ingredient.base_unit,
+                        'available_stock': available_stock,
+                        'has_stock': available_stock > 0,
+                        'is_sufficient': available_stock >= item.quantity_planned,
+                        'warehouses_info': warehouses_with_stock,
+                        'status': item.status,
+                        'orders': [{
+                            'date': order.date,
+                            'recipe': order.recipe.name,
+                            'portions': order.total_portions,
+                            'effective_portions': order.total_effective_portions,
+                            'quantity': item.quantity_planned,
+                            'item_id': item.id
+                        }]
+                    }
+        
+        sorted_ingredients = sorted(ingredient_totals.values(), key=lambda x: x['ingredient'].name)
+        
         context = {
             'document': document,
-            'picking_items': picking_items,
+            'ingredient_totals': sorted_ingredients,
         }
         
         return render(request, 'production/picking_list_edit.html', context)
