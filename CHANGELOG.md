@@ -8,6 +8,15 @@ a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
 ## [Unreleased]
 
 ### Added
+- **Blokování skladových zásob**: Implementován systém rezervace surovin při generování výdejek
+  - Nové pole `quantity_blocked` v modelu `StockItem` pro sledování rezervovaných množství
+  - Property `quantity_available` pro výpočet skutečně dostupného množství (quantity - quantity_blocked)
+  - Metody `block_quantity()` a `unblock_quantity()` pro správu rezervací
+  - Automatické blokování plánovaného množství při přiřazení položky k dokumentu výdejky
+  - Uvolnění blokace a odečtení skutečného množství při dokončení výdeje
+  - Prevence dvojité alokace - blokované množství není dostupné pro další výdejky
+  - Migrace databáze `inventory/0002_add_quantity_blocked.py`
+  - Kompletní sada testů pro ověření funkčnosti blokování (9 test cases)
 - **Tabulka vygenerovaných výdejek**: Přidána tabulka na stránku `production/vydejky/` pro trvalý přístup k vygenerovaným výdejkám
   - Umožňuje snadnější editaci reálně vydaných položek
   - Zachování historie vygenerovaných výdejek pro budoucí reference
