@@ -248,11 +248,10 @@
         <thead>
             <tr>
                 <th style="width: 5%;">№</th>
-                <th style="width: 30%;">Surovina</th>
-                <th style="width: 35%;">Použití (recepty a porce)</th>
-                <th style="width: 10%; text-align: center;">Plánováno</th>
+                <th style="width: 50%;">Surovina</th>
+                <th style="width: 15%; text-align: center;">Plánováno</th>
                 <th style="width: 10%; text-align: center;">Jednotka</th>
-                <th style="width: 10%; text-align: center; background-color: #e8e8e8; color: #000;">Skutečně<br>vydáno</th>
+                <th style="width: 20%; text-align: center; background-color: #e8e8e8; color: #000;">Skutečně<br>vydáno</th>
             </tr>
         </thead>
         <tbody>
@@ -278,16 +277,6 @@
                         </small>
                     </div>
                     {% endif %}
-                </td>
-                <td>
-                    <div class="orders-detail">
-                        {% for order in item.orders %}
-                        <div>
-                            • {{ order.date|date:"d.m." }} - <strong>{{ order.recipe }}</strong> 
-                            ({{ order.portions }} porc./{{ order.effective_portions|floatformat:1 }} ef.: {{ order.quantity|floatformat:2 }} {{ item.unit }})
-                        </div>
-                        {% endfor %}
-                    </div>
                 </td>
                 <td style="text-align: center; font-weight: bold; font-size: 12pt;">
                     {{ item.planned|floatformat:2 }}

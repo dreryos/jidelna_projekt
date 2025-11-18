@@ -4,6 +4,23 @@
 
 {% block title %}Sklady - Jídelna{% endblock %}
 
+{% block extra_css %}
+<style>
+.badge.bg-success {
+    background-color: #28a745 !important;
+}
+.badge.bg-warning {
+    background-color: #ffc107 !important;
+}
+.badge.bg-info {
+    background-color: #17a2b8 !important;
+}
+.table thead th {
+    vertical-align: middle;
+}
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
   <h1>
@@ -89,7 +106,9 @@
             <tr>
               <th><i class="fas fa-leaf me-1"></i>Surovina</th>
               <th><i class="fas fa-building me-1"></i>Sklad</th>
-              <th><i class="fas fa-weight me-1"></i>Množství</th>
+              <th><i class="fas fa-boxes me-1"></i>Celkem</th>
+              <th><i class="fas fa-check-circle me-1"></i>Dostupné</th>
+              <th><i class="fas fa-lock me-1"></i>Blokované</th>
               <th><i class="fas fa-coins me-1"></i>Cena za jednotku</th>
               <th><i class="fas fa-calculator me-1"></i>Celková hodnota</th>
               <th width="120"><i class="fas fa-cogs me-1"></i>Akce</th>
@@ -107,9 +126,23 @@
                 <small class="text-muted d-block">{{ item.warehouse.canteen.name }}</small>
               </td>
               <td>
-                <span class="badge {% if item.quantity <= 0 %}bg-danger{% elif item.quantity <= 10 %}bg-warning text-dark{% else %}bg-success{% endif %}">
+                <span class="badge {% if item.quantity <= 0 %}bg-secondary{% else %}bg-info{% endif %}">
                   {{ item.quantity|format_decimal }} {{ item.ingredient.unit }}
                 </span>
+              </td>
+              <td>
+                <span class="badge {% if item.quantity_available <= 0 %}bg-danger{% elif item.quantity_available <= 10 %}bg-warning text-dark{% else %}bg-success{% endif %}">
+                  {{ item.quantity_available|format_decimal }} {{ item.ingredient.unit }}
+                </span>
+              </td>
+              <td>
+                {% if item.quantity_blocked > 0 %}
+                <span class="badge bg-warning text-dark">
+                  {{ item.quantity_blocked|format_decimal }} {{ item.ingredient.unit }}
+                </span>
+                {% else %}
+                <span class="text-muted">-</span>
+                {% endif %}
               </td>
               <td>{{ item.price|format_price }} Kč</td>
               <td>
@@ -136,7 +169,7 @@
 
   <!-- Statistiky -->
   <div class="row mt-4">
-    <div class="col-md-4">
+    <div class="col-md-3">
       <div class="card bg-primary text-white">
         <div class="card-body">
           <div class="d-flex justify-content-between">
@@ -151,15 +184,14 @@
         </div>
       </div>
     </div>
-    <div class="col-md-4">
+    <div class="col-md-3">
       <div class="card bg-success text-white">
         <div class="card-body">
           <div class="d-flex justify-content-between">
             <div>
-              <h6 class="card-title">Dostupné zásoby</h6>
+              <h6 class="card-title">S dostupnými zásobami</h6>
               <h3 class="mb-0">
-                {% regroup stock_items by ingredient as grouped_items %}
-                {{ grouped_items|length }}
+                {{ stats.available_count }}
               </h3>
             </div>
             <div class="align-self-center">
@@ -169,16 +201,31 @@
         </div>
       </div>
     </div>
-    <div class="col-md-4">
+    <div class="col-md-3">
       <div class="card bg-warning text-dark">
+        <div class="card-body">
+          <div class="d-flex justify-content-between">
+            <div>
+              <h6 class="card-title">Blokované položky</h6>
+              <h3 class="mb-0">
+                {{ stats.blocked_count }}
+              </h3>
+            </div>
+            <div class="align-self-center">
+              <i class="fas fa-lock fa-2x"></i>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card bg-danger text-white">
         <div class="card-body">
           <div class="d-flex justify-content-between">
             <div>
               <h6 class="card-title">Nízké zásoby</h6>
               <h3 class="mb-0">
-                {% for item in stock_items %}
-                  {% if item.quantity <= 10 and item.quantity > 0 %}{{ forloop.counter0|add:1 }}{% endif %}
-                {% empty %}0{% endfor %}
+                {{ stats.low_stock_count }}
               </h3>
             </div>
             <div class="align-self-center">
