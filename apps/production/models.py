@@ -335,8 +335,28 @@ class PickingList(models.Model):
             original_state = PickingList.objects.get(pk=self.pk)
 
         super().save(*args, **kwargs)
+        
+        # Logika pro blokování množství při přiřazení k dokumentu
+        # Když je položka přidána k dokumentu, zablokujeme plánované množství
+        if self.document and self.warehouse and (original_state is None or original_state.document is None):
+            try:
+                with transaction.atomic():
+                    stock_item = StockItem.objects.select_for_update().get(
+                        warehouse=self.warehouse,
+                        ingredient=self.ingredient
+                    )
+                    stock_item.block_quantity(self.quantity_planned)
+            except StockItem.DoesNotExist:
+                # Vytvoříme skladovou položku s nulovou zásobou a zablokovaným množstvím
+                StockItem.objects.create(
+                    warehouse=self.warehouse,
+                    ingredient=self.ingredient,
+                    quantity=Decimal('0'),
+                    quantity_blocked=self.quantity_planned,
+                    price=Decimal('0')
+                )
 
-        # Logika pro odečtení ze skladu
+        # Logika pro odečtení ze skladu a uvolnění blokace
         # Spustí se pouze pokud je status změněn na COMPLETED
         if self.status == self.Status.COMPLETED and (original_state is None or original_state.status != self.Status.COMPLETED):
             if self.quantity_actual is not None and self.warehouse is not None:
@@ -346,16 +366,19 @@ class PickingList(models.Model):
                             warehouse=self.warehouse,
                             ingredient=self.ingredient
                         )
+                        # Uvolníme blokované množství
+                        stock_item.unblock_quantity(self.quantity_planned)
+                        # Odečteme skutečně vydané množství ze skladu
                         stock_item.quantity -= self.quantity_actual
                         stock_item.save()
                 except StockItem.DoesNotExist:
-                    # Případ, kdy položka ve skladu neexistuje - můžeme zalogovat chybu
-                    # nebo vytvořit položku se záporným stavem
+                    # Případ, kdy položka ve skladu neexistuje - vytvoříme ji se záporným stavem
                     StockItem.objects.create(
                         warehouse=self.warehouse,
                         ingredient=self.ingredient,
                         quantity=-self.quantity_actual,
-                        price=0 # Nemáme info o ceně, nutno dořešit
+                        quantity_blocked=Decimal('0'),
+                        price=Decimal('0')
                     )
 
     class Meta:

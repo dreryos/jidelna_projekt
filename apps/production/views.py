@@ -16,6 +16,7 @@ from functools import wraps
 from typing import Any, Dict, Type, TYPE_CHECKING, cast
 
 from django.db import models
+from django.db.models import F, Sum
 from django.db.models.query import QuerySet
 from django.http import HttpRequest, HttpResponse
 from django.core.exceptions import PermissionDenied, ObjectDoesNotExist
@@ -659,19 +660,29 @@ def picking_list_generator(request):
                         })
                     else:
                         # Zkontrolujeme dostupnost na VŠECH skladech přidružených k jídelně
+                        # Používáme quantity - quantity_blocked pro výpočet dostupného množství
                         from apps.inventory.models import StockItem
-                        available_stock = StockItem.objects.filter(
-                            ingredient=item.ingredient,
-                            warehouse__canteen=canteen,
-                            quantity__gt=0
-                        ).aggregate(total=models.Sum('quantity'))['total'] or Decimal('0')
                         
-                        # Získáme seznam skladů s touto surovinou pro informaci
-                        warehouses_with_stock = list(StockItem.objects.filter(
+                        # Výpočet celkového dostupného množství (quantity - quantity_blocked)
+                        stock_items = StockItem.objects.filter(
                             ingredient=item.ingredient,
-                            warehouse__canteen=canteen,
-                            quantity__gt=0
-                        ).values_list('warehouse__name', 'quantity'))
+                            warehouse__canteen=canteen
+                        ).annotate(
+                            available=F('quantity') - F('quantity_blocked')
+                        )
+                        
+                        available_stock = sum(
+                            si.available for si in stock_items if si.available > 0
+                        ) or Decimal('0')
+                        
+                        # Získáme seznam skladů s touto surovinou pro informaci (včetně blokovaného množství)
+                        warehouses_with_stock = []
+                        for si in stock_items:
+                            if si.quantity > 0 or si.quantity_blocked > 0:
+                                available = si.quantity - si.quantity_blocked
+                                warehouses_with_stock.append(
+                                    (si.warehouse.name, si.quantity, si.quantity_blocked, available)
+                                )
                         
                         ingredient_totals[key] = {
                             'ingredient': item.ingredient,
@@ -890,19 +901,27 @@ def picking_list_edit(request, document_id):
                     if item.status != 'PENDING':
                         ingredient_totals[key]['status'] = item.status
                 else:
-                    # Zkontrolujeme dostupnost na skladech
+                    # Zkontrolujeme dostupnost na skladech (quantity - quantity_blocked)
                     from apps.inventory.models import StockItem
-                    available_stock = StockItem.objects.filter(
-                        ingredient=item.ingredient,
-                        warehouse__canteen=document.canteen,
-                        quantity__gt=0
-                    ).aggregate(total=models.Sum('quantity'))['total'] or Decimal('0')
                     
-                    warehouses_with_stock = list(StockItem.objects.filter(
+                    stock_items = StockItem.objects.filter(
                         ingredient=item.ingredient,
-                        warehouse__canteen=document.canteen,
-                        quantity__gt=0
-                    ).values_list('warehouse__name', 'quantity'))
+                        warehouse__canteen=document.canteen
+                    ).annotate(
+                        available=F('quantity') - F('quantity_blocked')
+                    )
+                    
+                    available_stock = sum(
+                        si.available for si in stock_items if si.available > 0
+                    ) or Decimal('0')
+                    
+                    warehouses_with_stock = []
+                    for si in stock_items:
+                        if si.quantity > 0 or si.quantity_blocked > 0:
+                            available = si.quantity - si.quantity_blocked
+                            warehouses_with_stock.append(
+                                (si.warehouse.name, si.quantity, si.quantity_blocked, available)
+                            )
                     
                     ingredient_totals[key] = {
                         'ingredient': item.ingredient,
@@ -985,19 +1004,27 @@ def picking_list_pdf(request, document_id):
                         'quantity': item.quantity_planned
                     })
                 else:
-                    # Zkontrolujeme dostupnost na VŠECH skladech
+                    # Zkontrolujeme dostupnost na VŠECH skladech (quantity - quantity_blocked)
                     from apps.inventory.models import StockItem
-                    available_stock = StockItem.objects.filter(
-                        ingredient=item.ingredient,
-                        warehouse__canteen=document.canteen,
-                        quantity__gt=0
-                    ).aggregate(total=models.Sum('quantity'))['total'] or Decimal('0')
                     
-                    warehouses_with_stock = list(StockItem.objects.filter(
+                    stock_items = StockItem.objects.filter(
                         ingredient=item.ingredient,
-                        warehouse__canteen=document.canteen,
-                        quantity__gt=0
-                    ).values_list('warehouse__name', 'quantity'))
+                        warehouse__canteen=document.canteen
+                    ).annotate(
+                        available=F('quantity') - F('quantity_blocked')
+                    )
+                    
+                    available_stock = sum(
+                        si.available for si in stock_items if si.available > 0
+                    ) or Decimal('0')
+                    
+                    warehouses_with_stock = []
+                    for si in stock_items:
+                        if si.quantity > 0 or si.quantity_blocked > 0:
+                            available = si.quantity - si.quantity_blocked
+                            warehouses_with_stock.append(
+                                (si.warehouse.name, si.quantity, si.quantity_blocked, available)
+                            )
                     
                     ingredient_totals[key] = {
                         'ingredient': item.ingredient,
