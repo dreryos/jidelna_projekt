@@ -260,10 +260,11 @@ class PickingListDecrementTest(TestCase):
         
         Test ověřuje:
         - Picking list se vytvoří i když sklad má nulový stav
-        - prefilled_warehouse je None když všechny sklady mají nulový stav
-        - Systém neselže, ale upozorní na nedostatek zásob
+        - prefilled_warehouse JE vyplněna i když sklad má nulový stav (změna chování)
+        - Systém předvyplní sklad aby mohla probíhat blokace a odepsání do mínusu
         
-        Toto je důležité pro plánování - i když není zásoba, musíme vědět co potřebujeme.
+        Toto je důležité pro plánování - i když není zásoba, musíme vědět odkud se má vzít
+        a umožnit odepsání do mínusu.
         """
         # Nastavíme sklad na nulu
         stock_item = StockItem.objects.get(warehouse=self.warehouse, ingredient=self.ingredient)
@@ -302,12 +303,115 @@ class PickingListDecrementTest(TestCase):
         self.assertIsNotNone(pl, "Picking list item should be created even with zero stock")
         self.assertEqual(pl.ingredient, self.ingredient)
         
-        # Ověřte, že prefilled_warehouse je None (protože sklad má nulový stav)
-        # generate_picking_list() filtruje quantity__gt=0
-        self.assertIsNone(pl.warehouse, 
-                         "Warehouse should be None when stock quantity is zero")
+        # Ověřte, že prefilled_warehouse JE vyplněna i když má nulový stav
+        # Nové chování: předvyplníme sklad i s nulovou zásobou pro blokaci/odepsání
+        self.assertEqual(pl.warehouse, self.warehouse, 
+                         "Warehouse should be prefilled even when stock quantity is zero")
         
         # Ověříme správné plánované množství (5 porcí × 1 kg/porci = 5 kg)
         expected_quantity = Decimal('5.000')
         self.assertEqual(pl.quantity_planned, expected_quantity,
                         "Planned quantity should be calculated correctly regardless of stock")
+    
+    def test_create_stock_item_when_missing(self):
+        """
+        Test že při vytvoření výdejky se automaticky vytvoří skladová položka s nulovou zásobou,
+        pokud surovina není ve skladu.
+        
+        Test ověřuje:
+        - Při generování picking listu se vytvoří StockItem s quantity=0 pokud neexistuje
+        - StockItem je vytvořena v prvním skladu patřícím k jídelně
+        - Warehouse je předvyplněna v picking listu i když má nulovou zásobu
+        - Systém umožňuje blokaci a odepsání do mínusu
+        """
+        # Vytvoříme novou surovinu, která NENÍ ve skladu
+        new_ingredient = Ingredient.objects.create(
+            name='Cukr',
+            unit='kg',
+            base_unit='kg',
+            recipe_unit='kg',
+            conversion_factor=Decimal('1.0')
+        )
+        
+        # Vytvoříme recept s touto surovinou
+        recipe_with_new_ingredient = Recipe.objects.create(
+            name='Koláč',
+            base_portions=10
+        )
+        RecipeIngredient.objects.create(
+            recipe=recipe_with_new_ingredient,
+            ingredient=new_ingredient,
+            quantity_per_portion=Decimal('0.5')
+        )
+        
+        # Ověříme, že surovina není ve skladu
+        self.assertFalse(
+            StockItem.objects.filter(
+                ingredient=new_ingredient,
+                warehouse__canteen=self.canteen
+            ).exists(),
+            "Ingredient should not be in stock initially"
+        )
+        
+        # Vytvoříme MenuPlan
+        menu_plan = MenuPlan.objects.create(
+            name='Test Menu',
+            canteen=self.canteen,
+            date_from=date(2025, 9, 10),
+            date_to=date(2025, 9, 10)
+        )
+        
+        # Vytvoříme ProductionOrder s touto surovinou
+        order = ProductionOrder.objects.create(
+            recipe=recipe_with_new_ingredient,
+            canteen=self.canteen,
+            menu_plan=menu_plan,
+            date=date(2025, 9, 10)
+        )
+        
+        # Přidáme variantu porce
+        ProductionOrderPortionVariant.objects.create(
+            production_order=order,
+            portions=10,
+            coefficient=Decimal('1.0'),
+            order=0
+        )
+        
+        # Vygenerujeme picking list - mělo by vytvořit StockItem s 0
+        order.generate_picking_list()
+        
+        # Ověříme, že byla vytvořena skladová položka s nulovou zásobou
+        stock_item = StockItem.objects.filter(
+            ingredient=new_ingredient,
+            warehouse__canteen=self.canteen
+        ).first()
+        self.assertIsNotNone(stock_item, "StockItem should be created with zero quantity")
+        self.assertEqual(stock_item.quantity, Decimal('0.000'),
+                        "StockItem quantity should be 0")
+        self.assertEqual(stock_item.price, Decimal('0.00'),
+                        "StockItem price should be 0")
+        self.assertEqual(stock_item.warehouse, self.warehouse,
+                        "StockItem should be in the first warehouse of the canteen")
+        
+        # Ověříme, že picking list byl vytvořen
+        pl = order.picking_list_items.first()
+        self.assertIsNotNone(pl, "Picking list item should be created")
+        self.assertEqual(pl.ingredient, new_ingredient)
+        
+        # Ověříme, že warehouse je předvyplněna i když má nulovou zásobu
+        self.assertEqual(pl.warehouse, self.warehouse,
+                        "Warehouse should be prefilled even with zero stock after creation")
+        
+        # Ověříme správné plánované množství (10 porcí × 0.5 kg/porci = 5 kg)
+        expected_quantity = Decimal('5.000')
+        self.assertEqual(pl.quantity_planned, expected_quantity)
+        
+        # Bonus: Ověříme, že můžeme odepsat do mínusu
+        pl.quantity_actual = expected_quantity
+        pl.status = PickingList.Status.COMPLETED
+        pl.save()
+        
+        # Sklad by měl být v mínusu (0 - 5 = -5)
+        stock_item.refresh_from_db()
+        self.assertEqual(stock_item.quantity, Decimal('-5.000'),
+                        "Stock should go negative when ingredient was not available")
