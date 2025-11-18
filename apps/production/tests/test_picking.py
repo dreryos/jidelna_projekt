@@ -5,7 +5,8 @@ from datetime import date
 from apps.canteens.models import Canteen, Warehouse
 from apps.core.models import Ingredient, Recipe, RecipeIngredient
 from apps.inventory.models import StockItem
-from apps.production.models import ProductionOrder, PickingList, MenuPlan, ProductionOrderPortionVariant
+from apps.production.models import ProductionOrder, PickingList, MenuPlan, ProductionOrderPortionVariant, PickingListDocument
+from django.contrib.auth.models import User
 
 
 class PickingListDecrementTest(TestCase):
@@ -415,3 +416,174 @@ class PickingListDecrementTest(TestCase):
         stock_item.refresh_from_db()
         self.assertEqual(stock_item.quantity, Decimal('-5.000'),
                         "Stock should go negative when ingredient was not available")
+
+
+class PickingListDocumentArchiveTest(TestCase):
+    """Testy pro archivaci dokumentů výdejek"""
+    
+    def setUp(self):
+        self.canteen = Canteen.objects.create(name='Test Canteen')
+        self.warehouse = Warehouse.objects.create(name='Main', canteen=self.canteen)
+        self.user = User.objects.create_user(username='testuser', password='testpass')
+        
+        self.ingredient = Ingredient.objects.create(
+            name='Mouka',
+            unit='kg',
+            base_unit='kg',
+            recipe_unit='kg',
+            conversion_factor=Decimal('1.0')
+        )
+        StockItem.objects.create(
+            warehouse=self.warehouse,
+            ingredient=self.ingredient,
+            quantity=Decimal('10.000'),
+            price=Decimal('1.0')
+        )
+        
+        self.recipe = Recipe.objects.create(name='Chleba', base_portions=10)
+        RecipeIngredient.objects.create(
+            recipe=self.recipe,
+            ingredient=self.ingredient,
+            quantity_per_portion=Decimal('1.000')
+        )
+        
+        # Vytvoříme menu plan a production order
+        self.menu_plan = MenuPlan.objects.create(
+            name='Test Menu',
+            canteen=self.canteen,
+            date_from=date(2025, 11, 18),
+            date_to=date(2025, 11, 18)
+        )
+        
+        self.order = ProductionOrder.objects.create(
+            recipe=self.recipe,
+            canteen=self.canteen,
+            menu_plan=self.menu_plan,
+            date=date(2025, 11, 18)
+        )
+        
+        ProductionOrderPortionVariant.objects.create(
+            production_order=self.order,
+            portions=5,
+            coefficient=Decimal('1.0'),
+            order=0
+        )
+        
+        self.order.generate_picking_list()
+        
+        # Vytvoříme dokument výdejky
+        self.document = PickingListDocument.objects.create(
+            name='Test výdejka',
+            canteen=self.canteen,
+            date_from=date(2025, 11, 18),
+            date_to=date(2025, 11, 18),
+            created_by=self.user
+        )
+        
+        # Propojíme picking list s dokumentem
+        for item in self.order.picking_list_items.all():
+            item.document = self.document
+            item.save()
+    
+    def test_cannot_archive_with_pending_items(self):
+        """Test že nelze archivovat dokument s nevydanými položkami"""
+        # Dokument má položky ve stavu PENDING
+        self.assertFalse(self.document.can_be_archived())
+        
+        status = self.document.get_completion_status()
+        self.assertEqual(status['completed'], 0)
+        self.assertEqual(status['pending'], 1)
+        self.assertFalse(self.document.can_be_archived())
+    
+    def test_can_archive_with_all_completed(self):
+        """Test že lze archivovat dokument když jsou všechny položky dokončené"""
+        # Dokončíme všechny položky
+        for item in self.document.items.all():
+            item.quantity_actual = item.quantity_planned
+            item.status = PickingList.Status.COMPLETED
+            item.save()
+        
+        # Nyní by mělo být možné archivovat
+        self.assertTrue(self.document.can_be_archived())
+        
+        status = self.document.get_completion_status()
+        self.assertEqual(status['completed'], 1)
+        self.assertEqual(status['pending'], 0)
+        self.assertEqual(status['percentage'], 100)
+    
+    def test_archive_document(self):
+        """Test archivace dokumentu"""
+        # Dokončíme všechny položky
+        for item in self.document.items.all():
+            item.quantity_actual = item.quantity_planned
+            item.status = PickingList.Status.COMPLETED
+            item.save()
+        
+        # Archivujeme
+        self.document.archived = True
+        self.document.save()
+        
+        # Ověříme
+        self.document.refresh_from_db()
+        self.assertTrue(self.document.archived)
+    
+    def test_completion_status_with_multiple_items(self):
+        """Test správného počítání stavu dokončení s více položkami"""
+        # Přidáme další surovinu
+        ingredient2 = Ingredient.objects.create(
+            name='Sůl',
+            unit='kg',
+            base_unit='kg',
+            recipe_unit='kg',
+            conversion_factor=Decimal('1.0')
+        )
+        StockItem.objects.create(
+            warehouse=self.warehouse,
+            ingredient=ingredient2,
+            quantity=Decimal('5.000'),
+            price=Decimal('2.0')
+        )
+        
+        RecipeIngredient.objects.create(
+            recipe=self.recipe,
+            ingredient=ingredient2,
+            quantity_per_portion=Decimal('0.1')
+        )
+        
+        # Vygenerujeme nový picking list
+        self.order.generate_picking_list()
+        
+        # Propojíme nové položky s dokumentem
+        for item in self.order.picking_list_items.filter(ingredient=ingredient2):
+            item.document = self.document
+            item.save()
+        
+        # Nyní máme 2 položky
+        status = self.document.get_completion_status()
+        self.assertEqual(status['total'], 2)
+        self.assertEqual(status['completed'], 0)
+        self.assertEqual(status['pending'], 2)
+        
+        # Dokončíme jednu položku
+        first_item = self.document.items.first()
+        first_item.quantity_actual = first_item.quantity_planned
+        first_item.status = PickingList.Status.COMPLETED
+        first_item.save()
+        
+        status = self.document.get_completion_status()
+        self.assertEqual(status['completed'], 1)
+        self.assertEqual(status['pending'], 1)
+        self.assertEqual(status['percentage'], 50)
+        self.assertFalse(self.document.can_be_archived())
+        
+        # Dokončíme druhou položku
+        second_item = self.document.items.exclude(id=first_item.id).first()
+        second_item.quantity_actual = second_item.quantity_planned
+        second_item.status = PickingList.Status.COMPLETED
+        second_item.save()
+        
+        status = self.document.get_completion_status()
+        self.assertEqual(status['completed'], 2)
+        self.assertEqual(status['pending'], 0)
+        self.assertEqual(status['percentage'], 100)
+        self.assertTrue(self.document.can_be_archived())

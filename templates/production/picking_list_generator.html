@@ -118,8 +118,16 @@
 <div class="row mt-5">
   <div class="col-12">
     <div class="card shadow">
-      <div class="card-header bg-primary text-white">
+      <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
         <h5 class="mb-0"><i class="fas fa-list me-2"></i>Vygenerované výdejky</h5>
+        <div class="form-check form-switch">
+          <input class="form-check-input" type="checkbox" id="toggleArchived" 
+                 {% if show_archived %}checked{% endif %}
+                 onchange="window.location.href='?show_archived=' + (this.checked ? 'true' : 'false')">
+          <label class="form-check-label text-white" for="toggleArchived">
+            Zobrazit archivované
+          </label>
+        </div>
       </div>
       <div class="card-body">
         <div class="table-responsive">
@@ -129,16 +137,44 @@
                 <th>Název výdejky</th>
                 <th>Jídelna</th>
                 <th>Termín</th>
+                <th>Stav</th>
                 <th>Vytvořeno</th>
                 <th class="text-end">Akce</th>
               </tr>
             </thead>
             <tbody>
               {% for doc in documents %}
-              <tr>
-                <td><strong>{{ doc.name }}</strong></td>
+              {% with status=doc.get_completion_status %}
+              <tr {% if doc.archived %}class="table-secondary"{% endif %}>
+                <td>
+                  <strong>{{ doc.name }}</strong>
+                  {% if doc.archived %}
+                    <span class="badge bg-secondary ms-2">
+                      <i class="fas fa-archive"></i> Archivováno
+                    </span>
+                  {% endif %}
+                </td>
                 <td>{{ doc.canteen.name }}</td>
                 <td>{{ doc.date_from|date:"d.m.Y" }} - {{ doc.date_to|date:"d.m.Y" }}</td>
+                <td>
+                  <div class="progress" style="height: 25px; min-width: 120px;">
+                    <div class="progress-bar {% if status.percentage == 100 %}bg-success{% elif status.percentage > 0 %}bg-warning{% else %}bg-danger{% endif %}" 
+                         role="progressbar" 
+                         style="width: {{ status.percentage }}%;" 
+                         aria-valuenow="{{ status.percentage }}" 
+                         aria-valuemin="0" 
+                         aria-valuemax="100">
+                      {{ status.completed }}/{{ status.total }}
+                    </div>
+                  </div>
+                  <small class="text-muted">
+                    {% if status.percentage == 100 %}
+                      <i class="fas fa-check-circle text-success"></i> Kompletní
+                    {% else %}
+                      <i class="fas fa-clock text-warning"></i> Zbývá {{ status.pending }}
+                    {% endif %}
+                  </small>
+                </td>
                 <td>
                   <small class="text-muted">
                     {{ doc.created_at|date:"d.m.Y H:i" }}<br>
@@ -149,7 +185,8 @@
                   <div class="btn-group" role="group">
                     <a href="{% url 'production:picking_list_edit' doc.id %}" 
                        class="btn btn-sm btn-outline-primary" 
-                       title="Editace skutečných množství">
+                       title="Editace skutečných množství"
+                       {% if doc.archived %}disabled{% endif %}>
                       <i class="fas fa-edit"></i>
                     </a>
                     <a href="{% url 'production:picking_list_pdf' doc.id %}" 
@@ -158,9 +195,18 @@
                        target="_blank">
                       <i class="fas fa-file-pdf"></i>
                     </a>
+                    <button type="button" 
+                            class="btn btn-sm btn-outline-success archive-btn" 
+                            data-document-id="{{ doc.id }}"
+                            data-document-name="{{ doc.name }}"
+                            title="Archivovat výdejku"
+                            {% if not doc.can_be_archived or doc.archived %}disabled{% endif %}>
+                      <i class="fas fa-archive"></i>
+                    </button>
                   </div>
                 </td>
               </tr>
+              {% endwith %}
               {% endfor %}
             </tbody>
           </table>
@@ -195,6 +241,51 @@ document.getElementById('date_from').addEventListener('change', function() {
   if (dateTo.value && dateTo.value < dateFrom) {
     dateTo.value = dateFrom;
   }
+});
+
+// Archive document handler
+document.querySelectorAll('.archive-btn').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    const documentId = this.getAttribute('data-document-id');
+    const documentName = this.getAttribute('data-document-name');
+    
+    if (!confirm(`Opravdu chcete archivovat výdejku "${documentName}"?\n\nArchivované výdejky nelze editovat.`)) {
+      return;
+    }
+    
+    // Disable button
+    this.disabled = true;
+    const originalHtml = this.innerHTML;
+    this.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    
+    // Get CSRF token
+    const csrftoken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    
+    fetch(`/production/vydejky/${documentId}/archive/`, {
+      method: 'POST',
+      headers: {
+        'X-CSRFToken': csrftoken,
+        'Content-Type': 'application/json',
+      },
+    })
+    .then(response => response.json())
+    .then(data => {
+      if (data.success) {
+        // Reload page to show updated status
+        window.location.reload();
+      } else {
+        alert('Chyba: ' + data.error);
+        this.disabled = false;
+        this.innerHTML = originalHtml;
+      }
+    })
+    .catch(error => {
+      console.error('Error:', error);
+      alert('Chyba při komunikaci se serverem');
+      this.disabled = false;
+      this.innerHTML = originalHtml;
+    });
+  });
 });
 </script>
 {% endblock %}

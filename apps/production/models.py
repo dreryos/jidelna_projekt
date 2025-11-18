@@ -283,9 +283,25 @@ class PickingListDocument(models.Model):
     date_to = models.DateField(verbose_name="Datum do")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Vytvořeno")
     created_by = models.ForeignKey('auth.User', on_delete=models.PROTECT, verbose_name="Vytvořil")
+    archived = models.BooleanField(default=False, verbose_name="Archivováno")
     
     def __str__(self):
         return f"{self.name} - {self.canteen.name}"
+    
+    def can_be_archived(self):
+        """Zkontroluje, zda mohou být všechny položky archivovány (všechny musí být COMPLETED)"""
+        return self.items.exists() and not self.items.filter(status=PickingList.Status.PENDING).exists()
+    
+    def get_completion_status(self):
+        """Vrátí statistiku dokončení položek"""
+        total = self.items.count()
+        completed = self.items.filter(status=PickingList.Status.COMPLETED).count()
+        return {
+            'total': total,
+            'completed': completed,
+            'pending': total - completed,
+            'percentage': (completed / total * 100) if total > 0 else 0
+        }
     
     class Meta:
         verbose_name = "Dokument výdejky"

@@ -27,6 +27,7 @@ urlpatterns = [
     path('vydejky/', views.picking_list_generator, name='picking_list_generator'),
     path('vydejky/<int:document_id>/edit/', views.picking_list_edit, name='picking_list_edit'),
     path('vydejky/<int:document_id>/pdf/', views.picking_list_pdf, name='picking_list_pdf'),
+    path('vydejky/<int:document_id>/archive/', views.archive_picking_list, name='archive_picking_list'),
     
     # Detail výrobního příkazu (read-only, přístupný z jídelníčku)
     path('jidlo/<int:pk>/', views.production_order_detail, name='order_detail'),

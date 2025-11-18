@@ -590,7 +590,13 @@ def picking_list_generator(request):
             canteens = Canteen.objects.none()
     
     # Načtení existujících dokumentů výdejek
+    # Kontrola, zda zobrazit i archivované
+    show_archived = request.GET.get('show_archived', 'false') == 'true'
+    
     documents = PickingListDocument.objects.all()
+    if not show_archived:
+        documents = documents.filter(archived=False)
+    
     if not request.user.is_superuser:
         try:
             user_profile = request.user.userprofile
@@ -791,9 +797,57 @@ def picking_list_generator(request):
         'canteens': canteens,
         'today': date.today(),
         'documents': documents,
+        'show_archived': show_archived,
     }
     
     return render(request, 'production/picking_list_generator.html', context)
+
+
+@login_required
+def archive_picking_list(request, document_id):
+    """
+    View pro archivaci výdejky.
+    Výdejku lze archivovat pouze když jsou všechny položky ve stavu COMPLETED.
+    """
+    from .models import PickingListDocument
+    
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Požadována metoda POST'}, status=405)
+    
+    try:
+        document = PickingListDocument.objects.get(id=document_id)
+        
+        # Kontrola oprávnění
+        if not request.user.is_superuser:
+            try:
+                user_profile = request.user.userprofile
+                if document.canteen not in user_profile.canteens.all():
+                    return JsonResponse({'success': False, 'error': 'Nemáte oprávnění k této jídelně'}, status=403)
+            except:
+                return JsonResponse({'success': False, 'error': 'Nemáte přiřazený profil'}, status=403)
+        
+        # Kontrola, zda všechny položky jsou dokončené
+        if not document.can_be_archived():
+            pending_count = document.items.filter(status=PickingList.Status.PENDING).count()
+            return JsonResponse({
+                'success': False, 
+                'error': f'Nelze archivovat. Zbývá {pending_count} nevydaných položek.'
+            }, status=400)
+        
+        # Archivace dokumentu
+        document.archived = True
+        document.save()
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'Výdejka "{document.name}" byla archivována.'
+        })
+        
+    except PickingListDocument.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Dokument nenalezen'}, status=404)
+    except Exception as e:
+        logger.error(f"Error archiving document {document_id}: {e}", exc_info=True)
+        return JsonResponse({'success': False, 'error': 'Chyba při archivaci'}, status=500)
 
 
 @login_required
