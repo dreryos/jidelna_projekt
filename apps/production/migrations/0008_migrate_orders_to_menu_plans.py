@@ -8,14 +8,14 @@ def migrate_orphan_orders_to_menu_plans(apps, schema_editor):
     """
     Najde všechny ProductionOrder bez menu_plan a vytvoří pro ně jednorázové jídelníčky.
     Seskupí je podle jídelny a data, aby minimalizoval počet vytvořených jídelníčků.
-    
+
     DŮLEŽITÉ: Záznamy bez canteen_id NEMOHOU být migrovány a způsobí selhání migrace.
     Před spuštěním této migrace zajistěte, že všechny ProductionOrder mají přiřazenu jídelnu.
-    
+
     Zpracování záznamů:
     - Záznamy S canteen_id: Budou migrovány do nově vytvořených MenuPlan
     - Záznamy BEZ canteen_id: Migrace selže s chybou a vypíše IDs k ručnímu zpracování
-    
+
     Ruční zpracování problémových záznamů:
     1. python manage.py shell
     2. from apps.production.models import ProductionOrder
@@ -25,69 +25,61 @@ def migrate_orphan_orders_to_menu_plans(apps, schema_editor):
     """
     ProductionOrder = apps.get_model('production', 'ProductionOrder')
     MenuPlan = apps.get_model('production', 'MenuPlan')
-    
+
     # Najdeme všechny příkazy bez menu_plan
-    orphan_orders = ProductionOrder.objects.filter(menu_plan__isnull=True)
+    orphan_qs = ProductionOrder.objects.filter(menu_plan__isnull=True)
     
-    if not orphan_orders.exists():
+    if not orphan_qs.exists():
         return
+
+    # Ověříme že všechny mají canteen_id
+    missing_canteen_ids = list(orphan_qs.filter(canteen__isnull=True).values_list('id', flat=True))
     
-    # Seskupíme podle jídelny a data
-    orders_by_canteen_date = {}
-    orders_without_canteen = []
-    
-    for order in orphan_orders:
-        # Pokud order nemá canteen, zalogujeme to
-        if not order.canteen_id:
-            orders_without_canteen.append(order.id)
-            print(f"VAROVÁNÍ: ProductionOrder id={order.id} nemá canteen_id a nebude migrován!")
-            continue
-            
-        key = (order.canteen_id, order.date)
-        if key not in orders_by_canteen_date:
-            orders_by_canteen_date[key] = []
-        orders_by_canteen_date[key].append(order)
-    
-    # Zalogujeme souhrn
-    if orders_without_canteen:
+    if missing_canteen_ids:
         print("="*80)
-        print(f"⚠️  VAROVÁNÍ: Celkem {len(orders_without_canteen)} výrobních příkazů bez canteen_id nebylo migrováno!")
-        print(f"   Tyto záznamy MUSÍ být zpracovány ručně před migrací 0009!")
-        print(f"   ProductionOrder IDs: {orders_without_canteen}")
-        print(f"   Akce k provedení:")
-        print(f"   1. Přiřaďte těmto záznamům canteen pomocí Django admin nebo shell")
-        print(f"   2. Nebo je smažte, pokud jsou nevalidní")
-        print(f"   3. Poté znovu spusťte migraci")
+        print(f"⚠️  VAROVÁNÍ: Celkem {len(missing_canteen_ids)} výrobních příkazů bez canteen_id nebylo migrováno!")
+        print("   Tyto záznamy MUSÍ být zpracovány ručně před migrací 0009!")
+        print(f"   ProductionOrder IDs: {missing_canteen_ids}")
+        print("   Akce k provedení:")
+        print("   1. Přiřaďte těmto záznamům canteen pomocí Django admin nebo shell")
+        print("   2. Nebo je smažte, pokud jsou nevalidní")
+        print("   3. Poté znovu spusťte migraci")
         print("="*80)
         
-        # Pokud jsou nemigrovatelné záznamy, zastavíme migraci
-        # Toto zabrání, aby migrace 0009 selhala kvůli NOT NULL constraintu
-        if orders_without_canteen:
-            raise ValueError(
-                f"Migrace přerušena: {len(orders_without_canteen)} ProductionOrder nemá canteen_id. "
-                f"Tyto záznamy musí být opraveny před pokračováním. IDs: {orders_without_canteen}"
-            )
-    
-    # Vytvoříme jídelníčky pro každou kombinaci jídelna+datum
-    for (canteen_id, date), orders in orders_by_canteen_date.items():
+        raise ValueError(
+            f"Migrace přerušena: {len(missing_canteen_ids)} ProductionOrder nemá canteen_id. "
+            f"Tyto záznamy musí být opraveny před pokračováním. IDs: {missing_canteen_ids}"
+        )
+
+    # Seskupíme podle jídelny a data na úrovni databáze
+    groups = orphan_qs.exclude(canteen__isnull=True)\
+                      .values('canteen_id', 'date')\
+                      .distinct()
+
+    # Vytvoříme jídelníčky a přiřadíme příkazy pomocí bulk update
+    created_count = 0
+    for grp in groups:
         # Vytvoříme jednorázový jídelníček pro tento den
         menu_plan = MenuPlan.objects.create(
-            name=f"Migrovaný jídelníček - {date.strftime('%d.%m.%Y')}",
-            canteen_id=canteen_id,
-            date_from=date,
-            date_to=date,
+            name=f"Migrovaný jídelníček - {grp['date'].strftime('%d.%m.%Y')}",
+            canteen_id=grp['canteen_id'],
+            date_from=grp['date'],
+            date_to=grp['date'],
             default_portions_adult=50,
             default_portions_child=0
         )
         
-        # Přiřadíme všechny příkazy k tomuto jídelníčku
-        for order in orders:
-            order.menu_plan = menu_plan
-            order.save(update_fields=['menu_plan'])
-    
-    print(f"Migrace dokončena: vytvořeno {len(orders_by_canteen_date)} jídelníčků pro {orphan_orders.count()} výrobních příkazů")
+        # Jeden SQL UPDATE pro celou skupinu místo N save()
+        ProductionOrder.objects.filter(
+            menu_plan__isnull=True,
+            canteen_id=grp['canteen_id'],
+            date=grp['date']
+        ).update(menu_plan=menu_plan)
+        
+        created_count += 1
 
-
+    total_migrated = orphan_qs.count()
+    print(f"Migrace dokončena: vytvořeno {created_count} jídelníčků pro {total_migrated} výrobních příkazů")
 def reverse_migration(apps, schema_editor):
     """
     Reverse operace - odstraní menu_plan z migrovaných příkazů.

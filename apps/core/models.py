@@ -75,12 +75,12 @@ class Recipe(models.Model):
     """Recept"""
     # Základní informace
     code = models.CharField(max_length=20, verbose_name="Kód receptu", blank=True, 
-                           help_text="Kód receptu z receptáře (např. '1', 'D3-6')")
+                           help_text="Generuje se automaticky podle kategorie (např. 'PL-001', 'HJ-042')")
     name = models.CharField(max_length=200, verbose_name="Název receptu")
     description = models.TextField(verbose_name="Postup přípravy", blank=True)
     
     # Kategorie a počet porcí
-    category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, blank=True,
+    category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, blank=False,
                                  verbose_name="Kategorie", related_name='recipes')
     base_portions = models.PositiveIntegerField(default=10, verbose_name="Základní počet porcí",
                                                 help_text="Referenční počet porcí pro normu (obvykle 10)")
@@ -90,6 +90,33 @@ class Recipe(models.Model):
         through='RecipeIngredient',
         verbose_name="Suroviny"
     )
+    
+    def save(self, *args, **kwargs):
+        """Automatické generování kódu receptu při vytvoření"""
+        if not self.code and self.category:
+            # Najdeme nejvyšší číslo receptu v této kategorii
+            last_recipe = Recipe.objects.filter(
+                category=self.category
+            ).exclude(
+                code=''
+            ).order_by('-id').first()
+            
+            if last_recipe and last_recipe.code:
+                # Pokusíme se extrahovat číslo z posledního kódu
+                try:
+                    last_number = int(last_recipe.code.split('-')[-1])
+                    next_number = last_number + 1
+                except (ValueError, IndexError):
+                    # Pokud se nepodaří extrahovat číslo, začneme od 1
+                    next_number = 1
+            else:
+                # První recept v kategorii
+                next_number = 1
+            
+            # Vygenerujeme nový kód ve formátu "KATEGORIE-XXX"
+            self.code = f"{self.category.code}-{next_number:03d}"
+        
+        super().save(*args, **kwargs)
 
     def calculate_portion_price(self, canteen, portions=1, portion_coefficient=1.0):
         """

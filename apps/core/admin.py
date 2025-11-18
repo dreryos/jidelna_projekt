@@ -21,7 +21,14 @@ class RecipeAdmin(admin.ModelAdmin):
     list_display = ('code', 'name', 'category', 'base_portions')
     list_filter = ('category',)
     search_fields = ('code', 'name')
-    fields = ('code', 'category', 'name', 'base_portions', 'description')
+    fields = ('category', 'name', 'base_portions', 'description', 'code')
+    readonly_fields = ('code',)
+    
+    def get_readonly_fields(self, request, obj=None):
+        """Kód je read-only pouze u existujících objektů"""
+        if obj:  # Editace existujícího receptu
+            return self.readonly_fields
+        return []  # Při vytváření nového receptu není kód zobrazený
 
 @admin.register(Ingredient)
 class IngredientAdmin(admin.ModelAdmin):

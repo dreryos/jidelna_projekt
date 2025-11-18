@@ -89,7 +89,7 @@ Migrace dokončena: vytvořeno 3 jídelníčků pro 15 výrobních příkazů
 ⚠️  VAROVÁNÍ: Celkem 5 výrobních příkazů bez canteen_id nebylo migrováno!
    Tyto záznamy MUSÍ být zpracovány ručně před migrací 0009!
    ProductionOrder IDs: [12, 45, 67, 89, 101]
-   Akce k provedění:
+   Akce k provedení:
    1. Přiřaďte těmto záznamům canteen pomocí Django admin nebo shell
    2. Nebo je smažte, pokud jsou nevalidní
    3. Poté znovu spusťte migraci

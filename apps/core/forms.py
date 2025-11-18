@@ -24,16 +24,19 @@ class RecipeIngredientForm(forms.ModelForm):
 class RecipeForm(forms.ModelForm):
     """
     Formulář pro recept.
+    Kód receptu se generuje automaticky podle kategorie.
     """
     class Meta:
         model = Recipe
-        fields = ['code', 'name', 'category', 'description', 'base_portions']
+        fields = ['category', 'name', 'description', 'base_portions']
         widgets = {
-            'code': forms.TextInput(attrs={'class': 'form-control'}),
+            'category': forms.Select(attrs={'class': 'form-control', 'required': True}),
             'name': forms.TextInput(attrs={'class': 'form-control'}),
-            'category': forms.Select(attrs={'class': 'form-control'}),
             'description': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
             'base_portions': forms.NumberInput(attrs={'class': 'form-control', 'min': 1}),
+        }
+        help_texts = {
+            'category': 'Vyberte kategorii - kód receptu se vygeneruje automaticky (např. PL-001, HJ-042)',
         }
 
 

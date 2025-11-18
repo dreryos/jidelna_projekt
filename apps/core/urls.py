@@ -15,4 +15,7 @@ urlpatterns = [
     path('ingredients/add/', views.IngredientCreateView.as_view(), name='ingredient_add'),
     path('ingredients/edit/<int:pk>/', views.IngredientUpdateView.as_view(), name='ingredient_edit'),
     path('ingredients/delete/<int:pk>/', views.IngredientDeleteView.as_view(), name='ingredient_delete'),
+    
+    # AJAX endpoint pro přidání suroviny
+    path('ajax/add-ingredient/', views.ajax_add_ingredient, name='ajax_add_ingredient'),
 ]

@@ -260,10 +260,11 @@ class PickingListDecrementTest(TestCase):
         
         Test ověřuje:
         - Picking list se vytvoří i když sklad má nulový stav
-        - prefilled_warehouse je None když všechny sklady mají nulový stav
-        - Systém neselže, ale upozorní na nedostatek zásob
+        - prefilled_warehouse JE vyplněna i když sklad má nulový stav (změna chování)
+        - Systém předvyplní sklad aby mohla probíhat blokace a odepsání do mínusu
         
-        Toto je důležité pro plánování - i když není zásoba, musíme vědět co potřebujeme.
+        Toto je důležité pro plánování - i když není zásoba, musíme vědět odkud se má vzít
+        a umožnit odepsání do mínusu.
         """
         # Nastavíme sklad na nulu
         stock_item = StockItem.objects.get(warehouse=self.warehouse, ingredient=self.ingredient)
@@ -302,10 +303,10 @@ class PickingListDecrementTest(TestCase):
         self.assertIsNotNone(pl, "Picking list item should be created even with zero stock")
         self.assertEqual(pl.ingredient, self.ingredient)
         
-        # Ověřte, že prefilled_warehouse je None (protože sklad má nulový stav)
-        # generate_picking_list() filtruje quantity__gt=0
-        self.assertIsNone(pl.warehouse, 
-                         "Warehouse should be None when stock quantity is zero")
+        # Ověřte, že prefilled_warehouse JE vyplněna i když má nulový stav
+        # Nové chování: předvyplníme sklad i s nulovou zásobou pro blokaci/odepsání
+        self.assertEqual(pl.warehouse, self.warehouse, 
+                         "Warehouse should be prefilled even when stock quantity is zero")
         
         # Ověříme správné plánované množství (5 porcí × 1 kg/porci = 5 kg)
         expected_quantity = Decimal('5.000')

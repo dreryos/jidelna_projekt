@@ -1,7 +1,51 @@
 {% extends 'base.html' %}
-{% load bootstrap5 %}
+{% load django_bootstrap5 %}
 
 {% block title %}{% if object %}Upravit{% else %}Přidat{% endif %} recept - Jídelna{% endblock %}
+
+{% block extra_css %}
+<style>
+.autocomplete-items {
+    max-height: 300px;
+    overflow-y: auto;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    border: 1px solid #ddd;
+    border-radius: 0 0 0.25rem 0.25rem;
+}
+.autocomplete-items .list-group-item {
+    border-left: none;
+    border-right: none;
+}
+.autocomplete-items .list-group-item:first-child {
+    border-top: none;
+}
+
+/* Kompaktní tabulka surovin */
+#ingredient-forms tr td {
+    vertical-align: middle;
+    padding: 0.5rem;
+}
+
+#ingredient-forms input.form-control-sm,
+#ingredient-forms .input-group-sm {
+    font-size: 0.875rem;
+}
+
+#ingredient-forms .btn-sm {
+    padding: 0.25rem 0.5rem;
+}
+
+.table-sm td {
+    padding: 0.4rem;
+}
+
+.table thead th {
+    background-color: #f8f9fa;
+    font-weight: 600;
+    border-bottom: 2px solid #dee2e6;
+}
+</style>
+{% endblock %}
 
 {% block content %}
 <div class="row justify-content-center">
@@ -17,20 +61,29 @@
         <form method="post" id="recipe-form">
           {% csrf_token %}
           
+          {% if object and object.code %}
+          <div class="alert alert-info mb-4">
+            <i class="fas fa-info-circle me-2"></i>
+            <strong>Kód receptu:</strong> {{ object.code }}
+          </div>
+          {% endif %}
+          
+          {% if not object %}
+          <div class="alert alert-info mb-4">
+            <i class="fas fa-magic me-2"></i>
+            <strong>Automatické generování kódu:</strong> Po vybrání kategorie a uložení se vygeneruje kód receptu 
+            (např. <strong>PL-001</strong> pro polévky, <strong>HJ-042</strong> pro hlavní jídla)
+          </div>
+          {% endif %}
+
           <div class="row mb-4">
-            <div class="col-md-4">
-              <label for="{{ form.code.id_for_label }}" class="form-label">
-                <i class="fas fa-hashtag me-1"></i>Kód receptu:
-              </label>
-              {% bootstrap_field form.code show_label=False %}
-            </div>
-            <div class="col-md-4">
+            <div class="col-md-6">
               <label for="{{ form.category.id_for_label }}" class="form-label">
-                <i class="fas fa-folder me-1"></i>Kategorie:
+                <i class="fas fa-folder me-1"></i>Kategorie: <span class="text-danger">*</span>
               </label>
               {% bootstrap_field form.category show_label=False %}
             </div>
-            <div class="col-md-4">
+            <div class="col-md-6">
               <label for="{{ form.base_portions.id_for_label }}" class="form-label">
                 <i class="fas fa-users me-1"></i>Základní počet porcí:
               </label>
@@ -54,93 +107,120 @@
           </div>
 
           <div class="card mb-4">
-            <div class="card-header bg-light">
+            <div class="card-header bg-light d-flex justify-content-between align-items-center">
               <h5 class="mb-0">
                 <i class="fas fa-list me-2"></i>Suroviny a normy
               </h5>
+              <button type="button" class="btn btn-success btn-sm" id="add-ingredient-btn">
+                <i class="fas fa-plus me-1"></i>Přidat surovinu
+              </button>
             </div>
-            <div class="card-body">
+            <div class="card-body p-2">
               {{ ingredients.management_form }}
               
-              <div id="ingredient-forms">
-                {% for form in ingredients %}
-                <div class="ingredient-form mb-3 p-3 border rounded {% if form.DELETE.value %}d-none{% endif %}" data-form-index="{{ forloop.counter0 }}">
-                  <div class="row align-items-end">
-                    <div class="col-md-4">
-                      <label class="form-label">
+              <div class="table-responsive">
+                <table class="table table-sm table-hover mb-0">
+                  <thead class="table-light">
+                    <tr>
+                      <th style="width: 40%;">
                         <i class="fas fa-leaf me-1"></i>Surovina
-                      </label>
-                      {% bootstrap_field form.ingredient show_label=False %}
-                    </div>
-                    <div class="col-md-3">
-                      <label class="form-label">
-                        <i class="fas fa-weight me-1"></i>Množství na porci
-                      </label>
-                      {% bootstrap_field form.quantity_per_portion show_label=False %}
-                    </div>
-                    <div class="col-md-3">
-                      <label class="form-label">
+                      </th>
+                      <th style="width: 20%;">
+                        <i class="fas fa-weight me-1"></i>Množství/porci
+                      </th>
+                      <th style="width: 30%;">
                         <i class="fas fa-comment me-1"></i>Poznámka
-                      </label>
-                      {% bootstrap_field form.notes show_label=False %}
-                    </div>
-                    <div class="col-md-2">
-                      <button type="button" class="btn btn-outline-danger w-100 remove-ingredient" data-form-index="{{ forloop.counter0 }}">
-                        <i class="fas fa-trash"></i>
-                      </button>
-                    </div>
-                  </div>
-                  
-                  <!-- Hidden fields -->
-                  {% if form.id %}{{ form.id }}{% endif %}
-                  <div class="d-none">{{ form.DELETE }}</div>
-                  
-                  {% if form.non_field_errors %}
-                    <div class="alert alert-danger mt-2">
-                      {{ form.non_field_errors }}
-                    </div>
-                  {% endif %}
-                </div>
-                {% endfor %}
-              </div>
-
-              <div class="text-center mt-3">
-                <button type="button" class="btn btn-outline-success" id="add-ingredient-btn">
-                  <i class="fas fa-plus me-2"></i>Přidat surovinu
-                </button>
+                      </th>
+                      <th style="width: 10%; text-align: center;">
+                        <i class="fas fa-cog"></i>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody id="ingredient-forms">
+                    {% for form in ingredients %}
+                    <tr class="ingredient-form {% if form.DELETE.value %}d-none{% endif %}" data-form-index="{{ forloop.counter0 }}">
+                      <td>
+                        <div class="input-group input-group-sm">
+                          <input type="text" 
+                                 class="form-control ingredient-autocomplete" 
+                                 placeholder="Začněte psát..."
+                                 data-target="{{ form.ingredient.auto_id }}"
+                                 value="">
+                          <button type="button" class="btn btn-outline-success btn-sm" data-bs-toggle="modal" data-bs-target="#addIngredientModal" title="Přidat novou surovinu">
+                            <i class="fas fa-plus"></i>
+                          </button>
+                        </div>
+                        <div class="d-none">
+                          {% bootstrap_field form.ingredient show_label=False %}
+                        </div>
+                      </td>
+                      <td>
+                        {% bootstrap_field form.quantity_per_portion show_label=False %}
+                      </td>
+                      <td>
+                        {% bootstrap_field form.notes show_label=False %}
+                      </td>
+                      <td class="text-center">
+                        <button type="button" class="btn btn-outline-danger btn-sm remove-ingredient" data-form-index="{{ forloop.counter0 }}" title="Odstranit">
+                          <i class="fas fa-trash"></i>
+                        </button>
+                        {% if form.id %}{{ form.id }}{% endif %}
+                        <div class="d-none">{{ form.DELETE }}</div>
+                      </td>
+                    </tr>
+                    {% if form.non_field_errors %}
+                    <tr>
+                      <td colspan="4">
+                        <div class="alert alert-danger alert-sm mb-0">
+                          {{ form.non_field_errors }}
+                        </div>
+                      </td>
+                    </tr>
+                    {% endif %}
+                    {% endfor %}
+                  </tbody>
+                </table>
               </div>
               
               <!-- Template for new forms -->
               <div id="empty-form" class="d-none">
-                <div class="ingredient-form mb-3 p-3 border rounded" data-form-index="__prefix__">
-                  <div class="row align-items-end">
-                    <div class="col-md-4">
-                      <label class="form-label">
-                        <i class="fas fa-leaf me-1"></i>Surovina
-                      </label>
-                      {% bootstrap_field ingredients.empty_form.ingredient show_label=False %}
-                    </div>
-                    <div class="col-md-3">
-                      <label class="form-label">
-                        <i class="fas fa-weight me-1"></i>Množství na porci
-                      </label>
-                      {% bootstrap_field ingredients.empty_form.quantity_per_portion show_label=False %}
-                    </div>
-                    <div class="col-md-3">
-                      <label class="form-label">
-                        <i class="fas fa-comment me-1"></i>Poznámka
-                      </label>
-                      {% bootstrap_field ingredients.empty_form.notes show_label=False %}
-                    </div>
-                    <div class="col-md-2">
-                      <button type="button" class="btn btn-outline-danger w-100 remove-ingredient" data-form-index="__prefix__">
-                        <i class="fas fa-trash"></i>
+                // Empty form template
+              const emptyFormTemplate = `
+                <tr class="ingredient-form" data-form-index="__prefix__">
+                  <td>
+                    <div class="input-group input-group-sm">
+                      <input type="text" 
+                             class="form-control ingredient-autocomplete" 
+                             placeholder="Začněte psát..."
+                             data-target="id_ingredients-__prefix__-ingredient"
+                             value="">
+                      <button type="button" class="btn btn-outline-success btn-sm" data-bs-toggle="modal" data-bs-target="#addIngredientModal" title="Přidat novou surovinu">
+                        <i class="fas fa-plus"></i>
                       </button>
                     </div>
-                  </div>
-                  
-                  <div class="d-none">{{ ingredients.empty_form.DELETE }}</div>
-                </div>
+                    <div class="d-none">
+                      <select name="ingredients-__prefix__-ingredient" class="form-select" id="id_ingredients-__prefix__-ingredient">
+                        <option value="">---------</option>
+                        ${allIngredients.map(ing => \`<option value="\${ing.id}">\${ing.name}</option>\`).join('')}
+                      </select>
+                    </div>
+                  </td>
+                  <td>
+                    <input type="number" step="0.01" name="ingredients-__prefix__-quantity_per_portion" class="form-control form-control-sm" id="id_ingredients-__prefix__-quantity_per_portion">
+                  </td>
+                  <td>
+                    <input type="text" name="ingredients-__prefix__-notes" class="form-control form-control-sm" maxlength="100" id="id_ingredients-__prefix__-notes">
+                  </td>
+                  <td class="text-center">
+                    <button type="button" class="btn btn-outline-danger btn-sm remove-ingredient" title="Odstranit">
+                      <i class="fas fa-trash"></i>
+                    </button>
+                    <div class="d-none">
+                      <input type="checkbox" name="ingredients-__prefix__-DELETE" id="id_ingredients-__prefix__-DELETE">
+                    </div>
+                  </td>
+                </tr>
+              `;
               </div>
             </div>
           </div>
@@ -159,20 +239,66 @@
   </div>
 </div>
 
+<!-- Modal pro přidání nové suroviny -->
+<div class="modal fade" id="addIngredientModal" tabindex="-1" aria-labelledby="addIngredientModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header bg-success text-white">
+        <h5 class="modal-title" id="addIngredientModalLabel">
+          <i class="fas fa-plus me-2"></i>Přidat novou surovinu
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <form id="new-ingredient-form">
+          <div class="mb-3">
+            <label for="new_ingredient_name" class="form-label">Název suroviny *</label>
+            <input type="text" class="form-control" id="new_ingredient_name" required>
+          </div>
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <label for="new_ingredient_base_unit" class="form-label">Skladová jednotka *</label>
+              <select class="form-select" id="new_ingredient_base_unit" required>
+                <option value="kg">kg (kilogram)</option>
+                <option value="l">l (litr)</option>
+                <option value="ks">ks (kus)</option>
+              </select>
+            </div>
+            <div class="col-md-6 mb-3">
+              <label for="new_ingredient_recipe_unit" class="form-label">Receptová jednotka *</label>
+              <select class="form-select" id="new_ingredient_recipe_unit" required>
+                <option value="g">g (gram)</option>
+                <option value="ml">ml (mililitr)</option>
+                <option value="ks">ks (kus)</option>
+              </select>
+            </div>
+          </div>
+          <div class="mb-3">
+            <label for="new_ingredient_conversion" class="form-label">Převodní koeficient *</label>
+            <input type="number" step="0.001" class="form-control" id="new_ingredient_conversion" value="1000" required>
+            <small class="text-muted">Např. 1000 pro převod g → kg nebo ml → l</small>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Zrušit</button>
+        <button type="button" class="btn btn-success" id="save-new-ingredient">
+          <i class="fas fa-save me-2"></i>Uložit surovinu
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
+// Načtení všech surovin pro autocomplete
+let allIngredients = {{ all_ingredients|safe }};
+
 document.addEventListener('DOMContentLoaded', function() {
     const addBtn = document.getElementById('add-ingredient-btn');
     const formContainer = document.getElementById('ingredient-forms');
     const emptyFormTemplate = document.getElementById('empty-form');
     const totalFormsInput = document.querySelector('input[id$="-TOTAL_FORMS"]');
-    
-    console.log('Formset setup:', {
-        addBtn: !!addBtn,
-        formContainer: !!formContainer,
-        emptyFormTemplate: !!emptyFormTemplate,
-        totalFormsInput: !!totalFormsInput,
-        totalFormsName: totalFormsInput ? totalFormsInput.name : 'not found'
-    });
     
     if (!addBtn || !formContainer || !emptyFormTemplate || !totalFormsInput) {
         console.error('Required elements not found for formset');
@@ -181,51 +307,223 @@ document.addEventListener('DOMContentLoaded', function() {
     
     let formIndex = parseInt(totalFormsInput.value);
     
+    // Inicializace autocomplete pro existující pole
+    initializeAutocomplete();
+    
+    // Funkce pro inicializaci autocomplete
+    function initializeAutocomplete(forceAll = false) {
+        document.querySelectorAll('.ingredient-autocomplete').forEach(input => {
+            if (!input.dataset.initialized || forceAll) {
+                // Odstranit staré listenery pokud existují
+                const newInput = input.cloneNode(true);
+                input.parentNode.replaceChild(newInput, input);
+                
+                setupAutocomplete(newInput);
+                newInput.dataset.initialized = 'true';
+            }
+        });
+    }
+    
+    // Nastavení autocomplete pro jedno pole
+    function setupAutocomplete(input) {
+        const targetId = input.dataset.target;
+        const targetSelect = document.getElementById(targetId);
+        
+        if (!targetSelect) return;
+        
+        // Nastavit výchozí hodnotu z hidden selectu
+        const selectedOption = targetSelect.options[targetSelect.selectedIndex];
+        if (selectedOption && selectedOption.value) {
+            const ingredient = allIngredients.find(i => i.id == selectedOption.value);
+            if (ingredient) {
+                input.value = ingredient.name;
+            }
+        }
+        
+        // Autocomplete funkce
+        let currentFocus = -1;
+        
+        input.addEventListener('input', function(e) {
+            const val = this.value.toLowerCase();
+            closeAllLists();
+            
+            if (!val) return;
+            
+            currentFocus = -1;
+            
+            const listDiv = document.createElement('div');
+            listDiv.setAttribute('class', 'autocomplete-items list-group position-absolute w-100');
+            listDiv.style.zIndex = '1000';
+            this.parentNode.appendChild(listDiv);
+            
+            allIngredients
+                .filter(ing => ing.name.toLowerCase().includes(val))
+                .slice(0, 10)
+                .forEach(ingredient => {
+                    const item = document.createElement('a');
+                    item.setAttribute('class', 'list-group-item list-group-item-action');
+                    item.style.cursor = 'pointer';
+                    item.innerHTML = `<strong>${ingredient.name}</strong> <small class="text-muted">(${ingredient.unit})</small>`;
+                    
+                    item.addEventListener('click', function() {
+                        input.value = ingredient.name;
+                        targetSelect.value = ingredient.id;
+                        closeAllLists();
+                    });
+                    
+                    listDiv.appendChild(item);
+                });
+        });
+        
+        input.addEventListener('keydown', function(e) {
+            let list = this.parentNode.querySelector('.autocomplete-items');
+            if (list) list = list.getElementsByTagName('a');
+            
+            if (e.keyCode === 40) { // DOWN
+                currentFocus++;
+                addActive(list);
+                e.preventDefault();
+            } else if (e.keyCode === 38) { // UP
+                currentFocus--;
+                addActive(list);
+                e.preventDefault();
+            } else if (e.keyCode === 13) { // ENTER
+                e.preventDefault();
+                if (currentFocus > -1 && list) {
+                    list[currentFocus].click();
+                }
+            }
+        });
+        
+        function addActive(list) {
+            if (!list) return;
+            removeActive(list);
+            if (currentFocus >= list.length) currentFocus = 0;
+            if (currentFocus < 0) currentFocus = list.length - 1;
+            list[currentFocus].classList.add('active');
+        }
+        
+        function removeActive(list) {
+            for (let i = 0; i < list.length; i++) {
+                list[i].classList.remove('active');
+            }
+        }
+    }
+    
+    function closeAllLists() {
+        document.querySelectorAll('.autocomplete-items').forEach(el => el.remove());
+    }
+    
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('.ingredient-autocomplete')) {
+            closeAllLists();
+        }
+    });
+    
+    // Přidání nového formuláře pro ingredienci
     addBtn.addEventListener('click', function() {
-        console.log('Adding new ingredient form, current index:', formIndex);
+        // Vytvoříme nový řádek z template
+        const formHtml = emptyFormTemplate.replace(/__prefix__/g, formIndex);
         
-        // Clone the empty form
-        const newForm = emptyFormTemplate.cloneNode(true);
-        newForm.classList.remove('d-none');
-        newForm.id = '';
+        // Vytvoříme dočasný element pro parsování HTML
+        const temp = document.createElement('tbody');
+        temp.innerHTML = formHtml;
+        const newRow = temp.firstElementChild;
         
-        // Replace __prefix__ with actual form index
-        newForm.innerHTML = newForm.innerHTML.replace(/__prefix__/g, formIndex);
+        // Nastavíme správný data-form-index
+        newRow.setAttribute('data-form-index', formIndex);
         
-        // Update form index attribute
-        newForm.querySelector('.ingredient-form').setAttribute('data-form-index', formIndex);
+        // Odstranit data-initialized atribut z nového autocomplete pole
+        const newAutocomplete = newRow.querySelector('.ingredient-autocomplete');
+        if (newAutocomplete) {
+            delete newAutocomplete.dataset.initialized;
+        }
         
-        // Add to container
-        formContainer.appendChild(newForm.querySelector('.ingredient-form'));
+        // Přidáme řádek do tabulky
+        formContainer.appendChild(newRow);
         
         // Update total forms count
         totalFormsInput.value = formIndex + 1;
         formIndex++;
         
-        console.log('New form added, total forms:', totalFormsInput.value);
+        // Inicializovat autocomplete pro nově přidané pole
+        setTimeout(() => {
+            const lastAutocomplete = formContainer.querySelector(`.ingredient-form[data-form-index="${formIndex - 1}"] .ingredient-autocomplete`);
+            if (lastAutocomplete && !lastAutocomplete.dataset.initialized) {
+                setupAutocomplete(lastAutocomplete);
+                lastAutocomplete.dataset.initialized = 'true';
+            }
+        }, 50);
     });
     
-    // Handle remove buttons
+    // Odstranění formuláře
     document.addEventListener('click', function(e) {
         if (e.target.closest('.remove-ingredient')) {
             e.preventDefault();
-            
             const formDiv = e.target.closest('.ingredient-form');
             const deleteInput = formDiv.querySelector('input[name$="-DELETE"]');
             
             if (deleteInput) {
-                // Mark for deletion
                 deleteInput.value = 'on';
                 formDiv.classList.add('d-none');
-                console.log('Form marked for deletion');
             } else {
-                // Remove new form
                 formDiv.remove();
-                // Decrease total forms count
                 totalFormsInput.value = Math.max(0, parseInt(totalFormsInput.value) - 1);
-                console.log('Form removed, total forms:', totalFormsInput.value);
             }
         }
+    });
+    
+    // Modal pro přidání nové suroviny
+    const saveIngredientBtn = document.getElementById('save-new-ingredient');
+    const modal = document.getElementById('addIngredientModal');
+    
+    saveIngredientBtn.addEventListener('click', function() {
+        const name = document.getElementById('new_ingredient_name').value.trim();
+        const baseUnit = document.getElementById('new_ingredient_base_unit').value;
+        const recipeUnit = document.getElementById('new_ingredient_recipe_unit').value;
+        const conversion = document.getElementById('new_ingredient_conversion').value;
+        
+        if (!name) {
+            alert('Prosím vyplňte název suroviny');
+            return;
+        }
+        
+        // AJAX požadavek na server
+        fetch('{% url "core:ajax_add_ingredient" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            },
+            body: new URLSearchParams({
+                'name': name,
+                'base_unit': baseUnit,
+                'recipe_unit': recipeUnit,
+                'conversion_factor': conversion
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Přidat novou surovinu do seznamu
+                allIngredients.push(data.ingredient);
+                allIngredients.sort((a, b) => a.name.localeCompare(b.name));
+                
+                // Zavřít modal a vyčistit formulář
+                const bsModal = bootstrap.Modal.getInstance(modal);
+                bsModal.hide();
+                document.getElementById('new-ingredient-form').reset();
+                
+                // Zobrazit úspěšnou zprávu
+                alert(`Surovina "${data.ingredient.name}" byla úspěšně přidána!`);
+            } else {
+                alert('Chyba: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Nastala chyba při přidávání suroviny');
+        });
     });
 });
 </script>

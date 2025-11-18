@@ -136,12 +136,7 @@ class ProductionOrder(models.Model):
                 )
             )
 
-            # Najdeme sklad, který patří k jídelně a má danou surovinu (s kladnou zásobou)
-            stock_item = StockItem.objects.filter(
-                ingredient=item.ingredient,
-                warehouse__canteen=self.resolved_canteen,
-                quantity__gt=0
-            ).first() if self.resolved_canteen else None
+            prefilled_warehouse = None
             
             # Pokud surovina neexistuje v žádném skladu jídelny, vytvoříme ji s 0 ks
             if not stock_item and self.resolved_canteen:
@@ -267,6 +262,30 @@ class ProductionOrderPortionVariant(models.Model):
         ordering = ['production_order', 'order']
 
 
+class PickingListDocument(models.Model):
+    """Vygenerovaná výdejka jako dokument"""
+    name = models.CharField(max_length=100, verbose_name="Název výdejky")
+    canteen = models.ForeignKey('canteens.Canteen', on_delete=models.PROTECT, verbose_name="Jídelna")
+    date_from = models.DateField(verbose_name="Datum od")
+    date_to = models.DateField(verbose_name="Datum do")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Vytvořeno")
+    created_by = models.ForeignKey('auth.User', on_delete=models.PROTECT, verbose_name="Vytvořil")
+    archived = models.BooleanField(default=False, verbose_name="Archivováno")
+    archived_at = models.DateTimeField(null=True, blank=True, verbose_name="Archivováno dne")
+    
+    def can_be_archived(self):
+        """Kontroluje, zda mohou být všechny položky archivovány (všechny mají status COMPLETED)"""
+        return self.items.exists() and not self.items.exclude(status=PickingList.Status.COMPLETED).exists()
+    
+    def __str__(self):
+        return f"{self.name} - {self.canteen.name}"
+    
+    class Meta:
+        verbose_name = "Dokument výdejky"
+        verbose_name_plural = "Dokumenty výdejek"
+        ordering = ['-created_at']
+
+
 class PickingList(models.Model):
     """Výdejka surovin"""
     class Status(models.TextChoices):
@@ -274,6 +293,7 @@ class PickingList(models.Model):
         COMPLETED = 'COMPLETED', 'Vydáno'
 
     production_order = models.ForeignKey(ProductionOrder, on_delete=models.CASCADE, related_name='picking_list_items', verbose_name="Výrobní příkaz")
+    document = models.ForeignKey(PickingListDocument, on_delete=models.CASCADE, related_name='items', verbose_name="Dokument výdejky", null=True, blank=True)
     warehouse = models.ForeignKey(Warehouse, on_delete=models.PROTECT, verbose_name="Sklad", help_text="Sklad, ze kterého se má surovina vydat.", null=True, blank=False)
     ingredient = models.ForeignKey(Ingredient, on_delete=models.PROTECT, verbose_name="Surovina")
     quantity_planned = models.DecimalField(max_digits=10, decimal_places=3, verbose_name="Plánované množství")
@@ -302,8 +322,28 @@ class PickingList(models.Model):
             original_state = PickingList.objects.get(pk=self.pk)
 
         super().save(*args, **kwargs)
+        
+        # Logika pro blokování množství při přiřazení k dokumentu
+        # Když je položka přidána k dokumentu, zablokujeme plánované množství
+        if self.document and self.warehouse and (original_state is None or original_state.document is None):
+            try:
+                with transaction.atomic():
+                    stock_item = StockItem.objects.select_for_update().get(
+                        warehouse=self.warehouse,
+                        ingredient=self.ingredient
+                    )
+                    stock_item.block_quantity(self.quantity_planned)
+            except StockItem.DoesNotExist:
+                # Vytvoříme skladovou položku s nulovou zásobou a zablokovaným množstvím
+                StockItem.objects.create(
+                    warehouse=self.warehouse,
+                    ingredient=self.ingredient,
+                    quantity=Decimal('0'),
+                    quantity_blocked=self.quantity_planned,
+                    price=Decimal('0')
+                )
 
-        # Logika pro odečtení ze skladu
+        # Logika pro odečtení ze skladu a uvolnění blokace
         # Spustí se pouze pokud je status změněn na COMPLETED
         if self.status == self.Status.COMPLETED and (original_state is None or original_state.status != self.Status.COMPLETED):
             if self.quantity_actual is not None and self.warehouse is not None:
@@ -313,16 +353,19 @@ class PickingList(models.Model):
                             warehouse=self.warehouse,
                             ingredient=self.ingredient
                         )
+                        # Uvolníme blokované množství
+                        stock_item.unblock_quantity(self.quantity_planned)
+                        # Odečteme skutečně vydané množství ze skladu
                         stock_item.quantity -= self.quantity_actual
                         stock_item.save()
                 except StockItem.DoesNotExist:
-                    # Případ, kdy položka ve skladu neexistuje - můžeme zalogovat chybu
-                    # nebo vytvořit položku se záporným stavem
+                    # Případ, kdy položka ve skladu neexistuje - vytvoříme ji se záporným stavem
                     StockItem.objects.create(
                         warehouse=self.warehouse,
                         ingredient=self.ingredient,
                         quantity=-self.quantity_actual,
-                        price=0 # Nemáme info o ceně, nutno dořešit
+                        quantity_blocked=Decimal('0'),
+                        price=Decimal('0')
                     )
 
     class Meta:
