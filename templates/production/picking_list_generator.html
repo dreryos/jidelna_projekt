@@ -130,12 +130,13 @@
                 <th>Jídelna</th>
                 <th>Termín</th>
                 <th>Vytvořeno</th>
+                <th>Status</th>
                 <th class="text-end">Akce</th>
               </tr>
             </thead>
             <tbody>
               {% for doc in documents %}
-              <tr>
+              <tr id="doc-row-{{ doc.id }}" {% if doc.archived %}class="table-secondary"{% endif %}>
                 <td><strong>{{ doc.name }}</strong></td>
                 <td>{{ doc.canteen.name }}</td>
                 <td>{{ doc.date_from|date:"d.m.Y" }} - {{ doc.date_to|date:"d.m.Y" }}</td>
@@ -145,11 +146,32 @@
                     {{ doc.created_by.get_full_name|default:doc.created_by.username }}
                   </small>
                 </td>
+                <td>
+                  {% if doc.archived %}
+                    <span class="badge bg-secondary">
+                      <i class="fas fa-archive me-1"></i>Archivováno
+                    </span>
+                    {% if doc.archived_at %}
+                    <br><small class="text-muted">{{ doc.archived_at|date:"d.m.Y H:i" }}</small>
+                    {% endif %}
+                  {% else %}
+                    {% if doc.can_be_archived %}
+                      <span class="badge bg-success">
+                        <i class="fas fa-check me-1"></i>Připraveno k archivaci
+                      </span>
+                    {% else %}
+                      <span class="badge bg-warning text-dark">
+                        <i class="fas fa-clock me-1"></i>Aktivní
+                      </span>
+                    {% endif %}
+                  {% endif %}
+                </td>
                 <td class="text-end">
                   <div class="btn-group" role="group">
                     <a href="{% url 'production:picking_list_edit' doc.id %}" 
                        class="btn btn-sm btn-outline-primary" 
-                       title="Editace skutečných množství">
+                       title="Editace skutečných množství"
+                       {% if doc.archived %}disabled{% endif %}>
                       <i class="fas fa-edit"></i>
                     </a>
                     <a href="{% url 'production:picking_list_pdf' doc.id %}" 
@@ -158,6 +180,15 @@
                        target="_blank">
                       <i class="fas fa-file-pdf"></i>
                     </a>
+                    {% if not doc.archived %}
+                    <button type="button" 
+                            class="btn btn-sm btn-outline-secondary archive-btn" 
+                            data-document-id="{{ doc.id }}"
+                            {% if not doc.can_be_archived %}disabled{% endif %}
+                            title="{% if doc.can_be_archived %}Archivovat výdejku{% else %}Všechny položky musí být vydány{% endif %}">
+                      <i class="fas fa-archive"></i>
+                    </button>
+                    {% endif %}
                   </div>
                 </td>
               </tr>
@@ -195,6 +226,72 @@ document.getElementById('date_from').addEventListener('change', function() {
   if (dateTo.value && dateTo.value < dateFrom) {
     dateTo.value = dateFrom;
   }
+});
+
+// Archive button handling
+document.querySelectorAll('.archive-btn').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    var documentId = this.getAttribute('data-document-id');
+    
+    if (!confirm('Opravdu chcete archivovat tuto výdejku? Tuto akci nelze vrátit zpět.')) {
+      return;
+    }
+    
+    var csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    
+    fetch('/production/vydejky/' + documentId + '/archive/', {
+      method: 'POST',
+      headers: {
+        'X-CSRFToken': csrfToken,
+        'Content-Type': 'application/json'
+      }
+    })
+    .then(response => response.json())
+    .then(data => {
+      if (data.success) {
+        // Zobrazit zprávu o úspěchu
+        var alertDiv = document.createElement('div');
+        alertDiv.className = 'alert alert-success alert-dismissible fade show';
+        alertDiv.innerHTML = '<i class="fas fa-check-circle me-2"></i>' + data.message + 
+          '<button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
+        document.querySelector('.row').prepend(alertDiv);
+        
+        // Aktualizovat řádek v tabulce
+        var row = document.getElementById('doc-row-' + documentId);
+        row.classList.add('table-secondary');
+        
+        // Aktualizovat status sloupec
+        var statusCell = row.cells[4];
+        statusCell.innerHTML = '<span class="badge bg-secondary"><i class="fas fa-archive me-1"></i>Archivováno</span>';
+        
+        // Odstranit tlačítko archivace a zakázat editaci
+        var actionCell = row.cells[5];
+        var editBtn = actionCell.querySelector('.btn-outline-primary');
+        if (editBtn) {
+          editBtn.setAttribute('disabled', 'disabled');
+        }
+        var archiveBtn = actionCell.querySelector('.archive-btn');
+        if (archiveBtn) {
+          archiveBtn.remove();
+        }
+      } else {
+        // Zobrazit chybovou zprávu
+        var alertDiv = document.createElement('div');
+        alertDiv.className = 'alert alert-danger alert-dismissible fade show';
+        alertDiv.innerHTML = '<i class="fas fa-exclamation-circle me-2"></i>' + data.error + 
+          '<button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
+        document.querySelector('.row').prepend(alertDiv);
+      }
+    })
+    .catch(error => {
+      console.error('Error:', error);
+      var alertDiv = document.createElement('div');
+      alertDiv.className = 'alert alert-danger alert-dismissible fade show';
+      alertDiv.innerHTML = '<i class="fas fa-exclamation-circle me-2"></i>Došlo k chybě při archivaci.' + 
+        '<button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
+      document.querySelector('.row').prepend(alertDiv);
+    });
+  });
 });
 </script>
 {% endblock %}

@@ -974,3 +974,50 @@ def picking_list_pdf(request, document_id):
         messages.error(request, f'Chyba při generování PDF: {str(e)}')
         logger.exception("Error generating picking list PDF from document")
         return redirect('production:picking_list_generator')
+
+
+@login_required
+def archive_picking_list(request, document_id):
+    """
+    View pro archivaci výdejky.
+    Výdejka může být archivována pouze když všechny položky mají status COMPLETED.
+    """
+    from .models import PickingListDocument
+    
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Invalid request method.'}, status=405)
+    
+    try:
+        document = PickingListDocument.objects.get(id=document_id)
+        
+        # Kontrola oprávnění
+        if not request.user.is_superuser:
+            try:
+                user_profile = request.user.profile
+                if document.canteen not in user_profile.canteens.all():
+                    return JsonResponse({'success': False, 'error': 'Nemáte oprávnění k této jídelně.'}, status=403)
+            except:
+                return JsonResponse({'success': False, 'error': 'Nemáte přiřazený profil.'}, status=403)
+        
+        # Kontrola, zda mohou být všechny položky archivovány
+        if not document.can_be_archived():
+            return JsonResponse({
+                'success': False, 
+                'error': 'Výdejka nemůže být archivována. Všechny položky musí mít status "Vydáno".'
+            }, status=400)
+        
+        # Archivace dokumentu
+        document.archived = True
+        document.archived_at = timezone.now()
+        document.save()
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'Výdejka "{document.name}" byla úspěšně archivována.'
+        })
+        
+    except PickingListDocument.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Dokument výdejky neexistuje.'}, status=404)
+    except Exception as e:
+        logger.error(f"Error archiving picking list document {document_id}: {e}", exc_info=True)
+        return JsonResponse({'success': False, 'error': 'Chyba při archivaci výdejky.'}, status=500)
