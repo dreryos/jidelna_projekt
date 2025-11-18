@@ -283,6 +283,12 @@ class PickingListDocument(models.Model):
     date_to = models.DateField(verbose_name="Datum do")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Vytvořeno")
     created_by = models.ForeignKey('auth.User', on_delete=models.PROTECT, verbose_name="Vytvořil")
+    archived = models.BooleanField(default=False, verbose_name="Archivováno")
+    archived_at = models.DateTimeField(null=True, blank=True, verbose_name="Archivováno dne")
+    
+    def can_be_archived(self):
+        """Kontroluje, zda mohou být všechny položky archivovány (všechny mají status COMPLETED)"""
+        return self.items.exists() and not self.items.exclude(status=PickingList.Status.COMPLETED).exists()
     
     def __str__(self):
         return f"{self.name} - {self.canteen.name}"
