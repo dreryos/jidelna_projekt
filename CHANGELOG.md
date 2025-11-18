@@ -7,6 +7,31 @@ a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+### Added
+- **Tabulka vygenerovaných výdejek**: Přidána tabulka na stránku `production/vydejky/` pro trvalý přístup k vygenerovaným výdejkám
+  - Umožňuje snadnější editaci reálně vydaných položek
+  - Zachování historie vygenerovaných výdejek pro budoucí reference
+  - Rychlý přehled všech výdejek v systému
+
+### Changed
+- **PDF výdejky optimalizované pro černobílý tisk**: Upraveno generování PDF dokumentů výdejek
+  - Veškeré prvky generovány pouze v černobílých barvách
+  - Zajištění dobré čitelnosti i na černobílých tiskárnách
+  - Optimalizace kontrastu a čitelnosti textu pro ČB tisk
+- **Vylepšená čitelnost sekce "Skutečně vydáno"**: Změněn vzhled PDF výdejek
+  - Odstraněno pruhované pozadí v sekci "Skutečně vydáno" pro lepší čitelnost
+  - Jednodušší a přehlednější layout pro vyplňování skutečně vydaných množství
+- **Filtrování položek podle skladu jídelny**: Při generování PDF výdejky se nyní filtrují položky
+  - Blokují se pouze položky ze skladu přidruženého k dané jídelně
+  - Ostatní sklady se při generování výdejky neberou v úvahu
+  - Přesnější řízení zásob podle jednotlivých jídelen
+
+### Fixed
+- **Ošetření nedostupných položek na skladě**: Implementováno řešení pro případ, kdy položky na blokaci nejsou na skladě
+  - Systém korektně zpracovává situace s nedostatečnými zásobami
+  - Upozornění nebo alternativní handling při nedostupnosti surovin
+  - Prevence chyb při generování výdejek s chybějícími položkami
+
 ### Removed
 - **Rychlé stažení výdejky ze seznamu jídelníčků**: Odstraněna sekce pro stažení výdejky na konkrétní den
   - Odstraněn formulář s výběrem data a jídelny z `menu_list.html`
@@ -120,6 +145,13 @@ a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
   - Cast operace pro Django User objekt
 - **Migrace databáze**:
   - `0003_alter_recipeingredient_recipe_userprofile.py` - vytvoření UserProfile modelu a úprava RecipeIngredient
+  - `0008_migrate_orders_to_menu_plans.py` - migrace na menu-first architekturu
+    - Automatická migrace všech `ProductionOrder` bez `menu_plan` do nově vytvořených jídelníčků
+    - Seskupení výrobních příkazů podle kombinace (jídelna, datum)
+    - Validace existence `canteen` u všech migrovaných záznamů
+    - Management command `check_orphan_orders` pro kontrolu dat před migrací
+    - Podpora rollback s automatickým vymazáním vytvořených jídelníčků
+    - Detailní dokumentace v `apps/production/migrations/MIGRATION_0008_README.md`
 
 ## [1.2.0] - 2025-10-27
 
