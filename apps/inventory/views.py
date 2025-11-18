@@ -36,6 +36,15 @@ class StockListView(LoginRequiredMixin, ListView):
         context = super().get_context_data(**kwargs)
         context['warehouses'] = Warehouse.objects.select_related('canteen').all()
         context['selected_warehouses'] = self.request.GET.getlist('warehouse')
+        
+        # Přidáme statistiky
+        stock_items = context['stock_items']
+        context['stats'] = {
+            'available_count': sum(1 for item in stock_items if item.quantity_available > 0),
+            'blocked_count': sum(1 for item in stock_items if item.quantity_blocked > 0),
+            'low_stock_count': sum(1 for item in stock_items if item.quantity_available <= 10),
+        }
+        
         return context
 
 

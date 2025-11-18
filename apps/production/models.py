@@ -370,6 +370,11 @@ class PickingList(models.Model):
                         stock_item.unblock_quantity(self.quantity_planned)
                         # Odečteme skutečně vydané množství ze skladu
                         stock_item.quantity -= self.quantity_actual
+                        
+                        # Pokud je množství velmi blízko nule (< 0.001), nastavíme ho na přesně 0
+                        if abs(stock_item.quantity) < Decimal('0.001'):
+                            stock_item.quantity = Decimal('0')
+                        
                         stock_item.save()
                 except StockItem.DoesNotExist:
                     # Případ, kdy položka ve skladu neexistuje - vytvoříme ji se záporným stavem

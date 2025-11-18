@@ -49,6 +49,9 @@ class StockItem(models.Model):
         self.quantity_blocked -= amount
         if self.quantity_blocked < 0:
             self.quantity_blocked = Decimal('0')
+        # Pokud je blokované množství velmi blízko nule (< 0.001), nastavíme ho na přesně 0
+        elif abs(self.quantity_blocked) < Decimal('0.001'):
+            self.quantity_blocked = Decimal('0')
         self.save(update_fields=['quantity_blocked'])
 
     class Meta:
