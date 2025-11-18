@@ -272,8 +272,8 @@
                     {% if item.warehouses_info %}
                     <div class="warehouse-details">
                         <small>Skladem: 
-                        {% for wh_name, qty in item.warehouses_info %}
-                            {{ wh_name }} ({{ qty|floatformat:1 }}){% if not forloop.last %}, {% endif %}
+                        {% for wh_name, qty, blocked, available in item.warehouses_info %}
+                            {{ wh_name }} ({{ qty|floatformat:1 }} kg, bloková {{ blocked|floatformat:1 }} kg, dostupné {{ available|floatformat:1 }} kg){% if not forloop.last %}, {% endif %}
                         {% endfor %}
                         </small>
                     </div>

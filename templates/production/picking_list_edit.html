@@ -102,8 +102,8 @@
                     {% if item.warehouses_info %}
                     <br><small class="text-muted">
                       <i class="fas fa-warehouse me-1"></i>Skladem: 
-                      {% for wh_name, qty in item.warehouses_info %}
-                        {{ wh_name }} ({{ qty|floatformat:1 }}){% if not forloop.last %}, {% endif %}
+                      {% for wh_name, qty, blocked, available in item.warehouses_info %}
+                        {{ wh_name }} (celkem {{ qty|floatformat:1 }}, blokováno {{ blocked|floatformat:1 }}, dostupné {{ available|floatformat:1 }}){% if not forloop.last %}, {% endif %}
                       {% endfor %}
                     </small>
                     {% endif %}
