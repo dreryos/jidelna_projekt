@@ -8,7 +8,7 @@ class RecipeIngredientForm(forms.ModelForm):
     """
     quantity_per_portion = DecimalFormField(
         label="Množství na 1 porci",
-        help_text="Množství suroviny na 1 porci v receptových jednotkách (např. gramy)",
+        help_text="",  # Help text moved to table header
         required=True,
     )
     
@@ -18,6 +18,9 @@ class RecipeIngredientForm(forms.ModelForm):
         widgets = {
             'ingredient': forms.Select(attrs={'class': 'form-control'}),
             'notes': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Poznámka (volitelné)'}),
+        }
+        help_texts = {
+            'notes': '',  # Help text moved to table header
         }
 
 
