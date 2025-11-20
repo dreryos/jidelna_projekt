@@ -54,6 +54,17 @@ class StockItem(models.Model):
             self.quantity_blocked = Decimal('0')
         self.save(update_fields=['quantity_blocked'])
 
+    def save(self, *args, **kwargs):
+        # Automatická oprava nepřesností pro kusové položky
+        if self.ingredient.base_unit in ['ks', 'kus', 'kusy']:
+             # Pokud je množství velmi blízko celému číslu (chyba < 0.005), zaokrouhlíme ho
+             if abs(self.quantity - round(self.quantity)) < 0.005:
+                 self.quantity = round(self.quantity)
+             if abs(self.quantity_blocked - round(self.quantity_blocked)) < 0.005:
+                 self.quantity_blocked = round(self.quantity_blocked)
+        
+        super().save(*args, **kwargs)
+
     class Meta:
         verbose_name = "Skladová položka"
         verbose_name_plural = "Skladové položky"

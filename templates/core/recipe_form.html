@@ -157,10 +157,10 @@
                         </div>
                       </td>
                       <td>
-                        {% bootstrap_field form.quantity_per_portion show_label=False %}
+                        {% bootstrap_field form.quantity_per_portion show_label=False show_help=False %}
                       </td>
                       <td>
-                        {% bootstrap_field form.notes show_label=False %}
+                        {% bootstrap_field form.notes show_label=False show_help=False %}
                       </td>
                       <td class="text-center">
                         <button type="button" class="btn btn-outline-danger btn-sm remove-ingredient" data-form-index="{{ forloop.counter0 }}" title="Odstranit">
@@ -183,44 +183,6 @@
                   </tbody>
                 </table>
               </div>
-              
-              <!-- Template for new forms (will be used by JavaScript) -->
-              <script type="text/template" id="empty-form-template">
-                <tr class="ingredient-form" data-form-index="__prefix__">
-                  <td>
-                    <div class="input-group input-group-sm">
-                      <input type="text" 
-                             class="form-control ingredient-autocomplete" 
-                             placeholder="Začněte psát..."
-                             data-target="id_recipeingredient_set-__prefix__-ingredient"
-                             value="">
-                      <button type="button" class="btn btn-outline-success btn-sm" data-bs-toggle="modal" data-bs-target="#addIngredientModal" title="Přidat novou surovinu">
-                        <i class="fas fa-plus"></i>
-                      </button>
-                    </div>
-                    <div class="d-none">
-                      <select name="recipeingredient_set-__prefix__-ingredient" class="form-select" id="id_recipeingredient_set-__prefix__-ingredient">
-                        <option value="">---------</option>
-                      </select>
-                    </div>
-                  </td>
-                  <td>
-                    <input type="number" step="0.001" name="recipeingredient_set-__prefix__-quantity_per_portion" class="form-control form-control-sm" id="id_recipeingredient_set-__prefix__-quantity_per_portion">
-                  </td>
-                  <td>
-                    <input type="text" name="recipeingredient_set-__prefix__-notes" class="form-control form-control-sm" maxlength="200" id="id_recipeingredient_set-__prefix__-notes" placeholder="Poznámka (volitelné)">
-                  </td>
-                  <td class="text-center">
-                    <button type="button" class="btn btn-outline-danger btn-sm remove-ingredient" title="Odstranit">
-                      <i class="fas fa-trash"></i>
-                    </button>
-                    <input type="hidden" name="recipeingredient_set-__prefix__-id" id="id_recipeingredient_set-__prefix__-id">
-                    <div class="d-none">
-                      <input type="checkbox" name="recipeingredient_set-__prefix__-DELETE" id="id_recipeingredient_set-__prefix__-DELETE">
-                    </div>
-                  </td>
-                </tr>
-              </script>
             </div>
           </div>
 
@@ -296,16 +258,15 @@ let allIngredients = {{ all_ingredients|safe }};
 document.addEventListener('DOMContentLoaded', function() {
     const addBtn = document.getElementById('add-ingredient-btn');
     const formContainer = document.getElementById('ingredient-forms');
-    const emptyFormTemplateElement = document.getElementById('empty-form-template');
-    const totalFormsInput = document.querySelector('input[id$="-TOTAL_FORMS"]');
     
-    if (!addBtn || !formContainer || !emptyFormTemplateElement || !totalFormsInput) {
+    // Get prefix from Django context
+    const formPrefix = '{{ ingredients.prefix }}';
+    const totalFormsInput = document.getElementById(`id_${formPrefix}-TOTAL_FORMS`);
+    
+    if (!addBtn || !formContainer || !totalFormsInput) {
         console.error('Required elements not found for formset');
         return;
     }
-    
-    // Get the template content as a string
-    const emptyFormTemplate = emptyFormTemplateElement.innerHTML.trim();
     
     let formIndex = parseInt(totalFormsInput.value);
     
@@ -390,7 +351,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 addActive(list);
                 e.preventDefault();
             } else if (e.keyCode === 13) { // ENTER
-                e.preventDefault();
+                e.preventDefault(); // Always prevent form submission on Enter in this field
                 if (currentFocus > -1 && list) {
                     list[currentFocus].click();
                 }
@@ -424,33 +385,49 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Přidání nového formuláře pro ingredienci
     addBtn.addEventListener('click', function() {
-        // Vytvoříme nový řádek z template
-        const formHtml = emptyFormTemplate.replace(/__prefix__/g, formIndex);
-        
+        // Template string for new rows
+        const emptyFormTemplate = `
+        <tr class="ingredient-form" data-form-index="${formIndex}">
+          <td>
+            <div class="input-group input-group-sm">
+              <input type="text" 
+                     class="form-control ingredient-autocomplete" 
+                     placeholder="Začněte psát..."
+                     data-target="id_${formPrefix}-${formIndex}-ingredient"
+                     value="">
+              <button type="button" class="btn btn-outline-success btn-sm" data-bs-toggle="modal" data-bs-target="#addIngredientModal" title="Přidat novou surovinu">
+                <i class="fas fa-plus"></i>
+              </button>
+            </div>
+            <div class="d-none">
+              <select name="${formPrefix}-${formIndex}-ingredient" class="form-select" id="id_${formPrefix}-${formIndex}-ingredient">
+                <option value="">---------</option>
+                ${allIngredients.map(ing => `<option value="${ing.id}">${ing.name} (${ing.base_unit})</option>`).join('')}
+              </select>
+            </div>
+          </td>
+          <td>
+            <input type="number" step="0.001" name="${formPrefix}-${formIndex}-quantity_per_portion" class="form-control" id="id_${formPrefix}-${formIndex}-quantity_per_portion">
+          </td>
+          <td>
+            <input type="text" name="${formPrefix}-${formIndex}-notes" class="form-control" maxlength="200" id="id_${formPrefix}-${formIndex}-notes" placeholder="Poznámka (volitelné)">
+          </td>
+          <td class="text-center">
+            <button type="button" class="btn btn-outline-danger btn-sm remove-ingredient" title="Odstranit">
+              <i class="fas fa-trash"></i>
+            </button>
+            <input type="hidden" name="${formPrefix}-${formIndex}-id" id="id_${formPrefix}-${formIndex}-id">
+            <div class="d-none">
+              <input type="checkbox" name="${formPrefix}-${formIndex}-DELETE" id="id_${formPrefix}-${formIndex}-DELETE">
+            </div>
+          </td>
+        </tr>
+        `;
+
         // Vytvoříme dočasný element pro parsování HTML
         const temp = document.createElement('tbody');
-        temp.innerHTML = formHtml;
+        temp.innerHTML = emptyFormTemplate;
         const newRow = temp.firstElementChild;
-        
-        // Nastavíme správný data-form-index
-        newRow.setAttribute('data-form-index', formIndex);
-        
-        // Add ingredient options to the select
-        const select = newRow.querySelector('select[name$="-ingredient"]');
-        if (select) {
-            allIngredients.forEach(ing => {
-                const option = document.createElement('option');
-                option.value = ing.id;
-                option.textContent = `${ing.name} (${ing.base_unit})`;
-                select.appendChild(option);
-            });
-        }
-        
-        // Odstranit data-initialized atribut z nového autocomplete pole
-        const newAutocomplete = newRow.querySelector('.ingredient-autocomplete');
-        if (newAutocomplete) {
-            delete newAutocomplete.dataset.initialized;
-        }
         
         // Přidáme řádek do tabulky
         formContainer.appendChild(newRow);
@@ -461,8 +438,8 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Inicializovat autocomplete pro nově přidané pole
         setTimeout(() => {
-            const lastAutocomplete = formContainer.querySelector(`.ingredient-form[data-form-index="${formIndex - 1}"] .ingredient-autocomplete`);
-            if (lastAutocomplete && !lastAutocomplete.dataset.initialized) {
+            const lastAutocomplete = newRow.querySelector('.ingredient-autocomplete');
+            if (lastAutocomplete) {
                 setupAutocomplete(lastAutocomplete);
                 lastAutocomplete.dataset.initialized = 'true';
             }
@@ -477,11 +454,11 @@ document.addEventListener('DOMContentLoaded', function() {
             const deleteInput = formDiv.querySelector('input[name$="-DELETE"]');
             
             if (deleteInput) {
-                deleteInput.value = 'on';
+                deleteInput.checked = true;
                 formDiv.classList.add('d-none');
             } else {
                 formDiv.remove();
-                totalFormsInput.value = Math.max(0, parseInt(totalFormsInput.value) - 1);
+                // Note: We don't decrement TOTAL_FORMS to avoid index collision
             }
         }
     });

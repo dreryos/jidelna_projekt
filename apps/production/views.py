@@ -502,7 +502,7 @@ def daily_picking_list(request):
                 for variant in variants:
                     variant_amount = recipe_ingredient.get_quantity_in_base_unit(
                         portions=variant.portions,
-                        coefficient=float(variant.coefficient)
+                        coefficient=variant.coefficient
                     )
                     needed_amount += variant_amount
                 
@@ -513,7 +513,7 @@ def daily_picking_list(request):
             else:
                 needed_amount = recipe_ingredient.get_quantity_in_base_unit(
                     portions=order.total_portions,
-                    coefficient=float(order.portion_coefficient)
+                    coefficient=order.portion_coefficient
                 )
                 portions_desc = f"{order.total_portions}×{order.portion_coefficient}"
             
@@ -801,7 +801,8 @@ def picking_list_generator(request):
     context = {
         'canteens': canteens,
         'today': date.today(),
-        'documents': documents,
+        'active_documents': documents.filter(archived=False),
+        'archived_documents': documents.filter(archived=True),
     }
     
     return render(request, 'production/picking_list_generator.html', context)

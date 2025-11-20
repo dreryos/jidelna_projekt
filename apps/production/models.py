@@ -132,31 +132,32 @@ class ProductionOrder(models.Model):
             total_quantity = self._sum_variants(
                 lambda v: item.get_quantity_in_base_unit(
                     portions=v.portions,
-                    coefficient=float(v.coefficient)
+                    coefficient=v.coefficient
                 )
             )
+
+            # Pokusíme se najít existující skladovou položku
+            stock_item = None
+            if self.resolved_canteen:
+                stock_item = StockItem.objects.filter(
+                    ingredient=item.ingredient,
+                    warehouse__canteen=self.resolved_canteen
+                ).first()
 
             prefilled_warehouse = None
             
             # Pokud surovina neexistuje v žádném skladu jídelny, vytvoříme ji s 0 ks
             if not stock_item and self.resolved_canteen:
-                # Zkontrolujeme, zda surovina existuje v jakémkoliv skladu této jídelny
-                existing_stock = StockItem.objects.filter(
-                    ingredient=item.ingredient,
-                    warehouse__canteen=self.resolved_canteen
-                ).first()
-                
-                if not existing_stock:
-                    # Najdeme první sklad této jídelny
-                    warehouse = self.resolved_canteen.warehouses.first()
-                    if warehouse:
-                        # Vytvoříme záznam suroviny s 0 ks
-                        stock_item = StockItem.objects.create(
-                            ingredient=item.ingredient,
-                            warehouse=warehouse,
-                            quantity=Decimal('0'),
-                            price=Decimal('0')
-                        )
+                # Najdeme první sklad této jídelny
+                warehouse = self.resolved_canteen.warehouses.first()
+                if warehouse:
+                    # Vytvoříme záznam suroviny s 0 ks
+                    stock_item = StockItem.objects.create(
+                        ingredient=item.ingredient,
+                        warehouse=warehouse,
+                        quantity=Decimal('0'),
+                        price=Decimal('0')
+                    )
             
             prefilled_warehouse = stock_item.warehouse if stock_item else None
 
@@ -184,7 +185,7 @@ class ProductionOrder(models.Model):
             for variant in self.portion_variants.all():
                 amount = recipe_ingredient.get_quantity_in_base_unit(
                     portions=variant.portions,
-                    coefficient=float(variant.coefficient)
+                    coefficient=variant.coefficient
                 )
                 total_amount += amount
                 total_amount_recipe_unit += (
@@ -211,7 +212,7 @@ class ProductionOrder(models.Model):
     @property
     def total_effective_portions(self):
         """Vrátí celkový počet efektivních porcí ze všech variant (s aplikací koeficientů)"""
-        return float(self._sum_variants(lambda v: v.portions * v.coefficient))
+        return self._sum_variants(lambda v: v.portions * v.coefficient)
 
     def __str__(self):
         canteen = self.get_canteen()

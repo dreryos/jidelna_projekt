@@ -106,7 +106,7 @@
         <ol>
           <li>Vytiskněte vygenerované PDF</li>
           <li>Kuchař zapíše skutečné spotřebované množství do sloupce "Skutečně vydáno"</li>
-          <li>Zadejte skutečná množství zpět do systému v administraci (Django Admin → Položky výdejky)</li>
+          <li>Zadejte skutečná množství zpět do systému</li>
           <li>Změňte status na "Vydáno" - tím se automaticky odečtou zásoby ze skladu</li>
         </ol>
       </div>
@@ -114,14 +114,21 @@
   </div>
 </div>
 
-{% if documents %}
+{% if active_documents %}
 <div class="row mt-5">
   <div class="col-12">
     <div class="card shadow">
-      <div class="card-header bg-primary text-white">
-        <h5 class="mb-0"><i class="fas fa-list me-2"></i>Vygenerované výdejky</h5>
+      <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center" 
+           role="button"
+           data-bs-toggle="collapse" 
+           data-bs-target="#collapseActive" 
+           aria-expanded="true" 
+           aria-controls="collapseActive">
+        <h5 class="mb-0"><i class="fas fa-list me-2"></i>Vygenerované výdejky - aktivní</h5>
+        <i class="fas fa-chevron-down"></i>
       </div>
-      <div class="card-body">
+      <div class="collapse show" id="collapseActive">
+        <div class="card-body">
         <div class="table-responsive">
           <table class="table table-striped table-hover">
             <thead>
@@ -135,8 +142,8 @@
               </tr>
             </thead>
             <tbody>
-              {% for doc in documents %}
-              <tr id="doc-row-{{ doc.id }}" {% if doc.archived %}class="table-secondary"{% endif %}>
+              {% for doc in active_documents %}
+              <tr id="doc-row-{{ doc.id }}">
                 <td><strong>{{ doc.name }}</strong></td>
                 <td>{{ doc.canteen.name }}</td>
                 <td>{{ doc.date_from|date:"d.m.Y" }} - {{ doc.date_to|date:"d.m.Y" }}</td>
@@ -147,14 +154,6 @@
                   </small>
                 </td>
                 <td>
-                  {% if doc.archived %}
-                    <span class="badge bg-secondary">
-                      <i class="fas fa-archive me-1"></i>Archivováno
-                    </span>
-                    {% if doc.archived_at %}
-                    <br><small class="text-muted">{{ doc.archived_at|date:"d.m.Y H:i" }}</small>
-                    {% endif %}
-                  {% else %}
                     {% if doc.can_be_archived %}
                       <span class="badge bg-success">
                         <i class="fas fa-check me-1"></i>Připraveno k archivaci
@@ -164,14 +163,12 @@
                         <i class="fas fa-clock me-1"></i>Aktivní
                       </span>
                     {% endif %}
-                  {% endif %}
                 </td>
                 <td class="text-end">
                   <div class="btn-group" role="group">
                     <a href="{% url 'production:picking_list_edit' doc.id %}" 
                        class="btn btn-sm btn-outline-primary" 
-                       title="Editace skutečných množství"
-                       {% if doc.archived %}disabled{% endif %}>
+                       title="Editace skutečných množství">
                       <i class="fas fa-edit"></i>
                     </a>
                     <a href="{% url 'production:picking_list_pdf' doc.id %}" 
@@ -180,7 +177,6 @@
                        target="_blank">
                       <i class="fas fa-file-pdf"></i>
                     </a>
-                    {% if not doc.archived %}
                     <button type="button" 
                             class="btn btn-sm btn-outline-secondary archive-btn" 
                             data-document-id="{{ doc.id }}"
@@ -188,7 +184,6 @@
                             title="{% if doc.can_be_archived %}Archivovat výdejku{% else %}Všechny položky musí být vydány{% endif %}">
                       <i class="fas fa-archive"></i>
                     </button>
-                    {% endif %}
                   </div>
                 </td>
               </tr>
@@ -196,6 +191,82 @@
             </tbody>
           </table>
         </div>
+      </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% if archived_documents %}
+<div class="row mt-5">
+  <div class="col-12">
+    <div class="card shadow">
+      <div class="card-header bg-secondary text-white d-flex justify-content-between align-items-center" 
+           role="button"
+           data-bs-toggle="collapse" 
+           data-bs-target="#collapseArchived" 
+           aria-expanded="false" 
+           aria-controls="collapseArchived">
+        <h5 class="mb-0"><i class="fas fa-archive me-2"></i>Vygenerované výdejky - archivované</h5>
+        <i class="fas fa-chevron-down"></i>
+      </div>
+      <div class="collapse" id="collapseArchived">
+        <div class="card-body">
+        <div class="table-responsive">
+          <table class="table table-striped table-hover">
+            <thead>
+              <tr>
+                <th>Název výdejky</th>
+                <th>Jídelna</th>
+                <th>Termín</th>
+                <th>Vytvořeno</th>
+                <th>Status</th>
+                <th class="text-end">Akce</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for doc in archived_documents %}
+              <tr id="doc-row-{{ doc.id }}" class="table-secondary">
+                <td><strong>{{ doc.name }}</strong></td>
+                <td>{{ doc.canteen.name }}</td>
+                <td>{{ doc.date_from|date:"d.m.Y" }} - {{ doc.date_to|date:"d.m.Y" }}</td>
+                <td>
+                  <small class="text-muted">
+                    {{ doc.created_at|date:"d.m.Y H:i" }}<br>
+                    {{ doc.created_by.get_full_name|default:doc.created_by.username }}
+                  </small>
+                </td>
+                <td>
+                    <span class="badge bg-secondary">
+                      <i class="fas fa-archive me-1"></i>Archivováno
+                    </span>
+                    {% if doc.archived_at %}
+                    <br><small class="text-muted">{{ doc.archived_at|date:"d.m.Y H:i" }}</small>
+                    {% endif %}
+                </td>
+                <td class="text-end">
+                  <div class="btn-group" role="group">
+                    <a href="{% url 'production:picking_list_edit' doc.id %}" 
+                       class="btn btn-sm btn-outline-primary disabled" 
+                       title="Editace skutečných množství"
+                       disabled>
+                      <i class="fas fa-edit"></i>
+                    </a>
+                    <a href="{% url 'production:picking_list_pdf' doc.id %}" 
+                       class="btn btn-sm btn-outline-danger" 
+                       title="Stáhnout PDF"
+                       target="_blank">
+                      <i class="fas fa-file-pdf"></i>
+                    </a>
+                  </div>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
       </div>
     </div>
   </div>
@@ -249,31 +320,8 @@ document.querySelectorAll('.archive-btn').forEach(function(btn) {
     .then(response => response.json())
     .then(data => {
       if (data.success) {
-        // Zobrazit zprávu o úspěchu
-        var alertDiv = document.createElement('div');
-        alertDiv.className = 'alert alert-success alert-dismissible fade show';
-        alertDiv.innerHTML = '<i class="fas fa-check-circle me-2"></i>' + data.message + 
-          '<button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
-        document.querySelector('.row').prepend(alertDiv);
-        
-        // Aktualizovat řádek v tabulce
-        var row = document.getElementById('doc-row-' + documentId);
-        row.classList.add('table-secondary');
-        
-        // Aktualizovat status sloupec
-        var statusCell = row.cells[4];
-        statusCell.innerHTML = '<span class="badge bg-secondary"><i class="fas fa-archive me-1"></i>Archivováno</span>';
-        
-        // Odstranit tlačítko archivace a zakázat editaci
-        var actionCell = row.cells[5];
-        var editBtn = actionCell.querySelector('.btn-outline-primary');
-        if (editBtn) {
-          editBtn.setAttribute('disabled', 'disabled');
-        }
-        var archiveBtn = actionCell.querySelector('.archive-btn');
-        if (archiveBtn) {
-          archiveBtn.remove();
-        }
+        // Reload page to move the row to the archived table
+        location.reload();
       } else {
         // Zobrazit chybovou zprávu
         var alertDiv = document.createElement('div');
