@@ -214,6 +214,10 @@ class ProductionOrder(models.Model):
         """Vrátí celkový počet efektivních porcí ze všech variant (s aplikací koeficientů)"""
         return self._sum_variants(lambda v: v.portions * v.coefficient)
 
+    def has_issued_picking_list(self):
+        """Vrátí True, pokud pro tento výrobní příkaz existuje vydaná výdejka (přiřazená k dokumentu)"""
+        return self.picking_list_items.filter(document__isnull=False).exists()
+
     def __str__(self):
         canteen = self.get_canteen()
         canteen_name = canteen.name if canteen else 'Bez jídelny'

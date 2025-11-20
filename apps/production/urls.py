@@ -30,6 +30,5 @@ urlpatterns = [
     path('vydejky/<int:document_id>/archive/', views.archive_picking_list, name='archive_picking_list'),
     
     # Detail výrobního příkazu (read-only, přístupný z jídelníčku)
-    path('jidlo/<int:pk>/', views.production_order_detail, name='order_detail'),
     path('jidlo/<int:order_pk>/vydejka/', views.picking_list_print, name='picking_list_print'),
 ]

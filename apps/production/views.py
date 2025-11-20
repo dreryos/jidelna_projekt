@@ -114,10 +114,13 @@ class MenuPlanListView(CanteenOwnerMixin, ListView):
     model = MenuPlan
     template_name = 'production/menu_list.html'
     context_object_name = 'menu_plans'
-    paginate_by = 10
+    # Pagination removed to allow grouping of all plans
+    # paginate_by = 10 
     
     def get_queryset(self) -> QuerySet[MenuPlan]:
-        queryset = super().get_queryset().select_related('canteen').prefetch_related('production_orders').order_by('-created_at')
+        queryset = super().get_queryset().select_related('canteen').prefetch_related(
+            'production_orders__picking_list_items__document'
+        ).order_by('-created_at')
         
         canteen_filter = self.request.GET.get('canteen')
         if canteen_filter:
@@ -142,6 +145,46 @@ class MenuPlanListView(CanteenOwnerMixin, ListView):
                 context['canteens'] = Canteen.objects.none()
         context['selected_canteen'] = self.request.GET.get('canteen', '')
         context['today'] = date.today()
+        
+        # Categorize menu plans
+        menu_plans = context['menu_plans']
+        prepared_plans = []
+        in_progress_plans = []
+        archived_plans = []
+        
+        for plan in menu_plans:
+            plan_items_count = 0
+            archived_items_count = 0
+            items_with_doc_count = 0
+            
+            orders = plan.production_orders.all()
+            if not orders:
+                prepared_plans.append(plan)
+                continue
+                
+            for order in orders:
+                items = order.picking_list_items.all()
+                for item in items:
+                    plan_items_count += 1
+                    if item.document:
+                        items_with_doc_count += 1
+                        if item.document.archived:
+                            archived_items_count += 1
+            
+            if plan_items_count == 0:
+                prepared_plans.append(plan)
+            elif archived_items_count == plan_items_count:
+                archived_plans.append(plan)
+            elif items_with_doc_count > 0:
+                in_progress_plans.append(plan)
+            else:
+                # Items exist but no document -> Prepared
+                prepared_plans.append(plan)
+                
+        context['prepared_plans'] = prepared_plans
+        context['in_progress_plans'] = in_progress_plans
+        context['archived_plans'] = archived_plans
+        
         return context
 
 
@@ -320,7 +363,9 @@ def update_portions_bulk(request, menu_pk, *args, **kwargs):
         meal_date = data['date']
         
         with transaction.atomic():
-            orders = menu_plan.production_orders.filter(date=meal_date)
+            # Filter out orders that have issued picking lists
+            orders = menu_plan.production_orders.filter(date=meal_date).exclude(picking_list_items__document__isnull=False)
+            
             updated_count = orders.update(
                 portions_adult=total_portions,
                 portions_child=0,
@@ -342,6 +387,9 @@ def update_order_portions(request, order_pk, *args, **kwargs):
     
     if request.method != 'POST':
         return JsonResponse({'success': False, 'error': 'Invalid request method.'}, status=405)
+
+    if order.has_issued_picking_list():
+        return JsonResponse({'success': False, 'error': 'Nelze upravit jídlo s vydanou výdejkou.'}, status=403)
 
     try:
         data = json.loads(request.body)
@@ -371,6 +419,9 @@ def update_order_variants(request, order_pk, *args, **kwargs):
     
     if request.method != 'POST':
         return JsonResponse({'success': False, 'error': 'Invalid request method.'}, status=405)
+
+    if order.has_issued_picking_list():
+        return JsonResponse({'success': False, 'error': 'Nelze upravit jídlo s vydanou výdejkou.'}, status=403)
 
     try:
         data = json.loads(request.body)
@@ -405,6 +456,9 @@ def delete_order_ajax(request, order_pk, *args, **kwargs):
     if request.method != 'DELETE':
         return JsonResponse({'success': False, 'error': 'Invalid request method.'}, status=405)
 
+    if order.has_issued_picking_list():
+        return JsonResponse({'success': False, 'error': 'Nelze smazat jídlo s vydanou výdejkou.'}, status=403)
+
     try:
         with transaction.atomic():
             order_id = order.id
@@ -418,24 +472,6 @@ def delete_order_ajax(request, order_pk, *args, **kwargs):
 
 
 # Detail výrobního příkazu (read-only, přístupný z jídelníčku)
-
-@login_required
-@user_can_access_canteen_object(ProductionOrder)
-def production_order_detail(request, pk, *args, **kwargs):
-    """Detailní pohled na výrobní příkaz s výdejkou."""
-    order = request.instance
-    
-    picking_list, created = PickingList.objects.get_or_create(production_order=order)
-    
-    context = {
-        'order': order,
-        'picking_list': picking_list,
-        'total_portions': order.total_portions,
-        'required_ingredients': order.get_required_ingredients(),
-    }
-    
-    return render(request, 'production/order_detail.html', context)
-
 
 @login_required
 def daily_picking_list(request):
@@ -623,17 +659,20 @@ def picking_list_generator(request):
                     raise PermissionDenied("Nemáte přiřazený profil")
             
             # Najdeme všechny ProductionOrders v daném rozsahu pro tuto jídelnu
+            # Exclude orders that are already part of a picking list document (active or archived)
             orders = ProductionOrder.objects.filter(
                 canteen=canteen,
                 date__gte=date_from_obj,
                 date__lte=date_to_obj
+            ).exclude(
+                picking_list_items__document__isnull=False
             ).select_related('recipe', 'canteen', 'menu_plan').prefetch_related(
                 'portion_variants',
                 'picking_list_items'
             ).order_by('date', 'recipe__name')
             
             if not orders.exists():
-                messages.warning(request, f'Nenalezeny žádné výrobní příkazy pro {canteen.name} v období {date_from} - {date_to}.')
+                messages.warning(request, f'Nenalezeny žádné nové výrobní příkazy pro {canteen.name} v období {date_from} - {date_to}.')
                 return redirect('production:picking_list_generator')
             
             # Agregujeme suroviny napříč všemi příkazy

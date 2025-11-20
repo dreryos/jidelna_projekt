@@ -51,82 +51,175 @@
 
             <!-- Seznam jídelníčků -->
             {% if menu_plans %}
-                <div class="row">
-                    {% for menu in menu_plans %}
-                        <div class="col-lg-6 col-xl-4 mb-4">
-                            <div class="card h-100 shadow-sm">
-                                <div class="card-header bg-light">
-                                    <h5 class="card-title mb-0">
-                                        <i class="fas fa-utensils text-primary me-2"></i>
-                                        {{ menu.name }}
-                                    </h5>
+                <!-- Připravené -->
+                <div class="card shadow mb-4">
+                    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center"
+                         role="button" data-bs-toggle="collapse" data-bs-target="#collapsePrepared" aria-expanded="true">
+                        <h5 class="mb-0"><i class="fas fa-calendar-plus me-2"></i>Jídelníčky - připravené</h5>
+                        <i class="fas fa-chevron-down"></i>
+                    </div>
+                    <div class="collapse show" id="collapsePrepared">
+                        <div class="card-body p-0">
+                            {% if prepared_plans %}
+                                <div class="table-responsive">
+                                    <table class="table table-hover table-striped mb-0">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th>Název</th>
+                                                <th>Jídelna</th>
+                                                <th>Období</th>
+                                                <th>Počet jídel</th>
+                                                <th class="text-end">Akce</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for menu in prepared_plans %}
+                                            <tr>
+                                                <td>
+                                                    <a href="{% url 'production:menu_detail' menu.pk %}" class="text-decoration-none fw-bold">
+                                                        {{ menu.name }}
+                                                    </a>
+                                                </td>
+                                                <td>{{ menu.canteen.name }}</td>
+                                                <td>{{ menu.date_from|date:"d.m.Y" }} - {{ menu.date_to|date:"d.m.Y" }}</td>
+                                                <td>{{ menu.production_orders.count }}</td>
+                                                <td class="text-end">
+                                                    <div class="btn-group" role="group">
+                                                        <a href="{% url 'production:menu_detail' menu.pk %}" class="btn btn-sm btn-outline-primary" title="Upravit">
+                                                            <i class="fas fa-edit"></i>
+                                                        </a>
+                                                        <a href="{% url 'production:menu_delete' menu.pk %}" class="btn btn-sm btn-outline-danger" title="Smazat">
+                                                            <i class="fas fa-trash"></i>
+                                                        </a>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
                                 </div>
-                                <div class="card-body">
-                                    <p class="card-text">
-                                        <strong>Jídelna:</strong> {{ menu.canteen.name }}<br>
-                                        <strong>Období:</strong> {{ menu.date_from|date:"d.m.Y" }} - {{ menu.date_to|date:"d.m.Y" }}<br>
-                                        <strong>Výchozí porce:</strong> {{ menu.default_portions_adult }} dospělých / {{ menu.default_portions_child }} dětských
-                                    </p>
-                                    
-                                    {% if menu.production_orders.count > 0 %}
-                                        <div class="mb-3">
-                                            <small class="text-muted">
-                                                <i class="fas fa-list me-1"></i>
-                                                {{ menu.production_orders.count }} jídel
-                                            </small>
-                                        </div>
-                                    {% endif %}
-                                    
-                                    <div class="d-flex justify-content-between">
-                                        <a href="{% url 'production:menu_detail' menu.pk %}" class="btn btn-primary btn-sm">
-                                            <i class="fas fa-eye me-1"></i> Upravit
-                                        </a>
-                                        <div class="btn-group" role="group">
-                                            <a href="{% url 'production:menu_delete' menu.pk %}" class="btn btn-outline-danger btn-sm">
-                                                <i class="fas fa-trash me-1"></i> Smazat
-                                            </a>
-                                        </div>
-                                    </div>
+                            {% else %}
+                                <div class="p-3">
+                                    <p class="text-muted mb-0">Žádné připravené jídelníčky.</p>
                                 </div>
-                                <div class="card-footer text-muted small">
-                                    <i class="fas fa-clock me-1"></i>
-                                    Vytvořeno: {{ menu.created_at|date:"d.m.Y H:i" }}
-                                </div>
-                            </div>
+                            {% endif %}
                         </div>
-                    {% endfor %}
+                    </div>
                 </div>
 
-                <!-- Paginace -->
-                {% if is_paginated %}
-                    <nav aria-label="Navigace stránek">
-                        <ul class="pagination justify-content-center">
-                            {% if page_obj.has_previous %}
-                                <li class="page-item">
-                                    <a class="page-link" href="?page=1{% if selected_canteen %}&canteen={{ selected_canteen }}{% endif %}">&laquo; První</a>
-                                </li>
-                                <li class="page-item">
-                                    <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if selected_canteen %}&canteen={{ selected_canteen }}{% endif %}">Předchozí</a>
-                                </li>
+                <!-- Rozvařené -->
+                <div class="card shadow mb-4">
+                    <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center"
+                         role="button" data-bs-toggle="collapse" data-bs-target="#collapseInProgress" aria-expanded="true">
+                        <h5 class="mb-0"><i class="fas fa-fire me-2"></i>Jídelníčky - rozvařené</h5>
+                        <i class="fas fa-chevron-down"></i>
+                    </div>
+                    <div class="collapse show" id="collapseInProgress">
+                        <div class="card-body p-0">
+                            {% if in_progress_plans %}
+                                <div class="table-responsive">
+                                    <table class="table table-hover table-striped mb-0">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th>Název</th>
+                                                <th>Jídelna</th>
+                                                <th>Období</th>
+                                                <th>Počet jídel</th>
+                                                <th class="text-end">Akce</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for menu in in_progress_plans %}
+                                            <tr>
+                                                <td>
+                                                    <a href="{% url 'production:menu_detail' menu.pk %}" class="text-decoration-none fw-bold">
+                                                        {{ menu.name }}
+                                                    </a>
+                                                </td>
+                                                <td>{{ menu.canteen.name }}</td>
+                                                <td>{{ menu.date_from|date:"d.m.Y" }} - {{ menu.date_to|date:"d.m.Y" }}</td>
+                                                <td>{{ menu.production_orders.count }}</td>
+                                                <td class="text-end">
+                                                    <div class="btn-group" role="group">
+                                                        <a href="{% url 'production:menu_detail' menu.pk %}" class="btn btn-sm btn-outline-primary" title="Upravit">
+                                                            <i class="fas fa-edit"></i>
+                                                        </a>
+                                                        <a href="{% url 'production:menu_delete' menu.pk %}" class="btn btn-sm btn-outline-danger" title="Smazat">
+                                                            <i class="fas fa-trash"></i>
+                                                        </a>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            {% else %}
+                                <div class="p-3">
+                                    <p class="text-muted mb-0">Žádné rozpracované jídelníčky.</p>
+                                </div>
                             {% endif %}
+                        </div>
+                    </div>
+                </div>
 
-                            <li class="page-item active">
-                                <span class="page-link">
-                                    Stránka {{ page_obj.number }} z {{ page_obj.paginator.num_pages }}
-                                </span>
-                            </li>
-
-                            {% if page_obj.has_next %}
-                                <li class="page-item">
-                                    <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if selected_canteen %}&canteen={{ selected_canteen }}{% endif %}">Následující</a>
-                                </li>
-                                <li class="page-item">
-                                    <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% if selected_canteen %}&canteen={{ selected_canteen }}{% endif %}">Poslední &raquo;</a>
-                                </li>
+                <!-- Archivované -->
+                <div class="card shadow mb-4">
+                    <div class="card-header bg-secondary text-white d-flex justify-content-between align-items-center"
+                         role="button" data-bs-toggle="collapse" data-bs-target="#collapseArchived" aria-expanded="false">
+                        <h5 class="mb-0"><i class="fas fa-archive me-2"></i>Jídelníčky - archivované</h5>
+                        <i class="fas fa-chevron-down"></i>
+                    </div>
+                    <div class="collapse" id="collapseArchived">
+                        <div class="card-body p-0">
+                            {% if archived_plans %}
+                                <div class="table-responsive">
+                                    <table class="table table-hover table-striped mb-0">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th>Název</th>
+                                                <th>Jídelna</th>
+                                                <th>Období</th>
+                                                <th>Počet jídel</th>
+                                                <th class="text-end">Akce</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for menu in archived_plans %}
+                                            <tr>
+                                                <td>
+                                                    <a href="{% url 'production:menu_detail' menu.pk %}" class="text-decoration-none fw-bold">
+                                                        {{ menu.name }}
+                                                    </a>
+                                                </td>
+                                                <td>{{ menu.canteen.name }}</td>
+                                                <td>{{ menu.date_from|date:"d.m.Y" }} - {{ menu.date_to|date:"d.m.Y" }}</td>
+                                                <td>{{ menu.production_orders.count }}</td>
+                                                <td class="text-end">
+                                                    <div class="btn-group" role="group">
+                                                        <a href="{% url 'production:menu_detail' menu.pk %}" class="btn btn-sm btn-outline-primary" title="Upravit">
+                                                            <i class="fas fa-edit"></i>
+                                                        </a>
+                                                        <a href="{% url 'production:menu_delete' menu.pk %}" class="btn btn-sm btn-outline-danger" title="Smazat">
+                                                            <i class="fas fa-trash"></i>
+                                                        </a>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            {% else %}
+                                <div class="p-3">
+                                    <p class="text-muted mb-0">Žádné archivované jídelníčky.</p>
+                                </div>
                             {% endif %}
-                        </ul>
-                    </nav>
-                {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+
             {% else %}
                 <div class="alert alert-info text-center">
                     <i class="fas fa-info-circle me-2"></i>
