@@ -152,19 +152,9 @@ Flexibilní úprava velikosti porcí:
 - Automatické odstranění zbytečných nul
 - Podpora až 3 desetinných míst
 
-## 🤝 Přispívání
-
-Příspěvky jsou vítány! Prosím:
-
-1. Forkněte repositář
-2. Vytvořte feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commitněte změny (`git commit -m 'Add some AmazingFeature'`)
-4. Pushněte do branche (`git push origin feature/AmazingFeature`)
-5. Otevřete Pull Request
-
 ## 📝 Licence
 
-Tento projekt je licencován pod MIT licencí - viz LICENSE soubor pro detaily.
+Tento projekt je uvolněn jako volné dílo (Public Domain) pod licencí Unlicense - viz LICENSE soubor pro detaily.
 
 ## 👥 Autoři
 
