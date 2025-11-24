@@ -1,0 +1,162 @@
+{% extends 'base.html' %}
+{% load django_bootstrap5 %}
+
+{% block title %}Detail receptu - {{ recipe.name }} - Jídelna{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h1>
+      <i class="fas fa-utensils me-2"></i>{{ recipe.name }}
+    </h1>
+    <p class="text-muted mb-0">
+      {% if recipe.code %}<strong>Kód:</strong> {{ recipe.code }} | {% endif %}
+      {% if recipe.category %}<strong>Kategorie:</strong> {{ recipe.category.name }}{% endif %}
+    </p>
+  </div>
+  <div>
+    <a href="{% url 'analytics:recipe_cost_analysis' %}" class="btn btn-secondary">
+      <i class="fas fa-arrow-left me-2"></i>Zpět
+    </a>
+  </div>
+</div>
+
+<!-- Statistiky -->
+<div class="row mb-4">
+  <div class="col-md-3">
+    <div class="card bg-primary text-white">
+      <div class="card-body text-center">
+        <i class="fas fa-coins fa-2x mb-2"></i>
+        <h4>{{ avg_cost }} Kč</h4>
+        <small>Průměrné náklady/porce</small>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card bg-success text-white">
+      <div class="card-body text-center">
+        <i class="fas fa-arrow-down fa-2x mb-2"></i>
+        <h4>{{ min_cost }} Kč</h4>
+        <small>Minimální náklady</small>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card bg-warning text-dark">
+      <div class="card-body text-center">
+        <i class="fas fa-arrow-up fa-2x mb-2"></i>
+        <h4>{{ max_cost }} Kč</h4>
+        <small>Maximální náklady</small>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card bg-info text-white">
+      <div class="card-body text-center">
+        <i class="fas fa-history fa-2x mb-2"></i>
+        <h4>{{ usage_count }}</h4>
+        <small>Počet použití</small>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Aktuální rozklad surovin -->
+<div class="card mb-4 shadow-sm">
+  <div class="card-header bg-dark text-white">
+    <h5 class="mb-0">
+      <i class="fas fa-leaf me-2"></i>Rozklad surovin (na 1 porci)
+    </h5>
+  </div>
+  <div class="card-body">
+    {% if ingredients_breakdown %}
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Surovina</th>
+            <th class="text-end">Množství</th>
+            <th class="text-end">Cena/jednotka</th>
+            <th class="text-end">Náklady/porce</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for ing in ingredients_breakdown %}
+          <tr>
+            <td>{{ ing.ingredient.name }}</td>
+            <td class="text-end">{{ ing.quantity }} {{ ing.unit }}</td>
+            <td class="text-end">{{ ing.price_per_unit }} Kč</td>
+            <td class="text-end">
+              <strong>{{ ing.cost_per_portion }} Kč</strong>
+            </td>
+          </tr>
+          {% endfor %}
+          <tr class="table-info">
+            <td colspan="3" class="text-end"><strong>Celkem na porci:</strong></td>
+            <td class="text-end">
+              <strong>{{ avg_cost }} Kč</strong>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="text-muted mb-0">Nejsou dostupné údaje o surovinách.</p>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Historie použití -->
+<div class="card shadow-sm">
+  <div class="card-header bg-dark text-white">
+    <h5 class="mb-0">
+      <i class="fas fa-history me-2"></i>Historie použití
+    </h5>
+  </div>
+  <div class="card-body p-0">
+    {% if usage_history %}
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead class="table-light">
+          <tr>
+            <th><i class="fas fa-calendar me-1"></i>Datum</th>
+            <th><i class="fas fa-building me-1"></i>Jídelna</th>
+            <th><i class="fas fa-book me-1"></i>Jídelníček</th>
+            <th class="text-end"><i class="fas fa-users me-1"></i>Porcí</th>
+            <th class="text-end"><i class="fas fa-coins me-1"></i>Náklady/porce</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for usage in usage_history %}
+          <tr>
+            <td>{{ usage.date|date:"d.m.Y" }}</td>
+            <td>{{ usage.canteen.name }}</td>
+            <td>
+              {% if usage.menu_plan %}
+                <a href="{% url 'analytics:menu_detail_analytics' usage.menu_plan.id %}">
+                  {{ usage.menu_plan.name }}
+                </a>
+              {% else %}
+                <span class="text-muted">-</span>
+              {% endif %}
+            </td>
+            <td class="text-end">
+              <span class="badge bg-info">{{ usage.portions }}</span>
+            </td>
+            <td class="text-end">
+              <strong>{{ usage.cost_per_portion }} Kč</strong>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="p-4 text-center">
+      <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+      <p class="text-muted mb-0">Tento recept nebyl zatím použit v žádném jídelníčku.</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,174 @@
+{% extends 'base.html' %}
+{% load django_bootstrap5 %}
+
+{% block title %}Analýza nákladů receptů - Jídelna{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h1>
+      <i class="fas fa-chart-bar me-2"></i>Analýza nákladů receptů
+    </h1>
+    <p class="text-muted mb-0">Průměrné náklady receptů napříč časem</p>
+  </div>
+  <div>
+    <a href="{% url 'analytics:menu_analytics_list' %}" class="btn btn-secondary">
+      <i class="fas fa-arrow-left me-2"></i>Zpět na jídelníčky
+    </a>
+  </div>
+</div>
+
+<!-- Filtry -->
+<div class="card mb-4">
+  <div class="card-body">
+    <form method="get" class="row g-3">
+      <div class="col-md-6">
+        <label class="form-label">
+          <i class="fas fa-building me-1"></i>Jídelna
+        </label>
+        <select name="canteen" class="form-select">
+          <option value="">Všechny jídelny</option>
+          {% for canteen in canteens %}
+          <option value="{{ canteen.id }}" {% if selected_canteen == canteen.id|stringformat:"s" %}selected{% endif %}>
+            {{ canteen.name }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">
+          <i class="fas fa-tag me-1"></i>Kategorie
+        </label>
+        <select name="category" class="form-select">
+          <option value="">Všechny kategorie</option>
+          {% for category in categories %}
+          <option value="{{ category.id }}" {% if selected_category == category.id|stringformat:"s" %}selected{% endif %}>
+            {{ category.name }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-12">
+        <button type="submit" class="btn btn-primary">
+          <i class="fas fa-filter me-2"></i>Filtrovat
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Statistiky -->
+{% if recipes_data %}
+<div class="row mb-4">
+  <div class="col-md-4">
+    <div class="card bg-primary text-white">
+      <div class="card-body text-center">
+        <i class="fas fa-utensils fa-2x mb-2"></i>
+        <h4>{{ recipes_data|length }}</h4>
+        <small>Analyzovaných receptů</small>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card bg-success text-white">
+      <div class="card-body text-center">
+        <i class="fas fa-coins fa-2x mb-2"></i>
+        <h4>
+          {% with recipes_data|first as most_expensive %}
+            {{ most_expensive.avg_cost }} Kč
+          {% endwith %}
+        </h4>
+        <small>Nejdražší recept (průměr)</small>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card bg-info text-white">
+      <div class="card-body text-center">
+        <i class="fas fa-chart-line fa-2x mb-2"></i>
+        <h4>
+          {% with recipes_data|last as cheapest %}
+            {{ cheapest.avg_cost }} Kč
+          {% endwith %}
+        </h4>
+        <small>Nejlevnější recept (průměr)</small>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Tabulka s recepty -->
+<div class="card shadow-sm">
+  <div class="card-header bg-dark text-white">
+    <h5 class="mb-0">
+      <i class="fas fa-table me-2"></i>Přehled receptů
+    </h5>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead class="table-light">
+          <tr>
+            <th><i class="fas fa-utensils me-1"></i>Recept</th>
+            <th><i class="fas fa-tag me-1"></i>Kategorie</th>
+            <th class="text-end"><i class="fas fa-coins me-1"></i>Průměr</th>
+            <th class="text-end"><i class="fas fa-arrow-down me-1"></i>Min</th>
+            <th class="text-end"><i class="fas fa-arrow-up me-1"></i>Max</th>
+            <th class="text-center"><i class="fas fa-history me-1"></i>Použití</th>
+            <th class="text-center"><i class="fas fa-calendar me-1"></i>Poslední</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for data in recipes_data %}
+          <tr>
+            <td>
+              <strong>{{ data.recipe.name }}</strong>
+              {% if data.recipe.code %}
+              <br><small class="text-muted">{{ data.recipe.code }}</small>
+              {% endif %}
+            </td>
+            <td>
+              {% if data.recipe.category %}
+                <span class="badge bg-secondary">{{ data.recipe.category.name }}</span>
+              {% endif %}
+            </td>
+            <td class="text-end">
+              <span class="badge bg-info">{{ data.avg_cost }} Kč</span>
+            </td>
+            <td class="text-end">
+              <span class="badge bg-success">{{ data.min_cost }} Kč</span>
+            </td>
+            <td class="text-end">
+              <span class="badge bg-warning text-dark">{{ data.max_cost }} Kč</span>
+            </td>
+            <td class="text-center">
+              <span class="badge bg-primary">{{ data.usage_count }}×</span>
+            </td>
+            <td class="text-center">
+              {% if data.last_used %}
+                <small>{{ data.last_used|date:"d.m.Y" }}</small>
+              {% else %}
+                <small class="text-muted">-</small>
+              {% endif %}
+            </td>
+            <td class="text-end">
+              <a href="{% url 'analytics:recipe_cost_detail' data.recipe.id %}" class="btn btn-sm btn-outline-primary">
+                <i class="fas fa-eye"></i> Detail
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% else %}
+<div class="text-center py-5">
+  <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+  <h4 class="text-muted">Žádné recepty</h4>
+  <p class="text-muted">Pro vybrané filtry nejsou dostupné žádné recepty s historickými daty.</p>
+</div>
+{% endif %}
+{% endblock %}
