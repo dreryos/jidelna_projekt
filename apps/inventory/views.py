@@ -1,15 +1,15 @@
-from django.urls import reverse_lazy
+from django.urls import reverse_lazy, reverse
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.views.generic import ListView, CreateView, UpdateView, DeleteView
+from django.views.generic import ListView, CreateView, UpdateView, DeleteView, DetailView
 from django.contrib import messages
-from django.shortcuts import render, redirect
+from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
 import csv
 import io
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
-from .models import StockItem
+from .models import StockItem, GoodsReceipt, GoodsReceiptItem
 from apps.canteens.models import Warehouse, Canteen
 from apps.core.models import Ingredient
 
@@ -384,3 +384,186 @@ def import_csv_step2_confirm(request):
             messages.warning(request, error)
     
     return redirect('inventory:stock_list')
+
+
+# CRUD pro příjem zboží (GoodsReceipt)
+
+class GoodsReceiptListView(LoginRequiredMixin, ListView):
+    model = GoodsReceipt
+    template_name = 'inventory/goods_receipt_list.html'
+    context_object_name = 'goods_receipts'
+    paginate_by = 20
+    
+    def get_queryset(self):
+        queryset = GoodsReceipt.objects.select_related('warehouse', 'warehouse__canteen', 'created_by').all()
+        
+        # Filtrování podle skladu
+        warehouse_id = self.request.GET.get('warehouse')
+        if warehouse_id:
+            queryset = queryset.filter(warehouse_id=warehouse_id)
+        
+        # Filtrování podle stavu
+        status = self.request.GET.get('status')
+        if status:
+            queryset = queryset.filter(status=status)
+        
+        return queryset.order_by('-created_at')
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['warehouses'] = Warehouse.objects.select_related('canteen').all()
+        context['selected_warehouse'] = self.request.GET.get('warehouse', '')
+        context['selected_status'] = self.request.GET.get('status', '')
+        context['statuses'] = GoodsReceipt.Status.choices
+        return context
+
+
+class GoodsReceiptDetailView(LoginRequiredMixin, DetailView):
+    model = GoodsReceipt
+    template_name = 'inventory/goods_receipt_detail.html'
+    context_object_name = 'goods_receipt'
+    
+    def get_queryset(self):
+        return GoodsReceipt.objects.select_related('warehouse', 'warehouse__canteen', 'created_by').prefetch_related('items__ingredient')
+
+
+@login_required
+def goods_receipt_create(request):
+    """Vytvoření nového příjmu zboží"""
+    if request.method == 'POST':
+        # Základní údaje příjmu
+        warehouse_id = request.POST.get('warehouse')
+        receipt_number = request.POST.get('receipt_number')
+        receipt_date = request.POST.get('receipt_date')
+        supplier = request.POST.get('supplier', '')
+        notes = request.POST.get('notes', '')
+        
+        if not warehouse_id or not receipt_number or not receipt_date:
+            messages.error(request, 'Vyplňte povinná pole: Sklad, Číslo dokladu a Datum příjmu.')
+            return redirect('inventory:goods_receipt_create')
+        
+        try:
+            warehouse = Warehouse.objects.get(pk=warehouse_id)
+        except Warehouse.DoesNotExist:
+            messages.error(request, 'Vybraný sklad neexistuje.')
+            return redirect('inventory:goods_receipt_create')
+        
+        # Zpracování položek příjmu
+        items_data = []
+        item_count = int(request.POST.get('item_count', 0))
+        
+        for i in range(item_count):
+            ingredient_id = request.POST.get(f'item_{i}_ingredient')
+            quantity = request.POST.get(f'item_{i}_quantity')
+            price = request.POST.get(f'item_{i}_price')
+            item_notes = request.POST.get(f'item_{i}_notes', '')
+            
+            if ingredient_id and quantity and price:
+                try:
+                    # Normalize decimal separators for both comma and dot
+                    quantity_normalized = quantity.replace(',', '.')
+                    price_normalized = price.replace(',', '.')
+                    
+                    items_data.append({
+                        'ingredient_id': int(ingredient_id),
+                        'quantity': Decimal(quantity_normalized),
+                        'price': Decimal(price_normalized),
+                        'notes': item_notes
+                    })
+                except (ValueError, InvalidOperation):
+                    messages.error(request, f'Neplatná hodnota v položce {i+1}.')
+                    return redirect('inventory:goods_receipt_create')
+        
+        if not items_data:
+            messages.error(request, 'Přidejte alespoň jednu položku příjmu.')
+            return redirect('inventory:goods_receipt_create')
+        
+        # Vytvoření příjmu a položek v transakci
+        try:
+            with transaction.atomic():
+                goods_receipt = GoodsReceipt.objects.create(
+                    warehouse=warehouse,
+                    receipt_number=receipt_number,
+                    receipt_date=receipt_date,
+                    supplier=supplier,
+                    notes=notes,
+                    created_by=request.user
+                )
+                
+                for item_data in items_data:
+                    ingredient = Ingredient.objects.get(pk=item_data['ingredient_id'])
+                    GoodsReceiptItem.objects.create(
+                        goods_receipt=goods_receipt,
+                        ingredient=ingredient,
+                        quantity=item_data['quantity'],
+                        price=item_data['price'],
+                        notes=item_data['notes']
+                    )
+                
+                messages.success(request, f'Příjem zboží "{receipt_number}" byl úspěšně vytvořen.')
+                return redirect('inventory:goods_receipt_detail', pk=goods_receipt.pk)
+        
+        except Exception as e:
+            messages.error(request, f'Chyba při vytváření příjmu: {str(e)}')
+            return redirect('inventory:goods_receipt_create')
+    
+    # GET - zobrazíme formulář
+    warehouses = Warehouse.objects.select_related('canteen').all()
+    ingredients = Ingredient.objects.all().order_by('name')
+    
+    context = {
+        'warehouses': warehouses,
+        'ingredients': ingredients,
+    }
+    
+    return render(request, 'inventory/goods_receipt_form.html', context)
+
+
+@login_required
+def goods_receipt_confirm(request, pk):
+    """Potvrzení příjmu zboží - aktualizuje sklady a ceny"""
+    goods_receipt = get_object_or_404(GoodsReceipt, pk=pk)
+    
+    if goods_receipt.status != GoodsReceipt.Status.DRAFT:
+        messages.warning(request, 'Tento příjem již byl potvrzen.')
+        return redirect('inventory:goods_receipt_detail', pk=pk)
+    
+    if request.method == 'POST':
+        try:
+            goods_receipt.confirm()
+            messages.success(
+                request, 
+                f'Příjem zboží "{goods_receipt.receipt_number}" byl potvrzen. '
+                f'Sklady byly aktualizovány.'
+            )
+        except Exception as e:
+            messages.error(request, f'Chyba při potvrzování příjmu: {str(e)}')
+        
+        return redirect('inventory:goods_receipt_detail', pk=pk)
+    
+    # GET - zobrazíme potvrzovací stránku
+    context = {
+        'goods_receipt': goods_receipt,
+    }
+    return render(request, 'inventory/goods_receipt_confirm.html', context)
+
+
+@login_required
+def goods_receipt_delete(request, pk):
+    """Smazání příjmu zboží - pouze pokud není potvrzen"""
+    goods_receipt = get_object_or_404(GoodsReceipt, pk=pk)
+    
+    if goods_receipt.status == GoodsReceipt.Status.CONFIRMED:
+        messages.error(request, 'Nelze smazat potvrzený příjem zboží.')
+        return redirect('inventory:goods_receipt_detail', pk=pk)
+    
+    if request.method == 'POST':
+        receipt_number = goods_receipt.receipt_number
+        goods_receipt.delete()
+        messages.success(request, f'Příjem zboží "{receipt_number}" byl smazán.')
+        return redirect('inventory:goods_receipt_list')
+    
+    context = {
+        'goods_receipt': goods_receipt,
+    }
+    return render(request, 'inventory/goods_receipt_confirm_delete.html', context)

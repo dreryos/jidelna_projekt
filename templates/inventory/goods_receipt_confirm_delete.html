@@ -1,0 +1,51 @@
+{% extends 'base.html' %}
+{% load django_bootstrap5 %}
+
+{% block title %}Smazat příjem zboží - Jídelna{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h1>
+    <i class="fas fa-trash me-2"></i>Smazat příjem zboží
+  </h1>
+</div>
+
+<div class="card">
+  <div class="card-body">
+    <div class="alert alert-danger">
+      <h5>
+        <i class="fas fa-exclamation-triangle me-2"></i>
+        Opravdu chcete smazat tento příjem zboží?
+      </h5>
+      <p class="mb-0">
+        Tato akce je nevratná. Smazán bude příjem včetně všech jeho položek.
+        Pokud byl příjem již potvrzen, nelze ho smazat.
+      </p>
+    </div>
+    
+    <div class="card mt-3">
+      <div class="card-header">
+        <h5 class="mb-0">Informace o příjmu</h5>
+      </div>
+      <div class="card-body">
+        <p><strong>Číslo dokladu:</strong> {{ goods_receipt.receipt_number }}</p>
+        <p><strong>Sklad:</strong> {{ goods_receipt.warehouse.name }} ({{ goods_receipt.warehouse.canteen.name }})</p>
+        <p><strong>Datum příjmu:</strong> {{ goods_receipt.receipt_date|date:"d.m.Y" }}</p>
+        <p><strong>Dodavatel:</strong> {{ goods_receipt.supplier|default:"-" }}</p>
+        <p><strong>Počet položek:</strong> {{ goods_receipt.items.count }}</p>
+        <p><strong>Celková hodnota:</strong> {{ goods_receipt.get_total_value|floatformat:2 }} Kč</p>
+      </div>
+    </div>
+    
+    <form method="post" class="mt-4">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-danger btn-lg">
+        <i class="fas fa-trash me-2"></i>Ano, smazat příjem
+      </button>
+      <a href="{% url 'inventory:goods_receipt_detail' goods_receipt.pk %}" class="btn btn-secondary btn-lg">
+        <i class="fas fa-times me-2"></i>Zrušit
+      </a>
+    </form>
+  </div>
+</div>
+{% endblock %}

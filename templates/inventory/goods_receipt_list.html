@@ -1,0 +1,172 @@
+{% extends 'base.html' %}
+{% load django_bootstrap5 %}
+
+{% block title %}Příjmy zboží - Jídelna{% endblock %}
+
+{% block extra_css %}
+<style>
+.badge.bg-success {
+    background-color: #28a745 !important;
+}
+.badge.bg-secondary {
+    background-color: #6c757d !important;
+}
+.table thead th {
+    vertical-align: middle;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h1>
+    <i class="fas fa-truck-loading me-2"></i>Příjmy zboží
+  </h1>
+  <div>
+    <a href="{% url 'inventory:stock_list' %}" class="btn btn-outline-primary me-2">
+      <i class="fas fa-warehouse me-2"></i>Sklady
+    </a>
+    <a href="{% url 'inventory:goods_receipt_create' %}" class="btn btn-success">
+      <i class="fas fa-plus me-2"></i>Nový příjem zboží
+    </a>
+  </div>
+</div>
+
+<!-- Filtry -->
+<div class="card mb-4">
+  <div class="card-body">
+    <form method="get" class="row g-3">
+      <div class="col-md-4">
+        <label for="warehouse" class="form-label">Sklad</label>
+        <select name="warehouse" id="warehouse" class="form-select">
+          <option value="">Všechny sklady</option>
+          {% for warehouse in warehouses %}
+            <option value="{{ warehouse.id }}" {% if selected_warehouse == warehouse.id|stringformat:"s" %}selected{% endif %}>
+              {{ warehouse.name }} ({{ warehouse.canteen.name }})
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+      
+      <div class="col-md-4">
+        <label for="status" class="form-label">Stav</label>
+        <select name="status" id="status" class="form-select">
+          <option value="">Všechny stavy</option>
+          {% for status_code, status_name in statuses %}
+            <option value="{{ status_code }}" {% if selected_status == status_code %}selected{% endif %}>
+              {{ status_name }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+      
+      <div class="col-md-4 d-flex align-items-end">
+        <button type="submit" class="btn btn-primary me-2">
+          <i class="fas fa-filter me-2"></i>Filtrovat
+        </button>
+        <a href="{% url 'inventory:goods_receipt_list' %}" class="btn btn-secondary">
+          <i class="fas fa-times me-2"></i>Zrušit filtry
+        </a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Seznam příjmů -->
+<div class="card">
+  <div class="card-body">
+    {% if goods_receipts %}
+      <div class="table-responsive">
+        <table class="table table-hover">
+          <thead>
+            <tr>
+              <th>Číslo dokladu</th>
+              <th>Sklad</th>
+              <th>Datum příjmu</th>
+              <th>Dodavatel</th>
+              <th>Stav</th>
+              <th>Celková hodnota</th>
+              <th>Vytvořil</th>
+              <th>Akce</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for receipt in goods_receipts %}
+              <tr>
+                <td>
+                  <a href="{% url 'inventory:goods_receipt_detail' receipt.pk %}">
+                    <strong>{{ receipt.receipt_number }}</strong>
+                  </a>
+                </td>
+                <td>{{ receipt.warehouse.name }} ({{ receipt.warehouse.canteen.name }})</td>
+                <td>{{ receipt.receipt_date|date:"d.m.Y" }}</td>
+                <td>{{ receipt.supplier|default:"-" }}</td>
+                <td>
+                  {% if receipt.status == 'CONFIRMED' %}
+                    <span class="badge bg-success">
+                      <i class="fas fa-check-circle me-1"></i>Potvrzeno
+                    </span>
+                  {% else %}
+                    <span class="badge bg-secondary">
+                      <i class="fas fa-clock me-1"></i>Koncept
+                    </span>
+                  {% endif %}
+                </td>
+                <td>{{ receipt.get_total_value|floatformat:2 }} Kč</td>
+                <td>{{ receipt.created_by.username }}</td>
+                <td>
+                  <a href="{% url 'inventory:goods_receipt_detail' receipt.pk %}" 
+                     class="btn btn-sm btn-info" title="Detail">
+                    <i class="fas fa-eye"></i>
+                  </a>
+                  {% if receipt.status == 'DRAFT' %}
+                    <a href="{% url 'inventory:goods_receipt_delete' receipt.pk %}" 
+                       class="btn btn-sm btn-danger" title="Smazat">
+                      <i class="fas fa-trash"></i>
+                    </a>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      
+      <!-- Pagination -->
+      {% if is_paginated %}
+        <nav aria-label="Navigace stránkování">
+          <ul class="pagination justify-content-center">
+            {% if page_obj.has_previous %}
+              <li class="page-item">
+                <a class="page-link" href="?page=1{% if selected_warehouse %}&warehouse={{ selected_warehouse }}{% endif %}{% if selected_status %}&status={{ selected_status }}{% endif %}">První</a>
+              </li>
+              <li class="page-item">
+                <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if selected_warehouse %}&warehouse={{ selected_warehouse }}{% endif %}{% if selected_status %}&status={{ selected_status }}{% endif %}">Předchozí</a>
+              </li>
+            {% endif %}
+            
+            <li class="page-item active">
+              <span class="page-link">{{ page_obj.number }} z {{ page_obj.paginator.num_pages }}</span>
+            </li>
+            
+            {% if page_obj.has_next %}
+              <li class="page-item">
+                <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if selected_warehouse %}&warehouse={{ selected_warehouse }}{% endif %}{% if selected_status %}&status={{ selected_status }}{% endif %}">Další</a>
+              </li>
+              <li class="page-item">
+                <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% if selected_warehouse %}&warehouse={{ selected_warehouse }}{% endif %}{% if selected_status %}&status={{ selected_status }}{% endif %}">Poslední</a>
+              </li>
+            {% endif %}
+          </ul>
+        </nav>
+      {% endif %}
+    {% else %}
+      <div class="alert alert-info">
+        <i class="fas fa-info-circle me-2"></i>
+        Zatím nejsou vytvořeny žádné příjmy zboží.
+        <a href="{% url 'inventory:goods_receipt_create' %}" class="alert-link">Vytvořit první příjem zboží</a>
+      </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

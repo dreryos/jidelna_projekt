@@ -1,0 +1,171 @@
+{% extends 'base.html' %}
+{% load django_bootstrap5 %}
+
+{% block title %}Detail příjmu zboží - Jídelna{% endblock %}
+
+{% block extra_css %}
+<style>
+.info-row {
+    padding: 10px 0;
+    border-bottom: 1px solid #dee2e6;
+}
+.info-row:last-child {
+    border-bottom: none;
+}
+.info-label {
+    font-weight: bold;
+    color: #6c757d;
+}
+.badge.bg-success {
+    background-color: #28a745 !important;
+}
+.badge.bg-secondary {
+    background-color: #6c757d !important;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h1>
+    <i class="fas fa-truck-loading me-2"></i>Detail příjmu zboží
+  </h1>
+  <div>
+    <a href="{% url 'inventory:goods_receipt_list' %}" class="btn btn-secondary">
+      <i class="fas fa-arrow-left me-2"></i>Zpět na seznam
+    </a>
+    {% if goods_receipt.status == 'DRAFT' %}
+      <a href="{% url 'inventory:goods_receipt_confirm' goods_receipt.pk %}" class="btn btn-success">
+        <i class="fas fa-check me-2"></i>Potvrdit příjem
+      </a>
+      <a href="{% url 'inventory:goods_receipt_delete' goods_receipt.pk %}" class="btn btn-danger">
+        <i class="fas fa-trash me-2"></i>Smazat
+      </a>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Základní informace -->
+<div class="card mb-4">
+  <div class="card-header">
+    <h5 class="mb-0">Základní informace</h5>
+  </div>
+  <div class="card-body">
+    <div class="row">
+      <div class="col-md-6">
+        <div class="info-row">
+          <span class="info-label">Číslo dokladu:</span>
+          <span class="ms-2">{{ goods_receipt.receipt_number }}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Sklad:</span>
+          <span class="ms-2">{{ goods_receipt.warehouse.name }} ({{ goods_receipt.warehouse.canteen.name }})</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Datum příjmu:</span>
+          <span class="ms-2">{{ goods_receipt.receipt_date|date:"d.m.Y" }}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Dodavatel:</span>
+          <span class="ms-2">{{ goods_receipt.supplier|default:"-" }}</span>
+        </div>
+      </div>
+      
+      <div class="col-md-6">
+        <div class="info-row">
+          <span class="info-label">Stav:</span>
+          <span class="ms-2">
+            {% if goods_receipt.status == 'CONFIRMED' %}
+              <span class="badge bg-success">
+                <i class="fas fa-check-circle me-1"></i>Potvrzeno
+              </span>
+            {% else %}
+              <span class="badge bg-secondary">
+                <i class="fas fa-clock me-1"></i>Koncept
+              </span>
+            {% endif %}
+          </span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Vytvořeno:</span>
+          <span class="ms-2">{{ goods_receipt.created_at|date:"d.m.Y H:i" }} ({{ goods_receipt.created_by.username }})</span>
+        </div>
+        {% if goods_receipt.confirmed_at %}
+        <div class="info-row">
+          <span class="info-label">Potvrzeno:</span>
+          <span class="ms-2">{{ goods_receipt.confirmed_at|date:"d.m.Y H:i" }}</span>
+        </div>
+        {% endif %}
+        <div class="info-row">
+          <span class="info-label">Celková hodnota:</span>
+          <span class="ms-2"><strong>{{ goods_receipt.get_total_value|floatformat:2 }} Kč</strong></span>
+        </div>
+      </div>
+    </div>
+    
+    {% if goods_receipt.notes %}
+    <div class="info-row mt-3">
+      <span class="info-label">Poznámky:</span>
+      <div class="mt-2">{{ goods_receipt.notes }}</div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Položky příjmu -->
+<div class="card">
+  <div class="card-header">
+    <h5 class="mb-0">Položky příjmu ({{ goods_receipt.items.count }})</h5>
+  </div>
+  <div class="card-body">
+    {% if goods_receipt.items.exists %}
+      <div class="table-responsive">
+        <table class="table table-hover">
+          <thead>
+            <tr>
+              <th>Surovina</th>
+              <th>Množství</th>
+              <th>Jednotka</th>
+              <th>Cena za jedn.</th>
+              <th>Celková cena</th>
+              <th>Poznámka</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in goods_receipt.items.all %}
+              <tr>
+                <td><strong>{{ item.ingredient.name }}</strong></td>
+                <td class="text-end">{{ item.quantity|floatformat:3 }}</td>
+                <td>{{ item.ingredient.unit }}</td>
+                <td class="text-end">{{ item.price|floatformat:2 }} Kč</td>
+                <td class="text-end"><strong>{{ item.total_price|floatformat:2 }} Kč</strong></td>
+                <td>{{ item.notes|default:"-" }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+          <tfoot>
+            <tr class="table-light">
+              <th colspan="4" class="text-end">Celkem:</th>
+              <th class="text-end">{{ goods_receipt.get_total_value|floatformat:2 }} Kč</th>
+              <th></th>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    {% else %}
+      <div class="alert alert-info">
+        <i class="fas fa-info-circle me-2"></i>Tento příjem neobsahuje žádné položky.
+      </div>
+    {% endif %}
+  </div>
+</div>
+
+{% if goods_receipt.status == 'DRAFT' %}
+<div class="alert alert-warning mt-4">
+  <i class="fas fa-exclamation-triangle me-2"></i>
+  <strong>Upozornění:</strong> Tento příjem je stále ve stavu Koncept. 
+  Pro aktualizaci skladů a cen jej musíte potvrdit pomocí tlačítka <strong>"Potvrdit příjem"</strong> výše.
+</div>
+{% endif %}
+
+{% endblock %}

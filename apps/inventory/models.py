@@ -2,6 +2,7 @@ from django.db import models
 from django.utils import timezone
 from decimal import Decimal
 from datetime import datetime
+from django.db import transaction
 from apps.core.models import Ingredient
 from apps.canteens.models import Warehouse
 
@@ -9,6 +10,8 @@ from apps.canteens.models import Warehouse
 Model pro evidenci zásob v konkrétních skladech.
 - StockItem: propojovací entita mezi `Ingredient` a `Warehouse`, obsahuje množství a cenu.
 - IngredientPriceHistory: historie cen suroviny v konkrétním skladu pro přesné kalkulace.
+- GoodsReceipt: dokument příjmu zboží
+- GoodsReceiptItem: položka příjmu zboží (surovina, množství, cena)
 
 Cenu používáme pro výpočet ceny porcí. Množství se aktualizuje při výdeji z výdejky (PickingList).
 Historie cen umožňuje správné výpočty nákladů i při změně nákupních cen v čase.
@@ -178,3 +181,155 @@ class IngredientPriceHistory(models.Model):
             return stock_item.price
         except StockItem.DoesNotExist:
             return Decimal('0')
+
+
+class GoodsReceipt(models.Model):
+    """
+    Dokument příjmu zboží.
+    Slouží k evidenci příjmů surovin do skladu s cenou.
+    """
+    class Status(models.TextChoices):
+        DRAFT = 'DRAFT', 'Koncept'
+        CONFIRMED = 'CONFIRMED', 'Potvrzeno'
+    
+    warehouse = models.ForeignKey(
+        Warehouse, 
+        on_delete=models.PROTECT, 
+        related_name='goods_receipts',
+        verbose_name="Sklad"
+    )
+    receipt_number = models.CharField(
+        max_length=50,
+        verbose_name="Číslo dokladu",
+        help_text="Např. číslo dodacího listu nebo faktury"
+    )
+    receipt_date = models.DateField(
+        default=timezone.now,
+        verbose_name="Datum příjmu"
+    )
+    supplier = models.CharField(
+        max_length=200,
+        blank=True,
+        verbose_name="Dodavatel",
+        help_text="Název dodavatele"
+    )
+    status = models.CharField(
+        max_length=10,
+        choices=Status.choices,
+        default=Status.DRAFT,
+        verbose_name="Stav"
+    )
+    notes = models.TextField(
+        blank=True,
+        verbose_name="Poznámky"
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Vytvořeno"
+    )
+    created_by = models.ForeignKey(
+        'auth.User',
+        on_delete=models.PROTECT,
+        verbose_name="Vytvořil"
+    )
+    confirmed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Potvrzeno dne"
+    )
+    
+    def __str__(self):
+        return f"Příjem {self.receipt_number} - {self.warehouse.name}"
+    
+    def get_total_value(self):
+        """Vrátí celkovou hodnotu příjmu"""
+        total = Decimal('0')
+        for item in self.items.all():
+            total += item.quantity * item.price
+        return total
+    
+    def confirm(self):
+        """
+        Potvrdí příjem zboží - aktualizuje stavy ve skladu a ceny.
+        Pouze pokud je ve stavu DRAFT.
+        """
+        if self.status != self.Status.DRAFT:
+            raise ValueError("Příjem lze potvrdit pouze ve stavu Koncept")
+        
+        with transaction.atomic():
+            for item in self.items.all():
+                # Získání nebo vytvoření skladové položky
+                stock_item, created = StockItem.objects.get_or_create(
+                    ingredient=item.ingredient,
+                    warehouse=self.warehouse,
+                    defaults={
+                        'quantity': Decimal('0'),
+                        'price': item.price
+                    }
+                )
+                
+                # Přičtení množství
+                stock_item.quantity += item.quantity
+                
+                # Aktualizace ceny - zapíše se do historie automaticky v save() StockItem
+                if stock_item.price != item.price:
+                    stock_item.price = item.price
+                
+                stock_item.save()
+            
+            # Změna stavu na potvrzeno
+            self.status = self.Status.CONFIRMED
+            self.confirmed_at = timezone.now()
+            self.save()
+    
+    class Meta:
+        verbose_name = "Příjem zboží"
+        verbose_name_plural = "Příjmy zboží"
+        ordering = ['-created_at']
+
+
+class GoodsReceiptItem(models.Model):
+    """
+    Položka příjmu zboží - konkrétní surovina s množstvím a cenou.
+    """
+    goods_receipt = models.ForeignKey(
+        GoodsReceipt,
+        on_delete=models.CASCADE,
+        related_name='items',
+        verbose_name="Příjem zboží"
+    )
+    ingredient = models.ForeignKey(
+        Ingredient,
+        on_delete=models.PROTECT,
+        verbose_name="Surovina"
+    )
+    quantity = models.DecimalField(
+        max_digits=10,
+        decimal_places=3,
+        verbose_name="Množství",
+        help_text="Množství v základní jednotce suroviny"
+    )
+    price = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        verbose_name="Nákupní cena za jednotku"
+    )
+    notes = models.CharField(
+        max_length=200,
+        blank=True,
+        verbose_name="Poznámka",
+        help_text="Např. šarže, expirace"
+    )
+    
+    def __str__(self):
+        return f"{self.ingredient.name}: {self.quantity} {self.ingredient.unit} @ {self.price} Kč"
+    
+    @property
+    def total_price(self):
+        """Vrátí celkovou cenu položky (množství × cena)"""
+        return self.quantity * self.price
+    
+    class Meta:
+        verbose_name = "Položka příjmu zboží"
+        verbose_name_plural = "Položky příjmu zboží"
+        ordering = ['ingredient__name']

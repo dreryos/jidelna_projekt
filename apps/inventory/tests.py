@@ -341,3 +341,266 @@ class IngredientPriceHistoryTest(TestCase):
         prices = [h.price for h in history]
         self.assertEqual(prices[0], Decimal('80.00'))  # Newest
         self.assertEqual(prices[-1], Decimal('50.00'))  # Oldest
+
+
+class GoodsReceiptTest(TestCase):
+    """Tests for goods receipt functionality"""
+    
+    def setUp(self):
+        """Set up test data"""
+        from django.contrib.auth.models import User
+        from apps.inventory.models import GoodsReceipt, GoodsReceiptItem
+        
+        self.canteen = Canteen.objects.create(name='Test Canteen')
+        self.warehouse = Warehouse.objects.create(name='Main Warehouse', canteen=self.canteen)
+        
+        self.ingredient1 = Ingredient.objects.create(
+            name='Flour',
+            unit='kg',
+            base_unit='kg',
+            recipe_unit='g',
+            conversion_factor=Decimal('1000')
+        )
+        
+        self.ingredient2 = Ingredient.objects.create(
+            name='Sugar',
+            unit='kg',
+            base_unit='kg',
+            recipe_unit='g',
+            conversion_factor=Decimal('1000')
+        )
+        
+        self.user = User.objects.create_user(username='testuser', password='testpass')
+    
+    def test_create_goods_receipt(self):
+        """Test creating a goods receipt"""
+        from apps.inventory.models import GoodsReceipt, GoodsReceiptItem
+        
+        goods_receipt = GoodsReceipt.objects.create(
+            warehouse=self.warehouse,
+            receipt_number='GR-001',
+            receipt_date=timezone.now().date(),
+            supplier='Test Supplier',
+            created_by=self.user
+        )
+        
+        self.assertEqual(goods_receipt.status, GoodsReceipt.Status.DRAFT)
+        self.assertEqual(goods_receipt.receipt_number, 'GR-001')
+        self.assertEqual(goods_receipt.warehouse, self.warehouse)
+    
+    def test_add_items_to_goods_receipt(self):
+        """Test adding items to goods receipt"""
+        from apps.inventory.models import GoodsReceipt, GoodsReceiptItem
+        
+        goods_receipt = GoodsReceipt.objects.create(
+            warehouse=self.warehouse,
+            receipt_number='GR-001',
+            receipt_date=timezone.now().date(),
+            created_by=self.user
+        )
+        
+        item1 = GoodsReceiptItem.objects.create(
+            goods_receipt=goods_receipt,
+            ingredient=self.ingredient1,
+            quantity=Decimal('10.000'),
+            price=Decimal('25.00')
+        )
+        
+        item2 = GoodsReceiptItem.objects.create(
+            goods_receipt=goods_receipt,
+            ingredient=self.ingredient2,
+            quantity=Decimal('5.000'),
+            price=Decimal('30.00')
+        )
+        
+        self.assertEqual(goods_receipt.items.count(), 2)
+        self.assertEqual(item1.total_price, Decimal('250.00'))  # 10 * 25
+        self.assertEqual(item2.total_price, Decimal('150.00'))  # 5 * 30
+    
+    def test_goods_receipt_total_value(self):
+        """Test calculating total value of goods receipt"""
+        from apps.inventory.models import GoodsReceipt, GoodsReceiptItem
+        
+        goods_receipt = GoodsReceipt.objects.create(
+            warehouse=self.warehouse,
+            receipt_number='GR-001',
+            receipt_date=timezone.now().date(),
+            created_by=self.user
+        )
+        
+        GoodsReceiptItem.objects.create(
+            goods_receipt=goods_receipt,
+            ingredient=self.ingredient1,
+            quantity=Decimal('10.000'),
+            price=Decimal('25.00')
+        )
+        
+        GoodsReceiptItem.objects.create(
+            goods_receipt=goods_receipt,
+            ingredient=self.ingredient2,
+            quantity=Decimal('5.000'),
+            price=Decimal('30.00')
+        )
+        
+        # Total should be 250 + 150 = 400
+        self.assertEqual(goods_receipt.get_total_value(), Decimal('400.00'))
+    
+    def test_confirm_goods_receipt_updates_stock(self):
+        """Test that confirming goods receipt updates stock quantities"""
+        from apps.inventory.models import GoodsReceipt, GoodsReceiptItem
+        
+        # Create initial stock
+        stock1 = StockItem.objects.create(
+            ingredient=self.ingredient1,
+            warehouse=self.warehouse,
+            quantity=Decimal('5.000'),
+            price=Decimal('20.00')
+        )
+        
+        # Create goods receipt
+        goods_receipt = GoodsReceipt.objects.create(
+            warehouse=self.warehouse,
+            receipt_number='GR-001',
+            receipt_date=timezone.now().date(),
+            created_by=self.user
+        )
+        
+        GoodsReceiptItem.objects.create(
+            goods_receipt=goods_receipt,
+            ingredient=self.ingredient1,
+            quantity=Decimal('10.000'),
+            price=Decimal('25.00')
+        )
+        
+        GoodsReceiptItem.objects.create(
+            goods_receipt=goods_receipt,
+            ingredient=self.ingredient2,
+            quantity=Decimal('5.000'),
+            price=Decimal('30.00')
+        )
+        
+        # Confirm the receipt
+        goods_receipt.confirm()
+        
+        # Check stock was updated
+        stock1.refresh_from_db()
+        self.assertEqual(stock1.quantity, Decimal('15.000'))  # 5 + 10
+        self.assertEqual(stock1.price, Decimal('25.00'))  # Updated price
+        
+        # Check new stock item was created for ingredient2
+        stock2 = StockItem.objects.get(ingredient=self.ingredient2, warehouse=self.warehouse)
+        self.assertEqual(stock2.quantity, Decimal('5.000'))
+        self.assertEqual(stock2.price, Decimal('30.00'))
+        
+        # Check status changed
+        self.assertEqual(goods_receipt.status, GoodsReceipt.Status.CONFIRMED)
+        self.assertIsNotNone(goods_receipt.confirmed_at)
+    
+    def test_confirm_goods_receipt_creates_price_history(self):
+        """Test that confirming goods receipt creates price history records"""
+        from apps.inventory.models import GoodsReceipt, GoodsReceiptItem
+        
+        goods_receipt = GoodsReceipt.objects.create(
+            warehouse=self.warehouse,
+            receipt_number='GR-001',
+            receipt_date=timezone.now().date(),
+            created_by=self.user
+        )
+        
+        GoodsReceiptItem.objects.create(
+            goods_receipt=goods_receipt,
+            ingredient=self.ingredient1,
+            quantity=Decimal('10.000'),
+            price=Decimal('25.00')
+        )
+        
+        # Confirm the receipt
+        goods_receipt.confirm()
+        
+        # Check price history was created
+        history = IngredientPriceHistory.objects.filter(
+            ingredient=self.ingredient1,
+            warehouse=self.warehouse
+        )
+        
+        self.assertEqual(history.count(), 1)
+        self.assertEqual(history.first().price, Decimal('25.00'))
+    
+    def test_cannot_confirm_already_confirmed_receipt(self):
+        """Test that already confirmed receipt cannot be confirmed again"""
+        from apps.inventory.models import GoodsReceipt, GoodsReceiptItem
+        
+        goods_receipt = GoodsReceipt.objects.create(
+            warehouse=self.warehouse,
+            receipt_number='GR-001',
+            receipt_date=timezone.now().date(),
+            created_by=self.user
+        )
+        
+        GoodsReceiptItem.objects.create(
+            goods_receipt=goods_receipt,
+            ingredient=self.ingredient1,
+            quantity=Decimal('10.000'),
+            price=Decimal('25.00')
+        )
+        
+        # Confirm once
+        goods_receipt.confirm()
+        
+        # Try to confirm again
+        with self.assertRaises(ValueError):
+            goods_receipt.confirm()
+    
+    def test_price_change_tracking_through_goods_receipt(self):
+        """Test that price changes are tracked through goods receipts"""
+        from apps.inventory.models import GoodsReceipt, GoodsReceiptItem
+        
+        # First receipt with price 20
+        receipt1 = GoodsReceipt.objects.create(
+            warehouse=self.warehouse,
+            receipt_number='GR-001',
+            receipt_date=timezone.now().date(),
+            created_by=self.user
+        )
+        
+        GoodsReceiptItem.objects.create(
+            goods_receipt=receipt1,
+            ingredient=self.ingredient1,
+            quantity=Decimal('10.000'),
+            price=Decimal('20.00')
+        )
+        
+        receipt1.confirm()
+        
+        # Second receipt with price 25
+        time.sleep(0.01)
+        receipt2 = GoodsReceipt.objects.create(
+            warehouse=self.warehouse,
+            receipt_number='GR-002',
+            receipt_date=timezone.now().date(),
+            created_by=self.user
+        )
+        
+        GoodsReceiptItem.objects.create(
+            goods_receipt=receipt2,
+            ingredient=self.ingredient1,
+            quantity=Decimal('5.000'),
+            price=Decimal('25.00')
+        )
+        
+        receipt2.confirm()
+        
+        # Check price history
+        history = IngredientPriceHistory.objects.filter(
+            ingredient=self.ingredient1,
+            warehouse=self.warehouse
+        ).order_by('-valid_from')
+        
+        self.assertEqual(history.count(), 2)
+        self.assertEqual(history[0].price, Decimal('25.00'))  # Latest
+        self.assertEqual(history[1].price, Decimal('20.00'))  # Oldest
+        
+        # Check stock quantity is cumulative
+        stock = StockItem.objects.get(ingredient=self.ingredient1, warehouse=self.warehouse)
+        self.assertEqual(stock.quantity, Decimal('15.000'))  # 10 + 5
+        self.assertEqual(stock.price, Decimal('25.00'))  # Latest price
