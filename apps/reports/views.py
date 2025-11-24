@@ -70,17 +70,20 @@ def generate_order_report(canteen, date_from, date_to):
     - Počítá pomocí RecipeIngredient.get_quantity_in_base_unit()
     """
     from decimal import Decimal
+    from django.db.models import Q
     
     # Najdeme výrobní příkazy pro jídelnu v daném období
-    # Musíme použít resolved_canteen property protože canteen může být null (nastaveno z menu_plan)
-    orders = ProductionOrder.objects.filter(date__gte=date_from, date__lte=date_to).prefetch_related(
-        'portion_variants',
-        'recipe__recipeingredient_set__ingredient',
-        'menu_plan'
-    )
-    
     # Filtrujeme podle jídelny - buď přímo nebo přes menu_plan
-    orders = [order for order in orders if order.resolved_canteen == canteen]
+    orders = ProductionOrder.objects.filter(
+        Q(date__gte=date_from) & Q(date__lte=date_to) & 
+        (Q(canteen=canteen) | Q(menu_plan__canteen=canteen))
+    ).select_related(
+        'recipe',
+        'menu_plan'
+    ).prefetch_related(
+        'portion_variants',
+        'recipe__recipeingredient_set__ingredient'
+    )
 
     needs = {}
 
