@@ -292,7 +292,9 @@ def recipe_cost_detail(request, recipe_id):
         min_cost = Decimal('0')
         max_cost = Decimal('0')
     
-    # Získáme aktuální rozklad surovin (pro první jídelnu)
+    # Získáme aktuální rozklad surovin
+    # Používáme první jídelnu pro výpočet aktuálních cen
+    # (ceny se mohou lišit mezi jídelnami, proto zobrazujeme konkrétní hodnoty)
     canteen = Canteen.objects.first()
     ingredients_breakdown = []
     
