@@ -1,6 +1,7 @@
 from django.db import models
 from django.utils import timezone
 from decimal import Decimal
+from datetime import datetime
 from apps.core.models import Ingredient
 from apps.canteens.models import Warehouse
 
@@ -156,7 +157,6 @@ class IngredientPriceHistory(models.Model):
             query_date = date
         else:
             # Je to date, převedeme na datetime (začátek dne)
-            from datetime import datetime
             query_date = datetime.combine(date, datetime.min.time())
             # Nastavíme timezone aware pokud je to zapnuto
             if timezone.is_aware(timezone.now()):

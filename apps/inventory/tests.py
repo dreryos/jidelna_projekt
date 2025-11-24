@@ -2,6 +2,7 @@ from django.test import TestCase
 from django.utils import timezone
 from decimal import Decimal
 from datetime import datetime, timedelta
+import time
 
 from apps.canteens.models import Canteen, Warehouse
 from apps.core.models import Ingredient, Recipe, RecipeIngredient, Category
@@ -149,7 +150,6 @@ class IngredientPriceHistoryTest(TestCase):
         first_timestamp = first_history.valid_from
         
         # Wait a moment and change price to 60
-        import time
         time.sleep(0.01)
         stock_item.price = Decimal('60.00')
         stock_item.save()
@@ -238,7 +238,6 @@ class IngredientPriceHistoryTest(TestCase):
         historical_date = first_history.valid_from
         
         # Change price
-        import time
         time.sleep(0.01)
         stock_item.price = Decimal('80.00')  # 80 Kč/kg
         stock_item.save()
@@ -327,7 +326,6 @@ class IngredientPriceHistoryTest(TestCase):
         )
         
         # Make several price changes
-        import time
         for price in [Decimal('60.00'), Decimal('70.00'), Decimal('80.00')]:
             time.sleep(0.01)
             stock_item.price = price
