@@ -1208,7 +1208,15 @@ def picking_list_pdf(request, document_id):
         
         # Vygenerujeme PDF
         from django.template.loader import render_to_string
-        from weasyprint import HTML
+        try:
+            from weasyprint import HTML
+        except OSError as e:
+            if "libgobject" in str(e) or "cannot load library" in str(e):
+                messages.error(request, "Chyba: V systému chybí knihovny GTK3 potřebné pro generování PDF (WeasyPrint). Prosím nainstalujte GTK3 Runtime.")
+                logger.error(f"WeasyPrint GTK3 libraries missing: {e}")
+                return redirect('production:picking_list_generator')
+            raise e
+
         from django.http import HttpResponse
         
         html_string = render_to_string('production/picking_list_pdf.html', context)

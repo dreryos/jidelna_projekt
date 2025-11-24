@@ -3,3 +3,4 @@ django-bootstrap5
 openpyxl
 reportlab
 weasyprint
+whitenoise

@@ -1,0 +1,22 @@
+services:
+  web:
+    build: .
+    volumes:
+      - sqlite_data:/app/data
+      - static_volume:/app/staticfiles
+    ports:
+      - "8000:8000"
+    environment:
+      - DJANGO_ALLOWED_HOSTS=*
+      - SECRET_KEY=change_me_in_production
+      - DEBUG=False
+      - SQLITE_DB_PATH=/app/data/db.sqlite3
+      # Superuser creation (optional)
+      - DJANGO_SUPERUSER_USERNAME=admin
+      - DJANGO_SUPERUSER_EMAIL=admin@example.com
+      - DJANGO_SUPERUSER_PASSWORD=admin
+    command: sh -c "python manage.py migrate && python manage.py collectstatic --noinput && python create_superuser.py && gunicorn --bind 0.0.0.0:8000 jidelna_project.wsgi:application"
+
+volumes:
+  sqlite_data:
+  static_volume:
