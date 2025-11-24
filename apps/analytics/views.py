@@ -13,8 +13,9 @@ from django.db.models import Avg, Count, Q
 from decimal import Decimal
 
 from apps.production.models import MenuPlan, ProductionOrder
-from apps.core.models import Recipe
+from apps.core.models import Recipe, Category
 from apps.canteens.models import Canteen
+from apps.inventory.models import StockItem
 
 
 @login_required
@@ -37,7 +38,6 @@ def menu_analytics_list(request):
         # Vypočítáme celkové náklady a průměr
         total_cost = Decimal('0')
         total_meals = 0
-        meal_costs = []
         
         for order in orders:
             # Vypočítáme náklady pro tento výrobní příkaz
@@ -52,7 +52,6 @@ def menu_analytics_list(request):
                 price_info = order.recipe.calculate_portion_price(canteen, portions=int(portions))
                 total_cost += price_info['total']
                 total_meals += int(portions)
-                meal_costs.append(price_info['per_portion'])
         
         # Vypočítáme průměr
         avg_cost_per_meal = total_cost / Decimal(str(total_meals)) if total_meals > 0 else Decimal('0')
@@ -103,9 +102,6 @@ def menu_detail_analytics(request, menu_id):
         # Získáme ingredience a jejich ceny
         ingredients_breakdown = []
         for recipe_ingredient in order.recipe.recipeingredient_set.all():
-            from apps.inventory.models import StockItem
-            from django.db.models import Avg
-            
             # Najdeme průměrnou cenu suroviny
             avg_price_data = StockItem.objects.filter(
                 ingredient=recipe_ingredient.ingredient,
@@ -163,7 +159,13 @@ def recipe_cost_analysis(request):
     category_id = request.GET.get('category')
     
     # Získáme všechny recepty s počtem použití
-    recipes = Recipe.objects.all().select_related('category').prefetch_related('recipeingredient_set__ingredient')
+    recipes_query = Recipe.objects.all().select_related('category').prefetch_related('recipeingredient_set__ingredient')
+    
+    # Aplikujeme filtry pokud jsou zadány
+    if category_id:
+        recipes_query = recipes_query.filter(category_id=category_id)
+    
+    recipes = recipes_query
     
     # Vypočítáme statistiky pro každý recept
     recipes_data = []
@@ -232,7 +234,6 @@ def recipe_cost_analysis(request):
     
     # Získáme seznam jídelen a kategorií pro filtry
     canteens = Canteen.objects.all()
-    from apps.core.models import Category
     categories = Category.objects.all()
     
     context = {
@@ -296,9 +297,6 @@ def recipe_cost_detail(request, recipe_id):
     ingredients_breakdown = []
     
     if canteen:
-        from apps.inventory.models import StockItem
-        from django.db.models import Avg
-        
         for recipe_ingredient in recipe.recipeingredient_set.all():
             # Najdeme průměrnou cenu suroviny
             avg_price_data = StockItem.objects.filter(
