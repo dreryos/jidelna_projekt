@@ -1,0 +1,202 @@
+{% extends 'base.html' %}
+{% load django_bootstrap5 %}
+
+{% block title %}Nový příjem zboží - Jídelna{% endblock %}
+
+{% block extra_css %}
+<style>
+.item-row {
+    background-color: #f8f9fa;
+    padding: 15px;
+    margin-bottom: 10px;
+    border-radius: 5px;
+    border: 1px solid #dee2e6;
+}
+.remove-item {
+    cursor: pointer;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h1>
+    <i class="fas fa-truck-loading me-2"></i>Nový příjem zboží
+  </h1>
+  <a href="{% url 'inventory:goods_receipt_list' %}" class="btn btn-secondary">
+    <i class="fas fa-arrow-left me-2"></i>Zpět na seznam
+  </a>
+</div>
+
+<div class="card">
+  <div class="card-body">
+    <form method="post" id="goodsReceiptForm">
+      {% csrf_token %}
+      
+      <!-- Základní údaje -->
+      <h5 class="mb-3">Základní údaje</h5>
+      <div class="row mb-3">
+        <div class="col-md-4">
+          <label for="warehouse" class="form-label">Sklad <span class="text-danger">*</span></label>
+          <select name="warehouse" id="warehouse" class="form-select" required>
+            <option value="">-- Vyberte sklad --</option>
+            {% for warehouse in warehouses %}
+              <option value="{{ warehouse.id }}">{{ warehouse.name }} ({{ warehouse.canteen.name }})</option>
+            {% endfor %}
+          </select>
+        </div>
+        
+        <div class="col-md-4">
+          <label for="receipt_number" class="form-label">Číslo dokladu <span class="text-danger">*</span></label>
+          <input type="text" name="receipt_number" id="receipt_number" class="form-control" required 
+                 placeholder="Např. DL-2024-001">
+        </div>
+        
+        <div class="col-md-4">
+          <label for="receipt_date" class="form-label">Datum příjmu <span class="text-danger">*</span></label>
+          <input type="date" name="receipt_date" id="receipt_date" class="form-control" required 
+                 value="{% now 'Y-m-d' %}">
+        </div>
+      </div>
+      
+      <div class="row mb-3">
+        <div class="col-md-6">
+          <label for="supplier" class="form-label">Dodavatel</label>
+          <input type="text" name="supplier" id="supplier" class="form-control" 
+                 placeholder="Název dodavatele">
+        </div>
+        
+        <div class="col-md-6">
+          <label for="notes" class="form-label">Poznámky</label>
+          <textarea name="notes" id="notes" class="form-control" rows="2" 
+                    placeholder="Volitelné poznámky k příjmu"></textarea>
+        </div>
+      </div>
+      
+      <hr class="my-4">
+      
+      <!-- Položky příjmu -->
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h5 class="mb-0">Položky příjmu</h5>
+        <button type="button" class="btn btn-primary btn-sm" onclick="addItem()">
+          <i class="fas fa-plus me-2"></i>Přidat položku
+        </button>
+      </div>
+      
+      <div id="items-container">
+        <!-- Položky se přidají dynamicky -->
+      </div>
+      
+      <input type="hidden" name="item_count" id="item_count" value="0">
+      
+      <div class="mt-4">
+        <button type="submit" class="btn btn-success btn-lg">
+          <i class="fas fa-save me-2"></i>Vytvořit příjem
+        </button>
+        <a href="{% url 'inventory:goods_receipt_list' %}" class="btn btn-secondary btn-lg">
+          <i class="fas fa-times me-2"></i>Zrušit
+        </a>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let itemIndex = 0;
+const ingredients = {{ ingredients|safe }};
+
+// Připravíme data surovin pro JavaScript
+const ingredientsData = [
+  {% for ingredient in ingredients %}
+    {id: {{ ingredient.id }}, name: "{{ ingredient.name|escapejs }}", unit: "{{ ingredient.unit|escapejs }}"},
+  {% endfor %}
+];
+
+function addItem() {
+  const container = document.getElementById('items-container');
+  const itemDiv = document.createElement('div');
+  itemDiv.className = 'item-row';
+  itemDiv.id = `item-${itemIndex}`;
+  
+  itemDiv.innerHTML = `
+    <div class="row">
+      <div class="col-md-4">
+        <label class="form-label">Surovina <span class="text-danger">*</span></label>
+        <select name="item_${itemIndex}_ingredient" class="form-select" required onchange="updateUnit(${itemIndex})">
+          <option value="">-- Vyberte surovinu --</option>
+          ${ingredientsData.map(ing => `<option value="${ing.id}" data-unit="${ing.unit}">${ing.name}</option>`).join('')}
+        </select>
+      </div>
+      
+      <div class="col-md-2">
+        <label class="form-label">Množství <span class="text-danger">*</span></label>
+        <div class="input-group">
+          <input type="number" name="item_${itemIndex}_quantity" class="form-control" 
+                 step="0.001" min="0.001" required placeholder="0.000">
+          <span class="input-group-text" id="unit-${itemIndex}">-</span>
+        </div>
+      </div>
+      
+      <div class="col-md-2">
+        <label class="form-label">Cena za jedn. <span class="text-danger">*</span></label>
+        <div class="input-group">
+          <input type="number" name="item_${itemIndex}_price" class="form-control" 
+                 step="0.01" min="0" required placeholder="0.00">
+          <span class="input-group-text">Kč</span>
+        </div>
+      </div>
+      
+      <div class="col-md-3">
+        <label class="form-label">Poznámka</label>
+        <input type="text" name="item_${itemIndex}_notes" class="form-control" 
+               placeholder="Šarže, expirace...">
+      </div>
+      
+      <div class="col-md-1 d-flex align-items-end">
+        <button type="button" class="btn btn-danger btn-sm w-100 remove-item" 
+                onclick="removeItem(${itemIndex})">
+          <i class="fas fa-trash"></i>
+        </button>
+      </div>
+    </div>
+  `;
+  
+  container.appendChild(itemDiv);
+  itemIndex++;
+  document.getElementById('item_count').value = itemIndex;
+}
+
+function removeItem(index) {
+  const item = document.getElementById(`item-${index}`);
+  if (item) {
+    item.remove();
+  }
+}
+
+function updateUnit(index) {
+  const select = document.querySelector(`select[name="item_${index}_ingredient"]`);
+  const unitSpan = document.getElementById(`unit-${index}`);
+  const selectedOption = select.options[select.selectedIndex];
+  const unit = selectedOption.getAttribute('data-unit') || '-';
+  unitSpan.textContent = unit;
+}
+
+// Přidáme první položku při načtení stránky
+document.addEventListener('DOMContentLoaded', function() {
+  addItem();
+});
+
+// Validace před odesláním
+document.getElementById('goodsReceiptForm').addEventListener('submit', function(e) {
+  const itemCount = document.querySelectorAll('.item-row').length;
+  if (itemCount === 0) {
+    e.preventDefault();
+    alert('Přidejte alespoň jednu položku příjmu.');
+    return false;
+  }
+});
+</script>
+{% endblock %}

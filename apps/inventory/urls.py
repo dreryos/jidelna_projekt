@@ -25,4 +25,11 @@ urlpatterns = [
     # Import CSV
     path('import/', views.import_csv_step1, name='import_csv_step1'),
     path('import/confirm/', views.import_csv_step2_confirm, name='import_csv_step2_confirm'),
+    
+    # Příjem zboží (GoodsReceipt)
+    path('goods-receipts/', views.GoodsReceiptListView.as_view(), name='goods_receipt_list'),
+    path('goods-receipts/create/', views.goods_receipt_create, name='goods_receipt_create'),
+    path('goods-receipts/<int:pk>/', views.GoodsReceiptDetailView.as_view(), name='goods_receipt_detail'),
+    path('goods-receipts/<int:pk>/confirm/', views.goods_receipt_confirm, name='goods_receipt_confirm'),
+    path('goods-receipts/<int:pk>/delete/', views.goods_receipt_delete, name='goods_receipt_delete'),
 ]
