@@ -75,6 +75,28 @@
     </div>
   </div>
 
+  <!-- Analytika -->
+  <div class="col-lg-6">
+    <div class="card h-100 shadow-sm">
+      <div class="card-header bg-secondary text-white">
+        <h5 class="card-title mb-0">
+          <i class="fas fa-chart-line me-2"></i>Analytika a statistiky
+        </h5>
+      </div>
+      <div class="card-body">
+        <p class="card-text">Přehled nákladů, analýza cen receptů a statistik jídelníčků.</p>
+        <div class="d-grid gap-2">
+          <a href="{% url 'analytics:menu_analytics_list' %}" class="btn btn-secondary">
+            <i class="fas fa-chart-pie me-2"></i>Náklady jídelníčků
+          </a>
+          <a href="{% url 'analytics:recipe_cost_analysis' %}" class="btn btn-outline-secondary">
+            <i class="fas fa-chart-area me-2"></i>Vývoj cen receptů
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Jídelníčky a výroba -->
   <div class="col-lg-6">
     <div class="card h-100 shadow-sm">

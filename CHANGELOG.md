@@ -5,9 +5,15 @@ Všechny významné změny v tomto projektu budou zdokumentovány v tomto soubor
 Formát je založen na [Keep a Changelog](https://keepachangelog.com/cs/1.0.0/),
 a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
 
-## [Unreleased]
+## [0.9.0] - 2025-11-25
 
 ### Added
+- **Analytika a statistiky**: Přidána nová sekce na hlavní stránku (dashboard)
+  - Karta "Analytika a statistiky" mezi sklady a výrobou
+  - Odkazy na přehled nákladů jídelníčků a vývoj cen receptů
+- **Favicon**: Přidána ikona aplikace (`favicon.png`)
+  - Vytvořena struktura pro statické obrázky (`static/img`)
+  - Implementováno v `base.html` pro zobrazení na všech stránkách
 - **Automatické vytváření surovin ve skladu**: Při vytvoření výrobního příkazu s receptem obsahujícím novou surovinu
   - Surovina je automaticky vytvořena ve skladu s množstvím 0 ks, pokud ve skladu jídelny ještě neexistuje
   - Cena je nastavena na 0 (není známa)
@@ -18,61 +24,10 @@ a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
   - Umožňuje snadnější editaci reálně vydaných položek
   - Zachování historie vygenerovaných výdejek pro budoucí reference
   - Rychlý přehled všech výdejek v systému
-
-### Changed
-- **PDF výdejky optimalizované pro černobílý tisk**: Upraveno generování PDF dokumentů výdejek
-  - Veškeré prvky generovány pouze v černobílých barvách
-  - Zajištění dobré čitelnosti i na černobílých tiskárnách
-  - Optimalizace kontrastu a čitelnosti textu pro ČB tisk
-- **Vylepšená čitelnost sekce "Skutečně vydáno"**: Změněn vzhled PDF výdejek
-  - Odstraněno pruhované pozadí v sekci "Skutečně vydáno" pro lepší čitelnost
-  - Jednodušší a přehlednější layout pro vyplňování skutečně vydaných množství
-- **Filtrování položek podle skladu jídelny**: Při generování PDF výdejky se nyní filtrují položky
-  - Blokují se pouze položky ze skladu přidruženého k dané jídelně
-  - Ostatní sklady se při generování výdejky neberou v úvahu
-  - Přesnější řízení zásob podle jednotlivých jídelen
-
-### Fixed
-- **Ošetření nedostupných položek na skladě**: Implementováno řešení pro případ, kdy položky na blokaci nejsou na skladě
-  - Systém korektně zpracovává situace s nedostatečnými zásobami
-  - Upozornění nebo alternativní handling při nedostupnosti surovin
-  - Prevence chyb při generování výdejek s chybějícími položkami
-- **Zobrazení efektivních porcí**: Opraveno zobrazení počtu efektivních porcí v tabulce jídelníčku
-  - Přidána `@property total_effective_portions` do modelu `ProductionOrder` (dříve jen metoda `get_total_effective_portions()`)
-  - Aktualizovány šablony `daily_picking_list.html` a `daily_picking_list_pdf.html` na použití property místo metody
-  - Nyní se správně zobrazuje číslo, ne jen text "porcí"
-- **Tlačítko pro přidání jídla k dni**: Opravena CSS třída v JavaScript handleru
-  - Handler hledal `.open-add-meal-modal`, ale HTML používalo `.add-meal-to-day-btn`
-  - Změna selektoru v `menu_detail.html` na řádku ~412
-  - Odstraněno nefunkční tlačítko `bulkAddMealBtn` z hlavičky (funkce duplikována tlačítky u jednotlivých dnů)
-
-### Removed
-- **Rychlé stažení výdejky ze seznamu jídelníčků**: Odstraněna sekce pro stažení výdejky na konkrétní den
-  - Odstraněn formulář s výběrem data a jídelny z `menu_list.html`
-  - Odstraněna JavaScript funkce `setToday()`
-  - Funkce je stále dostupná v jiných částech aplikace
-
-### Added
 - **Template filtr `get_item`**: Nový filtr pro získání hodnoty ze slovníku v Django šablonách
   - Umístění: `apps/core/templatetags/core_filters.py`
   - Použití: `{{ dictionary|get_item:key }}`
   - Vrací prázdný list pokud klíč neexistuje nebo slovník je None
-
-### Changed
-- **Redesign stránky editace jídelníčku**: Předělání z kartové struktury na tabulkovou
-  - Stránka `/production/jidelnicky/<id>/` nyní používá tabulkový layout konzistentní se seznamem výrobních příkazů
-  - **MenuPlanDetailView** (`apps/production/views.py`):
-    - Přidána logika pro seskupení výrobních příkazů podle data
-    - Nový context `orders_by_date` - slovník ve formátu `{datum: [seznam příkazů]}`
-    - Optimalizace dotazů pomocí `select_related('recipe', 'menu_plan')` a `prefetch_related('portion_variants')`
-  - **Šablona `menu_detail.html`**:
-    - Změna z karet na tabulku s 5 sloupci: Den (rowspan), Jídlo, Varianty porcí, Efektivně, Akce
-    - Zjednodušené CSS - odstraněny styly specifické pro karty
-    - Prázdné dny se zobrazují s tlačítkem "Přidat" napříč celým řádkem
-    - Vizuální oddělovače mezi dny
-    - Zachování všech JavaScript handlerů s původními CSS třídami
-
-### Added
 - **Select2 autocomplete pro výběr receptů**: Implementace vyhledávacího pole s našeptávačem v modulu tvorby jídelníčku
   - Integrace knihovny Select2 4.1.0 s Bootstrap 5 témem
   - Česká lokalizace vyhledávacího pole
@@ -82,14 +37,6 @@ a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
 - **Rozšiřitelnost base šablony**: Přidány bloky `extra_css` a `extra_js` do `base.html`
   - Umožňuje snadné přidání dalších CSS a JavaScript knihoven do jednotlivých šablon
   - Bloky vloženy za Bootstrap CSS a JavaScript pro správné pořadí načítání
-
-### Fixed
-- **Formuláře pro jídelníčky a výrobní příkazy**: Opravena chyba při vytváření nového jídelníčku
-  - Formuláře `MenuPlanForm`, `ProductionOrderForm` a `ProductionOrderFormAdvanced` nyní správně přijímají argument `user`
-  - Implementována filtrace jídelen podle uživatelských oprávnění přímo ve formulářích
-  - Uživatelé vidí v select boxech pouze jídelny, ke kterým mají přístup
-
-### Added
 - **Uživatelské profily s přiřazením jídelen**: Nový model `UserProfile` pro správu oprávnění uživatelů
   - Model `UserProfile` propojuje uživatele s jídelnami, které smí spravovat
   - Automatické vytváření profilu při registraci uživatele pomocí Django signálů
@@ -105,6 +52,33 @@ a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
   - Detailní záznamy s traceback pro debugging
 
 ### Changed
+- **Zjednodušení formuláře receptů**: Odstraněno pole "Základní počet porcí"
+  - Recepty se nyní vždy počítají na 1 porci (databázově default=10, ale v UI skryto)
+  - Upraven layout formuláře pro lepší využití prostoru (název a kategorie vedle sebe)
+- **Konfigurace statických souborů**: Aktualizováno nastavení `STATICFILES_DIRS` v `settings.py` pro správnou podporu vlastních statických souborů (obrázků)
+- **PDF výdejky optimalizované pro černobílý tisk**: Upraveno generování PDF dokumentů výdejek
+  - Veškeré prvky generovány pouze v černobílých barvách
+  - Zajištění dobré čitelnosti i na černobílých tiskárnách
+  - Optimalizace kontrastu a čitelnosti textu pro ČB tisk
+- **Vylepšená čitelnost sekce "Skutečně vydáno"**: Změněn vzhled PDF výdejek
+  - Odstraněno pruhované pozadí v sekci "Skutečně vydáno" pro lepší čitelnost
+  - Jednodušší a přehlednější layout pro vyplňování skutečně vydaných množství
+- **Filtrování položek podle skladu jídelny**: Při generování PDF výdejky se nyní filtrují položky
+  - Blokují se pouze položky ze skladu přidruženého k dané jídelně
+  - Ostatní sklady se při generování výdejky neberou v úvahu
+  - Přesnější řízení zásob podle jednotlivých jídelen
+- **Redesign stránky editace jídelníčku**: Předělání z kartové struktury na tabulkovou
+  - Stránka `/production/jidelnicky/<id>/` nyní používá tabulkový layout konzistentní se seznamem výrobních příkazů
+  - **MenuPlanDetailView** (`apps/production/views.py`):
+    - Přidána logika pro seskupení výrobních příkazů podle data
+    - Nový context `orders_by_date` - slovník ve formátu `{datum: [seznam příkazů]}`
+    - Optimalizace dotazů pomocí `select_related('recipe', 'menu_plan')` a `prefetch_related('portion_variants')`
+  - **Šablona `menu_detail.html`**:
+    - Změna z karet na tabulku s 5 sloupci: Den (rowspan), Jídlo, Varianty porcí, Efektivně, Akce
+    - Zjednodušené CSS - odstraněny styly specifické pro karty
+    - Prázdné dny se zobrazují s tlačítkem "Přidat" napříč celým řádkem
+    - Vizuální oddělovače mezi dny
+    - Zachování všech JavaScript handlerů s původními CSS třídami
 - **Přidávání jídel do jídelníčku**: Při přidávání nového jídla do jídelníčku lze nyní rovnou definovat více variant porcí (např. malé a velké porce)
   - Nový modal `addMealModal` s podporou dynamického přidávání variant
   - Upravený view `add_meal_to_menu` podporuje pole variant místo jednoho koeficientu
@@ -132,6 +106,30 @@ a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
   - Strukturované error handling s logging
   - Konzistentní JSON error responses
 
+### Fixed
+- **Ošetření nedostupných položek na skladě**: Implementováno řešení pro případ, kdy položky na blokaci nejsou na skladě
+  - Systém korektně zpracovává situace s nedostatečnými zásobami
+  - Upozornění nebo alternativní handling při nedostupnosti surovin
+  - Prevence chyb při generování výdejek s chybějícími položkami
+- **Zobrazení efektivních porcí**: Opraveno zobrazení počtu efektivních porcí v tabulce jídelníčku
+  - Přidána `@property total_effective_portions` do modelu `ProductionOrder` (dříve jen metoda `get_total_effective_portions()`)
+  - Aktualizovány šablony `daily_picking_list.html` a `daily_picking_list_pdf.html` na použití property místo metody
+  - Nyní se správně zobrazuje číslo, ne jen text "porcí"
+- **Tlačítko pro přidání jídla k dni**: Opravena CSS třída v JavaScript handleru
+  - Handler hledal `.open-add-meal-modal`, ale HTML používalo `.add-meal-to-day-btn`
+  - Změna selektoru v `menu_detail.html` na řádku ~412
+  - Odstraněno nefunkční tlačítko `bulkAddMealBtn` z hlavičky (funkce duplikována tlačítky u jednotlivých dnů)
+- **Formuláře pro jídelníčky a výrobní příkazy**: Opravena chyba při vytváření nového jídelníčku
+  - Formuláře `MenuPlanForm`, `ProductionOrderForm` a `ProductionOrderFormAdvanced` nyní správně přijímají argument `user`
+  - Implementována filtrace jídelen podle uživatelských oprávnění přímo ve formulářích
+  - Uživatelé vidí v select boxech pouze jídelny, ke kterým mají přístup
+
+### Removed
+- **Rychlé stažení výdejky ze seznamu jídelníčků**: Odstraněna sekce pro stažení výdejky na konkrétní den
+  - Odstraněn formulář s výběrem data a jídelny z `menu_list.html`
+  - Odstraněna JavaScript funkce `setToday()`
+  - Funkce je stále dostupná v jiných částech aplikace
+
 ### Security
 - **Kontrola přístupu k jídelnám**: Implementována granulární kontrola přístupu na úrovni objektů
   - Uživatelé nemohou zobrazit ani upravovat data z jiných jídelen
@@ -157,7 +155,7 @@ a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
     - Podpora rollback s automatickým vymazáním vytvořených jídelníčků
     - Detailní dokumentace v `apps/production/migrations/MIGRATION_0008_README.md`
 
-## [1.2.0] - 2025-10-27
+## [0.3.0] - 2025-10-27
 
 ### Added
 - **Systém kategorií receptů**: Nový model `Category` pro organizaci receptů podle kategorií z receptáře (P1, P2, HJ, PO atd.)
@@ -222,7 +220,7 @@ a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
   - `templates/inventory/stock_list.html`: Filtrování a české formátování
   - `templates/inventory/warehouse_*.html`: Nové šablony pro správu skladů
 
-## [1.1.0] - 2025-10-XX
+## [0.2.0] - 2025-10-XX
 
 ### Added
 - Modul `production` pro plánování výroby
@@ -234,7 +232,7 @@ a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
 - Aktualizace Django na verzi 4.2.25
 - Přechod na Bootstrap 5
 
-## [1.0.0] - 2025-10-XX
+## [0.1.0] - 2025-10-XX
 
 ### Added
 - Základní struktura Django projektu
@@ -244,7 +242,7 @@ a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
 - Admin rozhraní pro všechny moduly
 - Přihlašování uživatelů
 
-[Unreleased]: https://github.com/dreryos/jidelna_projekt/compare/v1.2.0...HEAD
-[1.2.0]: https://github.com/dreryos/jidelna_projekt/compare/v1.1.0...v1.2.0
-[1.1.0]: https://github.com/dreryos/jidelna_projekt/compare/v1.0.0...v1.1.0
-[1.0.0]: https://github.com/dreryos/jidelna_projekt/releases/tag/v1.0.0
+[0.9.0]: https://github.com/dreryos/jidelna_projekt/compare/v0.3.0...v0.9.0
+[0.3.0]: https://github.com/dreryos/jidelna_projekt/compare/v0.2.0...v0.3.0
+[0.2.0]: https://github.com/dreryos/jidelna_projekt/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/dreryos/jidelna_projekt/releases/tag/v0.1.0

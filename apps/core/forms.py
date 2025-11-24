@@ -31,12 +31,11 @@ class RecipeForm(forms.ModelForm):
     """
     class Meta:
         model = Recipe
-        fields = ['category', 'name', 'description', 'base_portions']
+        fields = ['category', 'name', 'description']
         widgets = {
             'category': forms.Select(attrs={'class': 'form-control', 'required': True}),
             'name': forms.TextInput(attrs={'class': 'form-control'}),
             'description': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
-            'base_portions': forms.NumberInput(attrs={'class': 'form-control', 'min': 1}),
         }
         help_texts = {
             'category': 'Vyberte kategorii - kód receptu se vygeneruje automaticky (např. PL-001, HJ-042)',
