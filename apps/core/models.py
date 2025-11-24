@@ -118,7 +118,7 @@ class Recipe(models.Model):
         
         super().save(*args, **kwargs)
 
-    def calculate_portion_price(self, canteen, portions=1, portion_coefficient=1.0):
+    def calculate_portion_price(self, canteen, portions=1, portion_coefficient=1.0, price_date=None):
         """
         Vypočítá cenu porce pro danou jídelnu.
         Cena se počítá na základě průměrné ceny surovin ve skladech dané jídelny.
@@ -127,11 +127,12 @@ class Recipe(models.Model):
             canteen: Jídelna
             portions: Počet porcí (výchozí 1)
             portion_coefficient: Koeficient velikosti porce (1.0 = normální, 0.5 = poloviční atd.)
+            price_date: Datum pro historické ceny (None = aktuální ceny)
         
         Returns:
             dict: {'total': celková cena, 'per_portion': cena za porci}
         """
-        from apps.inventory.models import StockItem
+        from apps.inventory.models import StockItem, IngredientPriceHistory
         from django.db.models import Avg
 
         total_price = Decimal('0')
@@ -139,13 +140,28 @@ class Recipe(models.Model):
         recipe_ingredients = self.recipeingredient_set.all()
 
         for item in recipe_ingredients:
-            # Najdeme průměrnou cenu suroviny ve všech skladech dané jídelny
-            avg_price_data = StockItem.objects.filter(
-                ingredient=item.ingredient,
-                warehouse__canteen=canteen
-            ).aggregate(avg_price=Avg('price'))
-
-            avg_price = avg_price_data.get('avg_price') or Decimal('0')
+            if price_date is not None:
+                # Použijeme historické ceny pro každý sklad
+                warehouses = canteen.warehouses.all()
+                prices = []
+                for warehouse in warehouses:
+                    price = IngredientPriceHistory.get_price_at_date(
+                        item.ingredient, 
+                        warehouse, 
+                        price_date
+                    )
+                    if price > 0:
+                        prices.append(price)
+                
+                # Průměr z historických cen
+                avg_price = sum(prices) / len(prices) if prices else Decimal('0')
+            else:
+                # Použijeme aktuální ceny
+                avg_price_data = StockItem.objects.filter(
+                    ingredient=item.ingredient,
+                    warehouse__canteen=canteen
+                ).aggregate(avg_price=Avg('price'))
+                avg_price = avg_price_data.get('avg_price') or Decimal('0')
 
             # Vypočítáme množství v základních jednotkách (kg)
             quantity_needed = item.get_quantity_in_base_unit(portions, portion_coefficient)
