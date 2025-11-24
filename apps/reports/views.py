@@ -145,6 +145,10 @@ def order_report_download(request):
         return HttpResponse('Invalid canteen', status=400)
 
     report = generate_order_report(canteen, date_from, date_to)
+    
+    # Add metadata for PDF report
+    report['generated_at'] = timezone.now()
+    report['generated_by'] = request.user
 
     if download == 'excel':
         return generate_excel_response(report)
@@ -214,8 +218,28 @@ def generate_pdf_response(report):
 
     elems = []
 
-    title = Paragraph(f"Report objednávek - {report['canteen'].name}", styles['Heading2'])
-    elems.extend([title, Spacer(1, 12)])
+    title = Paragraph(f"Report objednávek", styles['Heading1'])
+    elems.append(title)
+    elems.append(Spacer(1, 12))
+
+    # Header info
+    header_style = styles['Normal']
+    
+    canteen_info = Paragraph(f"<b>Jídelna:</b> {report['canteen'].name}", header_style)
+    period_info = Paragraph(f"<b>Období:</b> {report['date_from']} - {report['date_to']}", header_style)
+    
+    generated_at_val = report.get('generated_at', timezone.now())
+    # Handle both datetime and date objects safely
+    if hasattr(generated_at_val, 'strftime'):
+        generated_at_str = generated_at_val.strftime('%d.%m.%Y %H:%M')
+    else:
+        generated_at_str = str(generated_at_val)
+        
+    generated_by_str = str(report.get('generated_by', 'Neznámý'))
+    
+    gen_info = Paragraph(f"<b>Generováno:</b> {generated_at_str} (uživatel: {generated_by_str})", header_style)
+    
+    elems.extend([canteen_info, period_info, gen_info, Spacer(1, 12)])
 
     data = [['Surovina', 'Jednotka', 'Potřeba', 'Sklad', 'K objednání']]
     data.extend([[it['ingredient'].name, it['unit'], str(it['needed']), str(it['stock']), str(it['to_order'])] for it in report['items']])
