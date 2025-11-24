@@ -2,31 +2,42 @@
 
 Webová aplikace v Django pro komplexní správu provozu školní nebo firemní jídelny. Umožňuje efektivně spravovat skladové zásoby, receptury, výdej surovin, plánování výroby a kalkulaci cen.
 
-[![Django](https://img.shields.io/badge/Django-4.2.25-green.svg)](https://www.djangoproject.com/)
+[![Django](https://img.shields.io/badge/Django-5.2.6-green.svg)](https://www.djangoproject.com/)
 [![Python](https://img.shields.io/badge/Python-3.13-blue.svg)](https://www.python.org/)
 [![Bootstrap](https://img.shields.io/badge/Bootstrap-5-purple.svg)](https://getbootstrap.com/)
 
 ## 📋 Funkce
 
-### Správa receptů
-- **Databáze receptů** s kategorizací (přílohy, hlavní jídla, polévky, atd.)
+### 📊 Analytika a Dashboard
+- **Přehledový dashboard** s rychlým přístupem k funkcím
+- **Statistiky nákladů** jídelníčků
+- **Vývoj cen** receptů v čase
+
+### 🍳 Správa receptů
+- **Databáze receptů** s kategorizací a vyhledáváním (našeptávač)
 - **Import receptů z XML** s automatickým vytvářením surovin
-- **Jednotková norma na porci** s flexibilním koeficientem velikosti
+- **Jednotková norma na porci** (vždy kalkulováno na 1 porci)
 - **Kalkulace ceny** na základě aktuálních skladových cen
 
-### Skladové hospodářství
+### 📦 Skladové hospodářství
 - **Více skladů** pro každou jídelnu
-- **Sledování zásob** s filtracím podle skladů
+- **Automatické zakládání karet** surovin při prvním použití
+- **Sledování zásob** s filtrací podle skladů
 - **Automatická konverze jednotek** (g→kg, ml→l)
-- **Výdejky surovin** pro výrobní příkazy
 
-### Plánování výroby
-- **Výrobní příkazy** s nastavitelným koeficientem porce
-- **Denní výdejka** agregovaná ze všech výrobních příkazů
-- **PDF export** výdejek pro tisk
-- **Sledování stavu** výdeje surovin
+### 📅 Plánování výroby a Jídelníčky
+- **Tabulkový plánovač** jídelníčků s podporou variant porcí
+- **Varianty porcí** (např. dospělá, dětská) v rámci jednoho jídla
+- **Denní výdejka** agregovaná ze všech příkazů a variant
+- **PDF export** optimalizovaný pro černobílý tisk
+- **Historie výdejek** s možností zpětné editace
 
-### Reporty
+### 👥 Uživatelé a Oprávnění
+- **Granulární řízení přístupu** k datům jednotlivých jídelen
+- **Uživatelské profily** s přiřazením k jídelnám
+- **Bezpečné oddělení dat** mezi provozy
+
+### 📈 Reporty
 - **Přehled potřebných surovin** pro daný den/období
 - **Kontrola dostupnosti** surovin na skladě
 - **Návrh objednávky** chybějících surovin
@@ -109,8 +120,8 @@ Aplikace bude dostupná na adrese [http://127.0.0.1:8000](http://127.0.0.1:8000)
 ## 🔧 Technologie
 
 - **Backend:** Python 3.13.7
-- **Framework:** Django 4.2.25
-- **Frontend:** Bootstrap 5, FontAwesome
+- **Framework:** Django 5.2.6
+- **Frontend:** Bootstrap 5, FontAwesome, Select2
 - **Databáze:** SQLite3 (vývoj), PostgreSQL/MySQL (produkce)
 - **Template Engine:** Django Templates
 - **Forms:** django-bootstrap-v5
@@ -122,6 +133,7 @@ Aplikace bude dostupná na adrese [http://127.0.0.1:8000](http://127.0.0.1:8000)
 - **Ingredient** - Suroviny s podporou konverze jednotek
 - **Recipe** - Recepty s kódy a kategorizací
 - **RecipeIngredient** - Normy surovin v receptech
+- **UserProfile** - Rozšířený profil uživatele s vazbou na jídelny
 
 ### Inventory (Sklad)
 - **Canteen** - Jídelny
@@ -130,27 +142,33 @@ Aplikace bude dostupná na adrese [http://127.0.0.1:8000](http://127.0.0.1:8000)
 
 ### Production (Výroba)
 - **MenuPlan** - Plány jídelníčků
-- **ProductionOrder** - Výrobní příkazy
+- **ProductionOrder** - Výrobní příkazy (vazba na jídelníček)
+- **ProductionOrderPortionVariant** - Varianty porcí pro výrobní příkaz
 - **PickingList** - Výdejky surovin
 
 ## 🎯 Klíčové vlastnosti
 
-### Konverze jednotek
+### 🔐 Bezpečnost a Oprávnění
+- **Izolace dat**: Uživatelé vidí pouze data jídelen, ke kterým mají přístup
+- **Role**: Superuživatelé (přístup ke všemu) vs. Běžní uživatelé (omezený přístup)
+- **Audit**: Logování bezpečnostních událostí a chyb
+
+### 🔄 Konverze jednotek
 Systém automaticky převádí mezi receptovými a skladovými jednotkami:
 - Recepty používají **gramy (g)** a **mililitry (ml)**
 - Sklady používají **kilogramy (kg)** a **litry (l)**
 - Konverze probíhá automaticky pomocí `conversion_factor`
 
-### Koeficient porce
+### ⚖️ Varianty a Koeficienty
 Flexibilní úprava velikosti porcí:
-- `1.0` = normální porce
-- `0.5` = poloviční porce (např. děti)
-- `1.5` = větší porce
+- **Varianty**: Možnost definovat více variant porcí pro jedno jídlo (např. 100x dospělá, 50x dětská)
+- **Koeficienty**: Přepočet norem podle velikosti porce (např. 0.7 pro dětskou porci)
 
-### České formátování
+### 🇨🇿 České prostředí
 - Desetinná čárka místo tečky (2,5 místo 2.5)
 - Automatické odstranění zbytečných nul
 - Podpora až 3 desetinných míst
+- Lokalizované formáty data a času
 
 ## 📝 Licence
 
