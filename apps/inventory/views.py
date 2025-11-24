@@ -5,10 +5,9 @@ from django.contrib import messages
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
-from django.http import JsonResponse
 import csv
 import io
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 from .models import StockItem, GoodsReceipt, GoodsReceiptItem
 from apps.canteens.models import Warehouse, Canteen
@@ -461,13 +460,17 @@ def goods_receipt_create(request):
             
             if ingredient_id and quantity and price:
                 try:
+                    # Normalize decimal separators for both comma and dot
+                    quantity_normalized = quantity.replace(',', '.')
+                    price_normalized = price.replace(',', '.')
+                    
                     items_data.append({
                         'ingredient_id': int(ingredient_id),
-                        'quantity': Decimal(quantity.replace(',', '.')),
-                        'price': Decimal(price.replace(',', '.')),
+                        'quantity': Decimal(quantity_normalized),
+                        'price': Decimal(price_normalized),
                         'notes': item_notes
                     })
-                except (ValueError, Decimal.InvalidOperation):
+                except (ValueError, InvalidOperation):
                     messages.error(request, f'Neplatná hodnota v položce {i+1}.')
                     return redirect('inventory:goods_receipt_create')
         

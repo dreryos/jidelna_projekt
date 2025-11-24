@@ -106,19 +106,26 @@
 {% block extra_js %}
 <script>
 let itemIndex = 0;
-const ingredients = {{ ingredients|safe }};
 
-// Připravíme data surovin pro JavaScript
+// Připravíme data surovin pro JavaScript (properly escaped)
 const ingredientsData = [
   {% for ingredient in ingredients %}
     {id: {{ ingredient.id }}, name: "{{ ingredient.name|escapejs }}", unit: "{{ ingredient.unit|escapejs }}"},
   {% endfor %}
 ];
 
+// Helper function to escape HTML for safe insertion
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
 function addItem() {
   const container = document.getElementById('items-container');
   const itemDiv = document.createElement('div');
   itemDiv.className = 'item-row';
+  // itemIndex is a controlled integer, not user input, safe to use
   itemDiv.id = `item-${itemIndex}`;
   
   itemDiv.innerHTML = `
@@ -127,7 +134,7 @@ function addItem() {
         <label class="form-label">Surovina <span class="text-danger">*</span></label>
         <select name="item_${itemIndex}_ingredient" class="form-select" required onchange="updateUnit(${itemIndex})">
           <option value="">-- Vyberte surovinu --</option>
-          ${ingredientsData.map(ing => `<option value="${ing.id}" data-unit="${ing.unit}">${ing.name}</option>`).join('')}
+          ${ingredientsData.map(ing => `<option value="${escapeHtml(ing.id)}" data-unit="${escapeHtml(ing.unit)}">${escapeHtml(ing.name)}</option>`).join('')}
         </select>
       </div>
       
