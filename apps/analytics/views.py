@@ -48,8 +48,12 @@ def menu_analytics_list(request):
             # Získáme celkový počet porcí
             portions = order.get_total_effective_portions()
             if portions > 0:
-                # Vypočítáme cenu za všechny porce
-                price_info = order.recipe.calculate_portion_price(canteen, portions=int(portions))
+                # Vypočítáme cenu za všechny porce s použitím historických cen
+                price_info = order.recipe.calculate_portion_price(
+                    canteen, 
+                    portions=int(portions),
+                    price_date=order.date
+                )
                 total_cost += price_info['total']
                 total_meals += int(portions)
         
@@ -96,19 +100,30 @@ def menu_detail_analytics(request, menu_id):
         if portions <= 0:
             continue
             
-        # Vypočítáme cenu za všechny porce
-        price_info = order.recipe.calculate_portion_price(canteen, portions=int(portions))
+        # Vypočítáme cenu za všechny porce s použitím historických cen
+        price_info = order.recipe.calculate_portion_price(
+            canteen, 
+            portions=int(portions),
+            price_date=order.date
+        )
         
-        # Získáme ingredience a jejich ceny
+        # Získáme ingredience a jejich ceny (s historickými cenami)
         ingredients_breakdown = []
         for recipe_ingredient in order.recipe.recipeingredient_set.all():
-            # Najdeme průměrnou cenu suroviny
-            avg_price_data = StockItem.objects.filter(
-                ingredient=recipe_ingredient.ingredient,
-                warehouse__canteen=canteen
-            ).aggregate(avg_price=Avg('price'))
+            # Najdeme průměrnou historickou cenu suroviny k datu objednávky
+            from apps.inventory.models import IngredientPriceHistory
+            warehouses = canteen.warehouses.all()
+            prices = []
+            for warehouse in warehouses:
+                price = IngredientPriceHistory.get_price_at_date(
+                    recipe_ingredient.ingredient,
+                    warehouse,
+                    order.date
+                )
+                if price > 0:
+                    prices.append(price)
             
-            avg_price = avg_price_data.get('avg_price') or Decimal('0')
+            avg_price = sum(prices) / len(prices) if prices else Decimal('0')
             
             # Vypočítáme množství a cenu pro tento počet porcí
             quantity_needed = recipe_ingredient.get_quantity_in_base_unit(int(portions), 1.0)
@@ -197,7 +212,12 @@ def recipe_cost_analysis(request):
             if portions <= 0:
                 continue
             
-            price_info = recipe.calculate_portion_price(canteen, portions=1)
+            # Použijeme historické ceny pro každé datum použití
+            price_info = recipe.calculate_portion_price(
+                canteen, 
+                portions=1,
+                price_date=order.date
+            )
             costs_list.append(price_info['per_portion'])
             usage_dates.append(order.date)
         
@@ -270,7 +290,12 @@ def recipe_cost_detail(request, recipe_id):
         if portions <= 0:
             continue
         
-        price_info = recipe.calculate_portion_price(canteen, portions=1)
+        # Použijeme historické ceny pro datum objednávky
+        price_info = recipe.calculate_portion_price(
+            canteen, 
+            portions=1,
+            price_date=order.date
+        )
         cost_per_portion = price_info['per_portion']
         costs_list.append(cost_per_portion)
         
@@ -300,7 +325,7 @@ def recipe_cost_detail(request, recipe_id):
     
     if canteen:
         for recipe_ingredient in recipe.recipeingredient_set.all():
-            # Najdeme průměrnou cenu suroviny
+            # Najdeme průměrnou aktuální cenu suroviny (bez historických cen)
             avg_price_data = StockItem.objects.filter(
                 ingredient=recipe_ingredient.ingredient,
                 warehouse__canteen=canteen
