@@ -30,4 +30,7 @@ urlpatterns = [
 
     # Reporty (reporty objednávek) – rozhraní pro generování přehledů
     path('reports/', include('apps.reports.urls', namespace='reports')),
+    
+    # Analytika a statistiky
+    path('analytics/', include('apps.analytics.urls', namespace='analytics')),
 ]
