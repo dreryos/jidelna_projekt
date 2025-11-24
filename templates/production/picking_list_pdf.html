@@ -244,6 +244,74 @@
     </div>
     {% endif %}
     
+    {% for date, meals in daily_picking_data %}
+    <div class="page-break"></div>
+    <h2 style="border-bottom: 2px solid #000; padding-bottom: 5px; margin-top: 20px;">
+        📅 {{ date|date:"l d.m.Y" }}
+    </h2>
+    
+    {% for meal in meals %}
+    <div style="margin-top: 20px; margin-bottom: 10px;">
+        <h3 style="margin: 0; background-color: #eee; padding: 5px 10px; border: 1px solid #ccc;">
+            {{ meal.recipe_name }} <span style="font-weight: normal; font-size: 10pt;">({{ meal.portions }} porcí)</span>
+        </h3>
+        
+        <table class="ingredients">
+            <thead>
+                <tr>
+                    <th style="width: 5%;">№</th>
+                    <th style="width: 50%;">Surovina</th>
+                    <th style="width: 15%; text-align: center;">Plánováno</th>
+                    <th style="width: 10%; text-align: center;">Jednotka</th>
+                    <th style="width: 20%; text-align: center; background-color: #e8e8e8; color: #000;">Skutečně<br>vydáno</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in meal.ingredients %}
+                <tr class="{% if not item.has_stock %}missing{% elif not item.is_sufficient %}insufficient{% endif %}">
+                    <td style="text-align: center; font-weight: bold;">
+                        {% if not item.has_stock %}
+                            ✖ {{ forloop.counter }}
+                        {% elif not item.is_sufficient %}
+                            ⚠ {{ forloop.counter }}
+                        {% else %}
+                            {{ forloop.counter }}
+                        {% endif %}
+                    </td>
+                    <td>
+                        <strong>{{ item.name }}</strong>
+                        {% if item.warehouses_info %}
+                        <div class="warehouse-details">
+                            <small>Skladem: 
+                            {% for wh_name, qty, blocked, available in item.warehouses_info %}
+                                {{ wh_name }} ({{ qty|floatformat:1 }} kg, bloková {{ blocked|floatformat:1 }} kg, dostupné {{ available|floatformat:1 }} kg){% if not forloop.last %}, {% endif %}
+                            {% endfor %}
+                            </small>
+                        </div>
+                        {% endif %}
+                    </td>
+                    <td style="text-align: center; font-weight: bold; font-size: 12pt;">
+                        {{ item.quantity|floatformat:2 }}
+                    </td>
+                    <td style="text-align: center;">
+                        {{ item.unit }}
+                    </td>
+                    <td class="actual-column" style="text-align: center;">
+                        <!-- Prostor pro ruční zápis -->
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endfor %}
+    {% endfor %}
+    
+    <div class="page-break"></div>
+    <h2 style="border-bottom: 2px solid #000; padding-bottom: 5px; margin-top: 20px;">
+        ∑ Celkový souhrn surovin
+    </h2>
+    
     <table class="ingredients">
         <thead>
             <tr>

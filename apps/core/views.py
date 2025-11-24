@@ -92,11 +92,13 @@ class RecipeCreateView(LoginRequiredMixin, CreateView):
 	def form_valid(self, form):
 		context = self.get_context_data()
 		ingredients = context['ingredients']
-		self.object = form.save()
 		if ingredients.is_valid():
+			self.object = form.save()
 			ingredients.instance = self.object
 			ingredients.save()
-		return super().form_valid(form)
+			return super().form_valid(form)
+		else:
+			return self.render_to_response(context)
 
 
 class RecipeUpdateView(LoginRequiredMixin, UpdateView):
@@ -129,11 +131,13 @@ class RecipeUpdateView(LoginRequiredMixin, UpdateView):
 	def form_valid(self, form):
 		context = self.get_context_data()
 		ingredients = context['ingredients']
-		self.object = form.save()
 		if ingredients.is_valid():
+			self.object = form.save()
 			ingredients.instance = self.object
 			ingredients.save()
-		return super().form_valid(form)
+			return super().form_valid(form)
+		else:
+			return self.render_to_response(context)
 
 
 class RecipeDeleteView(LoginRequiredMixin, DeleteView):

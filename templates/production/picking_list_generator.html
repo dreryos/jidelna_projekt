@@ -342,4 +342,14 @@ document.querySelectorAll('.archive-btn').forEach(function(btn) {
   });
 });
 </script>
+
+{% if download_pdf_id %}
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    // Automatické stažení PDF po vygenerování
+    window.location.href = "{% url 'production:picking_list_pdf' download_pdf_id %}";
+  });
+</script>
+{% endif %}
+
 {% endblock %}

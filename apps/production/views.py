@@ -1,7 +1,7 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from django.urls import reverse_lazy
+from django.urls import reverse_lazy, reverse
 from django.views.generic import ListView, CreateView, UpdateView, DeleteView
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django import forms
@@ -800,34 +800,58 @@ def picking_list_generator(request):
             missing_count = len(missing_ingredients)
             insufficient_count = len(insufficient_ingredients)
             
+            # Připravíme data strukturovaná podle dnů a jídel pro PDF
+            daily_picking_data = {}
+            
+            for order in orders:
+                if order.date not in daily_picking_data:
+                    daily_picking_data[order.date] = []
+                
+                order_ingredients = []
+                for item in order.picking_list_items.all():
+                    # Získáme info o dostupnosti z agregovaných dat
+                    total_info = ingredient_totals.get(item.ingredient.id)
+                    
+                    order_ingredients.append({
+                        'name': item.ingredient.name,
+                        'quantity': item.quantity_planned,
+                        'unit': item.ingredient.base_unit,
+                        'has_stock': total_info['has_stock'] if total_info else True,
+                        'is_sufficient': total_info['is_sufficient'] if total_info else True,
+                        'warehouses_info': total_info['warehouses_info'] if total_info else [],
+                    })
+                
+                # Seřadíme suroviny abecedně
+                order_ingredients.sort(key=lambda x: x['name'])
+                
+                daily_picking_data[order.date].append({
+                    'recipe_name': order.recipe.name,
+                    'portions': order.total_portions,
+                    'ingredients': order_ingredients
+                })
+            
+            # Seřadíme dny
+            sorted_daily_data = sorted(daily_picking_data.items())
+            
             context = {
                 'canteen': canteen,
                 'date_from': date_from_obj,
                 'date_to': date_to_obj,
                 'orders': orders,
                 'ingredient_totals': sorted_ingredients,
+                'daily_picking_data': sorted_daily_data,
                 'total_orders': orders.count(),
                 'generated_at': timezone.now(),
                 'missing_count': missing_count,
                 'insufficient_count': insufficient_count,
             }
             
-            # Vygenerujeme PDF
-            from django.template.loader import render_to_string
-            from weasyprint import HTML
-            from django.http import HttpResponse
-            import tempfile
+            # Vygenerujeme PDF - PŮVODNÍ KÓD NAHRAZEN PŘESMĚROVÁNÍM
+            # Místo přímého vrácení PDF přesměrujeme zpět na stránku s parametrem pro stažení
+            messages.success(request, f'Výdejka byla úspěšně vytvořena a suroviny zablokovány.')
             
-            html_string = render_to_string('production/picking_list_pdf.html', context)
-            html = HTML(string=html_string, base_url=request.build_absolute_uri())
-            
-            response = HttpResponse(content_type='application/pdf')
-            response['Content-Disposition'] = f'attachment; filename="vydejka_{canteen.name}_{date_from}_{date_to}.pdf"'
-            html.write_pdf(response)
-            
-            messages.success(request, f'PDF výdejka vygenerována. Suroviny byly zablokovány.')
-            
-            return response
+            url = reverse('production:picking_list_generator')
+            return redirect(f'{url}?download_pdf={picking_document.id}')
             
         except Canteen.DoesNotExist:
             messages.error(request, 'Vybraná jídelna neexistuje.')
@@ -843,6 +867,16 @@ def picking_list_generator(request):
         'active_documents': documents.filter(archived=False),
         'archived_documents': documents.filter(archived=True),
     }
+    
+    # Pokud je v GET parametru požadavek na stažení PDF, přidáme ho do kontextu
+    if 'download_pdf' in request.GET:
+        try:
+            doc_id = int(request.GET['download_pdf'])
+            # Ověříme, že dokument existuje (zjednodušeně, detailní kontrola je ve view pro PDF)
+            if documents.filter(id=doc_id).exists():
+                context['download_pdf_id'] = doc_id
+        except ValueError:
+            pass
     
     return render(request, 'production/picking_list_generator.html', context)
 
@@ -919,118 +953,11 @@ def picking_list_edit(request, document_id):
         
         ingredient_totals = {}
         
-        for order in orders:
-            for item in order.picking_list_items.filter(document=document):
-                key = item.ingredient.id
-                
-                if key in ingredient_totals:
-                    ingredient_totals[key]['planned'] += item.quantity_planned
-                    ingredient_totals[key]['orders'].append({
-                        'date': order.date,
-                        'recipe': order.recipe.name,
-                        'portions': order.total_portions,
-                        'effective_portions': order.total_effective_portions,
-                        'quantity': item.quantity_planned,
-                        'item_id': item.id
-                    })
-                    # Aktualizujeme quantity_actual a status (vezmeme poslední hodnotu)
-                    if item.quantity_actual:
-                        ingredient_totals[key]['quantity_actual'] = (
-                            ingredient_totals[key].get('quantity_actual', Decimal('0')) + item.quantity_actual
-                        )
-                    if item.status != 'PENDING':
-                        ingredient_totals[key]['status'] = item.status
-                else:
-                    # Zkontrolujeme dostupnost na skladech (quantity - quantity_blocked)
-                    from apps.inventory.models import StockItem
-                    
-                    stock_items = StockItem.objects.filter(
-                        ingredient=item.ingredient,
-                        warehouse__canteen=document.canteen
-                    ).annotate(
-                        available=F('quantity') - F('quantity_blocked')
-                    )
-                    
-                    available_stock = sum(
-                        si.available for si in stock_items if si.available > 0
-                    ) or Decimal('0')
-                    
-                    warehouses_with_stock = []
-                    for si in stock_items:
-                        if si.quantity > 0 or si.quantity_blocked > 0:
-                            available = si.quantity - si.quantity_blocked
-                            warehouses_with_stock.append(
-                                (si.warehouse.name, si.quantity, si.quantity_blocked, available)
-                            )
-                    
-                    ingredient_totals[key] = {
-                        'ingredient': item.ingredient,
-                        'planned': item.quantity_planned,
-                        'quantity_actual': item.quantity_actual or Decimal('0'),
-                        'unit': item.ingredient.base_unit,
-                        'available_stock': available_stock,
-                        'has_stock': available_stock > 0,
-                        'is_sufficient': available_stock >= item.quantity_planned,
-                        'warehouses_info': warehouses_with_stock,
-                        'status': item.status,
-                        'orders': [{
-                            'date': order.date,
-                            'recipe': order.recipe.name,
-                            'portions': order.total_portions,
-                            'effective_portions': order.total_effective_portions,
-                            'quantity': item.quantity_planned,
-                            'item_id': item.id
-                        }]
-                    }
-        
-        sorted_ingredients = sorted(ingredient_totals.values(), key=lambda x: x['ingredient'].name)
-        
-        context = {
-            'document': document,
-            'ingredient_totals': sorted_ingredients,
-        }
-        
-        return render(request, 'production/picking_list_edit.html', context)
-        
-    except PickingListDocument.DoesNotExist:
-        messages.error(request, 'Dokument výdejky neexistuje.')
-        return redirect('production:picking_list_generator')
-    except PermissionDenied as e:
-        messages.error(request, str(e))
-        return redirect('production:picking_list_generator')
-
-
-@login_required
-def picking_list_pdf(request, document_id):
-    """
-    View pro regeneraci PDF z existujícího dokumentu výdejky.
-    """
-    from .models import PickingListDocument
-    
-    try:
-        document = PickingListDocument.objects.get(id=document_id)
-        
-        # Kontrola oprávnění
-        if not request.user.is_superuser:
-            try:
-                user_profile = request.user.userprofile
-                if document.canteen not in user_profile.canteens.all():
-                    raise PermissionDenied("Nemáte oprávnění k této jídelně")
-            except:
-                raise PermissionDenied("Nemáte přiřazený profil")
-        
-        # Načteme všechny ProductionOrders souvisící s tímto dokumentem
-        orders = ProductionOrder.objects.filter(
-            picking_list_items__document=document
-        ).distinct().select_related('recipe', 'canteen', 'menu_plan').prefetch_related(
-            'portion_variants',
-            'picking_list_items'
-        ).order_by('date', 'recipe__name')
-        
-        # Agregujeme suroviny z picking list items tohoto dokumentu
-        ingredient_totals = {}
+        # Připravíme data strukturovaná podle dnů a jídel pro PDF
+        daily_picking_data = {}
         
         for order in orders:
+            # Agregace pro celkový přehled (zachováno pro kompatibilitu)
             for item in order.picking_list_items.filter(document=document):
                 key = item.ingredient.id
                 
@@ -1080,14 +1007,191 @@ def picking_list_pdf(request, document_id):
                             'portions': order.total_portions,
                             'effective_portions': order.total_effective_portions,
                             'quantity': item.quantity_planned
-                        }]
+                        }],
+                        'picking_items': []
                     }
+                
+                ingredient_totals[key]['picking_items'].append(item)
+
+            # Příprava dat pro denní přehled
+            if order.date not in daily_picking_data:
+                daily_picking_data[order.date] = []
+            
+            order_ingredients = []
+            for item in order.picking_list_items.filter(document=document):
+                # Získáme info o dostupnosti z agregovaných dat
+                total_info = ingredient_totals.get(item.ingredient.id)
+                
+                order_ingredients.append({
+                    'name': item.ingredient.name,
+                    'quantity': item.quantity_planned,
+                    'unit': item.ingredient.base_unit,
+                    'has_stock': total_info['has_stock'] if total_info else True,
+                    'is_sufficient': total_info['is_sufficient'] if total_info else True,
+                    'warehouses_info': total_info['warehouses_info'] if total_info else [],
+                })
+            
+            # Seřadíme suroviny abecedně
+            order_ingredients.sort(key=lambda x: x['name'])
+            
+            daily_picking_data[order.date].append({
+                'recipe_name': order.recipe.name,
+                'portions': order.total_portions,
+                'ingredients': order_ingredients
+            })
         
+        # Seřadíme dny
+        sorted_daily_data = sorted(daily_picking_data.items())
+        
+        # Seřadíme ingredience abecedně
         sorted_ingredients = sorted(ingredient_totals.values(), key=lambda x: x['ingredient'].name)
         
-        # Spočítáme problematické položky
-        missing_count = sum(1 for ing in ingredient_totals.values() if not ing['has_stock'])
-        insufficient_count = sum(1 for ing in ingredient_totals.values() if ing['has_stock'] and not ing['is_sufficient'])
+        # Počítáme problematické položky
+        missing_count = sum(1 for i in ingredient_totals.values() if not i['has_stock'])
+        insufficient_count = sum(1 for i in ingredient_totals.values() if i['has_stock'] and not i['is_sufficient'])
+        
+        context = {
+            'document': document,
+            'ingredient_totals': sorted_ingredients,
+            'daily_picking_data': sorted_daily_data,
+        }
+        
+        return render(request, 'production/picking_list_edit.html', context)
+        
+    except PickingListDocument.DoesNotExist:
+        messages.error(request, 'Dokument výdejky neexistuje.')
+        return redirect('production:picking_list_generator')
+    except PermissionDenied as e:
+        messages.error(request, str(e))
+        return redirect('production:picking_list_generator')
+
+
+@login_required
+def picking_list_pdf(request, document_id):
+    """
+    View pro regeneraci PDF z existujícího dokumentu výdejky.
+    """
+    from .models import PickingListDocument
+    
+    try:
+        document = PickingListDocument.objects.get(id=document_id)
+        
+        # Kontrola oprávnění
+        if not request.user.is_superuser:
+            try:
+                user_profile = request.user.userprofile
+                if document.canteen not in user_profile.canteens.all():
+                    raise PermissionDenied("Nemáte oprávnění k této jídelně")
+            except:
+                raise PermissionDenied("Nemáte přiřazený profil")
+        
+        # Načteme všechny ProductionOrders souvisící s tímto dokumentem
+        orders = ProductionOrder.objects.filter(
+            picking_list_items__document=document
+        ).distinct().select_related('recipe', 'canteen', 'menu_plan').prefetch_related(
+            'portion_variants',
+            'picking_list_items'
+        ).order_by('date', 'recipe__name')
+        
+        # Agregujeme suroviny z picking list items tohoto dokumentu
+        ingredient_totals = {}
+        
+        # Připravíme data strukturovaná podle dnů a jídel pro PDF
+        daily_picking_data = {}
+        
+        for order in orders:
+            # Agregace pro celkový přehled (zachováno pro kompatibilitu)
+            for item in order.picking_list_items.filter(document=document):
+                key = item.ingredient.id
+                
+                if key in ingredient_totals:
+                    ingredient_totals[key]['planned'] += item.quantity_planned
+                    ingredient_totals[key]['orders'].append({
+                        'date': order.date,
+                        'recipe': order.recipe.name,
+                        'portions': order.total_portions,
+                        'effective_portions': order.total_effective_portions,
+                        'quantity': item.quantity_planned
+                    })
+                else:
+                    # Zkontrolujeme dostupnost na VŠECH skladech (quantity - quantity_blocked)
+                    from apps.inventory.models import StockItem
+                    
+                    stock_items = StockItem.objects.filter(
+                        ingredient=item.ingredient,
+                        warehouse__canteen=document.canteen
+                    ).annotate(
+                        available=F('quantity') - F('quantity_blocked')
+                    )
+                    
+                    available_stock = sum(
+                        si.available for si in stock_items if si.available > 0
+                    ) or Decimal('0')
+                    
+                    warehouses_with_stock = []
+                    for si in stock_items:
+                        if si.quantity > 0 or si.quantity_blocked > 0:
+                            available = si.quantity - si.quantity_blocked
+                            warehouses_with_stock.append(
+                                (si.warehouse.name, si.quantity, si.quantity_blocked, available)
+                            )
+                    
+                    ingredient_totals[key] = {
+                        'ingredient': item.ingredient,
+                        'planned': item.quantity_planned,
+                        'unit': item.ingredient.base_unit,
+                        'available_stock': available_stock,
+                        'has_stock': available_stock > 0,
+                        'is_sufficient': available_stock >= item.quantity_planned,
+                        'warehouses_info': warehouses_with_stock,
+                        'orders': [{
+                            'date': order.date,
+                            'recipe': order.recipe.name,
+                            'portions': order.total_portions,
+                            'effective_portions': order.total_effective_portions,
+                            'quantity': item.quantity_planned
+                        }],
+                        'picking_items': []
+                    }
+                
+                ingredient_totals[key]['picking_items'].append(item)
+
+            # Příprava dat pro denní přehled
+            if order.date not in daily_picking_data:
+                daily_picking_data[order.date] = []
+            
+            order_ingredients = []
+            for item in order.picking_list_items.filter(document=document):
+                # Získáme info o dostupnosti z agregovaných dat
+                total_info = ingredient_totals.get(item.ingredient.id)
+                
+                order_ingredients.append({
+                    'name': item.ingredient.name,
+                    'quantity': item.quantity_planned,
+                    'unit': item.ingredient.base_unit,
+                    'has_stock': total_info['has_stock'] if total_info else True,
+                    'is_sufficient': total_info['is_sufficient'] if total_info else True,
+                    'warehouses_info': total_info['warehouses_info'] if total_info else [],
+                })
+            
+            # Seřadíme suroviny abecedně
+            order_ingredients.sort(key=lambda x: x['name'])
+            
+            daily_picking_data[order.date].append({
+                'recipe_name': order.recipe.name,
+                'portions': order.total_portions,
+                'ingredients': order_ingredients
+            })
+        
+        # Seřadíme dny
+        sorted_daily_data = sorted(daily_picking_data.items())
+        
+        # Seřadíme ingredience abecedně
+        sorted_ingredients = sorted(ingredient_totals.values(), key=lambda x: x['ingredient'].name)
+        
+        # Počítáme problematické položky
+        missing_count = sum(1 for i in ingredient_totals.values() if not i['has_stock'])
+        insufficient_count = sum(1 for i in ingredient_totals.values() if i['has_stock'] and not i['is_sufficient'])
         
         context = {
             'canteen': document.canteen,
@@ -1095,6 +1199,7 @@ def picking_list_pdf(request, document_id):
             'date_to': document.date_to,
             'orders': orders,
             'ingredient_totals': sorted_ingredients,
+            'daily_picking_data': sorted_daily_data,
             'total_orders': orders.count(),
             'generated_at': timezone.now(),
             'missing_count': missing_count,
