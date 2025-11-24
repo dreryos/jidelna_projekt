@@ -10,6 +10,8 @@ from django.http import HttpResponse
 from django.urls import reverse
 from django.utils import timezone
 from django.contrib.auth.decorators import login_required
+from django.db.models import Q
+from decimal import Decimal
 
 from apps.canteens.models import Canteen
 from apps.production.models import ProductionOrder
@@ -69,14 +71,13 @@ def generate_order_report(canteen, date_from, date_to):
     - Používá ProductionOrderPortionVariant s koeficienty místo portions_adult/portions_child
     - Počítá pomocí RecipeIngredient.get_quantity_in_base_unit()
     """
-    from decimal import Decimal
-    from django.db.models import Q
-    
     # Najdeme výrobní příkazy pro jídelnu v daném období
     # Filtrujeme podle jídelny - buď přímo nebo přes menu_plan
     orders = ProductionOrder.objects.filter(
-        Q(date__gte=date_from) & Q(date__lte=date_to) & 
-        (Q(canteen=canteen) | Q(menu_plan__canteen=canteen))
+        date__gte=date_from,
+        date__lte=date_to
+    ).filter(
+        Q(canteen=canteen) | Q(menu_plan__canteen=canteen)
     ).select_related(
         'recipe',
         'menu_plan'

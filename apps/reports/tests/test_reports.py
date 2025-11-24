@@ -10,6 +10,9 @@ from apps.reports.views import generate_order_report
 
 User = get_user_model()
 
+# Conversion factor: 1 kg = 1000 g
+KG_TO_G_CONVERSION = Decimal('1000')
+
 
 class ReportAggregationTest(TestCase):
     def setUp(self):
@@ -21,7 +24,7 @@ class ReportAggregationTest(TestCase):
             name='Cukr',
             base_unit='kg',
             recipe_unit='g',
-            conversion_factor=Decimal('1000')  # 1 kg = 1000 g
+            conversion_factor=KG_TO_G_CONVERSION
         )
         StockItem.objects.create(
             warehouse=self.w1,
@@ -35,7 +38,7 @@ class ReportAggregationTest(TestCase):
         RecipeIngredient.objects.create(
             recipe=self.recipe,
             ingredient=self.ingredient,
-            quantity_per_portion=Decimal('1000.000')  # 1000g = 1kg na porci
+            quantity_per_portion=KG_TO_G_CONVERSION  # 1000g = 1kg na porci
         )
         
         # Vytvoříme menu plan
