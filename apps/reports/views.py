@@ -64,28 +64,58 @@ def generate_order_report(canteen, date_from, date_to):
     """Aggreguje potřebu surovin z plánovaných výrobních příkazů a porovná s aktuálními zásobami.
 
     Vrací dict s položkami: ingredient, unit, needed, stock, to_order
+    
+    Nová logika:
+    - Používá ProductionOrderPortionVariant s koeficienty místo portions_adult/portions_child
+    - Počítá pomocí RecipeIngredient.get_quantity_in_base_unit()
     """
+    from decimal import Decimal
+    
     # Najdeme výrobní příkazy pro jídelnu v daném období
-    orders = ProductionOrder.objects.filter(canteen=canteen, date__gte=date_from, date__lte=date_to)
+    # Musíme použít resolved_canteen property protože canteen může být null (nastaveno z menu_plan)
+    orders = ProductionOrder.objects.filter(date__gte=date_from, date__lte=date_to).prefetch_related(
+        'portion_variants',
+        'recipe__recipeingredient_set__ingredient',
+        'menu_plan'
+    )
+    
+    # Filtrujeme podle jídelny - buď přímo nebo přes menu_plan
+    orders = [order for order in orders if order.resolved_canteen == canteen]
 
     needs = {}
 
     for order in orders:
         # Pro každý recept vezmeme normy
-        for ri in order.recipe.recipeingredient_set.all():
-            ing_id = ri.ingredient_id
-            needed = (ri.quantity_adult * order.portions_adult) + (ri.quantity_child * order.portions_child)
-            needs.setdefault(ing_id, {'ingredient': ri.ingredient, 'unit': ri.ingredient.unit, 'needed': 0})
-            needs[ing_id]['needed'] += float(needed)
+        for recipe_ingredient in order.recipe.recipeingredient_set.all():
+            ing_id = recipe_ingredient.ingredient_id
+            
+            # Vypočítáme celkové množství ze všech variant porcí
+            total_quantity = Decimal('0')
+            for variant in order.portion_variants.all():
+                quantity = recipe_ingredient.get_quantity_in_base_unit(
+                    portions=variant.portions,
+                    coefficient=variant.coefficient
+                )
+                total_quantity += quantity
+            
+            # Inicializujeme nebo aktualizujeme potřebu suroviny
+            if ing_id not in needs:
+                needs[ing_id] = {
+                    'ingredient': recipe_ingredient.ingredient,
+                    'unit': recipe_ingredient.ingredient.base_unit,
+                    'needed': Decimal('0')
+                }
+            needs[ing_id]['needed'] += total_quantity
 
     # Porovnáme s aktuálním stavem ve skladech jídelny
     for data in needs.values():
         ing = data['ingredient']
-        # simple sum across all warehouses of the canteen
+        # Sečteme zásoby ze všech skladů jídelny
         stock_qs = StockItem.objects.filter(ingredient=ing, warehouse__canteen=canteen)
-        total_stock = sum(float(s.quantity) for s in stock_qs)
-        data['stock'] = total_stock
-        data['to_order'] = max(0, round(data['needed'] - total_stock, 3))
+        total_stock = sum(s.quantity for s in stock_qs)
+        data['stock'] = float(total_stock)
+        data['needed'] = float(data['needed'])
+        data['to_order'] = max(0, round(data['needed'] - data['stock'], 3))
 
     items = sorted(needs.values(), key=lambda x: x['ingredient'].name)
 
