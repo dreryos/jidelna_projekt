@@ -11,6 +11,20 @@
     box-shadow: 0 4px 6px rgba(0,0,0,0.1);
     border: 1px solid #ddd;
     border-radius: 0 0 0.25rem 0.25rem;
+    background-color: white;
+}
+
+/* Zajistí, že autocomplete dropdown nebude oříznut nadřazenými kontejnery */
+.table-responsive {
+    overflow: visible !important;
+}
+
+#ingredient-forms td {
+    position: relative;
+}
+
+#ingredient-forms .input-group {
+    position: relative;
 }
 .autocomplete-items .list-group-item {
     border-left: none;
