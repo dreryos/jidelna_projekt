@@ -3,8 +3,9 @@ from decimal import Decimal
 
 class DecimalInputWidget(forms.NumberInput):
     """
-    Widget pro zadávání desetinných čísel s českou lokalizací (čárka jako oddělovač).
-    Automaticky převádí mezi čárkou (zobrazení) a tečkou (uložení).
+    Widget pro zadávání desetinných čísel.
+    HTML5 number input vyžaduje tečku jako desetinný oddělovač.
+    Vstup přijímá jak čárku, tak tečku díky DecimalFormField.to_python().
     """
     
     def __init__(self, attrs=None):
@@ -20,7 +21,7 @@ class DecimalInputWidget(forms.NumberInput):
     def format_value(self, value):
         """
         Formátuje hodnotu pro zobrazení ve formuláři.
-        Převede na string s čárkou a odstraní zbytečné nuly.
+        HTML5 number input vyžaduje tečku jako desetinný oddělovač.
         """
         if value is None or value == '':
             return ''
@@ -36,10 +37,8 @@ class DecimalInputWidget(forms.NumberInput):
             if '.' in str_value:
                 str_value = str_value.rstrip('0').rstrip('.')
             
-            # Převod na string a nahrazení tečky čárkou
-            result = str_value.replace('.', ',')
-            
-            return result
+            # HTML5 number input vyžaduje tečku jako desetinný oddělovač
+            return str_value
         except (ValueError, TypeError, ArithmeticError):
             return super().format_value(value)
 
