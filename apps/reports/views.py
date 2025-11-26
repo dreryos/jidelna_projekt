@@ -123,11 +123,17 @@ def generate_order_report(canteen, date_from, date_to):
 
     items = sorted(needs.values(), key=lambda x: x['ingredient'].name)
 
+    # Count items with sufficient stock and items that need ordering
+    sufficient_stock_count = sum(1 for item in items if item['stock'] >= item['needed'])
+    to_order_count = sum(1 for item in items if item['to_order'] > 0)
+
     return {
         'canteen': canteen,
         'date_from': date_from,
         'date_to': date_to,
         'items': items,
+        'sufficient_stock_count': sufficient_stock_count,
+        'to_order_count': to_order_count,
     }
 
 
