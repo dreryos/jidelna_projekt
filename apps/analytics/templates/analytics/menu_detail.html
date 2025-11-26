@@ -23,7 +23,7 @@
 
 <!-- Statistiky -->
 <div class="row mb-4">
-  <div class="col-md-4">
+  <div class="col-sm-6 col-md-3">
     <div class="card bg-primary text-white">
       <div class="card-body text-center">
         <i class="fas fa-utensils fa-2x mb-2"></i>
@@ -32,7 +32,7 @@
       </div>
     </div>
   </div>
-  <div class="col-md-4">
+  <div class="col-sm-6 col-md-3">
     <div class="card bg-success text-white">
       <div class="card-body text-center">
         <i class="fas fa-users fa-2x mb-2"></i>
@@ -41,12 +41,21 @@
       </div>
     </div>
   </div>
-  <div class="col-md-4">
+  <div class="col-sm-6 col-md-3">
     <div class="card bg-info text-white">
       <div class="card-body text-center">
         <i class="fas fa-coins fa-2x mb-2"></i>
         <h4>{{ avg_cost }} Kč</h4>
         <small>Průměrné náklady/porce</small>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-md-3">
+    <div class="card bg-warning text-dark">
+      <div class="card-body text-center">
+        <i class="fas fa-user fa-2x mb-2"></i>
+        <h4>{{ cost_per_person }} Kč</h4>
+        <small>Cena na osobu</small>
       </div>
     </div>
   </div>
