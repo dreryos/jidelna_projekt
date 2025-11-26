@@ -38,6 +38,7 @@ def menu_analytics_list(request):
         # Vypočítáme celkové náklady a průměr
         total_cost = Decimal('0')
         total_meals = 0
+        cost_per_person = Decimal('0')  # Součet cen za porci všech jídel
         
         for order in orders:
             # Vypočítáme náklady pro tento výrobní příkaz
@@ -56,6 +57,8 @@ def menu_analytics_list(request):
                 )
                 total_cost += price_info['total']
                 total_meals += int(portions)
+                # Přidáme cenu za porci tohoto jídla do celkové ceny na osobu
+                cost_per_person += price_info['per_portion']
         
         # Vypočítáme průměr
         avg_cost_per_meal = total_cost / Decimal(str(total_meals)) if total_meals > 0 else Decimal('0')
@@ -65,6 +68,7 @@ def menu_analytics_list(request):
             'total_meals': total_meals,
             'total_cost': round(total_cost, 2),
             'avg_cost_per_meal': round(avg_cost_per_meal, 2),
+            'cost_per_person': round(cost_per_person, 2),  # Nová metrika: cena na osobu
             'meals_count': orders.count(),
         })
     
@@ -89,6 +93,7 @@ def menu_detail_analytics(request, menu_id):
     meals_data = []
     total_cost = Decimal('0')
     total_portions = 0
+    cost_per_person = Decimal('0')  # Součet cen za porci všech jídel
     
     for order in orders:
         canteen = order.resolved_canteen
@@ -149,6 +154,8 @@ def menu_detail_analytics(request, menu_id):
         
         total_cost += price_info['total']
         total_portions += int(portions)
+        # Přidáme cenu za porci tohoto jídla do celkové ceny na osobu
+        cost_per_person += price_info['per_portion']
     
     avg_cost = total_cost / Decimal(str(total_portions)) if total_portions > 0 else Decimal('0')
     
@@ -158,6 +165,7 @@ def menu_detail_analytics(request, menu_id):
         'total_cost': round(total_cost, 2),
         'total_portions': total_portions,
         'avg_cost': round(avg_cost, 2),
+        'cost_per_person': round(cost_per_person, 2),  # Nová metrika: cena na osobu
     }
     
     return render(request, 'analytics/menu_detail.html', context)
