@@ -504,6 +504,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 allIngredients.push(data.ingredient);
                 allIngredients.sort((a, b) => a.name.localeCompare(b.name));
                 
+                // Přidat novou surovinu do všech existujících hidden select elementů
+                const newOption = `<option value="${data.ingredient.id}">${data.ingredient.name} (${data.ingredient.base_unit})</option>`;
+                document.querySelectorAll('select[name$="-ingredient"]').forEach(select => {
+                    select.insertAdjacentHTML('beforeend', newOption);
+                });
+                
                 // Zavřít modal a vyčistit formulář
                 const bsModal = bootstrap.Modal.getInstance(modal);
                 bsModal.hide();
