@@ -504,6 +504,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 allIngredients.push(data.ingredient);
                 allIngredients.sort((a, b) => a.name.localeCompare(b.name));
                 
+                // Přidat novou surovinu do všech existujících hidden select elementů
+                // Použijeme DOM API místo string interpolace pro bezpečnost (XSS prevence)
+                document.querySelectorAll('select[name$="-ingredient"]').forEach(select => {
+                    const option = document.createElement('option');
+                    option.value = data.ingredient.id;
+                    option.textContent = `${data.ingredient.name} (${data.ingredient.base_unit})`;
+                    select.appendChild(option);
+                });
+                
                 // Zavřít modal a vyčistit formulář
                 const bsModal = bootstrap.Modal.getInstance(modal);
                 bsModal.hide();
