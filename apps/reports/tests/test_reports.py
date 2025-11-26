@@ -179,3 +179,48 @@ class ReportAggregationTest(TestCase):
         items = report['items']
         # Žádný příkaz v období -> žádné položky
         self.assertEqual(len(items), 0)
+
+    def test_generate_order_report_count_fields(self):
+        """Test that sufficient_stock_count and to_order_count are calculated correctly"""
+        # Create second ingredient
+        ingredient2 = Ingredient.objects.create(
+            name='Mouka',
+            base_unit='kg',
+            recipe_unit='g',
+            conversion_factor=KG_TO_G_CONVERSION
+        )
+        # Add stock for second ingredient - enough stock
+        StockItem.objects.create(
+            warehouse=self.w1,
+            ingredient=ingredient2,
+            quantity=Decimal('20.000'),
+            price=15.0
+        )
+        
+        # Add second ingredient to recipe
+        RecipeIngredient.objects.create(
+            recipe=self.recipe,
+            ingredient=ingredient2,
+            quantity_per_portion=Decimal('500')  # 500g = 0.5kg per portion
+        )
+        
+        order = ProductionOrder.objects.create(
+            recipe=self.recipe,
+            menu_plan=self.menu_plan,
+            canteen=self.canteen,
+            date='2025-09-01'
+        )
+        # 10 portions: Cukr needs 10kg (stock 5kg), Mouka needs 5kg (stock 20kg)
+        ProductionOrderPortionVariant.objects.create(
+            production_order=order,
+            coefficient=Decimal('1.0'),
+            portions=10
+        )
+        
+        report = generate_order_report(self.canteen, '2025-09-01', '2025-09-30')
+        
+        # Cukr: needed 10kg, stock 5kg -> to_order 5kg (insufficient)
+        # Mouka: needed 5kg, stock 20kg -> to_order 0 (sufficient)
+        self.assertEqual(len(report['items']), 2)
+        self.assertEqual(report['sufficient_stock_count'], 1)  # Mouka has enough
+        self.assertEqual(report['to_order_count'], 1)  # Cukr needs ordering
