@@ -9,6 +9,7 @@ WORKDIR /app
 
 # Install system dependencies
 # WeasyPrint needs: pango, gdk-pixbuf, cairo
+# Pillow needs: zlib, jpeg, freetype
 RUN apk add --no-cache \
     build-base \
     python3-dev \
@@ -16,7 +17,15 @@ RUN apk add --no-cache \
     pango \
     gdk-pixbuf \
     cairo \
-    shared-mime-info
+    shared-mime-info \
+    zlib-dev \
+    jpeg-dev \
+    freetype-dev \
+    lcms2-dev \
+    openjpeg-dev \
+    tiff-dev \
+    tk-dev \
+    tcl-dev
 
 # Install python dependencies
 COPY requirements.txt /app/
