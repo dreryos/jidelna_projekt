@@ -36,4 +36,4 @@ RUN mkdir -p /app/data /app/staticfiles
 EXPOSE 8000
 
 # Run gunicorn
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "jidelna_project.wsgi:application"]
+CMD ["gunicorn", "--bind", "0.0.0.0:8000", "spiz_project.wsgi:application"]

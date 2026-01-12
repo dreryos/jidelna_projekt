@@ -1,4 +1,4 @@
-# TODO Seznam pro Projekt Jídelna
+# TODO Seznam pro SPÍŽ
 
 Tento soubor sleduje hlavní úkoly, bugy a nápady pro projekt. Pro detailnější správu úkolů použijte Issues na GitHubu/GitLabu (pokud je máte).
 

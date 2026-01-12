@@ -10,7 +10,7 @@ import sys
 
 def main():
     """Spustí administrativní příkazy Django."""
-    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'jidelna_project.settings')
+    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'spiz_project.settings')
     try:
         from django.core.management import execute_from_command_line
     except ImportError as exc:

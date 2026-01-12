@@ -1,8 +1,58 @@
 from django.contrib import admin
-from .models import Recipe, Ingredient, RecipeIngredient, Category
+from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
+from django.contrib.auth import get_user_model
+from .models import Recipe, Ingredient, RecipeIngredient, Category, UserProfile
 
 # Tento admin modul poskytuje jednoduché rozhraní pro správu receptů a surovin.
 # Inline `RecipeIngredientInline` umožňuje editovat normy přímo v editaci receptu.
+# UserProfileInline umožňuje přiřazovat jídelny uživatelům přímo v admin rozhraní.
+
+User = get_user_model()
+
+
+class UserProfileInline(admin.StackedInline):
+    """Inline pro přiřazení jídelen k uživateli přímo v editaci uživatele"""
+    model = UserProfile
+    can_delete = False
+    verbose_name_plural = 'Uživatelský profil'
+    filter_horizontal = ('canteens',)  # Pro lepší výběr jídelen
+
+
+class UserAdmin(BaseUserAdmin):
+    """Rozšířený UserAdmin s možností přiřazení jídelen"""
+    inlines = (UserProfileInline,)
+    list_display = ('username', 'email', 'first_name', 'last_name', 'is_staff', 'get_canteens')
+    
+    def get_canteens(self, obj):
+        """Zobrazí přiřazené jídelny v seznamu uživatelů"""
+        if hasattr(obj, 'profile'):
+            canteens = obj.profile.canteens.all()
+            return ', '.join([c.name for c in canteens]) if canteens else '-'
+        return '-'
+    get_canteens.short_description = 'Přiřazené jídelny'
+
+
+# Znovu registrujeme User model s rozšířeným adminem
+admin.site.unregister(User)
+admin.site.register(User, UserAdmin)
+
+
+@admin.register(UserProfile)
+class UserProfileAdmin(admin.ModelAdmin):
+    """Samostatná správa profilů uživatelů"""
+    list_display = ('user', 'get_canteens_count', 'get_canteens')
+    list_filter = ('canteens',)
+    search_fields = ('user__username', 'user__email', 'user__first_name', 'user__last_name')
+    filter_horizontal = ('canteens',)
+    
+    def get_canteens_count(self, obj):
+        return obj.canteens.count()
+    get_canteens_count.short_description = 'Počet jídelen'
+    
+    def get_canteens(self, obj):
+        canteens = obj.canteens.all()
+        return ', '.join([c.name for c in canteens]) if canteens else '-'
+    get_canteens.short_description = 'Přiřazené jídelny'
 
 class RecipeIngredientInline(admin.TabularInline):
     model = RecipeIngredient

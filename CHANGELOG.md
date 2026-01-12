@@ -242,7 +242,7 @@ a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
 - Admin rozhraní pro všechny moduly
 - Přihlašování uživatelů
 
-[0.9.0]: https://github.com/dreryos/jidelna_projekt/compare/v0.3.0...v0.9.0
-[0.3.0]: https://github.com/dreryos/jidelna_projekt/compare/v0.2.0...v0.3.0
-[0.2.0]: https://github.com/dreryos/jidelna_projekt/compare/v0.1.0...v0.2.0
-[0.1.0]: https://github.com/dreryos/jidelna_projekt/releases/tag/v0.1.0
+[0.9.0]: https://github.com/dreryos/spiz/compare/v0.3.0...v0.9.0
+[0.3.0]: https://github.com/dreryos/spiz/compare/v0.2.0...v0.3.0
+[0.2.0]: https://github.com/dreryos/spiz/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/dreryos/spiz/releases/tag/v0.1.0

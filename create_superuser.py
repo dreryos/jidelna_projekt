@@ -2,7 +2,7 @@ import os
 import django
 
 def create_superuser():
-    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "jidelna_project.settings")
+    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "spiz_project.settings")
     django.setup()
 
     from django.contrib.auth import get_user_model

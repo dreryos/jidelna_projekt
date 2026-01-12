@@ -1,9 +1,11 @@
-# Projekt Jídelna
+# SPÍŽ
+
+**SPÍŽ** = **S**ystém **P**ro **I**nventuru **Ž**vance
 
 Webová aplikace v Django pro komplexní správu provozu školní nebo firemní jídelny. Umožňuje efektivně spravovat skladové zásoby, receptury, výdej surovin, plánování výroby a kalkulaci cen.
 
-[![Django](https://img.shields.io/badge/Django-5.2.6-green.svg)](https://www.djangoproject.com/)
-[![Python](https://img.shields.io/badge/Python-3.13-blue.svg)](https://www.python.org/)
+[![Django](https://img.shields.io/badge/Django-6.0.1-green.svg)](https://www.djangoproject.com/)
+[![Python](https://img.shields.io/badge/Python-3.14-blue.svg)](https://www.python.org/)
 [![Bootstrap](https://img.shields.io/badge/Bootstrap-5-purple.svg)](https://getbootstrap.com/)
 
 ## 📋 Funkce
@@ -47,7 +49,7 @@ Webová aplikace v Django pro komplexní správu provozu školní nebo firemní 
 Aplikace je postavena na modulární architektuře, kde každá část systému je samostatná Django aplikace:
 
 ```
-jidelna_projekt/
+spiz/
 ├── apps/
 │   ├── core/          # Recepty a suroviny
 │   ├── inventory/     # Skladové hospodářství
@@ -69,8 +71,8 @@ jidelna_projekt/
 
 1. **Klonování repositáře:**
    ```bash
-   git clone https://github.com/dreryos/jidelna_projekt.git
-   cd jidelna_projekt
+   git clone https://github.com/dreryos/spiz.git
+   cd spiz
    ```
 
 2. **Vytvoření virtuálního prostředí:**
@@ -119,8 +121,8 @@ Aplikace bude dostupná na adrese [http://127.0.0.1:8000](http://127.0.0.1:8000)
 
 ## 🔧 Technologie
 
-- **Backend:** Python 3.13.7
-- **Framework:** Django 5.2.6
+- **Backend:** Python 3.14
+- **Framework:** Django 6.0.1
 - **Frontend:** Bootstrap 5, FontAwesome, Select2
 - **Databáze:** SQLite3 (vývoj), PostgreSQL/MySQL (produkce)
 - **Template Engine:** Django Templates
