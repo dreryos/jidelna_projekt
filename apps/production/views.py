@@ -14,6 +14,7 @@ import json
 import logging
 from functools import wraps
 from typing import Any, Dict, Type, TYPE_CHECKING, cast
+from collections import defaultdict
 
 from django.db import models
 from django.db.models import F, Sum
@@ -242,18 +243,44 @@ class MenuPlanDetailView(CanteenOwnerMixin, UpdateView):
         
         context['recipes'] = Recipe.objects.all()
         
-        # Vytvoříme datum range a seskupíme příkazy podle dní
+        # Definice pořadí meal_types pro konzistentní zobrazení
+        MEAL_TYPE_ORDER = [
+            'BREAKFAST',
+            'SNACK_MORNING',
+            'LUNCH',
+            'SNACK_AFTERNOON',
+            'DINNER'
+        ]
+        context['MEAL_TYPE_ORDER'] = MEAL_TYPE_ORDER
+        
+        # Vytvoříme datum range a seskupíme příkazy podle dní a typu jídla
         date_range = self.get_date_range()
-        orders_by_date = {}
+        orders_by_date_and_type = defaultdict(lambda: defaultdict(list))
         
         for order in self.object.production_orders.all().select_related('recipe', 'recipe__category').prefetch_related('portion_variants'):
-            date_key = order.date
-            if date_key not in orders_by_date:
-                orders_by_date[date_key] = []
-            orders_by_date[date_key].append(order)
+            orders_by_date_and_type[order.date][order.meal_type].append(order)
+        
+        # Seřadíme meal_types podle definovaného pořadí
+        sorted_orders = {}
+        for date_key, meal_types in orders_by_date_and_type.items():
+            sorted_orders[date_key] = {
+                mt: meal_types[mt] 
+                for mt in MEAL_TYPE_ORDER 
+                if mt in meal_types
+            }
         
         context['date_range'] = date_range
-        context['orders_by_date'] = orders_by_date
+        context['orders_by_date_and_type'] = sorted_orders
+        
+        # Přidáme výchozí koeficienty pro JavaScript (konvertujeme Decimal na float)
+        context['default_coefficients'] = [
+            {
+                'name': coef.name,
+                'coefficient': float(coef.coefficient),
+                'order': coef.order
+            }
+            for coef in self.object.default_coefficients.all().order_by('order')
+        ]
         
         return context
     
@@ -305,6 +332,7 @@ def add_meal_to_menu(request, menu_pk, *args, **kwargs):
         data = json.loads(request.body)
         recipe_id = data['recipe_id']
         meal_date = data['date']
+        meal_type = data.get('meal_type', 'LUNCH')  # Výchozí typ je oběd
         variants = data.get('variants', [])
         
         recipe = get_object_or_404(Recipe, pk=recipe_id)
@@ -313,7 +341,8 @@ def add_meal_to_menu(request, menu_pk, *args, **kwargs):
             order = ProductionOrder.objects.create(
                 menu_plan=menu_plan,
                 recipe=recipe,
-                date=meal_date
+                date=meal_date,
+                meal_type=meal_type
             )
             
             if variants:
@@ -339,7 +368,8 @@ def add_meal_to_menu(request, menu_pk, *args, **kwargs):
         return JsonResponse({
             'success': True,
             'order_id': order.id,
-            'recipe_name': recipe.name
+            'recipe_name': recipe.name,
+            'meal_type_display': order.get_meal_type_display()
         })
             
     except (json.JSONDecodeError, KeyError, TypeError, ValueError, InvalidOperation, ObjectDoesNotExist) as e:
@@ -433,6 +463,7 @@ def update_order_variants(request, order_pk, *args, **kwargs):
             for variant_info in variants_data:
                 ProductionOrderPortionVariant.objects.create(
                     production_order=order,
+                    name=variant_info.get('name', ''),
                     coefficient=Decimal(str(variant_info['coefficient'])),
                     portions=int(variant_info['portions']),
                     order=int(variant_info.get('order', 0))

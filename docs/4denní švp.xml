@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<jidelnicek>
+  <den nazev="Pondělí">
+    <chod typ="polevka">Vývar se zeleninou a nudlemi</chod>
+    <chod typ="obed">Kuřecí řízek s bramborami a kyselou okurkou</chod>
+    <chod typ="svacina_odpoledni">Cereální kaiserka, sýr trojúhelník</chod>
+    <chod typ="vecere">Rajská omáčka, pečené masové kuličky, těstoviny</chod>
+  </den>
+  
+  <den nazev="Úterý">
+    <chod typ="snidane">Snídaňový mix</chod>
+    <chod typ="svacina_dopoledni">Ovoce nebo zelenina</chod>
+    <chod typ="polevka">Krupicová s vejcem</chod>
+    <chod typ="obed">Svíčková na smetaně, houskový knedlík</chod>
+    <chod typ="svacina_odpoledni">Ovocný jogurt, rohlík</chod>
+    <chod typ="vecere">Hamburger s trhaným vepřovým masem a čedarem</chod>
+  </den>
+  
+  <den nazev="Středa">
+    <chod typ="snidane">Snídaňový mix</chod>
+    <chod typ="svacina_dopoledni">Ovoce nebo zelenina</chod>
+    <chod typ="polevka">Brokolicový krém s krutony</chod>
+    <chod typ="obed">Bavorské vdolky s povidly a tvarohem</chod>
+    <chod typ="svacina_odpoledni">Rohlík se šunkovým salámem</chod>
+    <chod typ="vecere">Špagety s boloňskou omáčkou a sýrem</chod>
+  </den>
+  
+  <den nazev="Čtvrtek">
+    <chod typ="snidane">Snídaňový mix</chod>
+    <chod typ="svacina_dopoledni">Ovoce nebo zelenina</chod>
+    <chod typ="polevka">Frankfurtská</chod>
+    <chod typ="obed">Vepřová panenka s grilovanou zeleninou a bramborovou kaší</chod>
+    <chod typ="svacina_odpoledni">Domácí perník</chod>
+    <chod typ="vecere">Rizoto se sýrem a červenou řepou</chod>
+  </den>
+  
+  <den nazev="Pátek">
+    <chod typ="snidane">Snídaňový mix</chod>
+  </den>
+</jidelnicek>

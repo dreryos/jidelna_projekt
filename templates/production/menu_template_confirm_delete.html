@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+
+{% block title %}Potvrzení smazání šablony{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'home' %}">Domů</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'production:template_list' %}">Šablony</a></li>
+            <li class="breadcrumb-item active">Smazat</li>
+        </ol>
+    </nav>
+
+    <div class="alert alert-danger">
+        <h4><i class="fas fa-exclamation-triangle"></i> Potvrzení smazání</h4>
+        <p>Opravdu chcete smazat šablonu <strong>{{ object.name }}</strong>?</p>
+        <p class="mb-0">Tato akce je nevratná!</p>
+    </div>
+
+    <form method="post">
+        {% csrf_token %}
+        <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-danger">
+                <i class="fas fa-trash"></i> Ano, smazat
+            </button>
+            <a href="{% url 'production:template_list' %}" class="btn btn-secondary">
+                <i class="fas fa-times-circle"></i> Zrušit
+            </a>
+        </div>
+    </form>
+</div>
+{% endblock %}

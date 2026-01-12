@@ -3,7 +3,8 @@ from django.forms import inlineformset_factory
 from datetime import date, timedelta
 from decimal import Decimal
 
-from .models import MenuPlan, MenuPlanCoefficient
+from .models import MenuPlan, MenuPlanCoefficient, MenuTemplate
+from apps.canteens.models import Canteen
 from apps.core.widgets import DecimalFormField
 
 
@@ -146,3 +147,169 @@ MenuPlanCoefficientFormSet = inlineformset_factory(
     validate_min=True,
     max_num=10  # Maximum 10 koeficientů pro rozumnost
 )
+
+
+class MenuTemplateForm(forms.ModelForm):
+    """Formulář pro vytvoření/úpravu XML šablony jídelníčku"""
+    
+    class Meta:
+        model = MenuTemplate
+        fields = ['name', 'description', 'xml_content']
+        widgets = {
+            'name': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'Např. "4denní jídelníček pro MŠ"'
+            }),
+            'description': forms.Textarea(attrs={
+                'class': 'form-control',
+                'rows': 3,
+                'placeholder': 'Stručný popis šablony a co obsahuje...'
+            }),
+            'xml_content': forms.Textarea(attrs={
+                'class': 'form-control font-monospace',
+                'rows': 20,
+                'placeholder': '<?xml version="1.0" encoding="UTF-8"?>\n<MenuImportDescription>\n  ...\n</MenuImportDescription>'
+            })
+        }
+        help_texts = {
+            'xml_content': 'XML definice receptů a harmonogramu. Musí obsahovat sekce <Recipes> a <MenuSchedule>.'
+        }
+    
+    def clean_xml_content(self):
+        """Validuje XML obsah pomocí parseru"""
+        from .xml_parser import parse_menu_template_xml
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        
+        xml_content = self.cleaned_data['xml_content']
+        
+        try:
+            # Pokusíme se XML naparsovat
+            result = parse_menu_template_xml(xml_content)
+            
+            # Zkontrolujeme, zda obsahuje nějaké recepty
+            if not result['recipes']:
+                raise forms.ValidationError(
+                    "XML neobsahuje žádné recepty. Přidejte alespoň jeden recept do sekce <Recipes>."
+                )
+            
+            # Zkontrolujeme, zda obsahuje nějaký harmonogram
+            if not result['schedule']:
+                raise forms.ValidationError(
+                    "XML neobsahuje žádný harmonogram. Přidejte alespoň jeden den do sekce <MenuSchedule>."
+                )
+            
+        except DjangoValidationError as e:
+            raise forms.ValidationError(str(e))
+        
+        return xml_content
+
+
+class MenuImportForm(forms.Form):
+    """Formulář pro import jídelníčku ze šablony"""
+    
+    IMPORT_SOURCE_CHOICES = [
+        ('template', 'Vybrat uloženou šablonu'),
+        ('upload', 'Nahrát XML soubor'),
+    ]
+    
+    import_source = forms.ChoiceField(
+        choices=IMPORT_SOURCE_CHOICES,
+        widget=forms.RadioSelect(attrs={'class': 'form-check-input'}),
+        initial='template',
+        label='Zdroj šablony'
+    )
+    
+    template = forms.ModelChoiceField(
+        queryset=MenuTemplate.objects.all(),
+        required=False,
+        empty_label="Vyberte šablonu...",
+        widget=forms.Select(attrs={'class': 'form-control'}),
+        label='Šablona'
+    )
+    
+    uploaded_file = forms.FileField(
+        required=False,
+        widget=forms.FileInput(attrs={'class': 'form-control', 'accept': '.xml'}),
+        label='XML soubor',
+        help_text='Nahrajte XML soubor se šablonou jídelníčku'
+    )
+    
+    canteen = forms.ModelChoiceField(
+        queryset=Canteen.objects.all(),
+        widget=forms.Select(attrs={'class': 'form-control'}),
+        label='Jídelna',
+        help_text='Pro kterou jídelnu chcete vytvořit jídelníček'
+    )
+    
+    start_date = forms.DateField(
+        widget=forms.DateInput(attrs={
+            'type': 'date',
+            'class': 'form-control',
+            'min': date.today().strftime('%Y-%m-%d')
+        }),
+        initial=lambda: date.today() + timedelta(days=1),
+        label='Datum zahájení',
+        help_text='Od kterého dne začíná jídelníček'
+    )
+    
+    menu_name = forms.CharField(
+        max_length=200,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'Např. "Jídelníček 20.-24.1.2026"'
+        }),
+        label='Název jídelníčku',
+        help_text='Název pro vytvořený jídelníček'
+    )
+    
+    def __init__(self, *args, **kwargs):
+        user = kwargs.pop('user', None)
+        super().__init__(*args, **kwargs)
+        
+        # Filtrujeme jídelny podle oprávnění uživatele
+        if user:
+            from django.core.exceptions import ObjectDoesNotExist
+            
+            if not user.is_superuser:
+                try:
+                    self.fields['canteen'].queryset = user.profile.canteens.all()
+                except ObjectDoesNotExist:
+                    self.fields['canteen'].queryset = self.fields['canteen'].queryset.none()
+    
+    def clean(self):
+        """Validuje, že je vybrán správný zdroj a naparsuje XML"""
+        from .xml_parser import parse_menu_template_xml
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        
+        cleaned_data = super().clean()
+        import_source = cleaned_data.get('import_source')
+        template = cleaned_data.get('template')
+        uploaded_file = cleaned_data.get('uploaded_file')
+        
+        # Validace zdroje
+        if import_source == 'template' and not template:
+            raise forms.ValidationError('Prosím vyberte šablonu.')
+        
+        if import_source == 'upload' and not uploaded_file:
+            raise forms.ValidationError('Prosím nahrajte XML soubor.')
+        
+        # Získání XML obsahu
+        xml_content = None
+        if import_source == 'template' and template:
+            xml_content = template.xml_content
+        elif import_source == 'upload' and uploaded_file:
+            try:
+                xml_content = uploaded_file.read().decode('utf-8')
+            except UnicodeDecodeError:
+                raise forms.ValidationError('Soubor není v UTF-8 kódování.')
+        
+        # Parsování a validace XML
+        if xml_content:
+            try:
+                parsed_data = parse_menu_template_xml(xml_content)
+                cleaned_data['parsed_xml'] = parsed_data
+            except DjangoValidationError as e:
+                raise forms.ValidationError(f'Chyba v XML: {str(e)}')
+        
+        return cleaned_data
+

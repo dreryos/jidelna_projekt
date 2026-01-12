@@ -83,13 +83,29 @@
     </div>
 
     <!-- Tabulka s jídly po dnech -->
-    <div class="card shadow-sm">
+    {% for date in date_range %}
+    <div class="card shadow-sm mb-3 border-primary">
+        <div class="card-header bg-light d-flex justify-content-between align-items-center">
+            <div>
+                <h5 class="mb-0">
+                    <i class="fas fa-calendar-day text-primary me-2"></i>
+                    <strong>{{ date|date:"d.m.Y" }}</strong>
+                    <small class="text-muted ms-2">{{ date|date:"l" }}</small>
+                </h5>
+            </div>
+            <button type="button" class="btn btn-primary btn-sm add-meal-to-day-btn" 
+                    data-date="{{ date|date:'Y-m-d' }}"
+                    title="Přidat jídlo">
+                <i class="fas fa-plus me-1"></i>Přidat jídlo
+            </button>
+        </div>
         <div class="card-body p-0">
+            {% with date_meal_types=orders_by_date_and_type|get_item:date %}
+            {% if date_meal_types %}
             <div class="table-responsive">
                 <table class="table table-hover mb-0">
                     <thead class="table-light">
                         <tr>
-                            <th width="120"><i class="fas fa-calendar-day me-1"></i>Den</th>
                             <th><i class="fas fa-utensils me-1"></i>Jídlo</th>
                             <th width="180"><i class="fas fa-users me-1"></i>Varianty porcí</th>
                             <th width="120" class="text-center"><i class="fas fa-calculator me-1"></i>Efektivně</th>
@@ -97,66 +113,67 @@
                         </tr>
                     </thead>
                     <tbody>
-                        {% for date in date_range %}
-                            {% with day_orders=orders_by_date|get_item:date %}
-                            {% if day_orders %}
-                                {% for order in day_orders %}
-                                <tr data-order-id="{{ order.id }}">
-                                    <!-- Den (rowspan pro seskupení) -->
-                                    {% if forloop.first %}
-                                    <td rowspan="{{ day_orders|length }}" class="align-middle bg-light">
-                                        <div class="text-center">
-                                            <div class="fw-bold">{{ date|date:"d.m.Y" }}</div>
-                                            <small class="text-muted">{{ date|date:"l" }}</small>
-                                            <div class="mt-2">
-                                                <button type="button" class="btn btn-outline-primary btn-sm add-meal-to-day-btn" 
-                                                        data-date="{{ date|date:'Y-m-d' }}"
-                                                        title="Přidat jídlo">
-                                                    <i class="fas fa-plus"></i>
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </td>
+                        {% for meal_type, meal_orders in date_meal_types.items %}
+                            <!-- Hlavička typu jídla -->
+                            <tr class="table-secondary">
+                                <td colspan="4" class="fw-bold">
+                                    {% if meal_type == 'BREAKFAST' %}
+                                        🌅 Snídaně
+                                    {% elif meal_type == 'SNACK_MORNING' %}
+                                        ☕ Svačina dopolední
+                                    {% elif meal_type == 'LUNCH' %}
+                                        🍽️ Oběd
+                                    {% elif meal_type == 'SNACK_AFTERNOON' %}
+                                        🍎 Svačina odpolední
+                                    {% elif meal_type == 'DINNER' %}
+                                        🌙 Večeře
                                     {% endif %}
-                                    
-                                    <!-- Název jídla -->
-                                    <td class="align-middle">
-                                        <div class="d-flex align-items-center">
-                                            <i class="fas fa-utensils text-primary me-2"></i>
-                                            <div>
-                                                <strong>{{ order.recipe.name }}</strong>
-                                                {% if order.recipe.category %}
-                                                <br><small class="text-muted">{{ order.recipe.category.name }}</small>
-                                                {% endif %}
-                                            </div>
+                                </td>
+                            </tr>
+                            
+                            {% for order in meal_orders %}
+                            <tr data-order-id="{{ order.id }}">
+                                <!-- Název jídla -->
+                                <td class="align-middle">
+                                    <div class="d-flex align-items-center">
+                                        <i class="fas fa-utensils text-primary me-2"></i>
+                                        <div>
+                                            <strong>{{ order.recipe.name }}</strong>
+                                            {% if order.recipe.category %}
+                                            <br><small class="text-muted">{{ order.recipe.category.name }}</small>
+                                            {% endif %}
                                         </div>
-                                    </td>
-                                    
-                                    <!-- Varianty porcí -->
-                                    <td class="align-middle">
-                                        {% if order.portion_variants.exists %}
-                                            {% for variant in order.portion_variants.all %}
-                                            <div class="mb-1">
-                                                <span class="badge bg-info">
-                                                    {{ variant.portions }}× {{ variant.coefficient }}
-                                                </span>
-                                            </div>
-                                            {% endfor %}
-                                        {% else %}
-                                            <span class="badge bg-secondary">
-                                                {{ order.total_portions }}× {{ order.portion_coefficient }}
-                                            </span>
-                                        {% endif %}
-                                    </td>
-                                    
-                                    <!-- Celkem efektivních porcí -->
-                                    <td class="align-middle text-center">
-                                        <span class="badge bg-success fs-6">
-                                            {{ order.total_effective_portions|floatformat:1 }} porcí
+                                    </div>
+                                </td>
+                            
+                            <!-- Varianty porcí -->
+                            <td class="align-middle">
+                                {% if order.portion_variants.exists %}
+                                    {% for variant in order.portion_variants.all %}
+                                    <div class="mb-1">
+                                        <span class="badge bg-info" 
+                                              data-coefficient="{{ variant.coefficient }}" 
+                                              data-portions="{{ variant.portions }}"
+                                              data-name="{{ variant.name }}">
+                                            {% if variant.name %}{{ variant.name }}: {% endif %}{{ variant.portions }}× {{ variant.coefficient }}
                                         </span>
-                                    </td>
-                                    
-                                    <!-- Akce -->
+                                    </div>
+                                    {% endfor %}
+                                {% else %}
+                                    <span class="badge bg-secondary">
+                                        {{ order.total_portions }}× {{ order.portion_coefficient }}
+                                    </span>
+                                {% endif %}
+                            </td>
+                            
+                            <!-- Celkem efektivních porcí -->
+                            <td class="align-middle text-center">
+                                <span class="badge bg-success fs-6">
+                                    {{ order.total_effective_portions|floatformat:1 }} porcí
+                                </span>
+                            </td>
+                            
+                            <!-- Akce -->
                                     <td class="align-middle text-center">
                                         <div class="btn-group btn-group-sm" role="group">
                                             {% if not order.has_issued_picking_list %}
@@ -184,41 +201,21 @@
                                     </td>
                                 </tr>
                                 {% endfor %}
-                            {% else %}
-                                <!-- Prázdný den - bez jídel -->
-                                <tr>
-                                    <td class="align-middle bg-light text-center">
-                                        <div class="text-center">
-                                            <div class="fw-bold">{{ date|date:"d.m.Y" }}</div>
-                                            <small class="text-muted">{{ date|date:"l" }}</small>
-                                            <div class="mt-2">
-                                                <button type="button" class="btn btn-primary btn-sm add-meal-to-day-btn" 
-                                                        data-date="{{ date|date:'Y-m-d' }}"
-                                                        title="Přidat jídlo">
-                                                    <i class="fas fa-plus me-1"></i>Přidat
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td colspan="4" class="align-middle text-center text-muted">
-                                        <em>Žádná jídla pro tento den</em>
-                                    </td>
-                                </tr>
-                            {% endif %}
-                            {% endwith %}
-                            
-                            <!-- Oddělovač mezi dny -->
-                            {% if not forloop.last %}
-                            <tr class="table-light">
-                                <td colspan="5" class="p-0"></td>
-                            </tr>
-                            {% endif %}
                         {% endfor %}
                     </tbody>
                 </table>
             </div>
+            {% else %}
+            <!-- Prázdný den - bez jídel -->
+            <div class="text-center p-4 text-muted">
+                <i class="fas fa-inbox fa-3x mb-3"></i>
+                <p class="mb-0"><em>Žádná jídla pro tento den</em></p>
+            </div>
+            {% endif %}
+            {% endwith %}
         </div>
     </div>
+    {% endfor %}
 </div>
 
 <!-- Modal pro přidání jídla -->
@@ -234,12 +231,23 @@
                     <input type="hidden" id="addMealDate">
                     
                     <div class="mb-3">
-                        <label class="form-label">Recept:</label>
+                        <label class="form-label">Recept: <span class="text-danger">*</span></label>
                         <select class="form-select" id="addMealRecipe" required>
                             <option value="">Vyberte recept...</option>
                             {% for recipe in recipes %}
                                 <option value="{{ recipe.id }}">{{ recipe.name }}</option>
                             {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Typ jídla: <span class="text-danger">*</span></label>
+                        <select class="form-select" id="addMealType" required>
+                            <option value="BREAKFAST">🌅 Snídaně</option>
+                            <option value="SNACK_MORNING">☕ Svačina dopolední</option>
+                            <option value="LUNCH" selected>🍽️ Oběd</option>
+                            <option value="SNACK_AFTERNOON">🍎 Svačina odpolední</option>
+                            <option value="DINNER">🌙 Večeře</option>
                         </select>
                     </div>
                     
@@ -313,6 +321,17 @@
     </div>
 </div>
 
+<!-- Datalist pro návrhy koeficientů -->
+<datalist id="coefficient-suggestions">
+    {% for coef in menu_plan.default_coefficients.all %}
+    <option value="{{ coef.coefficient }}" label="{{ coef.name }}">
+    {% endfor %}
+    <option value="0.5" label="Poloviční porce">
+    <option value="0.75" label="Menší porce">
+    <option value="1.0" label="Normální porce">
+    <option value="1.5" label="Větší porce">
+</datalist>
+
 <!-- Modal pro hromadnou úpravu porcí -->
 <div class="modal fade" id="bulkPortionsModal" tabindex="-1">
     <div class="modal-dialog">
@@ -363,7 +382,17 @@
 const menuPlanId = {{ menu_plan.pk }};
 const csrfToken = '{{ csrf_token }}';
 
+// Načteme výchozí koeficienty z contextu
+const defaultCoefficients = ({{ default_coefficients|safe|default:"[]" }}).map(coef => ({
+    name: coef.name,
+    value: parseFloat(coef.coefficient).toFixed(2),
+    order: coef.order
+}));
+
+console.log('Default coefficients loaded:', defaultCoefficients);
+
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOM Content Loaded - initializing edit portions handlers');
     // Inicializace Select2 pro výběr receptu
     if (typeof jQuery !== 'undefined' && typeof jQuery.fn.select2 !== 'undefined') {
         jQuery('#addMealRecipe').select2({
@@ -422,14 +451,25 @@ document.addEventListener('DOMContentLoaded', function() {
                 document.getElementById('addMealRecipe').value = '';
             }
             
-            // Vyčistíme a přidáme výchozí variantu
+            // Vyčistíme a přidáme výchozí varianty z menu_plan koeficientů
             const container = document.getElementById('add-meal-variants-container');
             container.innerHTML = '';
             
-            // Přidáme výchozí variantu s prvním koeficientem
-            const defaultCoef = defaultCoefficients.length > 0 ? defaultCoefficients[0].value : '1.0';
-            const defaultPortions = {{ menu_plan.default_portions_adult|add:menu_plan.default_portions_child }};
-            container.insertAdjacentHTML('beforeend', createAddMealVariantRow(0, defaultCoef, defaultPortions));
+            // Přidáme všechny výchozí koeficienty jako předvyplněné řádky
+            if (defaultCoefficients.length > 0) {
+                defaultCoefficients.forEach((coef, index) => {
+                    container.insertAdjacentHTML('beforeend', createAddMealVariantRow(
+                        index, 
+                        coef.value, 
+                        '', 
+                        coef.name
+                    ));
+                });
+            } else {
+                // Pokud nejsou koeficienty, vytvoříme jeden výchozí řádek
+                const defaultPortions = {{ menu_plan.default_portions_adult|add:menu_plan.default_portions_child }};
+                container.insertAdjacentHTML('beforeend', createAddMealVariantRow(0, '1.0', defaultPortions, ''));
+            }
             
             attachAddMealVariantHandlers();
             updateAddMealTotalEffective();
@@ -438,21 +478,28 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
-    function createAddMealVariantRow(index, coefficient = '', portions = '') {
+    function createAddMealVariantRow(index, coefficient = '', portions = '', name = '') {
         return `
             <div class="add-meal-variant-row border rounded p-3 mb-2" data-index="${index}">
                 <div class="row align-items-center">
-                    <div class="col-md-5">
-                        <label class="form-label small">Koeficient:</label>
-                        <select class="form-select form-select-sm add-meal-variant-coefficient" required>
-                            ${defaultCoefficients.map(coef => 
-                                `<option value="${coef.value}" ${coef.value == coefficient ? 'selected' : ''}>
-                                    ${coef.name} (${coef.value})
-                                </option>`
-                            ).join('')}
-                        </select>
+                    <div class="col-md-4">
+                        <label class="form-label small">Název:</label>
+                        <input type="text" class="form-control form-control-sm add-meal-variant-name" 
+                               value="${name || ''}" placeholder="např. Malá porce">
                     </div>
-                    <div class="col-md-5">
+                    <div class="col-md-3">
+                        <label class="form-label small">Koeficient:</label>
+                        <input type="number" 
+                               class="form-control form-control-sm add-meal-variant-coefficient" 
+                               value="${coefficient || '1.0'}" 
+                               step="0.01" 
+                               min="0.01" 
+                               max="10" 
+                               list="coefficient-suggestions"
+                               placeholder="např. 1.0"
+                               required>
+                    </div>
+                    <div class="col-md-3">
                         <label class="form-label small">Počet porcí:</label>
                         <input type="number" class="form-control form-control-sm add-meal-variant-portions" 
                                value="${portions}" min="1" required>
@@ -501,6 +548,21 @@ document.addEventListener('DOMContentLoaded', function() {
             input.addEventListener('input', updateAddMealTotalEffective);
             input.addEventListener('change', updateAddMealTotalEffective);
         });
+        
+        // Automatické doplnění názvu při výběru koeficientu z datalist
+        document.querySelectorAll('.add-meal-variant-coefficient').forEach(input => {
+            input.addEventListener('input', function() {
+                const row = this.closest('.add-meal-variant-row');
+                const nameInput = row.querySelector('.add-meal-variant-name');
+                const coefficient = this.value;
+                
+                // Najdeme odpovídající option v datalist
+                const option = document.querySelector(`#coefficient-suggestions option[value="${coefficient}"]`);
+                if (option && option.label && !nameInput.value) {
+                    nameInput.value = option.label;
+                }
+            });
+        });
     }
     
     document.getElementById('add-meal-variant-btn')?.addEventListener('click', function() {
@@ -522,9 +584,15 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         const date = document.getElementById('addMealDate').value;
+        const mealType = document.getElementById('addMealType').value;
         
         if (!recipeId) {
             alert('Vyberte prosím recept.');
+            return;
+        }
+        
+        if (!mealType) {
+            alert('Vyberte prosím typ jídla.');
             return;
         }
         
@@ -533,8 +601,10 @@ document.addEventListener('DOMContentLoaded', function() {
         document.querySelectorAll('.add-meal-variant-row').forEach((row, index) => {
             const coefficient = parseDecimal(row.querySelector('.add-meal-variant-coefficient').value);
             const portions = parseInt(row.querySelector('.add-meal-variant-portions').value);
+            const name = row.querySelector('.add-meal-variant-name').value || '';
             variants.push({
                 coefficient: coefficient,
+                name: name,
                 portions: portions,
                 order: index
             });
@@ -554,6 +624,7 @@ document.addEventListener('DOMContentLoaded', function() {
             body: JSON.stringify({
                 recipe_id: recipeId,
                 date: date,
+                meal_type: mealType,
                 variants: variants
             })
         })
@@ -571,34 +642,33 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
-    // Úprava porcí jednotlivého jídla - s podporou více variant
+    // === ÚPRAVA PORCÍ JEDNOTLIVÉHO JÍDLA - S PODPOROU VÍCE VARIANT ===
     let currentOrderId = null;
     let portionVariants = [];
+
     
-    // Výchozí koeficienty z jídelníčku
-    const defaultCoefficients = [
-        {% for coef in menu_plan.default_coefficients.all %}
-            { name: "{{ coef.name }}", value: "{{ coef.coefficient }}" },
-        {% empty %}
-            { name: "Normální porce", value: "1.0" }
-        {% endfor %}
-    ];
-    
-    function createVariantRow(index, coefficient = '', portions = '', variantId = null) {
+    function createVariantRow(index, coefficient = '', portions = '', name = '', variantId = null) {
         return `
             <div class="variant-row border rounded p-3 mb-2" data-index="${index}" data-variant-id="${variantId || ''}">
                 <div class="row align-items-center">
-                    <div class="col-md-5">
-                        <label class="form-label small">Koeficient:</label>
-                        <select class="form-select form-select-sm variant-coefficient" required>
-                            ${defaultCoefficients.map(coef => 
-                                `<option value="${coef.value}" ${coef.value == coefficient ? 'selected' : ''}>
-                                    ${coef.name} (${coef.value})
-                                </option>`
-                            ).join('')}
-                        </select>
+                    <div class="col-md-4">
+                        <label class="form-label small">Název:</label>
+                        <input type="text" class="form-control form-control-sm variant-name" 
+                               value="${name || ''}" placeholder="např. Malá porce">
                     </div>
-                    <div class="col-md-5">
+                    <div class="col-md-3">
+                        <label class="form-label small">Koeficient:</label>
+                        <input type="number" 
+                               class="form-control form-control-sm variant-coefficient" 
+                               value="${coefficient || '1.0'}" 
+                               step="0.01" 
+                               min="0.01" 
+                               max="10" 
+                               list="coefficient-suggestions"
+                               placeholder="např. 1.0"
+                               required>
+                    </div>
+                    <div class="col-md-3">
                         <label class="form-label small">Počet porcí:</label>
                         <input type="number" class="form-control form-control-sm variant-portions" 
                                value="${portions}" min="1" required>
@@ -642,10 +712,26 @@ document.addEventListener('DOMContentLoaded', function() {
             input.addEventListener('input', updateTotalEffective);
             input.addEventListener('change', updateTotalEffective);
         });
+        
+        // Automatické doplnění názvu při výběru koeficientu z datalist
+        document.querySelectorAll('.variant-coefficient').forEach(input => {
+            input.addEventListener('input', function() {
+                const row = this.closest('.variant-row');
+                const nameInput = row.querySelector('.variant-name');
+                const coefficient = this.value;
+                
+                // Najdeme odpovídající option v datalist
+                const option = document.querySelector(`#coefficient-suggestions option[value="${coefficient}"]`);
+                if (option && option.label && !nameInput.value) {
+                    nameInput.value = option.label;
+                }
+            });
+        });
     }
     
     document.querySelectorAll('.edit-portions-btn').forEach(btn => {
         btn.addEventListener('click', function() {
+            console.log('Edit portions clicked for order:', this.dataset.orderId);
             currentOrderId = this.dataset.orderId;
             document.getElementById('editOrderId').value = currentOrderId;
             
@@ -654,22 +740,32 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Načteme existující varianty z DOM
             const mealItem = document.querySelector(`[data-order-id="${currentOrderId}"]`);
-            const variantRows = mealItem ? mealItem.querySelectorAll('.portion-variants-body tr') : [];
+            const variantBadges = mealItem ? mealItem.querySelectorAll('.badge[data-coefficient]') : [];
             
-            if (variantRows.length > 0) {
-                // Máme varianty
-                variantRows.forEach((row, index) => {
-                    const cells = row.querySelectorAll('td');
-                    if (cells.length >= 2) {
-                        const coefficient = cells[0].textContent.trim().replace(',', '.');
-                        const portions = cells[1].textContent.trim();
-                        container.insertAdjacentHTML('beforeend', createVariantRow(index, coefficient, portions));
-                    }
+            if (variantBadges.length > 0) {
+                // Máme varianty - načteme je
+                variantBadges.forEach((badge, index) => {
+                    const coefficient = badge.dataset.coefficient;
+                    const portions = badge.dataset.portions;
+                    const name = badge.dataset.name || '';
+                    container.insertAdjacentHTML('beforeend', createVariantRow(index, coefficient, portions, name));
                 });
             } else {
-                // Nemáme varianty - vytvoříme jednu výchozí
-                const defaultTotal = {{ menu_plan.default_portions_adult|add:menu_plan.default_portions_child }};
-                container.insertAdjacentHTML('beforeend', createVariantRow(0, '1.0', defaultTotal));
+                // Nemáme varianty - vytvoříme výchozí z koeficientů menu plánu
+                if (defaultCoefficients.length > 0) {
+                    defaultCoefficients.forEach((coef, index) => {
+                        container.insertAdjacentHTML('beforeend', createVariantRow(
+                            index, 
+                            coef.value, 
+                            '', 
+                            coef.name
+                        ));
+                    });
+                } else {
+                    // Pokud nejsou žádné výchozí koeficienty, vytvoříme jeden prázdný řádek
+                    const defaultTotal = {{ menu_plan.default_portions_adult|add:menu_plan.default_portions_child }};
+                    container.insertAdjacentHTML('beforeend', createVariantRow(0, '1.0', defaultTotal, ''));
+                }
             }
             
             attachVariantHandlers();
@@ -693,11 +789,13 @@ document.addEventListener('DOMContentLoaded', function() {
         document.querySelectorAll('.variant-row').forEach((row, index) => {
             const coefficient = parseDecimal(row.querySelector('.variant-coefficient').value);
             const portions = parseInt(row.querySelector('.variant-portions').value);
+            const name = row.querySelector('.variant-name').value || '';
             const variantId = row.dataset.variantId || null;
             
             variants.push({
                 id: variantId,
                 coefficient: coefficient,
+                name: name,
                 portions: portions,
                 order: index
             });

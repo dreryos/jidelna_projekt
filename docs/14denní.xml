@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<jidelnicek typ="14_denni_cyklus" rok="2026">
+  
+  <den poradi="1" nazev="Sobota">
+    <chod typ="snidane">Vánočka, máslo, čaj</chod>
+    <chod typ="vecere">Chilli con carne, chléb</chod>
+  </den>
+
+  <den poradi="2" nazev="Neděle">
+    <chod typ="snidane">Pečivo, salám, sýr, marmeláda, máslo, čokokuličky, mléko, čaj</chod>
+    <chod typ="obed">Vepřový řízek, brambory, salát</chod>
+    <chod typ="svacina">Rohlík, jogurt</chod>
+    <chod typ="vecere">Zapečené těstoviny s uzeninou, okurek</chod>
+  </den>
+
+  <den poradi="3" nazev="Pondělí">
+    <chod typ="snidane">Pečivo, šunka, tavený sýr, marmeláda, máslo, mussli, bílý jogurt, čaj</chod>
+    <chod typ="obed">Kynuté buchty s povidly, kakao</chod>
+    <chod typ="svacina">Rohlík, šunka</chod>
+    <chod typ="vecere">Sekaná, bramborová kaše, okurek</chod>
+  </den>
+
+  <den poradi="4" nazev="Úterý">
+    <chod typ="snidane">Pečivo, vajíčková pomazánka, marmeláda, máslo, čaj</chod>
+    <chod typ="obed">Svíčková omáčka, houskový knedlík</chod>
+    <chod typ="svacina">Rohlík, tavený sýr</chod>
+    <chod typ="vecere">Chleba, párek, kečup</chod>
+  </den>
+
+  <den poradi="5" nazev="Středa">
+    <chod typ="snidane">Pečivo, salám, sýr, marmeláda, máslo, čokokuličky, mléko, čaj</chod>
+    <chod typ="obed">Vepřová pečeně, bramborový knedlík, zelí</chod>
+    <chod typ="svacina">Rohlík, jogurt</chod>
+    <chod typ="vecere">Rizoto sypané sýrem, červená řepa</chod>
+  </den>
+
+  <den poradi="6" nazev="Čtvrtek">
+    <chod typ="snidane">Pečivo, šunka, tavený sýr, marmeláda, máslo, mussli, bílý jogurt, čaj</chod>
+    <chod typ="obed">Vepřová panenka, šťouchané brambory, grilovaná zelenina</chod>
+    <chod typ="svacina">Domácí perník</chod>
+    <chod typ="vecere">Rajská omáčka, masové kuličky, těstoviny</chod>
+  </den>
+
+  <den poradi="7" nazev="Pátek">
+    <chod typ="snidane">Pečivo, šunková pomazánka, máslo, marmeláda, čaj</chod>
+    <chod typ="obed">Kuřecí plátek, rýže, salát</chod>
+    <chod typ="svacina">Rohlík, sýr eidam</chod>
+    <chod typ="vecere">Krupicová kaše</chod>
+  </den>
+
+  <den poradi="8" nazev="Sobota">
+    <chod typ="snidane">Vánočka, máslo, čaj</chod>
+    <chod typ="obed">Segedínský guláš, houskový knedlík</chod>
+    <chod typ="svacina">Rohlík, salám</chod>
+    <chod typ="vecere">Vepřová směs po čínsku, rýže</chod>
+  </den>
+
+  <den poradi="9" nazev="Neděle">
+    <chod typ="snidane">Pečivo, salám, sýr, marmeláda, máslo, čokokuličky, mléko, čaj</chod>
+    <chod typ="obed">Halušky s uzeným masem a zelím</chod>
+    <chod typ="svacina">Rohlík, jogurt</chod>
+    <chod typ="vecere">Grilované kuřecí stehno, brambory, salát</chod>
+  </den>
+
+  <den poradi="10" nazev="Pondělí">
+    <chod typ="snidane">Pečivo, šunka, tavený sýr, marmeláda, máslo, mussli, bílý jogurt, čaj</chod>
+    <chod typ="obed">Buchtičky s vanilkovým šodo</chod>
+    <chod typ="svacina">Rohlík, sýr eidam</chod>
+    <chod typ="vecere">Buřtguláš, chléb</chod>
+  </den>
+
+  <den poradi="11" nazev="Úterý">
+    <chod typ="snidane">Pečivo, rybičková pomazánka, marmeláda, máslo, čaj</chod>
+    <chod typ="obed">Trhané vepřové maso, brambor, grilovaná zelenina</chod>
+    <chod typ="svacina">Rohlík, jogurt</chod>
+    <chod typ="vecere">Španělská omáčka, rýže</chod>
+  </den>
+
+  <den poradi="12" nazev="Středa">
+    <chod typ="snidane">Pečivo, salám, sýr, marmeláda, máslo, čokokuličky, mléko, čaj</chod>
+    <chod typ="obed">Hovězí guláš, houskový knedlík</chod>
+    <chod typ="svacina">Rohlík, tavený sýr</chod>
+    <chod typ="vecere">Boloňské špagety sypané sýrem</chod>
+  </den>
+
+  <den poradi="13" nazev="Čtvrtek">
+    <chod typ="snidane">Pečivo, šunka, tavený sýr, marmeláda, máslo, mussli, bílý jogurt, čaj</chod>
+    <chod typ="obed">Karbenátek, šťouchané brambory, kyselá okurka</chod>
+    <chod typ="svacina">Domácí perník</chod>
+    <chod typ="vecere">Kuře na paprice, těstoviny</chod>
+  </den>
+
+  <den poradi="14" nazev="Pátek">
+    <chod typ="snidane">Pečivo, paštiková pomazánka, máslo, marmeláda, čaj</chod>
+    <chod typ="obed">Bavorské vdolečky</chod>
+    <chod typ="svacina">Rohlík, šunka</chod>
+    <chod typ="vecere">Kuřecí kung pao, rýže</chod>
+  </den>
+</jidelnicek>

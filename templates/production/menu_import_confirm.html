@@ -1,0 +1,104 @@
+{% extends 'base.html' %}
+
+{% block title %}Import jídelníčku - Krok 3/3{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'home' %}">Domů</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'production:menu_list' %}">Výroba</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'production:menu_import_step1' %}">Import jídelníčku</a></li>
+            <li class="breadcrumb-item active">Potvrzení</li>
+        </ol>
+    </nav>
+
+    <h1>Finální potvrzení importu</h1>
+    
+    <!-- Progress indicator -->
+    <div class="mb-4">
+        <div class="progress" style="height: 30px;">
+            <div class="progress-bar bg-success" style="width: 33%">✓ Krok 1</div>
+            <div class="progress-bar bg-success" style="width: 33%">✓ Krok 2</div>
+            <div class="progress-bar bg-primary" style="width: 34%">Krok 3/3: Potvrzení</div>
+        </div>
+    </div>
+
+    <!-- Souhrn -->
+    <div class="card mb-4">
+        <div class="card-header bg-success text-white"><strong>Shrnutí importu</strong></div>
+        <div class="card-body">
+            <dl class="row mb-0">
+                <dt class="col-sm-3">Jídelna:</dt>
+                <dd class="col-sm-9">{{ canteen }}</dd>
+                
+                <dt class="col-sm-3">Název jídelníčku:</dt>
+                <dd class="col-sm-9"><strong>{{ menu_name }}</strong></dd>
+                
+                <dt class="col-sm-3">Období:</dt>
+                <dd class="col-sm-9">{{ start_date|date:"d.m.Y" }} - {{ end_date|date:"d.m.Y" }}</dd>
+                
+                <dt class="col-sm-3">Počet receptů:</dt>
+                <dd class="col-sm-9">{{ recipes_count }}</dd>
+                
+                <dt class="col-sm-3">Počet jídel:</dt>
+                <dd class="col-sm-9">{{ meals_count }}</dd>
+                
+                <dt class="col-sm-3">Koeficienty porcí:</dt>
+                <dd class="col-sm-9">
+                    {% if coefficients %}
+                        <div class="table-responsive">
+                            <table class="table table-sm table-bordered mb-0" style="max-width: 500px;">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Název</th>
+                                        <th class="text-center">Koeficient</th>
+                                        <th class="text-end">Počet porcí</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for coef in coefficients %}
+                                    <tr>
+                                        <td>{{ coef.name }}</td>
+                                        <td class="text-center">{{ coef.coefficient }}</td>
+                                        <td class="text-end">{{ coef.portions }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <span class="text-muted">Žádné koeficienty definovány</span>
+                    {% endif %}
+                </dd>
+            </dl>
+        </div>
+    </div>
+
+    <div class="alert alert-warning">
+        <h5><i class="fas fa-exclamation-triangle"></i> Upozornění</h5>
+        <p>Pokračováním v importu:</p>
+        <ul class="mb-0">
+            <li>Budou vytvořeny nové recepty (pokud ještě neexistují)</li>
+            <li>Bude vytvořen nový jídelníček s {{ meals_count }} jídly</li>
+            <li>Všechna jídla budou mít výchozí počet porcí z šablony</li>
+            <li>Po importu budete moci upravit jednotlivá jídla v detailu jídelníčku</li>
+        </ul>
+    </div>
+
+    <form method="post" action="{% url 'production:menu_import_step3' %}">
+        {% csrf_token %}
+        <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-success btn-lg">
+                <i class="fas fa-check-circle"></i> Potvrdit a vytvořit jídelníček
+            </button>
+            <a href="{% url 'production:menu_import_step2' %}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Zpět na nastavení
+            </a>
+            <a href="{% url 'production:menu_list' %}" class="btn btn-outline-secondary">
+                <i class="fas fa-times-circle"></i> Zrušit
+            </a>
+        </div>
+    </form>
+</div>
+{% endblock %}

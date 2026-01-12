@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import ProductionOrder, PickingList, MenuPlan, MenuPlanCoefficient, PickingListDocument
+from .models import ProductionOrder, PickingList, MenuPlan, MenuPlanCoefficient, PickingListDocument, MenuTemplate
 
 # Tento admin modul umožňuje správu výrobních příkazů a zobrazení souvisejících výdejek.
 # Výpočty cen používají metodu `calculate_portion_price` z modelu Recipe.
@@ -40,14 +40,14 @@ class MenuPlanAdmin(admin.ModelAdmin):
 @admin.register(ProductionOrder)
 class ProductionOrderAdmin(admin.ModelAdmin):
     inlines = [PickingListInline]
-    list_display = ('recipe', 'canteen', 'date', 'total_portions', 'created_at')
-    list_filter = ('canteen', 'date', 'menu_plan')
+    list_display = ('recipe', 'meal_type', 'canteen', 'date', 'total_portions', 'created_at')
+    list_filter = ('meal_type', 'canteen', 'date', 'menu_plan')
     autocomplete_fields = ['recipe', 'canteen', 'menu_plan']
     readonly_fields = ('price_per_portion', 'total_price')
     
     fieldsets = (
         (None, {
-            'fields': ('menu_plan', 'recipe', 'canteen', 'date')
+            'fields': ('menu_plan', 'recipe', 'canteen', 'date', 'meal_type')
         }),
         ('Vypočtené ceny', {
             'fields': ('price_per_portion', 'total_price'),
@@ -106,5 +106,26 @@ class PickingListDocumentAdmin(admin.ModelAdmin):
         if not change:  # Pokud je nový objekt
             obj.created_by = request.user
         super().save_model(request, obj, form, change)
+
+
+@admin.register(MenuTemplate)
+class MenuTemplateAdmin(admin.ModelAdmin):
+    """Admin pro šablony jídelníčků"""
+    list_display = ('name', 'created_at', 'updated_at')
+    search_fields = ('name', 'description')
+    readonly_fields = ('created_at', 'updated_at')
+    
+    fieldsets = (
+        ('Základní informace', {
+            'fields': ('name', 'description')
+        }),
+        ('XML obsah', {
+            'fields': ('xml_content',)
+        }),
+        ('Metadata', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
 
 # admin.site.register(PickingList)

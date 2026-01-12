@@ -1,0 +1,294 @@
+{% extends 'base.html' %}
+{% load production_filters %}
+
+{% block title %}Import jídelníčku - Krok 2/3{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'home' %}">Domů</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'production:menu_list' %}">Výroba</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'production:menu_import_step1' %}">Import jídelníčku</a></li>
+            <li class="breadcrumb-item active">Náhled</li>
+        </ol>
+    </nav>
+
+    <h1>Náhled importu jídelníčku</h1>
+    
+    <!-- Progress indicator -->
+    <div class="mb-4">
+        <div class="progress" style="height: 30px;">
+            <div class="progress-bar bg-success" style="width: 33%">✓ Krok 1</div>
+            <div class="progress-bar bg-primary" style="width: 33%">Krok 2/3: Náhled</div>
+            <div class="progress-bar bg-secondary" style="width: 34%">Krok 3: Potvrzení</div>
+        </div>
+    </div>
+
+    <!-- Varování -->
+    {% if warnings %}
+    <div class="alert alert-warning">
+        <h5><i class="fas fa-exclamation-triangle"></i> Upozornění</h5>
+        <ul class="mb-0">
+        {% for warning in warnings %}
+            <li>{{ warning }}</li>
+        {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+    
+    <form method="post" action="{% url 'production:menu_import_step2' %}">
+        {% csrf_token %}
+        
+        <!-- Výchozí koeficienty porcí -->
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <strong><i class="fas fa-balance-scale"></i> Výchozí koeficienty porcí</strong>
+            </div>
+            <div class="card-body">
+                <p class="text-muted mb-3">
+                    <i class="fas fa-info-circle"></i> Definujte různé velikosti porcí, které budete používat při plánování jídel. 
+                    Například: "Vedoucí" (koef. 1,0, porce: 25), "Děti" (koef. 0,75, porce: 30).
+                    Koeficient určuje velikost porce, počet porcí určuje, kolik osob bude mít tuto velikost.
+                </p>
+                
+                {{ coefficient_formset.management_form }}
+                
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th style="width: 50px;">#</th>
+                            <th>Název</th>
+                            <th style="width: 130px;">Koeficient</th>
+                            <th style="width: 130px;">Počet porcí</th>
+                            <th style="width: 100px;">Pořadí</th>
+                            <th style="width: 80px;">Smazat</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for form in coefficient_formset %}
+                        <tr>
+                            <td class="align-middle">{{ forloop.counter }}</td>
+                            <td>
+                                {{ form.name }}
+                                {% if form.name.errors %}
+                                    <div class="text-danger small">{{ form.name.errors }}</div>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="coefficient-field">{{ form.coefficient }}</div>
+                                {% if form.coefficient.errors %}
+                                    <div class="text-danger small">{{ form.coefficient.errors }}</div>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <input type="number" 
+                                       name="portions_{{ forloop.counter0 }}" 
+                                       class="form-control form-control-sm portions-input" 
+                                       value="{{ saved_portions|get_item:forloop.counter0|default:0 }}" 
+                                       min="0" 
+                                       placeholder="0">
+                            </td>
+                            <td>
+                                {{ form.order }}
+                                {% if form.order.errors %}
+                                    <div class="text-danger small">{{ form.order.errors }}</div>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                {{ form.DELETE }}
+                            </td>
+                        </tr>
+                        {{ form.id }}
+                        {% endfor %}
+                    </tbody>
+                </table>
+                
+                <div class="alert alert-info mb-0">
+                    <strong>Poznámka:</strong> Po vytvoření jídelníčku budete moci přidávat konkrétní jídla pro jednotlivé dny a vybírat z těchto výchozích koeficientů.
+                </div>
+            </div>
+        </div>
+
+    <!-- Souhrn -->
+    <div class="card mb-4">
+        <div class="card-header bg-info text-white"><strong>Souhrn importu</strong></div>
+        <div class="card-body">
+            <dl class="row mb-0">
+                <dt class="col-sm-3">Jídelna:</dt>
+                <dd class="col-sm-9">{{ canteen }}</dd>
+                
+                <dt class="col-sm-3">Název jídelníčku:</dt>
+                <dd class="col-sm-9">{{ menu_name }}</dd>
+                
+                <dt class="col-sm-3">Začátek:</dt>
+                <dd class="col-sm-9">{{ start_date|date:"d.m.Y" }}</dd>
+                
+                <dt class="col-sm-3">Počet receptů:</dt>
+                <dd class="col-sm-9">{{ recipes|length }}</dd>
+                
+                <dt class="col-sm-3">Počet dní:</dt>
+                <dd class="col-sm-9">{{ num_days }}</dd>
+            </dl>
+        </div>
+    </div>
+
+    <!-- Recepty -->
+    <div class="card mb-4">
+        <div class="card-header"><strong>Recepty ({{ recipes|length }})</strong></div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-sm table-striped">
+                    <thead>
+                        <tr>
+                            <th>Název</th>
+                            <th>Počet porcí</th>
+                            <th>Ingredience</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {% for recipe in recipes %}
+                        <tr>
+                            <td><strong>{{ recipe.name }}</strong></td>
+                            <td class="text-end">{{ recipe.portions }}</td>
+                            <td>
+                                <small>
+                                {% for ingredient in recipe.ingredients %}
+                                    {{ ingredient.name }} ({{ ingredient.amount }}{{ ingredient.unit }}){% if not forloop.last %}, {% endif %}
+                                {% endfor %}
+                                </small>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Jídelníček (schedule) - READ ONLY náhled -->
+    <div class="card mb-4">
+        <div class="card-header"><strong>Náhled jídelníčku</strong></div>
+        <div class="card-body">
+            {% regroup schedule by day as day_list %}
+            {% for day_group in day_list %}
+                <h5 class="mt-3 mb-2">{{ day_group.list.0.day_name }} ({{ day_group.list.0.date|date:"d.m.Y" }})</h5>
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered">
+                        <thead>
+                            <tr>
+                                <th style="width: 150px;">Typ jídla</th>
+                                <th>Recept</th>
+                                <th class="text-end" style="width: 120px;">Výchozí porce</th>
+                                <th class="text-end" style="width: 150px;">Ekvivalentní porce</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        {% for item in day_group.list %}
+                            <tr>
+                                <td>
+                                    {% if item.meal_type == 'BREAKFAST' %}
+                                        🌅 Snídaně
+                                    {% elif item.meal_type == 'SNACK_MORNING' %}
+                                        ☕ Svačina dopolední
+                                    {% elif item.meal_type == 'LUNCH' %}
+                                        🍽️ Oběd
+                                    {% elif item.meal_type == 'SNACK_AFTERNOON' %}
+                                        🍎 Svačina odpolední
+                                    {% elif item.meal_type == 'DINNER' %}
+                                        🌙 Večeře
+                                    {% else %}
+                                        {{ item.meal_type }}
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <strong>{{ item.recipe_name }}</strong>
+                                    {% if item.recipe_code != item.recipe_name %}
+                                        <br><small class="text-muted">Kód: {{ item.recipe_code }}</small>
+                                    {% endif %}
+                                </td>
+                                <td class="text-end">{{ item.portions }}</td>
+                                <td class="text-end">
+                                    <span class="equivalent-portions badge bg-secondary" data-base-portions="{{ item.portions }}">-</span>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+                
+        <div class="d-flex gap-2 mt-4">
+            <button type="submit" class="btn btn-success btn-lg">
+                <i class="fas fa-arrow-right"></i> Pokračovat na potvrzení
+            </button>
+            <a href="{% url 'production:menu_import_step1' %}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Zpět na výběr
+            </a>
+            <a href="{% url 'production:menu_list' %}" class="btn btn-outline-secondary">
+                <i class="fas fa-times-circle"></i> Zrušit
+            </a>
+        </div>
+    </form>
+</div>
+
+<script>
+// Interaktivní výpočet ekvivalentních porcí podle koeficientů
+document.addEventListener('DOMContentLoaded', function() {
+    
+    function calculateEquivalentPortions() {
+        let totalEquivalent = 0;
+        
+        // Najdeme všechny input fieldy koeficientů (Django formset vytváří name="coefficient_set-X-coefficient")
+        const coefficientInputs = document.querySelectorAll('.coefficient-field input');
+        const portionInputs = document.querySelectorAll('.portions-input');
+        
+        // Projdeme všechny koeficienty a počty porcí
+        coefficientInputs.forEach((coeffInput, idx) => {
+            const coefficient = parseFloat(coeffInput.value) || 0;
+            const portionInput = portionInputs[idx];
+            const portions = portionInput ? parseInt(portionInput.value) || 0 : 0;
+            
+            totalEquivalent += coefficient * portions;
+        });
+        
+        // Aktualizujeme všechny ekvivalentní porce
+        const equivalentSpans = document.querySelectorAll('.equivalent-portions');
+        equivalentSpans.forEach(span => {
+            const basePortions = parseFloat(span.getAttribute('data-base-portions')) || 0;
+            
+            if (totalEquivalent > 0) {
+                // Zobrazíme ekvivalentní porce jako celé číslo
+                const equivalent = Math.round(totalEquivalent);
+                span.textContent = equivalent;
+                
+                // Barevně označíme, jestli se liší od výchozí porce
+                if (Math.abs(equivalent - basePortions) > basePortions * 0.1) {
+                    span.classList.remove('bg-secondary', 'bg-success');
+                    span.classList.add('bg-warning', 'text-dark');
+                } else {
+                    span.classList.remove('bg-secondary', 'bg-warning', 'text-dark');
+                    span.classList.add('bg-success');
+                }
+            } else {
+                span.textContent = '-';
+                span.classList.remove('bg-warning', 'bg-success', 'text-dark');
+                span.classList.add('bg-secondary');
+            }
+        });
+    }
+    
+    // Použijeme event delegation pro dynamicky přidané fieldy
+    document.body.addEventListener('input', function(e) {
+        if (e.target.closest('.coefficient-field') || e.target.classList.contains('portions-input')) {
+            calculateEquivalentPortions();
+        }
+    });
+    
+    // Spustíme výpočet při načtení stránky
+    calculateEquivalentPortions();
+});
+</script>
+{% endblock %}

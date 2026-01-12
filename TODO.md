@@ -11,13 +11,12 @@ Tento soubor sleduje hlavní úkoly, bugy a nápady pro projekt. Pro detailněj�
 - [ ] Připravit pro zelináře tabulku pro import (ať se nemusí vše zadávat ručně) - přidat dodavatele k surovinám.
 - [ ] Vyřešit změnu ceny suroviny z nového příjmu - jak aktualizovat skladové ceny a historii cen.
 
-
 ---
 
 ## 🐛 Bugy (Chyby)
 *Nalezené chyby, které neblokují hlavní funkčnost, ale je třeba je opravit.*
 
-- [ ] Zpříjemnit práci s koeficienty porcí v jídelníčku (aktuálně se musí upravovat v detailu jídla).
+- [x] Zpříjemnit práci s koeficienty porcí v jídelníčku (aktuálně se musí upravovat v detailu jídla).
 - [ ] DPH u příjmu zboží - zajistit správné zaokrouhlování a výpočet celkové ceny s DPH.
 - [ ] DPH u prodeje jídel - zajistit správné zaokrouhlování a výpočet celkové ceny s DPH.
 
@@ -26,7 +25,7 @@ Tento soubor sleduje hlavní úkoly, bugy a nápady pro projekt. Pro detailněj�
 ## ✨ Nové Funkce (Features)
 *Nové části aplikace, které se mají implementovat.*
 
-- [ ] Předpřipravené jídelníčky na nejčastější akce (ŠVP, tábor - týden nebo 14 dní).
+- [x] Předpřipravené jídelníčky na nejčastější akce (ŠVP, tábor - týden nebo 14 dní).
 - [ ] Převodky, přesun surovin mezi sklady jídelen, přes mezisklad.
 - [ ] "Předpověď ceny" jídelníčku na základě historických dat o cenách surovin.
 - [ ] Modul Inventura - možnost provádět inventury skladů, generovat inventurní soupisy, porovnávat s evidencí skladu, upozornění dlouho neinventurovaných skladů.
@@ -59,7 +58,7 @@ Tento soubor sleduje hlavní úkoly, bugy a nápady pro projekt. Pro detailněj�
 
 - [x] Nastavit základní strukturu projektu.
 - [x] Inicializovat Git repozitář.
-- [x] Zjednodušit formulář receptů (odstranit základní počet porcí).
+- [x] Zjednodušit formulář receptů (odstranit záksladní počet porcí).
 - [x] Odstranit, předělat modul výrobní příkazy pro lepší integraci s plánováním výroby.
 - [x] Reporty upravit aby byly v souladu s novou strukturou plánování jídelníčku.
 - [x] Předělat tvorbu výrobních příkazů podle nové logiky plánování jídelníčku.
@@ -70,3 +69,5 @@ Tento soubor sleduje hlavní úkoly, bugy a nápady pro projekt. Pro detailněj�
 - [x] Opravit přidávání jídla do jídelníčku, nelze přidat.
 - [x] Dashboard pro statistiky jídelny (denní přehled, nejčastěji vařená jídla, spotřeba surovin).
 - [x] Přidat favicon aplikace.
+- [x] Přejmenování projektu.
+- [x] Správa uživatelů a oprávnění (přiřazení uživatele k jídelně, omezení přístupu k datům jídelny).

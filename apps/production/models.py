@@ -11,6 +11,7 @@ from apps.inventory.models import StockItem
 """
 Tento modul obsahuje logiku pro plánování a provádění výroby:
 - MenuPlan: jídelníček pro určité období
+- MenuTemplate: XML šablona pro import jídelníčků
 - ProductionOrder: reprezentuje plánované vaření (recept + počty porcí + jídelna) - nyní součást jídelníčku
 - generate_picking_list: vytvoří položky výdejky podle norem receptu
 - PickingList: položka výdejky obsahující plánované a skutečné množství, sklad a stav
@@ -18,6 +19,23 @@ Tento modul obsahuje logiku pro plánování a provádění výroby:
 Po změně stavu položky na COMPLETED se automaticky odečte `quantity_actual` ze skladu (StockItem).
 Pokud položka v daném skladu neexistuje, vytvoří se záznam se záporným množstvím – to slouží jako upozornění na nedostatek.
 """
+
+
+class MenuTemplate(models.Model):
+    """XML šablona pro import jídelníčků"""
+    name = models.CharField(max_length=200, verbose_name="Název šablony")
+    description = models.TextField(blank=True, verbose_name="Popis", help_text="Stručný popis šablony a co obsahuje")
+    xml_content = models.TextField(verbose_name="XML obsah", help_text="XML definice receptů a harmonogramu")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Vytvořeno")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Aktualizováno")
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        verbose_name = "Šablona jídelníčku"
+        verbose_name_plural = "Šablony jídelníčků"
+        ordering = ['-created_at']
 
 
 class MenuPlan(models.Model):
@@ -77,10 +95,27 @@ class MenuPlanCoefficient(models.Model):
 
 class ProductionOrder(models.Model):
     """Výrobní příkaz - nyní součást jídelníčku"""
+    
+    class MealType(models.TextChoices):
+        BREAKFAST = 'BREAKFAST', 'Snídaně'
+        SNACK_MORNING = 'SNACK_MORNING', 'Svačina dopolední'
+        LUNCH = 'LUNCH', 'Oběd'
+        SNACK_AFTERNOON = 'SNACK_AFTERNOON', 'Svačina odpolední'
+        DINNER = 'DINNER', 'Večeře'
+    
     menu_plan = models.ForeignKey(MenuPlan, on_delete=models.CASCADE, related_name='production_orders', verbose_name="Jídelníček", null=False, blank=False)
     recipe = models.ForeignKey(Recipe, on_delete=models.PROTECT, verbose_name="Recept")
     canteen = models.ForeignKey(Canteen, on_delete=models.PROTECT, verbose_name="Jídelna", null=True, blank=True)
     date = models.DateField(verbose_name="Datum vaření")
+    meal_type = models.CharField(
+        max_length=20,
+        choices=MealType.choices,
+        default=MealType.LUNCH,
+        blank=True,
+        verbose_name="Typ jídla",
+        help_text="Kategorie jídla (snídaně, oběd, večeře, svačina)",
+        db_index=True
+    )
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Vytvořeno")
     
     @property
@@ -243,6 +278,13 @@ class ProductionOrderPortionVariant(models.Model):
         verbose_name="Koeficient",
         help_text="Např. 1.0 = normální, 0.75 = menší"
     )
+    name = models.CharField(
+        max_length=100,
+        default='',
+        blank=True,
+        verbose_name="Název varianty",
+        help_text="Např. Vedoucí, Děti, Normální porce"
+    )
     portions = models.PositiveIntegerField(
         verbose_name="Počet porcí",
         help_text="Kolik porcí s tímto koeficientem"
@@ -254,6 +296,8 @@ class ProductionOrderPortionVariant(models.Model):
     )
     
     def __str__(self):
+        if self.name:
+            return f"{self.name}: {self.portions}× (koef. {self.coefficient})"
         return f"{self.portions}× (koef. {self.coefficient})"
     
     @property

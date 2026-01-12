@@ -14,9 +14,9 @@
   {% block extra_js %}{% endblock %}
 </head>
 <body>
-  <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+  <nav class="navbar navbar-expand-lg navbar-light bg-white border-bottom shadow-sm">
     <div class="container">
-      <a class="navbar-brand" href="/">
+      <a class="navbar-brand fw-bold text-primary" href="/">
         <i class="fas fa-warehouse me-2"></i>Spíž
       </a>
       <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
@@ -26,38 +26,153 @@
         <ul class="navbar-nav me-auto">
           {% if request.user.is_authenticated %}
             <li class="nav-item">
-              <a class="nav-link" href="/">Domů</a>
+              <a class="nav-link text-dark" href="/">
+                <i class="fas fa-home me-1"></i>Domů
+              </a>
             </li>
-            <li class="nav-item">
-              <a class="nav-link" href="{% url 'core:recipe_list' %}">Recepty</a>
+            
+            <!-- Recepty a suroviny -->
+            <li class="nav-item dropdown">
+              <a class="nav-link dropdown-toggle text-success" href="#" id="recipesDropdown" role="button" data-bs-toggle="dropdown">
+                <i class="fas fa-book-open me-1"></i>Recepty
+              </a>
+              <ul class="dropdown-menu">
+                <li>
+                  <a class="dropdown-item text-success" href="{% url 'core:recipe_list' %}">
+                    <i class="fas fa-list me-2"></i>Zobrazit recepty
+                  </a>
+                </li>
+                <li>
+                  <a class="dropdown-item text-success" href="{% url 'core:ingredient_list' %}">
+                    <i class="fas fa-seedling me-2"></i>Správa surovin
+                  </a>
+                </li>
+                <li><hr class="dropdown-divider"></li>
+                <li>
+                  <a class="dropdown-item text-success" href="{% url 'core:recipe_add' %}">
+                    <i class="fas fa-plus me-2"></i>Přidat nový recept
+                  </a>
+                </li>
+              </ul>
             </li>
-            <li class="nav-item">
-              <a class="nav-link" href="{% url 'core:ingredient_list' %}">Suroviny</a>
+            
+            <!-- Sklady a zásoby -->
+            <li class="nav-item dropdown">
+              <a class="nav-link dropdown-toggle text-warning" href="#" id="inventoryDropdown" role="button" data-bs-toggle="dropdown">
+                <i class="fas fa-warehouse me-1"></i>Sklady
+              </a>
+              <ul class="dropdown-menu">
+                <li>
+                  <a class="dropdown-item text-warning" href="{% url 'inventory:stock_list' %}">
+                    <i class="fas fa-boxes me-2"></i>Zobrazit zásoby
+                  </a>
+                </li>
+                <li>
+                  <a class="dropdown-item text-warning" href="{% url 'inventory:canteen_list' %}">
+                    <i class="fas fa-utensils me-2"></i>Spravovat jídelny
+                  </a>
+                </li>
+                <li>
+                  <a class="dropdown-item text-warning" href="{% url 'inventory:warehouse_list' %}">
+                    <i class="fas fa-building me-2"></i>Spravovat sklady
+                  </a>
+                </li>
+                <li><hr class="dropdown-divider"></li>
+                <li>
+                  <a class="dropdown-item text-warning" href="{% url 'inventory:stock_add' %}">
+                    <i class="fas fa-plus me-2"></i>Přidat zásobu
+                  </a>
+                </li>
+              </ul>
             </li>
-            <li class="nav-item">
-              <a class="nav-link" href="{% url 'inventory:stock_list' %}">Sklady</a>
+            
+            <!-- Jídelníčky a výroba -->
+            <li class="nav-item dropdown">
+              <a class="nav-link dropdown-toggle text-danger" href="#" id="productionDropdown" role="button" data-bs-toggle="dropdown">
+                <i class="fas fa-calendar-alt me-1"></i>Jídelníčky
+              </a>
+              <ul class="dropdown-menu">
+                <li>
+                  <a class="dropdown-item text-danger" href="{% url 'production:menu_list' %}">
+                    <i class="fas fa-calendar-alt me-2"></i>Jídelníčky
+                  </a>
+                </li>
+                <li>
+                  <a class="dropdown-item text-danger" href="{% url 'production:menu_create' %}">
+                    <i class="fas fa-plus me-2"></i>Nový jídelníček
+                  </a>
+                </li>
+                <li>
+                  <a class="dropdown-item text-danger" href="{% url 'production:template_list' %}">
+                    <i class="fas fa-file-alt me-2"></i>Šablony jídelníčků
+                  </a>
+                </li>
+                <li>
+                  <a class="dropdown-item text-danger" href="{% url 'production:menu_import_step1' %}">
+                    <i class="fas fa-file-import me-2"></i>Import ze šablony
+                  </a>
+                </li>
+              </ul>
             </li>
-            <li class="nav-item">
-              <a class="nav-link" href="{% url 'production:menu_list' %}">Jídelníčky</a>
+            
+            <!-- Reporty -->
+            <li class="nav-item dropdown">
+              <a class="nav-link dropdown-toggle text-info" href="#" id="reportsDropdown" role="button" data-bs-toggle="dropdown">
+                <i class="fas fa-chart-bar me-1"></i>Reporty
+              </a>
+              <ul class="dropdown-menu">
+                <li>
+                  <a class="dropdown-item text-info" href="{% url 'production:picking_list_generator' %}">
+                    <i class="fas fa-file-pdf me-2"></i>Výdejky (PDF)
+                  </a>
+                </li>
+                <li>
+                  <a class="dropdown-item text-info" href="{% url 'reports:order_report' %}">
+                    <i class="fas fa-file-alt me-2"></i>Report objednávek
+                  </a>
+                </li>
+                <li>
+                  <a class="dropdown-item text-info" href="{% url 'reports:order_report_download' %}">
+                    <i class="fas fa-download me-2"></i>Stáhnout report
+                  </a>
+                </li>
+              </ul>
             </li>
-            <li class="nav-item">
-              <a class="nav-link" href="{% url 'reports:order_report' %}">Reporty</a>
+            
+            <!-- Analytika -->
+            <li class="nav-item dropdown">
+              <a class="nav-link dropdown-toggle text-secondary" href="#" id="analyticsDropdown" role="button" data-bs-toggle="dropdown">
+                <i class="fas fa-chart-line me-1"></i>Analytika
+              </a>
+              <ul class="dropdown-menu">
+                <li>
+                  <a class="dropdown-item text-secondary" href="{% url 'analytics:menu_analytics_list' %}">
+                    <i class="fas fa-chart-pie me-2"></i>Náklady jídelníčků
+                  </a>
+                </li>
+                <li>
+                  <a class="dropdown-item text-secondary" href="{% url 'analytics:recipe_cost_analysis' %}">
+                    <i class="fas fa-chart-area me-2"></i>Vývoj cen receptů
+                  </a>
+                </li>
+              </ul>
             </li>
+            
+            <!-- Administrace -->
             <li class="nav-item">
-              <a class="nav-link" href="{% url 'analytics:menu_analytics_list' %}">Analytika</a>
-            </li>
-            <li class="nav-item">
-              <a class="nav-link" href="/admin/">Administrace</a>
+              <a class="nav-link text-primary" href="/admin/">
+                <i class="fas fa-cogs me-1"></i>Administrace
+              </a>
             </li>
           {% endif %}
         </ul>
         <ul class="navbar-nav">
           {% if request.user.is_authenticated %}
             <li class="nav-item dropdown">
-              <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown">
+              <a class="nav-link dropdown-toggle text-dark" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown">
                 <i class="fas fa-user me-1"></i>{{ user.username }}
               </a>
-              <ul class="dropdown-menu">
+              <ul class="dropdown-menu dropdown-menu-end">
                 <li>
                   <form method="post" action="{% url 'logout' %}" class="m-0">
                     {% csrf_token %}
@@ -70,7 +185,7 @@
             </li>
           {% else %}
             <li class="nav-item">
-              <a class="nav-link" href="{% url 'login' %}">
+              <a class="nav-link text-dark" href="{% url 'login' %}">
                 <i class="fas fa-sign-in-alt me-1"></i>Přihlásit
               </a>
             </li>

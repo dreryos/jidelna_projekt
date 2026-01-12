@@ -1,5 +1,6 @@
 from django.urls import path
 from . import views
+from . import template_views
 
 app_name = 'production'
 
@@ -10,6 +11,18 @@ urlpatterns = [
     path('jidelnicky/novy/', views.MenuPlanCreateView.as_view(), name='menu_create'),
     path('jidelnicky/<int:pk>/', views.MenuPlanDetailView.as_view(), name='menu_detail'),
     path('jidelnicky/<int:pk>/smazat/', views.MenuPlanDeleteView.as_view(), name='menu_delete'),
+    
+    # Šablony jídelníčků
+    path('sablony/', template_views.MenuTemplateListView.as_view(), name='template_list'),
+    path('sablony/nova/', template_views.MenuTemplateCreateView.as_view(), name='template_create'),
+    path('sablony/<int:pk>/upravit/', template_views.MenuTemplateUpdateView.as_view(), name='template_edit'),
+    path('sablony/<int:pk>/smazat/', template_views.MenuTemplateDeleteView.as_view(), name='template_delete'),
+    path('sablony/<int:pk>/duplikovat/', template_views.duplicate_template, name='template_duplicate'),
+    
+    # Import jídelníčku ze šablony
+    path('import-jidelnicku/', template_views.menu_import_step1, name='menu_import_step1'),
+    path('import-jidelnicku/nahled/', template_views.menu_import_step2_preview, name='menu_import_step2'),
+    path('import-jidelnicku/potvrdit/', template_views.menu_import_step3_confirm, name='menu_import_step3'),
     
     # AJAX endpointy pro jídelníčky
     path('jidelnicky/<int:menu_pk>/pridat-jidlo/', views.add_meal_to_menu, name='add_meal_to_menu'),
