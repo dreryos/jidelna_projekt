@@ -37,8 +37,11 @@ COPY . /app/
 # Create directory for sqlite db and static files
 RUN mkdir -p /app/data /app/staticfiles
 
+# Make entrypoint executable
+RUN chmod +x /app/docker-entrypoint.sh
+
 # Expose port
 EXPOSE 8000
 
-# Run gunicorn
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "spiz_project.wsgi:application"]
+# Run entrypoint script
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
