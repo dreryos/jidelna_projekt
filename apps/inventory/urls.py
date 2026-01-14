@@ -22,9 +22,10 @@ urlpatterns = [
     path('canteens/edit/<int:pk>/', views.CanteenUpdateView.as_view(), name='canteen_edit'),
     path('canteens/delete/<int:pk>/', views.CanteenDeleteView.as_view(), name='canteen_delete'),
     
-    # Import CSV
-    path('import/', views.import_csv_step1, name='import_csv_step1'),
-    path('import/confirm/', views.import_csv_step2_confirm, name='import_csv_step2_confirm'),
+    # Bidfood XML Import
+    path('bidfood-import/', views.bidfood_xml_import_step1, name='bidfood_import_step1'),
+    path('bidfood-import/preview/', views.bidfood_xml_import_step2, name='bidfood_import_step2'),
+    path('bidfood-import/create/', views.bidfood_xml_import_step3, name='bidfood_import_step3'),
     
     # Příjem zboží (GoodsReceipt)
     path('goods-receipts/', views.GoodsReceiptListView.as_view(), name='goods_receipt_list'),

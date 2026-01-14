@@ -1,0 +1,244 @@
+{% extends 'base.html' %}
+{% load django_bootstrap5 %}
+
+{% block title %}Bidfood Import - Preview - Spíž{% endblock %}
+
+{% block extra_css %}
+<style>
+.formset-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+    font-size: 0.9rem;
+}
+
+.formset-table th {
+    background-color: #f8f9fa;
+    padding: 10px 6px;
+    border: 1px solid #dee2e6;
+    font-weight: 600;
+    text-align: left;
+}
+
+.formset-table td {
+    padding: 6px;
+    border: 1px solid #dee2e6;
+    vertical-align: middle;
+}
+
+.formset-table tbody tr:hover {
+    background-color: #f8f9fa;
+}
+
+.match-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.match-high {
+    background-color: #d4edda;
+    color: #155724;
+}
+
+.match-medium {
+    background-color: #fff3cd;
+    color: #856404;
+}
+
+.match-low {
+    background-color: #f8d7da;
+    color: #721c24;
+}
+
+.xml-name {
+    font-size: 0.85rem;
+    color: #6c757d;
+    font-style: italic;
+}
+
+.form-select-sm, .form-control-sm {
+    font-size: 0.85rem;
+    padding: 4px 8px;
+}
+
+.info-section {
+    background-color: #e7f3ff;
+    padding: 15px;
+    border-radius: 5px;
+    margin-bottom: 20px;
+}
+
+.warehouse-select {
+    min-width: 120px;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h1>
+    <i class="fas fa-file-import me-2"></i>Bidfood Import - Preview
+  </h1>
+  <a href="{% url 'inventory:bidfood_import_step1' %}" class="btn btn-secondary">
+    <i class="fas fa-arrow-left me-2"></i>Zpět
+  </a>
+</div>
+
+<!-- Informace o příjmu -->
+<div class="info-section">
+  <div class="row">
+    <div class="col-md-3">
+      <strong>Číslo dokladu:</strong> {{ receipt_data.receipt_number }}
+    </div>
+    <div class="col-md-3">
+      <strong>Datum:</strong> {{ receipt_data.receipt_date }}
+    </div>
+    <div class="col-md-3">
+      <strong>Dodavatel:</strong> {{ receipt_data.supplier }}
+    </div>
+    <div class="col-md-3">
+      <strong>Počet položek:</strong> {{ receipt_data.items|length }}
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <h5 class="mb-0">Mapování surovin a editace</h5>
+    <small class="text-muted">Zkontrolujte mapování, upravte množství a jednotky, vyberte sklady</small>
+  </div>
+  <div class="card-body">
+    <form method="post" action="{% url 'inventory:bidfood_import_step3' %}">
+      {% csrf_token %}
+      
+      <div class="table-responsive">
+        <table class="formset-table">
+          <thead>
+            <tr>
+              <th style="width: 18%;">Název z XML<br><small class="text-muted">Kód</small></th>
+              <th style="width: 18%;">Mapování suroviny<br><small class="text-muted">Shoda</small></th>
+              <th style="width: 10%;">Sklad</th>
+              <th style="width: 8%;">Množství</th>
+              <th style="width: 6%;">Jednotka</th>
+              <th style="width: 10%;">Cena bez DPH</th>
+              <th style="width: 6%;">DPH %</th>
+              <th style="width: 10%;">Cena s DPH</th>
+              <th style="width: 10%;">Celkem</th>
+              <th style="width: 4%;">Akce</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in receipt_data.items %}
+              <tr>
+                <!-- Název z XML -->
+                <td>
+                  <strong>{{ item.item_name }}</strong>
+                  <br><small class="xml-name">{{ item.item_id }}</small>
+                </td>
+                
+                <!-- Mapování suroviny -->
+                <td>
+                  {% if item.suggested_ingredient_id %}
+                    <!-- Automatické mapování -->
+                    <select name="ingredient_{{ forloop.counter0 }}" class="form-select form-select-sm">
+                      <option value="{{ item.suggested_ingredient_id }}" selected>
+                        {{ item.suggested_ingredient_name }} ({{ item.suggested_ingredient_unit }})
+                      </option>
+                      {% for ing in all_ingredients %}
+                        {% if ing.id != item.suggested_ingredient_id %}
+                          <option value="{{ ing.id }}">{{ ing.name }} ({{ ing.unit }})</option>
+                        {% endif %}
+                      {% endfor %}
+                    </select>
+                    <span class="match-badge {% if item.match_ratio >= 80 %}match-high{% elif item.match_ratio >= 60 %}match-medium{% else %}match-low{% endif %}">
+                      {{ item.match_ratio }}%
+                    </span>
+                  {% else %}
+                    <!-- Žádná shoda - možnost vytvořit novou nebo vybrat -->
+                    <div class="mb-1">
+                      <label class="form-check-label">
+                        <input type="checkbox" name="create_new_{{ forloop.counter0 }}" class="form-check-input">
+                        <strong>Vytvořit novou surovinu</strong>
+                      </label>
+                    </div>
+                    <select name="ingredient_{{ forloop.counter0 }}" class="form-select form-select-sm">
+                      <option value="">-- Nebo vybrat existující --</option>
+                      {% for ing in all_ingredients %}
+                        <option value="{{ ing.id }}">{{ ing.name }} ({{ ing.unit }})</option>
+                      {% endfor %}
+                    </select>
+                    <span class="match-badge match-low">Nenalezeno</span>
+                  {% endif %}
+                </td>
+                
+                <!-- Sklad -->
+                <td>
+                  <select name="warehouse_{{ forloop.counter0 }}" class="form-select form-select-sm warehouse-select">
+                    {% for warehouse in warehouses %}
+                      <option value="{{ warehouse.id }}" {% if warehouse.id == default_warehouse_id %}selected{% endif %}>
+                        {{ warehouse.name }}
+                      </option>
+                    {% endfor %}
+                  </select>
+                </td>
+                
+                <!-- Množství -->
+                <td>
+                  <input type="text" name="quantity_{{ forloop.counter0 }}" 
+                         value="{{ item.quantity }}" 
+                         class="form-control form-control-sm text-end">
+                </td>
+                
+                <!-- Jednotka -->
+                <td>
+                  <input type="text" name="unit_{{ forloop.counter0 }}" 
+                         value="{{ item.unit_mapped }}" 
+                         class="form-control form-control-sm">
+                </td>
+                
+                <!-- Cena bez DPH -->
+                <td class="text-end">
+                  {{ item.price_per_unit_net }} Kč
+                </td>
+                
+                <!-- DPH % -->
+                <td class="text-end">
+                  {{ item.vat_rate }}%
+                </td>
+                
+                <!-- Cena s DPH -->
+                <td class="text-end">
+                  {{ item.price_per_unit_gross }} Kč
+                </td>
+                
+                <!-- Celková cena -->
+                <td class="text-end">
+                  <strong>{{ item.total_price }} Kč</strong>
+                </td>
+                
+                <!-- Akce (placeholder pro budoucí funkce) -->
+                <td class="text-center">
+                  <i class="fas fa-check text-success"></i>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      
+      <div class="mt-4">
+        <button type="submit" class="btn btn-success btn-lg">
+          <i class="fas fa-check me-2"></i>Vytvořit příjem
+        </button>
+        <a href="{% url 'inventory:bidfood_import_step1' %}" class="btn btn-secondary btn-lg">
+          <i class="fas fa-times me-2"></i>Zrušit
+        </a>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock %}

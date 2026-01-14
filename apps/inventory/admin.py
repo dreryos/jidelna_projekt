@@ -1,5 +1,7 @@
 from django.contrib import admin
+from decimal import Decimal
 from .models import StockItem, IngredientPriceHistory, GoodsReceipt, GoodsReceiptItem
+from .forms import VAT_RATE_CHOICES
 
 # Admin pro skladové položky. Zde se nastavuje vyhledávání a filtr podle skladu.
 # `autocomplete_fields` zlepšují UX při výběru surovin nebo skladu.
@@ -26,7 +28,16 @@ class IngredientPriceHistoryAdmin(admin.ModelAdmin):
 class GoodsReceiptItemInline(admin.TabularInline):
     model = GoodsReceiptItem
     extra = 1
-    autocomplete_fields = ['ingredient']
+    fields = ['ingredient', 'warehouse', 'quantity', 'price_without_vat', 'vat_rate', 'vat_amount', 'price', 'notes']
+    readonly_fields = ['vat_amount', 'price']
+    autocomplete_fields = ['ingredient', 'warehouse']
+    
+    def formfield_for_choice_field(self, db_field, request, **kwargs):
+        """Nastavení výchozí DPH sazby na 12%"""
+        if db_field.name == 'vat_rate':
+            kwargs['choices'] = VAT_RATE_CHOICES
+            kwargs['initial'] = Decimal('12')
+        return super().formfield_for_choice_field(db_field, request, **kwargs)
 
 
 @admin.register(GoodsReceipt)
@@ -47,7 +58,8 @@ class GoodsReceiptAdmin(admin.ModelAdmin):
 
 @admin.register(GoodsReceiptItem)
 class GoodsReceiptItemAdmin(admin.ModelAdmin):
-    list_display = ('goods_receipt', 'ingredient', 'quantity', 'price', 'total_price')
-    list_filter = ('goods_receipt__warehouse',)
+    list_display = ('goods_receipt', 'ingredient', 'quantity', 'price_without_vat', 'vat_rate', 'price', 'total_price')
+    list_filter = ('goods_receipt__warehouse', 'vat_rate')
     search_fields = ('ingredient__name', 'goods_receipt__receipt_number')
     autocomplete_fields = ['ingredient', 'goods_receipt']
+    readonly_fields = ('vat_amount', 'price', 'total_price')

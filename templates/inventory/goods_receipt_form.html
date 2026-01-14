@@ -5,15 +5,80 @@
 
 {% block extra_css %}
 <style>
-.item-row {
-    background-color: #f8f9fa;
-    padding: 15px;
-    margin-bottom: 10px;
-    border-radius: 5px;
-    border: 1px solid #dee2e6;
+.formset-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
 }
-.remove-item {
+
+.formset-table th {
+    background-color: #f8f9fa;
+    padding: 12px 8px;
+    border: 1px solid #dee2e6;
+    font-weight: 600;
+    text-align: left;
+    font-size: 0.9rem;
+}
+
+.formset-table td {
+    padding: 8px;
+    border: 1px solid #dee2e6;
+    vertical-align: middle;
+}
+
+.formset-row:hover {
+    background-color: #f8f9fa;
+}
+
+.vat-preview {
+    background-color: #d4edda;
+    border: 1px solid #c3e6cb;
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-weight: 600;
+    color: #155724;
+    text-align: right;
+    display: inline-block;
+    min-width: 80px;
+}
+
+.delete-checkbox {
+    width: 20px;
+    height: 20px;
     cursor: pointer;
+}
+
+.add-row-btn {
+    margin-top: 10px;
+}
+
+label.required::after {
+    content: " *";
+    color: #dc3545;
+    font-weight: bold;
+}
+
+.form-select, .form-control {
+    font-size: 0.9rem;
+}
+
+.ingredient-select {
+    min-width: 200px;
+}
+
+.warehouse-select {
+    min-width: 150px;
+}
+
+.table-responsive {
+    overflow-x: auto;
+}
+
+.main-form-section {
+    background-color: #f8f9fa;
+    padding: 20px;
+    border-radius: 5px;
+    margin-bottom: 20px;
 }
 </style>
 {% endblock %}
@@ -34,60 +99,140 @@
       {% csrf_token %}
       
       <!-- Základní údaje -->
-      <h5 class="mb-3">Základní údaje</h5>
-      <div class="row mb-3">
-        <div class="col-md-4">
-          <label for="warehouse" class="form-label">Sklad <span class="text-danger">*</span></label>
-          <select name="warehouse" id="warehouse" class="form-select" required>
-            <option value="">-- Vyberte sklad --</option>
-            {% for warehouse in warehouses %}
-              <option value="{{ warehouse.id }}">{{ warehouse.name }} ({{ warehouse.canteen.name }})</option>
-            {% endfor %}
-          </select>
+      <div class="main-form-section">
+        <h5 class="mb-3">Základní údaje</h5>
+        <div class="row">
+          <div class="col-md-3">
+            <label for="{{ form.receipt_number.id_for_label }}" class="form-label required">Číslo dokladu</label>
+            {{ form.receipt_number }}
+            {% if form.receipt_number.errors %}
+              <div class="text-danger">{{ form.receipt_number.errors }}</div>
+            {% endif %}
+          </div>
+          
+          <div class="col-md-3">
+            <label for="{{ form.receipt_date.id_for_label }}" class="form-label required">Datum příjmu</label>
+            {{ form.receipt_date }}
+            {% if form.receipt_date.errors %}
+              <div class="text-danger">{{ form.receipt_date.errors }}</div>
+            {% endif %}
+          </div>
+          
+          <div class="col-md-3">
+            <label for="{{ form.default_warehouse.id_for_label }}" class="form-label required">Výchozí sklad</label>
+            {{ form.default_warehouse }}
+            <small class="form-text text-muted">Bude předvyplněn u všech položek</small>
+            {% if form.default_warehouse.errors %}
+              <div class="text-danger">{{ form.default_warehouse.errors }}</div>
+            {% endif %}
+          </div>
+          
+          <div class="col-md-3">
+            <label for="{{ form.supplier.id_for_label }}" class="form-label">Dodavatel</label>
+            {{ form.supplier }}
+            {% if form.supplier.errors %}
+              <div class="text-danger">{{ form.supplier.errors }}</div>
+            {% endif %}
+          </div>
         </div>
         
-        <div class="col-md-4">
-          <label for="receipt_number" class="form-label">Číslo dokladu <span class="text-danger">*</span></label>
-          <input type="text" name="receipt_number" id="receipt_number" class="form-control" required 
-                 placeholder="Např. DL-2024-001">
+        <div class="row mt-3">
+          <div class="col-md-12">
+            <label for="{{ form.notes.id_for_label }}" class="form-label">Poznámky</label>
+            {{ form.notes }}
+            {% if form.notes.errors %}
+              <div class="text-danger">{{ form.notes.errors }}</div>
+            {% endif %}
+          </div>
         </div>
         
-        <div class="col-md-4">
-          <label for="receipt_date" class="form-label">Datum příjmu <span class="text-danger">*</span></label>
-          <input type="date" name="receipt_date" id="receipt_date" class="form-control" required 
-                 value="{% now 'Y-m-d' %}">
-        </div>
-      </div>
-      
-      <div class="row mb-3">
-        <div class="col-md-6">
-          <label for="supplier" class="form-label">Dodavatel</label>
-          <input type="text" name="supplier" id="supplier" class="form-control" 
-                 placeholder="Název dodavatele">
-        </div>
-        
-        <div class="col-md-6">
-          <label for="notes" class="form-label">Poznámky</label>
-          <textarea name="notes" id="notes" class="form-control" rows="2" 
-                    placeholder="Volitelné poznámky k příjmu"></textarea>
-        </div>
+        {{ form.warehouse }}
       </div>
       
       <hr class="my-4">
       
       <!-- Položky příjmu -->
-      <div class="d-flex justify-content-between align-items-center mb-3">
-        <h5 class="mb-0">Položky příjmu</h5>
-        <button type="button" class="btn btn-primary btn-sm" onclick="addItem()">
-          <i class="fas fa-plus me-2"></i>Přidat položku
-        </button>
+      <div class="mb-3">
+        <h5>Položky příjmu <span class="text-muted">(minimálně 1, maximálně 100)</span></h5>
       </div>
       
-      <div id="items-container">
-        <!-- Položky se přidají dynamicky -->
+      {{ formset.management_form }}
+      
+      {% if formset.non_form_errors %}
+        <div class="alert alert-danger">
+          {{ formset.non_form_errors }}
+        </div>
+      {% endif %}
+      
+      <div class="table-responsive">
+        <table class="formset-table">
+          <thead>
+            <tr>
+              <th style="width: 25%;">Surovina <span class="text-danger">*</span></th>
+              <th style="width: 15%;">Sklad <span class="text-danger">*</span></th>
+              <th style="width: 10%;">Množství <span class="text-danger">*</span></th>
+              <th style="width: 12%;">Cena bez DPH <span class="text-danger">*</span></th>
+              <th style="width: 8%;">DPH % <span class="text-danger">*</span></th>
+              <th style="width: 12%;">Cena s DPH</th>
+              <th style="width: 13%;">Poznámka</th>
+              <th style="width: 5%;">Smazat</th>
+            </tr>
+          </thead>
+          <tbody id="formset-body">
+            {% for form in formset %}
+              <tr class="formset-row" data-form-index="{{ forloop.counter0 }}">
+                <td>
+                  {{ form.ingredient }}
+                  {% if form.ingredient.errors %}
+                    <div class="text-danger small">{{ form.ingredient.errors }}</div>
+                  {% endif %}
+                </td>
+                <td>
+                  {{ form.warehouse }}
+                  {% if form.warehouse.errors %}
+                    <div class="text-danger small">{{ form.warehouse.errors }}</div>
+                  {% endif %}
+                </td>
+                <td>
+                  {{ form.quantity }}
+                  {% if form.quantity.errors %}
+                    <div class="text-danger small">{{ form.quantity.errors }}</div>
+                  {% endif %}
+                </td>
+                <td>
+                  {{ form.price_without_vat }}
+                  {% if form.price_without_vat.errors %}
+                    <div class="text-danger small">{{ form.price_without_vat.errors }}</div>
+                  {% endif %}
+                </td>
+                <td>
+                  {{ form.vat_rate }}
+                  {% if form.vat_rate.errors %}
+                    <div class="text-danger small">{{ form.vat_rate.errors }}</div>
+                  {% endif %}
+                </td>
+                <td>
+                  <span class="vat-preview" id="preview-{{ forloop.counter0 }}">-</span>
+                </td>
+                <td>
+                  {{ form.notes }}
+                  {% if form.notes.errors %}
+                    <div class="text-danger small">{{ form.notes.errors }}</div>
+                  {% endif %}
+                </td>
+                <td class="text-center">
+                  {{ form.DELETE }}
+                </td>
+                {{ form.id }}
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
       </div>
       
-      <input type="hidden" name="item_count" id="item_count" value="0">
+      <button type="button" class="btn btn-primary btn-sm add-row-btn" onclick="addFormsetRow()">
+        <i class="fas fa-plus me-2"></i>Přidat další položku
+      </button>
       
       <div class="mt-4">
         <button type="submit" class="btn btn-success btn-lg">
@@ -105,105 +250,138 @@
 
 {% block extra_js %}
 <script>
-let itemIndex = 0;
-
-// Připravíme data surovin pro JavaScript (properly escaped)
-const ingredientsData = [
-  {% for ingredient in ingredients %}
-    {id: {{ ingredient.id }}, name: "{{ ingredient.name|escapejs }}", unit: "{{ ingredient.unit|escapejs }}"},
-  {% endfor %}
-];
-
-// Helper function to escape HTML for safe insertion
-function escapeHtml(text) {
-  const div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
-}
-
-function addItem() {
-  const container = document.getElementById('items-container');
-  const itemDiv = document.createElement('div');
-  itemDiv.className = 'item-row';
-  // itemIndex is a controlled integer, not user input, safe to use
-  itemDiv.id = `item-${itemIndex}`;
+// Vypočítat cenu s DPH pro daný řádek
+function calculateVAT(element) {
+  // Najít parent row
+  const row = element.closest('tr');
+  const index = row.dataset.formIndex;
   
-  itemDiv.innerHTML = `
-    <div class="row">
-      <div class="col-md-4">
-        <label class="form-label">Surovina <span class="text-danger">*</span></label>
-        <select name="item_${itemIndex}_ingredient" class="form-select" required onchange="updateUnit(${itemIndex})">
-          <option value="">-- Vyberte surovinu --</option>
-          ${ingredientsData.map(ing => `<option value="${escapeHtml(ing.id)}" data-unit="${escapeHtml(ing.unit)}">${escapeHtml(ing.name)}</option>`).join('')}
-        </select>
-      </div>
-      
-      <div class="col-md-2">
-        <label class="form-label">Množství <span class="text-danger">*</span></label>
-        <div class="input-group">
-          <input type="number" name="item_${itemIndex}_quantity" class="form-control" 
-                 step="0.001" min="0.001" required placeholder="0.000">
-          <span class="input-group-text" id="unit-${itemIndex}">-</span>
-        </div>
-      </div>
-      
-      <div class="col-md-2">
-        <label class="form-label">Cena za jedn. <span class="text-danger">*</span></label>
-        <div class="input-group">
-          <input type="number" name="item_${itemIndex}_price" class="form-control" 
-                 step="0.01" min="0" required placeholder="0.00">
-          <span class="input-group-text">Kč</span>
-        </div>
-      </div>
-      
-      <div class="col-md-3">
-        <label class="form-label">Poznámka</label>
-        <input type="text" name="item_${itemIndex}_notes" class="form-control" 
-               placeholder="Šarže, expirace...">
-      </div>
-      
-      <div class="col-md-1 d-flex align-items-end">
-        <button type="button" class="btn btn-danger btn-sm w-100 remove-item" 
-                onclick="removeItem(${itemIndex})">
-          <i class="fas fa-trash"></i>
-        </button>
-      </div>
-    </div>
-  `;
+  // Získat input fieldy
+  const priceWithoutVatInput = row.querySelector('input[name$="-price_without_vat"]');
+  const vatRateSelect = row.querySelector('select[name$="-vat_rate"]');
+  const previewSpan = document.getElementById(`preview-${index}`);
   
-  container.appendChild(itemDiv);
-  itemIndex++;
-  document.getElementById('item_count').value = itemIndex;
-}
-
-function removeItem(index) {
-  const item = document.getElementById(`item-${index}`);
-  if (item) {
-    item.remove();
+  if (!priceWithoutVatInput || !vatRateSelect || !previewSpan) {
+    return;
   }
+  
+  const priceWithoutVat = parseFloat(priceWithoutVatInput.value);
+  const vatRate = parseFloat(vatRateSelect.value);
+  
+  // Validace a výpočet
+  if (isNaN(priceWithoutVat) || isNaN(vatRate) || priceWithoutVat < 0) {
+    previewSpan.textContent = '-';
+    return;
+  }
+  
+  const priceWithVat = priceWithoutVat * (1 + vatRate / 100);
+  previewSpan.textContent = priceWithVat.toFixed(2) + ' Kč';
 }
 
-function updateUnit(index) {
-  const select = document.querySelector(`select[name="item_${index}_ingredient"]`);
-  const unitSpan = document.getElementById(`unit-${index}`);
-  const selectedOption = select.options[select.selectedIndex];
-  const unit = selectedOption.getAttribute('data-unit') || '-';
-  unitSpan.textContent = unit;
+// Synchronizovat výchozí sklad do všech řádků
+function syncDefaultWarehouse() {
+  const defaultWarehouseSelect = document.getElementById('default-warehouse');
+  if (!defaultWarehouseSelect) return;
+  
+  const selectedWarehouse = defaultWarehouseSelect.value;
+  
+  // Nastavit všechny warehouse selecty na stejnou hodnotu
+  document.querySelectorAll('.warehouse-select').forEach(select => {
+    if (selectedWarehouse) {
+      select.value = selectedWarehouse;
+    }
+  });
 }
 
-// Přidáme první položku při načtení stránky
+// Přidat nový řádek do formsetu
+function addFormsetRow() {
+  const formsetBody = document.getElementById('formset-body');
+  const totalFormsInput = document.querySelector('input[name$="-TOTAL_FORMS"]');
+  
+  if (!formsetBody || !totalFormsInput) {
+    console.error('Formset elements not found');
+    return;
+  }
+  
+  const currentTotal = parseInt(totalFormsInput.value);
+  const maxForms = parseInt(document.querySelector('input[name$="-MAX_NUM_FORMS"]').value);
+  
+  if (currentTotal >= maxForms) {
+    alert(`Maximální počet položek je ${maxForms}`);
+    return;
+  }
+  
+  // Zkopírovat první řádek jako template
+  const firstRow = formsetBody.querySelector('tr.formset-row');
+  if (!firstRow) {
+    console.error('No template row found');
+    return;
+  }
+  
+  const newRow = firstRow.cloneNode(true);
+  newRow.dataset.formIndex = currentTotal;
+  
+  // Aktualizovat všechny ID a name atributy
+  newRow.querySelectorAll('input, select, textarea').forEach(field => {
+    if (field.name) {
+      field.name = field.name.replace(/-\d+-/, `-${currentTotal}-`);
+    }
+    if (field.id) {
+      field.id = field.id.replace(/-\d+-/, `-${currentTotal}-`);
+    }
+    
+    // Vymazat hodnoty
+    if (field.type === 'checkbox') {
+      field.checked = false;
+    } else if (field.tagName === 'SELECT') {
+      field.selectedIndex = 0;
+    } else {
+      field.value = '';
+    }
+  });
+  
+  // Aktualizovat preview span
+  const previewSpan = newRow.querySelector('.vat-preview');
+  if (previewSpan) {
+    previewSpan.id = `preview-${currentTotal}`;
+    previewSpan.textContent = '-';
+  }
+  
+  // Předvyplnit sklad z výchozího skladu
+  const defaultWarehouseSelect = document.getElementById('default-warehouse');
+  const newWarehouseSelect = newRow.querySelector('.warehouse-select');
+  if (defaultWarehouseSelect && newWarehouseSelect) {
+    newWarehouseSelect.value = defaultWarehouseSelect.value;
+  }
+  
+  // Předvyplnit DPH sazbu na 12%
+  const vatRateSelect = newRow.querySelector('.vat-rate-select');
+  if (vatRateSelect) {
+    vatRateSelect.value = '12';
+  }
+  
+  formsetBody.appendChild(newRow);
+  totalFormsInput.value = currentTotal + 1;
+}
+
+// Event listeners
 document.addEventListener('DOMContentLoaded', function() {
-  addItem();
-});
-
-// Validace před odesláním
-document.getElementById('goodsReceiptForm').addEventListener('submit', function(e) {
-  const itemCount = document.querySelectorAll('.item-row').length;
-  if (itemCount === 0) {
-    e.preventDefault();
-    alert('Přidejte alespoň jednu položku příjmu.');
-    return false;
+  // Výpočet DPH při načtení stránky pro existující hodnoty
+  document.querySelectorAll('.formset-row').forEach(row => {
+    const priceInput = row.querySelector('input[name$="-price_without_vat"]');
+    if (priceInput && priceInput.value) {
+      calculateVAT(priceInput);
+    }
+  });
+  
+  // Automatická synchronizace skladu při změně výchozího skladu
+  const defaultWarehouseSelect = document.getElementById('default-warehouse');
+  if (defaultWarehouseSelect) {
+    defaultWarehouseSelect.addEventListener('change', syncDefaultWarehouse);
   }
+  
+  // Předvyplnit sklady pokud je výchozí sklad již nastaven
+  syncDefaultWarehouse();
 });
 </script>
 {% endblock %}

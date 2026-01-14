@@ -126,8 +126,11 @@
               <th>Surovina</th>
               <th>Množství</th>
               <th>Jednotka</th>
-              <th>Cena za jedn.</th>
-              <th>Celková cena</th>
+              <th class="text-end">Cena bez DPH</th>
+              <th class="text-end">DPH %</th>
+              <th class="text-end">Částka DPH</th>
+              <th class="text-end">Cena s DPH</th>
+              <th class="text-end">Celkem s DPH</th>
               <th>Poznámka</th>
             </tr>
           </thead>
@@ -137,6 +140,27 @@
                 <td><strong>{{ item.ingredient.name }}</strong></td>
                 <td class="text-end">{{ item.quantity|floatformat:3 }}</td>
                 <td>{{ item.ingredient.unit }}</td>
+                <td class="text-end">
+                  {% if item.price_without_vat %}
+                    {{ item.price_without_vat|floatformat:2 }} Kč
+                  {% else %}
+                    -
+                  {% endif %}
+                </td>
+                <td class="text-end">
+                  {% if item.vat_rate %}
+                    {{ item.vat_rate|floatformat:0 }} %
+                  {% else %}
+                    -
+                  {% endif %}
+                </td>
+                <td class="text-end">
+                  {% if item.vat_amount %}
+                    {{ item.vat_amount|floatformat:2 }} Kč
+                  {% else %}
+                    -
+                  {% endif %}
+                </td>
                 <td class="text-end">{{ item.price|floatformat:2 }} Kč</td>
                 <td class="text-end"><strong>{{ item.total_price|floatformat:2 }} Kč</strong></td>
                 <td>{{ item.notes|default:"-" }}</td>
@@ -145,7 +169,7 @@
           </tbody>
           <tfoot>
             <tr class="table-light">
-              <th colspan="4" class="text-end">Celkem:</th>
+              <th colspan="7" class="text-end">Celkem:</th>
               <th class="text-end">{{ goods_receipt.get_total_value|floatformat:2 }} Kč</th>
               <th></th>
             </tr>

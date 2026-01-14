@@ -303,16 +303,42 @@ class GoodsReceiptItem(models.Model):
         on_delete=models.PROTECT,
         verbose_name="Surovina"
     )
+    warehouse = models.ForeignKey(
+        Warehouse,
+        on_delete=models.PROTECT,
+        verbose_name="Sklad",
+        help_text="Sklad, do kterého se surovina přijímá"
+    )
     quantity = models.DecimalField(
         max_digits=10,
         decimal_places=3,
         verbose_name="Množství",
         help_text="Množství v základní jednotce suroviny"
     )
+    price_without_vat = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name="Cena bez DPH za jednotku"
+    )
+    vat_rate = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal('21.00'),
+        verbose_name="Sazba DPH (%)"
+    )
+    vat_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name="Částka DPH za jednotku"
+    )
     price = models.DecimalField(
         max_digits=10,
         decimal_places=2,
-        verbose_name="Nákupní cena za jednotku"
+        verbose_name="Nákupní cena za jednotku (vč. DPH)"
     )
     notes = models.CharField(
         max_length=200,
@@ -326,8 +352,36 @@ class GoodsReceiptItem(models.Model):
     
     @property
     def total_price(self):
-        """Vrátí celkovou cenu položky (množství × cena)"""
+        """Vrátí celkovou cenu položky (množství × cena vč. DPH)"""
         return self.quantity * self.price
+    
+    @property
+    def total_without_vat(self):
+        """Vrátí celkovou cenu bez DPH"""
+        if self.price_without_vat:
+            return self.quantity * self.price_without_vat
+        return Decimal('0')
+    
+    @property
+    def total_vat(self):
+        """Vrátí celkovou částku DPH"""
+        if self.vat_amount:
+            return self.quantity * self.vat_amount
+        return Decimal('0')
+    
+    def calculate_vat_fields(self):
+        """Vypočítá DPH pole z ceny s DPH a sazby DPH"""
+        if self.price and self.vat_rate is not None:
+            # Cena s DPH / (1 + sazba/100) = cena bez DPH
+            vat_multiplier = 1 + (self.vat_rate / Decimal('100'))
+            self.price_without_vat = (self.price / vat_multiplier).quantize(Decimal('0.01'))
+            self.vat_amount = (self.price - self.price_without_vat).quantize(Decimal('0.01'))
+    
+    def save(self, *args, **kwargs):
+        # Automatický výpočet DPH polí pokud nejsou vyplněny
+        if self.price and not self.price_without_vat:
+            self.calculate_vat_fields()
+        super().save(*args, **kwargs)
     
     class Meta:
         verbose_name = "Položka příjmu zboží"

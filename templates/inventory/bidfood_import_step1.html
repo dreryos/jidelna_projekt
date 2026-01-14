@@ -1,0 +1,75 @@
+{% extends 'base.html' %}
+{% load django_bootstrap5 %}
+
+{% block title %}Import XML (Bidfood) - Spíž{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h1>
+    <i class="fas fa-file-import me-2"></i>Import XML dodejky (Bidfood)
+  </h1>
+  <a href="{% url 'inventory:stock_list' %}" class="btn btn-secondary">
+    <i class="fas fa-arrow-left me-2"></i>Zpět na zásoby
+  </a>
+</div>
+
+<div class="card">
+  <div class="card-body">
+    <h5 class="card-title mb-4">Krok 1: Nahrajte XML soubor</h5>
+    
+    <div class="alert alert-info">
+      <i class="fas fa-info-circle me-2"></i>
+      <strong>Podporovaný formát:</strong> XML dodejky z Bidfood Czech Republic
+    </div>
+    
+    <form method="post" enctype="multipart/form-data">
+      {% csrf_token %}
+      
+      <div class="mb-4">
+        <label for="xml_file" class="form-label">XML soubor <span class="text-danger">*</span></label>
+        <input type="file" name="xml_file" id="xml_file" class="form-control" accept=".xml" required>
+        <div class="form-text">Vyberte XML soubor s dodejkou od Bidfood</div>
+      </div>
+      
+      <div class="mb-4">
+        <label for="warehouse" class="form-label">Výchozí sklad <span class="text-danger">*</span></label>
+        <select name="warehouse" id="warehouse" class="form-select" required>
+          <option value="">-- Vyberte výchozí sklad --</option>
+          {% for warehouse in warehouses %}
+            <option value="{{ warehouse.id }}">
+              {{ warehouse.name }} ({{ warehouse.canteen.name }})
+            </option>
+          {% endfor %}
+        </select>
+        <div class="form-text">
+          Tento sklad bude předvybrán pro všechny položky. 
+          Jednotlivé položky můžete později přiřadit k jiným skladům.
+        </div>
+      </div>
+      
+      <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary">
+          <i class="fas fa-upload me-2"></i>Načíst XML
+        </button>
+        <a href="{% url 'inventory:stock_list' %}" class="btn btn-outline-secondary">
+          <i class="fas fa-times me-2"></i>Zrušit
+        </a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card mt-4">
+  <div class="card-body">
+    <h6 class="card-title">
+      <i class="fas fa-question-circle me-2"></i>Jak to funguje?
+    </h6>
+    <ol class="mb-0">
+      <li>Nahrajte XML soubor a vyberte výchozí sklad</li>
+      <li>Systém načte položky a automaticky namapuje suroviny</li>
+      <li>Zkontrolujete a upravíte mapování, množství a jednotky</li>
+      <li>Vytvoří se příjemka se všemi položkami včetně DPH</li>
+    </ol>
+  </div>
+</div>
+{% endblock %}

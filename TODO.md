@@ -37,6 +37,7 @@ Tento soubor sleduje hlavní úkoly, bugy a nápady pro projekt. Pro detailněj�
 
 - [ ] U reportů pro objednávky, přidat sloupce ruční úpravy množství.
 - [ ] Do reportu pro objednávky přidat i množství "s nulovým skladem".
+- [ ] Možnost editace receptů v jídelníčku bez nutnosti otevírat detail receptu, avšak pouze v tom jídelníčku
 
 ---
 

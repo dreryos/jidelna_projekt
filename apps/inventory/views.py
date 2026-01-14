@@ -5,11 +5,10 @@ from django.contrib import messages
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
-import csv
-import io
 from decimal import Decimal, InvalidOperation
 
 from .models import StockItem, GoodsReceipt, GoodsReceiptItem
+from .forms import GoodsReceiptForm, GoodsReceiptItemFormSet
 from apps.canteens.models import Warehouse, Canteen
 from apps.core.models import Ingredient
 
@@ -172,220 +171,6 @@ class CanteenDeleteView(LoginRequiredMixin, DeleteView):
         return super().delete(request, *args, **kwargs)
 
 
-# Import CSV
-
-def normalize_unit(unit_str):
-    """Normalizuje jednotku z CSV na jednotný formát"""
-    unit_str = unit_str.strip().lower()
-    
-    # Mapování běžných variant na standardní jednotky
-    unit_mapping = {
-        'ks': 'ks',
-        'kus': 'ks',
-        'kusy': 'ks',
-        'kg': 'kg',
-        'kilogram': 'kg',
-        'l': 'l',
-        'litr': 'l',
-        'litry': 'l',
-        'l (ks)': 'l',
-        'bal': 'bal',
-        'balení': 'bal',
-        'bal (1kg)': 'bal',
-        'plato': 'plato',
-        'plato (30ks)': 'plato',
-        'bedna': 'bedna',
-        'bedna (15kg)': 'bedna',
-    }
-    
-    return unit_mapping.get(unit_str, unit_str)
-
-
-def parse_csv_file(file_content):
-    """Parsuje CSV soubor a vrací seznam řádků"""
-    reader = csv.DictReader(io.StringIO(file_content))
-    rows = []
-    
-    for row in reader:
-        try:
-            # Parsování ceny (může obsahovat čárku nebo tečku)
-            price_str = row.get('Cena za MJ (Kč)', '0').replace(',', '.').replace(' ', '')
-            
-            parsed_row = {
-                'code': row.get('Kód položky', '').strip(),
-                'name': row.get('Název položky', '').strip(),
-                'batch': row.get('Šarže / Expirace', '').strip(),
-                'quantity': float(row.get('Množství (MJ)', '0').replace(',', '.')),
-                'unit': normalize_unit(row.get('Jednotka', '')),
-                'price': float(price_str),
-                'total': float(row.get('Celkem (Kč)', '0').replace(',', '.')),
-            }
-            rows.append(parsed_row)
-        except (ValueError, KeyError) as e:
-            # Přeskočíme chybné řádky
-            continue
-    
-    return rows
-
-
-@login_required
-def import_csv_step1(request):
-    """Krok 1: Nahrání CSV souboru a preview"""
-    if request.method == 'POST':
-        csv_file = request.FILES.get('csv_file')
-        warehouse_id = request.POST.get('warehouse')
-        
-        if not csv_file or not warehouse_id:
-            messages.error(request, 'Musíte vybrat soubor CSV a sklad.')
-            return redirect('inventory:import_csv_step1')
-        
-        try:
-            warehouse = Warehouse.objects.get(pk=warehouse_id)
-        except Warehouse.DoesNotExist:
-            messages.error(request, 'Vybraný sklad neexistuje.')
-            return redirect('inventory:import_csv_step1')
-        
-        # Čtení CSV
-        try:
-            file_content = csv_file.read().decode('utf-8')
-        except UnicodeDecodeError:
-            try:
-                file_content = csv_file.read().decode('windows-1250')
-            except:
-                messages.error(request, 'Nepodařilo se načíst soubor. Zkontrolujte kódování.')
-                return redirect('inventory:import_csv_step1')
-        
-        # Parsování
-        rows = parse_csv_file(file_content)
-        
-        if not rows:
-            messages.error(request, 'CSV soubor neobsahuje žádná data nebo má nesprávný formát.')
-            return redirect('inventory:import_csv_step1')
-        
-        # Analýza surovin - zjistíme, které existují a které ne
-        import_data = []
-        for row in rows:
-            # Hledáme surovinu podle názvu (case insensitive)
-            matching_ingredients = Ingredient.objects.filter(name__iexact=row['name'])
-            
-            row_data = {
-                'csv_data': row,
-                'ingredient_exists': matching_ingredients.exists(),
-                'matching_ingredient': matching_ingredients.first() if matching_ingredients.exists() else None,
-                'suggested_ingredients': list(Ingredient.objects.filter(
-                    name__icontains=row['name'].split()[0]
-                )[:5]) if not matching_ingredients.exists() else []
-            }
-            import_data.append(row_data)
-        
-        # Uložíme data do session pro další krok
-        request.session['import_data'] = {
-            'warehouse_id': warehouse_id,
-            'rows': rows,
-        }
-        
-        context = {
-            'warehouse': warehouse,
-            'import_data': import_data,
-            'total_rows': len(rows),
-            'existing_count': sum(1 for d in import_data if d['ingredient_exists']),
-            'new_count': sum(1 for d in import_data if not d['ingredient_exists']),
-        }
-        
-        return render(request, 'inventory/import_csv_step2.html', context)
-    
-    # GET - zobrazíme formulář pro upload
-    warehouses = Warehouse.objects.select_related('canteen').all()
-    return render(request, 'inventory/import_csv_step1.html', {'warehouses': warehouses})
-
-
-@login_required
-def import_csv_step2_confirm(request):
-    """Krok 2: Potvrzení a mapování surovin"""
-    if request.method != 'POST':
-        return redirect('inventory:import_csv_step1')
-    
-    import_data = request.session.get('import_data')
-    if not import_data:
-        messages.error(request, 'Import session vypršela. Začněte znovu.')
-        return redirect('inventory:import_csv_step1')
-    
-    warehouse = Warehouse.objects.get(pk=import_data['warehouse_id'])
-    rows = import_data['rows']
-    
-    # Zpracování mapování z formuláře
-    imported_count = 0
-    created_ingredients = 0
-    errors = []
-    
-    with transaction.atomic():
-        for idx, row in enumerate(rows):
-            action = request.POST.get(f'action_{idx}')
-            
-            if action == 'skip':
-                continue
-            
-            ingredient = None
-            
-            if action == 'create':
-                # Vytvořit novou surovinu
-                ingredient, created = Ingredient.objects.get_or_create(
-                    name=row['name'],
-                    defaults={'unit': row['unit']}
-                )
-                if created:
-                    created_ingredients += 1
-            
-            elif action == 'map':
-                # Mapovat na existující surovinu
-                ingredient_id = request.POST.get(f'ingredient_{idx}')
-                if ingredient_id:
-                    try:
-                        ingredient = Ingredient.objects.get(pk=ingredient_id)
-                    except Ingredient.DoesNotExist:
-                        errors.append(f"Surovina ID {ingredient_id} pro '{row['name']}' neexistuje")
-                        continue
-            
-            elif action == 'use_existing':
-                # Použít existující surovinu se stejným názvem
-                ingredient = Ingredient.objects.filter(name__iexact=row['name']).first()
-            
-            if ingredient:
-                # Vytvoření nebo aktualizace skladové položky
-                stock_item, created = StockItem.objects.get_or_create(
-                    ingredient=ingredient,
-                    warehouse=warehouse,
-                    defaults={
-                        'quantity': Decimal(str(row['quantity'])),
-                        'price': Decimal(str(row['price']))
-                    }
-                )
-                
-                if not created:
-                    # Aktualizace existující položky - přičteme množství
-                    stock_item.quantity += Decimal(str(row['quantity']))
-                    stock_item.price = Decimal(str(row['price']))  # Aktualizujeme cenu
-                    stock_item.save()
-                
-                imported_count += 1
-    
-    # Vyčištění session
-    if 'import_data' in request.session:
-        del request.session['import_data']
-    
-    messages.success(
-        request,
-        f'Import dokončen! Importováno: {imported_count} položek, '
-        f'vytvořeno nových surovin: {created_ingredients}.'
-    )
-    
-    if errors:
-        for error in errors:
-            messages.warning(request, error)
-    
-    return redirect('inventory:stock_list')
-
-
 # CRUD pro příjem zboží (GoodsReceipt)
 
 class GoodsReceiptListView(LoginRequiredMixin, ListView):
@@ -429,91 +214,62 @@ class GoodsReceiptDetailView(LoginRequiredMixin, DetailView):
 
 @login_required
 def goods_receipt_create(request):
-    """Vytvoření nového příjmu zboží"""
+    """Vytvoření nového příjmu zboží pomocí Django formsets"""
     if request.method == 'POST':
-        # Základní údaje příjmu
-        warehouse_id = request.POST.get('warehouse')
-        receipt_number = request.POST.get('receipt_number')
-        receipt_date = request.POST.get('receipt_date')
-        supplier = request.POST.get('supplier', '')
-        notes = request.POST.get('notes', '')
+        form = GoodsReceiptForm(request.POST)
+        formset = GoodsReceiptItemFormSet(request.POST)
         
-        if not warehouse_id or not receipt_number or not receipt_date:
-            messages.error(request, 'Vyplňte povinná pole: Sklad, Číslo dokladu a Datum příjmu.')
-            return redirect('inventory:goods_receipt_create')
-        
-        try:
-            warehouse = Warehouse.objects.get(pk=warehouse_id)
-        except Warehouse.DoesNotExist:
-            messages.error(request, 'Vybraný sklad neexistuje.')
-            return redirect('inventory:goods_receipt_create')
-        
-        # Zpracování položek příjmu
-        items_data = []
-        item_count = int(request.POST.get('item_count', 0))
-        
-        for i in range(item_count):
-            ingredient_id = request.POST.get(f'item_{i}_ingredient')
-            quantity = request.POST.get(f'item_{i}_quantity')
-            price = request.POST.get(f'item_{i}_price')
-            item_notes = request.POST.get(f'item_{i}_notes', '')
-            
-            if ingredient_id and quantity and price:
-                try:
-                    # Normalize decimal separators for both comma and dot
-                    quantity_normalized = quantity.replace(',', '.')
-                    price_normalized = price.replace(',', '.')
+        if form.is_valid() and formset.is_valid():
+            try:
+                with transaction.atomic():
+                    # Uložit hlavní příjem
+                    goods_receipt = form.save(commit=False)
+                    # Nastavit warehouse z default_warehouse
+                    goods_receipt.warehouse = form.cleaned_data['default_warehouse']
+                    goods_receipt.created_by = request.user
+                    goods_receipt.save()
                     
-                    items_data.append({
-                        'ingredient_id': int(ingredient_id),
-                        'quantity': Decimal(quantity_normalized),
-                        'price': Decimal(price_normalized),
-                        'notes': item_notes
-                    })
-                except (ValueError, InvalidOperation):
-                    messages.error(request, f'Neplatná hodnota v položce {i+1}.')
-                    return redirect('inventory:goods_receipt_create')
-        
-        if not items_data:
-            messages.error(request, 'Přidejte alespoň jednu položku příjmu.')
-            return redirect('inventory:goods_receipt_create')
-        
-        # Vytvoření příjmu a položek v transakci
-        try:
-            with transaction.atomic():
-                goods_receipt = GoodsReceipt.objects.create(
-                    warehouse=warehouse,
-                    receipt_number=receipt_number,
-                    receipt_date=receipt_date,
-                    supplier=supplier,
-                    notes=notes,
-                    created_by=request.user
-                )
-                
-                for item_data in items_data:
-                    ingredient = Ingredient.objects.get(pk=item_data['ingredient_id'])
-                    GoodsReceiptItem.objects.create(
-                        goods_receipt=goods_receipt,
-                        ingredient=ingredient,
-                        quantity=item_data['quantity'],
-                        price=item_data['price'],
-                        notes=item_data['notes']
+                    # Uložit položky
+                    formset.instance = goods_receipt
+                    items = formset.save(commit=False)
+                    
+                    for item in items:
+                        # calculate_vat_fields() se volá automaticky v save()
+                        item.save()
+                    
+                    # Zpracování smazaných položek
+                    for obj in formset.deleted_objects:
+                        obj.delete()
+                    
+                    messages.success(
+                        request, 
+                        f'Příjem zboží "{goods_receipt.receipt_number}" byl úspěšně vytvořen s {len(items)} položkami.'
                     )
-                
-                messages.success(request, f'Příjem zboží "{receipt_number}" byl úspěšně vytvořen.')
-                return redirect('inventory:goods_receipt_detail', pk=goods_receipt.pk)
-        
-        except Exception as e:
-            messages.error(request, f'Chyba při vytváření příjmu: {str(e)}')
-            return redirect('inventory:goods_receipt_create')
-    
-    # GET - zobrazíme formulář
-    warehouses = Warehouse.objects.select_related('canteen').all()
-    ingredients = Ingredient.objects.all().order_by('name')
+                    return redirect('inventory:goods_receipt_detail', pk=goods_receipt.pk)
+            
+            except Exception as e:
+                messages.error(request, f'Chyba při vytváření příjmu: {str(e)}')
+        else:
+            # Zobrazení chyb formuláře
+            if not form.is_valid():
+                for field, errors in form.errors.items():
+                    for error in errors:
+                        messages.error(request, f'{field}: {error}')
+            if not formset.is_valid():
+                for i, form_errors in enumerate(formset.errors):
+                    if form_errors:
+                        messages.error(request, f'Položka {i+1}: {form_errors}')
+                if formset.non_form_errors():
+                    for error in formset.non_form_errors():
+                        messages.error(request, f'Formset chyba: {error}')
+    else:
+        # GET - prázdný formulář
+        form = GoodsReceiptForm()
+        formset = GoodsReceiptItemFormSet()
     
     context = {
-        'warehouses': warehouses,
-        'ingredients': ingredients,
+        'form': form,
+        'formset': formset,
     }
     
     return render(request, 'inventory/goods_receipt_form.html', context)
@@ -567,3 +323,223 @@ def goods_receipt_delete(request, pk):
         'goods_receipt': goods_receipt,
     }
     return render(request, 'inventory/goods_receipt_confirm_delete.html', context)
+
+
+# Bidfood XML Import
+
+from .bidfood_parser import parse_bidfood_xml
+from difflib import SequenceMatcher
+
+
+@login_required
+def bidfood_xml_import_step1(request):
+    """Krok 1: Upload XML souboru a výběr výchozího skladu"""
+    if request.method == 'POST':
+        xml_file = request.FILES.get('xml_file')
+        default_warehouse_id = request.POST.get('warehouse')
+        
+        if not xml_file or not default_warehouse_id:
+            messages.error(request, 'Musíte vybrat XML soubor a výchozí sklad.')
+            return redirect('inventory:bidfood_import_step1')
+        
+        try:
+            # Parsování XML
+            receipt_data = parse_bidfood_xml(xml_file)
+            
+            # Uložení do session (konverze na JSON-serializovatelná data)
+            request.session['bidfood_receipt_data'] = {
+                'receipt_number': receipt_data['receipt_number'],
+                'receipt_date': receipt_data['receipt_date'].isoformat(),
+                'supplier': receipt_data['supplier'],
+                'items': [
+                    {
+                        'item_id': item['item_id'],
+                        'item_name': item['item_name'],
+                        'quantity': str(item['quantity']),
+                        'unit': item['unit'],
+                        'unit_mapped': item['unit_mapped'],
+                        'price_per_unit_net': str(item['price_per_unit_net']),
+                        'price_per_unit_gross': str(item['price_per_unit_gross']),
+                        'vat_rate': str(item['vat_rate']),
+                        'vat_amount': str(item['vat_amount']),
+                        'total_price': str(item['total_price']),
+                    }
+                    for item in receipt_data['items']
+                ]
+            }
+            request.session['bidfood_default_warehouse'] = default_warehouse_id
+            
+            messages.success(request, f'XML načten: {len(receipt_data["items"])} položek')
+            return redirect('inventory:bidfood_import_step2')
+            
+        except Exception as e:
+            messages.error(request, f'Chyba při načítání XML: {e}')
+    
+    warehouses = Warehouse.objects.select_related('canteen').all()
+    return render(request, 'inventory/bidfood_import_step1.html', {
+        'warehouses': warehouses
+    })
+
+
+@login_required
+def bidfood_xml_import_step2(request):
+    """Krok 2: Preview, mapování surovin, editace jednotek a skladů"""
+    receipt_data = request.session.get('bidfood_receipt_data')
+    if not receipt_data:
+        messages.error(request, 'Session vypršela. Začněte znovu.')
+        return redirect('inventory:bidfood_import_step1')
+    
+    default_warehouse_id = int(request.session.get('bidfood_default_warehouse'))
+    warehouses = Warehouse.objects.all()
+    all_ingredients = list(Ingredient.objects.all())
+    
+    # Automatické mapování surovin pomocí fuzzy matching
+    for item in receipt_data['items']:
+        best_match = None
+        best_ratio = 0
+        
+        for ingredient in all_ingredients:
+            # Porovnání názvu z XML s názvem suroviny
+            ratio = SequenceMatcher(
+                None,
+                item['item_name'].lower().strip(),
+                ingredient.name.lower().strip()
+            ).ratio()
+            
+            if ratio > best_ratio:
+                best_ratio = ratio
+                best_match = ingredient
+        
+        # Pokud je shoda > 60%, navrhne me surovinu
+        if best_ratio > 0.6:
+            item['suggested_ingredient_id'] = best_match.id
+            item['suggested_ingredient_name'] = best_match.name
+            item['suggested_ingredient_unit'] = best_match.unit
+            item['match_ratio'] = round(best_ratio * 100)
+        else:
+            item['suggested_ingredient_id'] = None
+            item['suggested_ingredient_name'] = None
+            item['suggested_ingredient_unit'] = None
+            item['match_ratio'] = 0
+    
+    context = {
+        'receipt_data': receipt_data,
+        'warehouses': warehouses,
+        'default_warehouse_id': default_warehouse_id,
+        'all_ingredients': all_ingredients,
+    }
+    
+    return render(request, 'inventory/bidfood_import_step2.html', context)
+
+
+@login_required
+@transaction.atomic
+def bidfood_xml_import_step3(request):
+    """Krok 3: Vytvoření GoodsReceipt s položkami"""
+    if request.method != 'POST':
+        return redirect('inventory:bidfood_import_step1')
+    
+    receipt_data = request.session.get('bidfood_receipt_data')
+    if not receipt_data:
+        messages.error(request, 'Session vypršela. Začněte znovu.')
+        return redirect('inventory:bidfood_import_step1')
+    
+    default_warehouse_id = request.session.get('bidfood_default_warehouse')
+    default_warehouse = Warehouse.objects.get(id=default_warehouse_id)
+    
+    # Vytvoření GoodsReceipt
+    goods_receipt = GoodsReceipt.objects.create(
+        warehouse=default_warehouse,
+        receipt_number=receipt_data['receipt_number'],
+        receipt_date=receipt_data['receipt_date'],
+        supplier=receipt_data['supplier'],
+        status=GoodsReceipt.Status.DRAFT,
+        created_by=request.user,
+        notes=f"Importováno z Bidfood XML"
+    )
+    
+    # Zpracování položek
+    created_ingredients_count = 0
+    
+    for idx, item in enumerate(receipt_data['items']):
+        # Načtení dat z formuláře
+        create_new = request.POST.get(f'create_new_{idx}') == 'on'
+        ingredient_id = request.POST.get(f'ingredient_{idx}')
+        quantity_str = request.POST.get(f'quantity_{idx}', item['quantity'])
+        unit = request.POST.get(f'unit_{idx}', item['unit_mapped'])
+        warehouse_id = request.POST.get(f'warehouse_{idx}')
+        
+        # Převod množství (nahrazení čárky tečkou)
+        quantity = Decimal(quantity_str.replace(',', '.'))
+        
+        # Validace skladu
+        if not warehouse_id:
+            messages.warning(request, f'Položka "{item["item_name"]}" přeskočena - nebyl vybrán sklad.')
+            continue
+        
+        try:
+            warehouse = Warehouse.objects.get(id=warehouse_id)
+        except Warehouse.DoesNotExist:
+            messages.warning(request, f'Sklad s ID {warehouse_id} neexistuje.')
+            continue
+        
+        # Získání nebo vytvoření suroviny
+        if create_new:
+            # Vytvoření nové suroviny
+            ingredient = Ingredient.objects.create(
+                name=item['item_name'],
+                unit=unit,
+                code=item['item_id'],
+                allergens=''
+            )
+            created_ingredients_count += 1
+        else:
+            # Použití existující suroviny
+            if not ingredient_id:
+                messages.warning(request, f'Položka "{item["item_name"]}" přeskočena - nebyla vybrána surovina.')
+                continue
+            
+            try:
+                ingredient = Ingredient.objects.get(id=ingredient_id)
+            except Ingredient.DoesNotExist:
+                messages.warning(request, f'Surovina s ID {ingredient_id} neexistuje.')
+                continue
+        
+        # Validace DPH sazby proti povoleným hodnotám
+        vat_rate = Decimal(item['vat_rate'])
+        from .forms import VAT_RATE_CHOICES
+        allowed_vat_rates = [choice[0] for choice in VAT_RATE_CHOICES]
+        
+        if vat_rate not in allowed_vat_rates:
+            messages.warning(
+                request,
+                f'Položka "{item["item_name"]}" má neplatnou DPH sazbu {vat_rate}%. '
+                f'Povolené sazby: {", ".join(str(r) for r in allowed_vat_rates)}%'
+            )
+            continue
+        
+        # Vytvoření položky příjmu s DPH
+        GoodsReceiptItem.objects.create(
+            goods_receipt=goods_receipt,
+            ingredient=ingredient,
+            warehouse=warehouse,
+            quantity=quantity,
+            price_without_vat=Decimal(item['price_per_unit_net']),
+            vat_rate=vat_rate,
+            vat_amount=Decimal(item['vat_amount']),
+            price=Decimal(item['price_per_unit_gross']),
+            notes=f"Kód: {item['item_id']}"
+        )
+    
+    # Vyčištění session
+    del request.session['bidfood_receipt_data']
+    del request.session['bidfood_default_warehouse']
+    
+    messages.success(
+        request,
+        f'Příjem {goods_receipt.receipt_number} byl vytvořen s {goods_receipt.items.count()} položkami. '
+        f'Vytvořeno nových surovin: {created_ingredients_count}.'
+    )
+    
+    return redirect('inventory:goods_receipt_detail', pk=goods_receipt.pk)
+
