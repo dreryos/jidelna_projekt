@@ -47,17 +47,6 @@ class StockListView(LoginRequiredMixin, ListView):
         return context
 
 
-class StockCreateView(LoginRequiredMixin, CreateView):
-    model = StockItem
-    fields = ['ingredient', 'warehouse', 'quantity', 'price']
-    template_name = 'inventory/stock_form.html'
-    success_url = reverse_lazy('inventory:stock_list')
-    
-    def form_valid(self, form):
-        messages.success(self.request, f'Skladová položka "{form.instance.ingredient.name}" byla úspěšně přidána.')
-        return super().form_valid(form)
-
-
 class StockUpdateView(LoginRequiredMixin, UpdateView):
     model = StockItem
     fields = ['ingredient', 'warehouse', 'quantity', 'price']

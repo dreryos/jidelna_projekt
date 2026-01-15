@@ -6,7 +6,6 @@ app_name = 'inventory'
 urlpatterns = [
     # Skladové položky (StockItem)
     path('', views.StockListView.as_view(), name='stock_list'),
-    path('add/', views.StockCreateView.as_view(), name='stock_add'),
     path('edit/<int:pk>/', views.StockUpdateView.as_view(), name='stock_edit'),
     path('delete/<int:pk>/', views.StockDeleteView.as_view(), name='stock_delete'),
     

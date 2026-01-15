@@ -17,7 +17,7 @@ Tento soubor sleduje hlavní úkoly, bugy a nápady pro projekt. Pro detailněj�
 *Nalezené chyby, které neblokují hlavní funkčnost, ale je třeba je opravit.*
 
 - [x] Zpříjemnit práci s koeficienty porcí v jídelníčku (aktuálně se musí upravovat v detailu jídla).
-- [ ] DPH u příjmu zboží - zajistit správné zaokrouhlování a výpočet celkové ceny s DPH.
+- [x] DPH u příjmu zboží - zajistit správné zaokrouhlování a výpočet celkové ceny s DPH.
 - [ ] DPH u prodeje jídel - zajistit správné zaokrouhlování a výpočet celkové ceny s DPH.
 
 ---
