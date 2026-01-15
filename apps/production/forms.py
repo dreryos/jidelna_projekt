@@ -152,6 +152,16 @@ MenuPlanCoefficientFormSet = inlineformset_factory(
 class MenuTemplateForm(forms.ModelForm):
     """Formulář pro vytvoření/úpravu XML šablony jídelníčku"""
     
+    xml_file = forms.FileField(
+        required=False,
+        label='XML soubor',
+        help_text='Nahrajte XML soubor s definicí jídelníčku',
+        widget=forms.FileInput(attrs={
+            'class': 'form-control',
+            'accept': '.xml,text/xml,application/xml'
+        })
+    )
+    
     class Meta:
         model = MenuTemplate
         fields = ['name', 'description', 'xml_content']
@@ -172,16 +182,41 @@ class MenuTemplateForm(forms.ModelForm):
             })
         }
         help_texts = {
-            'xml_content': 'XML definice receptů a harmonogramu. Musí obsahovat sekce <Recipes> a <MenuSchedule>.'
+            'xml_content': 'Nebo můžete XML vložit přímo jako text (nepovinné, pokud nahráváte soubor výše).'
         }
     
-    def clean_xml_content(self):
-        """Validuje XML obsah pomocí parseru"""
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Při editaci je xml_content povinné, při vytváření ne (protože může být nahrán soubor)
+        if not self.instance.pk:
+            self.fields['xml_content'].required = False
+    
+    def clean(self):
+        """Validuje XML obsah z uploadu nebo z textového pole"""
         from .xml_parser import parse_menu_template_xml
         from django.core.exceptions import ValidationError as DjangoValidationError
         
-        xml_content = self.cleaned_data['xml_content']
+        cleaned_data = super().clean()
+        xml_file = cleaned_data.get('xml_file')
+        xml_content = cleaned_data.get('xml_content')
         
+        # Pokud byl nahrán soubor, načti jeho obsah
+        if xml_file:
+            try:
+                xml_content = xml_file.read().decode('utf-8')
+                cleaned_data['xml_content'] = xml_content
+            except UnicodeDecodeError:
+                raise forms.ValidationError(
+                    "Soubor nemohl být dekódován jako UTF-8. Ujistěte se, že soubor je platný XML s UTF-8 kódováním."
+                )
+        
+        # Pokud není ani soubor ani text, vyhoď chybu
+        if not xml_content:
+            raise forms.ValidationError(
+                "Musíte buď nahrát XML soubor, nebo vložit XML obsah do textového pole."
+            )
+        
+        # Validace XML obsahu
         try:
             # Pokusíme se XML naparsovat
             result = parse_menu_template_xml(xml_content)
@@ -201,7 +236,7 @@ class MenuTemplateForm(forms.ModelForm):
         except DjangoValidationError as e:
             raise forms.ValidationError(str(e))
         
-        return xml_content
+        return cleaned_data
 
 
 class MenuImportForm(forms.Form):

@@ -16,7 +16,16 @@
 
     <h1>{% if object %}Upravit šablonu{% else %}Nová šablona jídelníčku{% endif %}</h1>
 
-    <form method="post" class="mt-4">
+    {% if not object %}
+    <div class="alert alert-info mt-3">
+        <i class="fas fa-info-circle"></i> 
+        <strong>Tip:</strong> Můžete si stáhnout ukázkové šablony:
+        <a href="{% static 'sablona_4denni.xml' %}" download class="alert-link">4denní šablona</a> nebo
+        <a href="{% static 'sablona_14denni.xml' %}" download class="alert-link">14denní šablona</a>
+    </div>
+    {% endif %}
+
+    <form method="post" enctype="multipart/form-data" class="mt-4">
         {% csrf_token %}
         
         {% if form.non_field_errors %}
@@ -47,8 +56,23 @@
         </div>
 
         <div class="mb-3">
+            <label for="{{ form.xml_file.id_for_label }}" class="form-label">
+                {{ form.xml_file.label }}
+            </label>
+            {{ form.xml_file }}
+            <div class="form-text">{{ form.xml_file.help_text }}</div>
+            {% if form.xml_file.errors %}
+            <div class="text-danger">{{ form.xml_file.errors }}</div>
+            {% endif %}
+        </div>
+
+        <div class="text-center my-3">
+            <span class="badge bg-secondary">NEBO</span>
+        </div>
+
+        <div class="mb-3">
             <label for="{{ form.xml_content.id_for_label }}" class="form-label">
-                {{ form.xml_content.label }} <span class="text-danger">*</span>
+                {{ form.xml_content.label }}{% if not object %} <span class="text-muted">(nepovinné)</span>{% else %} <span class="text-danger">*</span>{% endif %}
             </label>
             {{ form.xml_content }}
             <div class="form-text">{{ form.xml_content.help_text }}</div>

@@ -5,6 +5,178 @@ Všechny významné změny v tomto projektu budou zdokumentovány v tomto soubor
 Formát je založen na [Keep a Changelog](https://keepachangelog.com/cs/1.0.0/),
 a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
 
+## [0.9.1] - 2026-01-15
+
+### Added
+- **Import jídelníčku z XML šablony**: Trojkrokový proces importu jídelníčků
+  - Krok 1: Výběr XML šablony pro import
+  - Krok 2: Náhled importovaného menu s možností nastavení koeficientů pro jednotlivé varianty porcí
+  - Krok 3: Potvrzení a finální import jídelníčku
+  - Správa šablon: vytváření, editace, mazání a seznam šablon pro import jídelníčků
+  - Notifikace a indikátory průběhu během celého importu
+  - Podpora jmen pro varianty porcí a typu jídla (snídaně, svačina, oběd, večeře)
+  - XML parser pro zpracování souborů jídelníčků (`apps/production/xml_parser.py`)
+- **Import dodacího listu Bidfood z XML**: Nová funkce pro import skladových příjmů z XML souborů dodavatele Bidfood
+  - Odstraněn zastaralý CSV import, nahrazen moderním XML importem
+  - Parser pro XML dodací listy Bidfood (`apps/inventory/bidfood_parser.py`)
+  - Dvoustupňový proces importu s náhledem a možností úprav před potvrzením
+  - Šablony `bidfood_import_step1.html` a `bidfood_import_step2.html`
+  - Automatické zpracování DPH s podporou různých sazeb (10%, 12%, 15%, 21%)
+  - Migrace dat pro přidání polí DPH do existujících záznamů
+  - Propojení skladových položek se sklady (`warehouse` pole v `GoodsReceiptItem`)
+- **Inventarizace zásob**: Kompletní systém pro provádění inventur skladů
+  - Seznam inventur s filtrováním podle skladu a stavu (`inventory_verification_list.html`)
+  - Formulář pro vytvoření nové inventury (`inventory_verification_form.html`)
+  - Potvrzovací stránka pro zahájení inventury (`inventory_verification_start_confirm.html`)
+  - Rozhraní pro počítání zásob během inventury (`inventory_verification_count.html`)
+  - Detail dokončené inventury s přehledem rozdílů (`inventory_verification_detail.html`)
+  - Potvrzení dokončení inventury (`inventory_verification_complete_confirm.html`)
+  - Potvrzení zrušení inventury (`inventory_verification_cancel_confirm.html`)
+  - PDF export výsledků inventury (`verification_pdf.html`)
+  - Modely `InventoryVerification` a `InventoryVerificationItem` pro správu inventur
+  - Zamykání skladů během inventury (`is_locked`, `locked_by_inventory` pole v modelu `Warehouse`)
+  - Automatické vytváření položek inventury ze stávajících skladových zásob
+- **Jednotná stránka pro správu jídelen a skladů**: Nové rozhraní pro centralizovanou správu
+  - Šablona `management.html` s modaly pro vytváření, editaci a mazání jídelen a skladů
+  - AJAX operace pro všechny akce bez nutnosti reload stránky
+  - JavaScript modul `management.js` (697 řádků) pro interaktivní správu
+  - Zobrazení KPI statistik (počet jídelen, skladů, zamčených skladů, položek)
+- **Analýza nákladů na osobu**: Nový pohled v analytice zobrazující průměrné náklady na jednoho strávníka
+  - Výpočet cen na porci pro různé varianty porcí
+  - Možnost filtrování podle jídelny a časového období
+- **Dokumentace modulů**: Přidána kompletní dokumentace v adresáři `docs/`
+  - `analytics.md` - popis modulu analytiky
+  - `core_admin.md` - správa receptů a surovin
+  - `inventory.md` - skladové hospodářství
+  - `production.md` - výrobní plánování
+  - `reports.md` - reporty
+  - `overview.md` - celkový přehled projektu
+  - `price_history.md` - historie cen
+- **XML šablony pro jídelníčky**: Ukázkové šablony pro import
+  - `static/sablona_14denni.xml` - šablona pro 14denní jídelníček
+  - `static/sablona_4denni.xml` - šablona pro 4denní jídelníček
+  - Ukázkové dokumenty v `docs/14denní.xml` a `docs/4denní švp.xml`
+- **Upload XML souborů pro šablony jídelníčků**: Možnost nahrání XML souboru přímo z disku
+  - Přidáno pole `xml_file` do formuláře `MenuTemplateForm` pro nahrání souboru
+  - Uživatel může nahrát XML soubor místo kopírování jeho obsahu do textového pole
+  - Automatická validace nahraného souboru s kontrolou kódování UTF-8
+  - Informativní alert s odkazy na ukázkové šablony ke stažení
+  - Vizuální oddělovač "NEBO" mezi nahráním souboru a textovým polem
+  - Podpora formátů: `.xml`, `text/xml`, `application/xml`
+
+### Changed
+- **Rebranding z "Jídelna" na "Spíž"**: Kompletní přejmenování projektu
+  - Aktualizace všech odkazů v TODO.md a HTML šablonách
+  - Přejmenování Django nastavení, URL a WSGI/ASGI konfigurací
+  - Změna názvu služby v Docker Compose
+  - Přejmenování adresáře `jidelna_project` na `spiz_project`
+  - Aktualizace všech šablon (`base.html` a 40+ dalších)
+  - Upgrade Django z verze 5.2.6 na 6.0.1
+  - Aktualizace README.md s novým názvem projektu
+- **Dockerfile optimalizace**: Přechod na Alpine Linux
+  - Změna base image z `python:3.12-slim` na `python:3.15-rc-alpine3.23`
+  - Přepis z `apt-get` na `apk` pro Alpine kompatibilitu
+  - Přidání dodatečných závislostí pro Pillow (zlib-dev, jpeg-dev, libjpeg)
+  - Bezpečnostní upgrade pro odstranění zranitelností (Snyk scan)
+  - Přidán entrypoint skript `docker-entrypoint.sh` pro inicializaci
+- **Vylepšení formuláře pro příjem zboží**: Rozšířené možnosti pro ruční vytváření příjmů
+  - Přidání polí pro DPH (sazba, částka bez DPH, částka DPH)
+  - Interaktivní výpočty DPH v JavaScriptu
+  - Lepší validace a automatické výpočty cen
+  - Vylepšené tlačítko pro mazání řádků s vizuální zpětnou vazbou
+- **Admin rozhraní pro UserProfile**: Přidána správa uživatelských profilů
+  - Možnost přiřazení jídelen k uživatelům
+  - Lepší přehled oprávnění uživatelů
+- **Vylepšení stránky detailu jídelníčku**: Interaktivnější UI
+  - Aktualizované modaly pro přidávání jídel s podporou variant porcí
+  - Vylepšený JavaScript pro dynamické přidávání variant
+  - Template filtry v `production_filters.py` pro lepší formátování
+- **Nastavení projektu**: Rozšířená konfigurace v `spiz_project/settings.py`
+  - Přidány nové nastavení pro logování
+  - Konfigurace pro podporu PDF generování
+  - Nastavení pro správu souborů a médií
+- **Formulář pro šablony jídelníčků**: Vylepšení UX při vytváření XML šablon
+  - Přidána možnost nahrání XML souboru přímo z disku místo kopírování obsahu
+  - Formulář `MenuTemplateForm` rozšířen o pole `xml_file` typu `FileField`
+  - Pole `xml_content` je nepovinné při vytváření nové šablony (pokud se nahrává soubor)
+  - Šablona `menu_template_form.html` s atributem `enctype="multipart/form-data"`
+  - Informativní alert s odkazy na stažení ukázkových šablon
+- **Aktualizace dependencies**: Upgrade všech balíčků na nejnovější stabilní verze
+  - `django-bootstrap5`: 25.3 → 26.1
+  - `pillow`: 12.0.0 → 12.1.0 (bezpečnostní oprava)
+  - `fonttools`: 4.60.1 → 4.61.1
+  - `reportlab`: 4.4.5 → 4.4.9
+  - `sqlparse`: 0.5.3 → 0.5.5
+  - `weasyprint`: 66.0 → 67.0
+  - `pydyf`: 0.11.0 → 0.12.1
+
+### Fixed
+- **Přihlašovací stránka**: Opraveno zobrazování zavádějících validačních zaškrtávacích políček při chybě přihlášení
+  - Validační checkmarky se nyní nezobrazují při neúspěšném přihlášení
+- **Desetinná čísla v HTML5 vstupech**: Opraveno zobrazení desetinných čísel v polích pro množství surovin
+  - HTML5 number inputy vyžadují tečku jako desetinný oddělovač
+  - `DecimalInputWidget` byl chybně převáděl tečky na čárky, což způsobovalo odmítnutí hodnot jako "7,5"
+  - Nyní widget správně zachovává tečku pro kompatibilitu s prohlížečem
+- **Autocomplete dropdown v receptech**: Opravena viditelnost dropdown nabídky při výběru surovin
+  - Dropdown byl oříznut kontejnerem `.table-responsive`
+  - Přidány specifické CSS selektory pro správné zobrazení
+  - Konsolidace CSS pravidel
+- **Počítadlo položek v přehledu výrobních příkazů**: Opraveno zobrazení součtu místo konkatenace čísel
+  - Výpočet počtu položek přesunut z šablony do view
+  - Správné sčítání místo spojování textových řetězců
+- **Ukládání receptů s novými surovinami**: Opravena chyba při vytváření nových surovin přímo z formuláře receptu
+  - Odstraněna XSS zranitelnost při vytváření nových surovin
+  - Odebrání zobrazení počtu porcí z formuláře receptu
+  - Lepší zpracování dynamicky vytvořených surovin
+- **Odstranění funkce pro přidání skladové položky**: Refaktoring views a šablon
+  - Zjednodušení kódu pro správu skladových zásob
+  - Odstranění duplicitní funkcionality
+
+### Removed
+- **CSV import**: Odstraněny zastaralé šablony a dokumentace pro CSV import
+  - Smazány `import_csv_step1.html` a `import_csv_step2.html`
+  - Odstraněna dokumentace `docs/IMPORT_CSV.md`
+  - Odstraněn mock soubor `docs/mock_příjem1.csv`
+
+### Security
+- **Dockerfile security upgrade**: Oprava bezpečnostních zranitelností identifikovaných Snyk
+  - SNYK-DEBIAN13-APT-5675173
+  - SNYK-DEBIAN13-COREUTILS-10259260
+  - SNYK-DEBIAN13-COREUTILS-5673914
+  - SNYK-DEBIAN13-GLIBC-5680884
+- **XSS prevence**: Opravena XSS zranitelnost při vytváření nových surovin v receptech
+
+### Technical Details
+- **Nové modely**:
+  - `MenuTemplate` - šablony pro import jídelníčků
+  - `InventoryVerification` - hlavní záznam inventury
+  - `InventoryVerificationItem` - položky inventury
+- **Nová pole**:
+  - `ProductionOrder.meal_type` - typ jídla (snídaně, svačina, oběd, večeře)
+  - `ProductionOrderPortionVariant.name` - název varianty porce
+  - `GoodsReceiptItem.vat_rate`, `price_without_vat`, `vat_amount` - DPH pole
+  - `GoodsReceiptItem.warehouse` - propojení se skladem
+  - `Warehouse.is_locked`, `locked_by_inventory` - zamykání skladu
+- **Migrace databáze**:
+  - `production/0013_menutemplate_productionorder_meal_type.py`
+  - `production/0014_productionorderportionvariant_name.py`
+  - `inventory/0006_add_vat_to_goods_receipt.py`
+  - `inventory/0007_populate_vat_fields.py`
+  - `inventory/0008_add_warehouse_to_receipt_item.py`
+  - `inventory/0009_inventoryverification_inventoryverificationitem.py`
+  - `canteens/0002_warehouse_is_locked.py`
+  - `canteens/0003_warehouse_locked_by_inventory.py`
+- **Nové views**:
+  - `apps/production/template_views.py` - 481 řádků pro správu šablon a import
+  - Inventory verification views - seznam, vytvoření, zahájení, počítání, dokončení, zrušení, PDF
+  - AJAX views pro správu jídelen a skladů v `management.html`
+- **Nové parsery**:
+  - `apps/production/xml_parser.py` - 245 řádků pro parsing XML jídelníčků
+  - `apps/inventory/bidfood_parser.py` - 141 řádků pro parsing Bidfood XML
+- **Nové testy**:
+  - `apps/production/tests/test_import_views.py`
+  - `apps/production/tests/test_xml_parser.py`
+
 ## [0.9.0] - 2025-11-25
 
 ### Added
@@ -242,6 +414,7 @@ a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
 - Admin rozhraní pro všechny moduly
 - Přihlašování uživatelů
 
+[Unreleased]: https://github.com/dreryos/spiz/compare/v0.9.0...HEAD
 [0.9.0]: https://github.com/dreryos/spiz/compare/v0.3.0...v0.9.0
 [0.3.0]: https://github.com/dreryos/spiz/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/dreryos/spiz/compare/v0.1.0...v0.2.0
