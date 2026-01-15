@@ -63,6 +63,19 @@ a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
   - Informativní alert s odkazy na ukázkové šablony ke stažení
   - Vizuální oddělovač "NEBO" mezi nahráním souboru a textovým polem
   - Podpora formátů: `.xml`, `text/xml`, `application/xml`
+- **Automatický tmavý režim**: Implementace dark mode podle systémových preferencí
+  - Nový CSS soubor `static/css/dark-mode.css` s `@media (prefers-color-scheme: dark)` pravidly
+  - Automatické přepínání mezi světlým a tmavým vzhledem podle nastavení operačního systému
+  - Kompletní styly pro všechny komponenty: navbar, tabulky, formuláře, karty, dropdown menu, tlačítka, alerty, modal okna, pagination
+  - Tmavé pozadí (#212529) se světlým textem (#f8f9fa) pro lepší čitelnost při nočním používání
+  - Upravené barvy pro Bootstrap utility třídy (.bg-success, .bg-warning, .bg-danger, atd.) v tmavém režimu
+  - Optimalizované pruhování tabulek s jemnými odstíny šedé místo černé a bílé
+  - Podpora pro starší prohlížeče s fallback na světlý režim
+  - Odstranění 111 výskytů hardcoded barev ze 16 template souborů
+  - Nahrazení inline stylů Bootstrap utility třídami (.bg-light, .bg-*.bg-opacity-25, .text-muted)
+  - Vyčištěné šablony: goods_receipt_detail.html, bidfood_import_step2.html, goods_receipt_form.html, stock_list.html, goods_receipt_list.html
+  - CSS variables pro tabulky (--bs-table-bg, --bs-table-striped-bg, --bs-table-hover-bg)
+  - Správné zobrazení .table-dark, .table-secondary, .table-light v obou režimech
 
 ### Changed
 - **Rebranding z "Jídelna" na "Spíž"**: Kompletní přejmenování projektu

@@ -1,0 +1,482 @@
+/* Automatické přepínání mezi světlým a tmavým režimem podle systému */
+
+/* Světlý režim (výchozí) - explicitní definice */
+@media (prefers-color-scheme: light) {
+  body {
+    background-color: #ffffff;
+    color: #212529;
+  }
+}
+
+/* Tmavý režim - aktivuje se podle systémových preferencí */
+@media (prefers-color-scheme: dark) {
+  /* Základní pozadí a text */
+  body {
+    background-color: #212529;
+    color: #f8f9fa;
+  }
+
+  /* Navbar */
+  .navbar-light {
+    background-color: #343a40 !important;
+  }
+  
+  .navbar-light .navbar-brand,
+  .navbar-light .nav-link {
+    color: #f8f9fa !important;
+  }
+  
+  .navbar-light .nav-link:hover,
+  .navbar-light .nav-link:focus {
+    color: #adb5bd !important;
+  }
+  
+  .navbar-light .navbar-toggler {
+    border-color: rgba(248, 249, 250, 0.1);
+  }
+  
+  .navbar-light .navbar-toggler-icon {
+    filter: invert(1);
+  }
+
+  /* Footer */
+  .bg-light {
+    background-color: #343a40 !important;
+  }
+
+  /* Bílá pozadí na tmavá */
+  .bg-white {
+    background-color: #343a40 !important;
+  }
+
+  /* Karty */
+  .card {
+    background-color: #343a40;
+    color: #f8f9fa;
+    border-color: #495057;
+  }
+
+  .card-header {
+    background-color: #495057;
+    border-color: #6c757d;
+  }
+
+  /* Tabulky */
+  .table {
+    --bs-table-bg: transparent;
+    --bs-table-striped-bg: rgba(255, 255, 255, 0.03);
+    --bs-table-hover-bg: rgba(255, 255, 255, 0.075);
+    color: #f8f9fa;
+    border-color: #495057;
+  }
+
+  .table th,
+  .table td {
+    border-color: #495057;
+    color: #f8f9fa;
+  }
+
+  .table-striped > tbody > tr:nth-of-type(odd) > * {
+    color: #f8f9fa;
+    background-color: rgba(255, 255, 255, 0.03);
+  }
+
+  .table-striped > tbody > tr:nth-of-type(even) > * {
+    color: #f8f9fa;
+    background-color: transparent;
+  }
+
+  .table-hover > tbody > tr:hover > * {
+    color: #f8f9fa;
+    background-color: rgba(255, 255, 255, 0.075);
+  }
+
+  .table-light {
+    background-color: #495057 !important;
+    color: #f8f9fa !important;
+  }
+
+  .table-dark {
+    --bs-table-bg: #1a1d20;
+    --bs-table-striped-bg: #2c3034;
+    color: #f8f9fa !important;
+    background-color: #1a1d20 !important;
+  }
+
+  .table-dark th,
+  .table-dark td {
+    color: #f8f9fa !important;
+    background-color: #1a1d20 !important;
+    border-color: #495057 !important;
+  }
+
+  /* Formuláře */
+  .form-control,
+  .form-select {
+    background-color: #495057;
+    color: #f8f9fa;
+    border-color: #6c757d;
+  }
+
+  .form-control:focus,
+  .form-select:focus {
+    background-color: #495057;
+    color: #f8f9fa;
+    border-color: #adb5bd;
+    box-shadow: 0 0 0 0.25rem rgba(173, 181, 189, 0.25);
+  }
+
+  .form-control::placeholder {
+    color: #adb5bd;
+  }
+
+  .form-control:disabled,
+  .form-select:disabled {
+    background-color: #343a40;
+    color: #6c757d;
+  }
+
+  /* Dropdown menu */
+  .dropdown-menu {
+    background-color: #343a40;
+    border-color: #495057;
+  }
+
+  .dropdown-item {
+    color: #f8f9fa;
+  }
+
+  .dropdown-item:hover,
+  .dropdown-item:focus {
+    background-color: #495057;
+    color: #f8f9fa;
+  }
+
+  .dropdown-divider {
+    border-color: #495057;
+  }
+
+  /* Tlačítka */
+  .btn-outline-primary {
+    color: #86b7fe;
+    border-color: #86b7fe;
+  }
+
+  .btn-outline-primary:hover {
+    background-color: #86b7fe;
+    color: #000;
+  }
+
+  .btn-outline-secondary {
+    color: #adb5bd;
+    border-color: #adb5bd;
+  }
+
+  .btn-outline-secondary:hover {
+    background-color: #adb5bd;
+    color: #000;
+  }
+
+  .btn-outline-success {
+    color: #75b798;
+    border-color: #75b798;
+  }
+
+  .btn-outline-success:hover {
+    background-color: #75b798;
+    color: #000;
+  }
+
+  .btn-outline-danger {
+    color: #ea868f;
+    border-color: #ea868f;
+  }
+
+  .btn-outline-danger:hover {
+    background-color: #ea868f;
+    color: #000;
+  }
+
+  .btn-outline-warning {
+    color: #ffda6a;
+    border-color: #ffda6a;
+  }
+
+  .btn-outline-warning:hover {
+    background-color: #ffda6a;
+    color: #000;
+  }
+
+  .btn-outline-info {
+    color: #6edff6;
+    border-color: #6edff6;
+  }
+
+  .btn-outline-info:hover {
+    background-color: #6edff6;
+    color: #000;
+  }
+
+  /* Alerty */
+  .alert-info {
+    background-color: #055160;
+    border-color: #087990;
+    color: #6edff6;
+  }
+
+  .alert-warning {
+    background-color: #664d03;
+    border-color: #997404;
+    color: #ffda6a;
+  }
+
+  .alert-success {
+    background-color: #0f5132;
+    border-color: #146c43;
+    color: #75b798;
+  }
+
+  .alert-danger {
+    background-color: #842029;
+    border-color: #b02a37;
+    color: #ea868f;
+  }
+
+  /* Textové barvy */
+  .text-muted {
+    color: #adb5bd !important;
+  }
+
+  .text-dark {
+    color: #f8f9fa !important;
+  }
+
+  /* Okraje a stíny */
+  .border,
+  .border-bottom,
+  .border-top {
+    border-color: #495057 !important;
+  }
+
+  .shadow-sm {
+    box-shadow: 0 .125rem .25rem rgba(0, 0, 0, 0.5) !important;
+  }
+
+  /* Modální okna */
+  .modal-content {
+    background-color: #343a40;
+    color: #f8f9fa;
+  }
+
+  .modal-header,
+  .modal-footer {
+    border-color: #495057;
+  }
+
+  .btn-close {
+    filter: invert(1);
+  }
+
+  /* Breadcrumbs */
+  .breadcrumb {
+    background-color: #343a40;
+  }
+
+  .breadcrumb-item + .breadcrumb-item::before {
+    color: #adb5bd;
+  }
+
+  /* List group */
+  .list-group-item {
+    background-color: #343a40;
+    color: #f8f9fa;
+    border-color: #495057;
+  }
+
+  .list-group-item:hover {
+    background-color: #495057;
+  }
+
+  /* Pagination */
+  .page-link {
+    background-color: #343a40;
+    color: #86b7fe;
+    border-color: #495057;
+  }
+
+  .page-link:hover {
+    background-color: #495057;
+    color: #86b7fe;
+    border-color: #6c757d;
+  }
+
+  .page-item.active .page-link {
+    background-color: #0d6efd;
+    border-color: #0d6efd;
+  }
+
+  .page-item.disabled .page-link {
+    background-color: #343a40;
+    color: #6c757d;
+    border-color: #495057;
+  }
+
+  /* Progress bars */
+  .progress {
+    background-color: #495057;
+  }
+
+  /* Badges */
+  .badge {
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  /* HR separator */
+  hr {
+    border-color: #495057;
+    opacity: 1;
+  }
+
+  /* Specifické barvy pro navigaci */
+  .nav-link.text-success {
+    color: #75b798 !important;
+  }
+
+  .nav-link.text-warning {
+    color: #ffda6a !important;
+  }
+
+  .nav-link.text-danger {
+    color: #ea868f !important;
+  }
+
+  .nav-link.text-info {
+    color: #6edff6 !important;
+  }
+
+  .nav-link.text-secondary {
+    color: #adb5bd !important;
+  }
+
+  .dropdown-item.text-success {
+    color: #75b798 !important;
+  }
+
+  .dropdown-item.text-warning {
+    color: #ffda6a !important;
+  }
+
+  .dropdown-item.text-danger {
+    color: #ea868f !important;
+  }
+
+  .dropdown-item.text-info {
+    color: #6edff6 !important;
+  }
+
+  .dropdown-item.text-secondary {
+    color: #adb5bd !important;
+  }
+
+  /* Table danger/warning varianty */
+  .table-danger {
+    background-color: rgba(234, 134, 143, 0.1) !important;
+    color: #ea868f !important;
+  }
+
+  .table-warning {
+    background-color: rgba(255, 218, 106, 0.1) !important;
+    color: #ffda6a !important;
+  }
+
+  /* Bg-opacity varianty pro alertní pozadí */
+  .bg-success.bg-opacity-25 {
+    background-color: rgba(117, 183, 152, 0.25) !important;
+  }
+
+  .bg-warning.bg-opacity-25 {
+    background-color: rgba(255, 218, 106, 0.25) !important;
+  }
+
+  .bg-danger.bg-opacity-25 {
+    background-color: rgba(234, 134, 143, 0.25) !important;
+  }
+
+  .bg-info.bg-opacity-10 {
+    background-color: rgba(110, 223, 246, 0.1) !important;
+  }
+
+  /* Help texty a malé texty pod formulářovými poli */
+  .form-text,
+  .form-text.text-muted,
+  small.text-muted {
+    color: #adb5bd !important;
+  }
+
+  /* Alert light varianty - pro "Jak systém funguje" apod. */
+  .alert-light {
+    background-color: #343a40 !important;
+    border-color: #495057 !important;
+    color: #f8f9fa !important;
+  }
+
+  .alert-light .alert-heading {
+    color: #f8f9fa !important;
+  }
+
+  .alert-light small {
+    color: #adb5bd !important;
+  }
+
+  /* Tabulky s white background override */
+  table.table,
+  .table-responsive table,
+  table {
+    background-color: transparent !important;
+  }
+
+  .table thead,
+  table thead {
+    background-color: transparent !important;
+  }
+
+  .table tbody,
+  table tbody {
+    background-color: transparent !important;
+  }
+
+  .table tbody tr,
+  table tbody tr {
+    background-color: transparent !important;
+  }
+
+  /* Vynucení barvy textu v tabulkách */
+  table td,
+  table th,
+  .table td,
+  .table th {
+    color: #f8f9fa !important;
+  }
+
+  /* Oprava pruhování - odstranit původní a použít pouze CSS variables */
+  .table-striped > tbody > tr:nth-of-type(even) > *,
+  table.table-striped tbody tr:nth-of-type(even) td,
+  table.table-striped tbody tr:nth-of-type(even) th {
+    background-color: transparent !important;
+    color: #f8f9fa !important;
+  }
+
+  .table-striped > tbody > tr:nth-of-type(odd) > *,
+  table.table-striped tbody tr:nth-of-type(odd) td,
+  table.table-striped tbody tr:nth-of-type(odd) th {
+    background-color: rgba(255, 255, 255, 0.03) !important;
+    color: #f8f9fa !important;
+  }
+
+  /* Input group text */
+  .input-group-text {
+    background-color: #495057;
+    color: #f8f9fa;
+    border-color: #6c757d;
+  }
+}

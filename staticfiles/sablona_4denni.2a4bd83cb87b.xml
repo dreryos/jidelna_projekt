@@ -1,0 +1,238 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<MenuImportDescription>
+  <!-- 
+    Tento soubor slouží jako šablona pro import jídelníčku a chybějících receptů.
+    
+    STRUKTURA:
+    1. <Recipes> - Zde se definují recepty (normy), pokud ještě v systému neexistují.
+       - Atribut 'code' je unikátní identifikátor receptu.
+       - 'basePortions' určuje, na kolik porcí je norma kalkulována (obvykle 10).
+    
+    2. <MenuSchedule> - Zde se definuje, co se vaří v konkrétní dny.
+       - Odkazuje se na 'code' receptu z první sekce nebo z databáze.
+  -->
+
+  <!-- ČÁST 1: Definice receptů (Norem) použitých v jídelníčku -->
+  <Recipes>
+    <!-- Den 1: Pondělí recepty -->
+    <Recipe code="POL-001" name="Vývar se zeleninou a nudlemi" category="PO" basePortions="10">
+      <Ingredients>
+        <Ingredient name="Hovězí kosti" quantity="2.0" unit="kg"/>
+        <Ingredient name="Mrkev" quantity="0.3" unit="kg"/>
+        <Ingredient name="Celer" quantity="0.2" unit="kg"/>
+        <Ingredient name="Petržel" quantity="0.1" unit="kg"/>
+        <Ingredient name="Polévkové nudle" quantity="0.2" unit="kg"/>
+        <Ingredient name="Sůl" quantity="0.05" unit="kg"/>
+      </Ingredients>
+    </Recipe>
+
+    <Recipe code="HL-001" name="Kuřecí řízek s bramborami" category="HJ" basePortions="10">
+      <Ingredients>
+        <Ingredient name="Kuřecí prsa" quantity="1.5" unit="kg"/>
+        <Ingredient name="Vejce" quantity="3" unit="ks"/>
+        <Ingredient name="Mléko" quantity="0.2" unit="l"/>
+        <Ingredient name="Hladká mouka" quantity="0.3" unit="kg"/>
+        <Ingredient name="Strouhanka" quantity="0.5" unit="kg"/>
+        <Ingredient name="Olej na smažení" quantity="0.5" unit="l"/>
+        <Ingredient name="Brambory" quantity="2.5" unit="kg"/>
+        <Ingredient name="Kyselá okurka" quantity="0.5" unit="kg"/>
+      </Ingredients>
+    </Recipe>
+
+    <Recipe code="SVA-001" name="Cereální kaiserka se sýrem" category="SV" basePortions="10">
+      <Ingredients>
+        <Ingredient name="Kaiserka cereální" quantity="10" unit="ks"/>
+        <Ingredient name="Sýr tavený (trojúhelník)" quantity="10" unit="ks"/>
+        <Ingredient name="Máslo" quantity="0.1" unit="kg"/>
+      </Ingredients>
+    </Recipe>
+
+    <Recipe code="HL-005" name="Rajská omáčka s masovými kuličkami" category="HJ" basePortions="10">
+      <Ingredients>
+        <Ingredient name="Mleté maso (mix)" quantity="1.2" unit="kg"/>
+        <Ingredient name="Rajský protlak" quantity="0.4" unit="kg"/>
+        <Ingredient name="Cibule" quantity="0.2" unit="kg"/>
+        <Ingredient name="Hladká mouka" quantity="0.1" unit="kg"/>
+        <Ingredient name="Cukr krupice" quantity="0.1" unit="kg"/>
+        <Ingredient name="Těstoviny (kolínka)" quantity="1.0" unit="kg"/>
+      </Ingredients>
+    </Recipe>
+
+    <!-- Den 2: Úterý recepty -->
+    <Recipe code="SNI-001" name="Snídaňový mix" category="SN" basePortions="10">
+      <Ingredients>
+        <Ingredient name="Pečivo mix" quantity="10" unit="ks"/>
+        <Ingredient name="Máslo" quantity="0.2" unit="kg"/>
+        <Ingredient name="Džem" quantity="0.3" unit="kg"/>
+        <Ingredient name="Čaj ovocný" quantity="0.05" unit="kg"/>
+      </Ingredients>
+    </Recipe>
+
+    <Recipe code="POL-002" name="Krupicová s vejcem" category="PO" basePortions="10">
+      <Ingredients>
+        <Ingredient name="Dětská krupička" quantity="0.15" unit="kg"/>
+        <Ingredient name="Vejce" quantity="4" unit="ks"/>
+        <Ingredient name="Kořenová zelenina" quantity="0.3" unit="kg"/>
+        <Ingredient name="Masox" quantity="0.05" unit="kg"/>
+      </Ingredients>
+    </Recipe>
+
+    <Recipe code="HL-002" name="Svíčková na smetaně" category="HJ" basePortions="10">
+      <Ingredients>
+        <Ingredient name="Hovězí zadní" quantity="1.5" unit="kg"/>
+        <Ingredient name="Mrkev" quantity="0.5" unit="kg"/>
+        <Ingredient name="Celer" quantity="0.3" unit="kg"/>
+        <Ingredient name="Petržel" quantity="0.2" unit="kg"/>
+        <Ingredient name="Smetana 33%" quantity="0.5" unit="l"/>
+        <Ingredient name="Houskový knedlík" quantity="2.0" unit="kg"/>
+        <Ingredient name="Brusinky" quantity="0.2" unit="kg"/>
+      </Ingredients>
+    </Recipe>
+
+    <Recipe code="SVA-002" name="Ovocný jogurt s rohlíkem" category="SV" basePortions="10">
+      <Ingredients>
+        <Ingredient name="Jogurt ovocný" quantity="10" unit="ks"/>
+        <Ingredient name="Rohlík bílý" quantity="10" unit="ks"/>
+      </Ingredients>
+    </Recipe>
+
+    <Recipe code="HL-006" name="Hamburger s trhaným vepřovým" category="HJ" basePortions="10">
+      <Ingredients>
+        <Ingredient name="Vepřová plec" quantity="1.5" unit="kg"/>
+        <Ingredient name="Bulka na hamburger" quantity="10" unit="ks"/>
+        <Ingredient name="Sýr Čedar plátky" quantity="0.3" unit="kg"/>
+        <Ingredient name="BBQ omáčka" quantity="0.2" unit="l"/>
+        <Ingredient name="Salát ledový" quantity="0.3" unit="kg"/>
+      </Ingredients>
+    </Recipe>
+
+    <!-- Den 3: Středa recepty -->
+    <Recipe code="POL-003" name="Brokolicový krém" category="PO" basePortions="10">
+      <Ingredients>
+        <Ingredient name="Brokolice" quantity="1.5" unit="kg"/>
+        <Ingredient name="Brambory" quantity="0.5" unit="kg"/>
+        <Ingredient name="Smetana na vaření" quantity="0.3" unit="l"/>
+        <Ingredient name="Krutony" quantity="0.2" unit="kg"/>
+      </Ingredients>
+    </Recipe>
+
+    <Recipe code="HL-003" name="Bavorské vdolky" category="HJ" basePortions="10">
+      <Ingredients>
+        <Ingredient name="Hladká mouka" quantity="1.0" unit="kg"/>
+        <Ingredient name="Droždí" quantity="0.05" unit="kg"/>
+        <Ingredient name="Mléko" quantity="0.6" unit="l"/>
+        <Ingredient name="Vejce" quantity="2" unit="ks"/>
+        <Ingredient name="Povidla švestková" quantity="0.4" unit="kg"/>
+        <Ingredient name="Tvaroh tvrdý" quantity="0.2" unit="kg"/>
+      </Ingredients>
+    </Recipe>
+
+    <Recipe code="SVA-003" name="Rohlík se šunkovým salámem" category="SV" basePortions="10">
+      <Ingredients>
+        <Ingredient name="Rohlík bílý" quantity="10" unit="ks"/>
+        <Ingredient name="Máslo" quantity="0.1" unit="kg"/>
+        <Ingredient name="Šunkový salám" quantity="0.3" unit="kg"/>
+      </Ingredients>
+    </Recipe>
+
+    <Recipe code="HL-007" name="Špagety s boloňskou omáčkou" category="HJ" basePortions="10">
+      <Ingredients>
+        <Ingredient name="Špagety" quantity="1.2" unit="kg"/>
+        <Ingredient name="Mleté maso hovězí" quantity="1.0" unit="kg"/>
+        <Ingredient name="Rajčata krájená" quantity="0.8" unit="kg"/>
+        <Ingredient name="Sýr Eidam strouhaný" quantity="0.3" unit="kg"/>
+        <Ingredient name="Česnek" quantity="0.05" unit="kg"/>
+      </Ingredients>
+    </Recipe>
+
+    <!-- Den 4: Čtvrtek recepty -->
+    <Recipe code="POL-004" name="Frankfurtská polévka" category="PO" basePortions="10">
+      <Ingredients>
+        <Ingredient name="Párky" quantity="0.3" unit="kg"/>
+        <Ingredient name="Brambory" quantity="0.5" unit="kg"/>
+        <Ingredient name="Paprika sladká" quantity="0.02" unit="kg"/>
+        <Ingredient name="Hladká mouka" quantity="0.1" unit="kg"/>
+      </Ingredients>
+    </Recipe>
+
+    <Recipe code="HL-004" name="Vepřová panenka s gril. zeleninou" category="HJ" basePortions="10">
+      <Ingredients>
+        <Ingredient name="Vepřová panenka" quantity="1.5" unit="kg"/>
+        <Ingredient name="Paprika mix" quantity="0.5" unit="kg"/>
+        <Ingredient name="Cuketa" quantity="0.5" unit="kg"/>
+        <Ingredient name="Brambory (na kaši)" quantity="2.0" unit="kg"/>
+        <Ingredient name="Mléko" quantity="0.3" unit="l"/>
+        <Ingredient name="Máslo" quantity="0.1" unit="kg"/>
+      </Ingredients>
+    </Recipe>
+
+    <Recipe code="SVA-004" name="Domácí perník" category="SV" basePortions="10">
+      <Ingredients>
+        <Ingredient name="Hladká mouka" quantity="0.6" unit="kg"/>
+        <Ingredient name="Cukr krupice" quantity="0.3" unit="kg"/>
+        <Ingredient name="Mléko" quantity="0.4" unit="l"/>
+        <Ingredient name="Olej" quantity="0.2" unit="l"/>
+        <Ingredient name="Kakao" quantity="0.05" unit="kg"/>
+        <Ingredient name="Kypřící prášek do perníku" quantity="0.02" unit="kg"/>
+      </Ingredients>
+    </Recipe>
+
+    <Recipe code="HL-008" name="Rizoto se sýrem a řepou" category="HJ" basePortions="10">
+      <Ingredients>
+        <Ingredient name="Rýže arborio" quantity="1.0" unit="kg"/>
+        <Ingredient name="Červená řepa vařená" quantity="0.5" unit="kg"/>
+        <Ingredient name="Sýr Parmezán" quantity="0.2" unit="kg"/>
+        <Ingredient name="Vývar zeleninový" quantity="2.0" unit="l"/>
+        <Ingredient name="Máslo" quantity="0.1" unit="kg"/>
+      </Ingredients>
+    </Recipe>
+    
+    <!-- Obecné recepty pro svačiny -->
+    <Recipe code="SVA-OVOCE" name="Ovoce kusové" category="SV" basePortions="10">
+      <Ingredients>
+        <Ingredient name="Jablka/Banány/Pomeranče" quantity="1.5" unit="kg"/>
+      </Ingredients>
+    </Recipe>
+  </Recipes>
+
+  <!-- ČÁST 2: Soupis jídelníčku (Harmonogram) -->
+  <MenuSchedule>
+    <Day name="Pondělí" dateOffset="0">
+      <Meal type="polevka" recipeCode="POL-001" note="Vývar se zeleninou a nudlemi" />
+      <Meal type="obed" recipeCode="HL-001" note="Kuřecí řízek s bramborami a kyselou okurkou" />
+      <Meal type="svacina_odpoledni" recipeCode="SVA-001" note="Cereální kaiserka, sýr trojúhelník" />
+      <Meal type="vecere" recipeCode="HL-005" note="Rajská omáčka, pečené masové kuličky, těstoviny" />
+    </Day>
+
+    <Day name="Úterý" dateOffset="1">
+      <Meal type="snidane" recipeCode="SNI-001" note="Snídaňový mix" />
+      <Meal type="svacina_dopoledni" recipeCode="SVA-OVOCE" note="Ovoce nebo zelenina" />
+      <Meal type="polevka" recipeCode="POL-002" note="Krupicová s vejcem" />
+      <Meal type="obed" recipeCode="HL-002" note="Svíčková na smetaně, houskový knedlík" />
+      <Meal type="svacina_odpoledni" recipeCode="SVA-002" note="Ovocný jogurt, rohlík" />
+      <Meal type="vecere" recipeCode="HL-006" note="Hamburger s trhaným vepřovým masem a čedarem" />
+    </Day>
+
+    <Day name="Středa" dateOffset="2">
+      <Meal type="snidane" recipeCode="SNI-001" note="Snídaňový mix" />
+      <Meal type="svacina_dopoledni" recipeCode="SVA-OVOCE" note="Ovoce nebo zelenina" />
+      <Meal type="polevka" recipeCode="POL-003" note="Brokolicový krém s krutony" />
+      <Meal type="obed" recipeCode="HL-003" note="Bavorské vdolky s povidly a tvarohem" />
+      <Meal type="svacina_odpoledni" recipeCode="SVA-003" note="Rohlík se šunkovým salámem" />
+      <Meal type="vecere" recipeCode="HL-007" note="Špagety s boloňskou omáčkou a sýrem" />
+    </Day>
+
+    <Day name="Čtvrtek" dateOffset="3">
+      <Meal type="snidane" recipeCode="SNI-001" note="Snídaňový mix" />
+      <Meal type="svacina_dopoledni" recipeCode="SVA-OVOCE" note="Ovoce nebo zelenina" />
+      <Meal type="polevka" recipeCode="POL-004" note="Frankfurtská" />
+      <Meal type="obed" recipeCode="HL-004" note="Vepřová panenka s grilovanou zeleninou a bramborovou kaší" />
+      <Meal type="svacina_odpoledni" recipeCode="SVA-004" note="Domácí perník" />
+      <Meal type="vecere" recipeCode="HL-008" note="Rizoto se sýrem a červenou řepou" />
+    </Day>
+
+    <Day name="Pátek" dateOffset="4">
+      <Meal type="snidane" recipeCode="SNI-001" note="Snídaňový mix" />
+    </Day>
+  </MenuSchedule>
+</MenuImportDescription>
