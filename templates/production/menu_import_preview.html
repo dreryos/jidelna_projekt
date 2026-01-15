@@ -54,7 +54,7 @@
                 
                 {{ coefficient_formset.management_form }}
                 
-                <table class="table table-sm">
+                <table class="table table-sm" id="coefficient-table">
                     <thead>
                         <tr>
                             <th style="width: 50px;">#</th>
@@ -65,10 +65,10 @@
                             <th style="width: 80px;">Smazat</th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody id="coefficient-tbody">
                         {% for form in coefficient_formset %}
-                        <tr>
-                            <td class="align-middle">{{ forloop.counter }}</td>
+                        <tr class="coefficient-row">
+                            <td class="align-middle row-number">{{ forloop.counter }}</td>
                             <td>
                                 {{ form.name }}
                                 {% if form.name.errors %}
@@ -103,6 +103,10 @@
                         {% endfor %}
                     </tbody>
                 </table>
+                
+                <button type="button" class="btn btn-sm btn-outline-primary" id="add-coefficient-btn">
+                    <i class="fas fa-plus"></i> Přidat další koeficient
+                </button>
                 
                 <div class="alert alert-info mb-0">
                     <strong>Poznámka:</strong> Po vytvoření jídelníčku budete moci přidávat konkrétní jídla pro jednotlivé dny a vybírat z těchto výchozích koeficientů.
@@ -237,6 +241,118 @@
 <script>
 // Interaktivní výpočet ekvivalentních porcí podle koeficientů
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('Menu import preview script loaded');
+    
+    // Funkce pro přidání nového koeficientu
+    const addButton = document.getElementById('add-coefficient-btn');
+    console.log('Add button found:', addButton);
+    
+    if (addButton) {
+        addButton.addEventListener('click', function(e) {
+            e.preventDefault();
+            console.log('Add coefficient button clicked');
+            
+            const tbody = document.getElementById('coefficient-tbody');
+            
+            // Zjistíme formset prefix dynamicky z existujícího TOTAL_FORMS inputu
+            const totalFormsInput = document.querySelector('input[name$="-TOTAL_FORMS"]');
+            if (!totalFormsInput) {
+                console.error('TOTAL_FORMS input not found!');
+                return;
+            }
+            
+            const formsetPrefix = totalFormsInput.name.replace('-TOTAL_FORMS', '');
+            console.log('Formset prefix:', formsetPrefix);
+            
+            const currentTotal = parseInt(totalFormsInput.value);
+            console.log('Current total forms:', currentTotal);
+            
+            // Najdeme nejvyšší pořadí
+            const orderInputs = document.querySelectorAll('input[name$="-order"]');
+            let maxOrder = 0;
+            orderInputs.forEach(input => {
+                const val = parseInt(input.value) || 0;
+                if (val > maxOrder) maxOrder = val;
+            });
+            const newOrder = maxOrder + 1;
+            
+            console.log('New order will be:', newOrder);
+            
+            // Vytvoříme nový řádek
+            const newRow = document.createElement('tr');
+            newRow.className = 'coefficient-row';
+            newRow.innerHTML = `
+                <td class="align-middle row-number">${currentTotal + 1}</td>
+                <td>
+                    <input type="text" 
+                           name="${formsetPrefix}-${currentTotal}-name" 
+                           class="form-control form-control-sm" 
+                           placeholder="Název varianty" 
+                           maxlength="100" 
+                           required>
+                </td>
+                <td>
+                    <div class="coefficient-field">
+                        <input type="number" 
+                               name="${formsetPrefix}-${currentTotal}-coefficient" 
+                               class="form-control form-control-sm" 
+                               step="0.01" 
+                               min="0" 
+                               value="1.0" 
+                               required>
+                    </div>
+                </td>
+                <td>
+                    <input type="number" 
+                           name="portions_${currentTotal}" 
+                           class="form-control form-control-sm portions-input" 
+                           value="0" 
+                           min="0" 
+                           placeholder="0">
+                </td>
+                <td>
+                    <input type="number" 
+                           name="${formsetPrefix}-${currentTotal}-order" 
+                           class="form-control form-control-sm" 
+                           value="${newOrder}" 
+                           min="0" 
+                           required>
+                </td>
+                <td class="text-center">
+                    <input type="checkbox" 
+                           name="${formsetPrefix}-${currentTotal}-DELETE" 
+                           id="id_${formsetPrefix}-${currentTotal}-DELETE">
+                </td>
+                <input type="hidden" name="${formsetPrefix}-${currentTotal}-id" id="id_${formsetPrefix}-${currentTotal}-id">
+            `;
+            
+            tbody.appendChild(newRow);
+            console.log('New row added');
+            
+            // Aktualizujeme počet formulářů
+            totalFormsInput.value = currentTotal + 1;
+            console.log('Total forms updated to:', currentTotal + 1);
+            
+            // Přečíslujeme řádky
+            updateRowNumbers();
+            
+            // Přepočítáme ekvivalentní porce
+            calculateEquivalentPortions();
+        });
+    } else {
+        console.error('Add coefficient button not found!');
+    }
+    
+    // Funkce pro aktualizaci číslování řádků
+    function updateRowNumbers() {
+        const rows = document.querySelectorAll('.coefficient-row');
+        rows.forEach((row, index) => {
+            const numberCell = row.querySelector('.row-number');
+            if (numberCell) {
+                numberCell.textContent = index + 1;
+            }
+        });
+    }
     
     function calculateEquivalentPortions() {
         let totalEquivalent = 0;
@@ -283,6 +399,14 @@ document.addEventListener('DOMContentLoaded', function() {
     // Použijeme event delegation pro dynamicky přidané fieldy
     document.body.addEventListener('input', function(e) {
         if (e.target.closest('.coefficient-field') || e.target.classList.contains('portions-input')) {
+            calculateEquivalentPortions();
+        }
+    });
+    
+    // Sledujeme i změny v DELETE checkboxech pro přečíslování
+    document.body.addEventListener('change', function(e) {
+        if (e.target.type === 'checkbox' && e.target.name.includes('DELETE')) {
+            updateRowNumbers();
             calculateEquivalentPortions();
         }
     });

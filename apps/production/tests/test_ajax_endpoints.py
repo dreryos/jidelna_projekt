@@ -23,8 +23,8 @@ class AddMealToMenuAjaxTest(TestCase):
         self.client = Client()
         
         # Vytvoříme uživatele (UserProfile se vytvoří automaticky signálem)
-        self.user = User.objects.create_user(username='testuser', password='testpass123')
-        self.superuser = User.objects.create_superuser(username='admin', password='adminpass123', email='admin@test.com')
+        self.user = User.objects.create_user(username='testuser')
+        self.superuser = User.objects.create_superuser(username='admin', email='admin@test.com')
         
         # Získáme UserProfile
         self.profile = self.user.profile
@@ -66,7 +66,7 @@ class AddMealToMenuAjaxTest(TestCase):
     
     def test_add_meal_success(self):
         """Test úspěšného přidání jídla do jídelníčku"""
-        self.client.login(username='testuser', password='testpass123')
+        self.client.force_login(self.user)
         
         meal_date = date.today() + timedelta(days=1)
         url = reverse('production:add_meal_to_menu', kwargs={'menu_pk': self.menu_plan.pk})
@@ -124,7 +124,7 @@ class AddMealToMenuAjaxTest(TestCase):
     
     def test_add_meal_missing_required_fields(self):
         """Test s chybějícími povinnými poli"""
-        self.client.login(username='testuser', password='testpass123')
+        self.client.force_login(self.user)
         url = reverse('production:add_meal_to_menu', kwargs={'menu_pk': self.menu_plan.pk})
         
         # Chybí recipe_id
@@ -144,7 +144,7 @@ class AddMealToMenuAjaxTest(TestCase):
     
     def test_add_meal_invalid_menu_plan(self):
         """Test s neexistujícím menu_plan_id"""
-        self.client.login(username='testuser', password='testpass123')
+        self.client.force_login(self.user)
         
         # Používáme neexistující menu_pk v URL
         url = reverse('production:add_meal_to_menu', kwargs={'menu_pk': 99999})
@@ -164,7 +164,7 @@ class AddMealToMenuAjaxTest(TestCase):
     
     def test_add_meal_invalid_recipe(self):
         """Test s neexistujícím recipe_id"""
-        self.client.login(username='testuser', password='testpass123')
+        self.client.force_login(self.user)
         url = reverse('production:add_meal_to_menu', kwargs={'menu_pk': self.menu_plan.pk})
         
         response = self.client.post(
@@ -183,7 +183,7 @@ class AddMealToMenuAjaxTest(TestCase):
     
     def test_add_meal_date_outside_menu_range(self):
         """Test s datem mimo rozsah jídelníčku - mělo by projít (není validováno)"""
-        self.client.login(username='testuser', password='testpass123')
+        self.client.force_login(self.user)
         url = reverse('production:add_meal_to_menu', kwargs={'menu_pk': self.menu_plan.pk})
         
         # Datum mimo rozsah jídelníčku (validace zatím není implementována)
@@ -204,7 +204,7 @@ class AddMealToMenuAjaxTest(TestCase):
     
     def test_add_meal_empty_portions(self):
         """Test s prázdným seznamem porcí - měl by využít fallback"""
-        self.client.login(username='testuser', password='testpass123')
+        self.client.force_login(self.user)
         url = reverse('production:add_meal_to_menu', kwargs={'menu_pk': self.menu_plan.pk})
         
         response = self.client.post(
@@ -222,7 +222,7 @@ class AddMealToMenuAjaxTest(TestCase):
     
     def test_add_meal_negative_portions(self):
         """Test se záporným počtem porcí - systém chybu nezachytí"""
-        self.client.login(username='testuser', password='testpass123')
+        self.client.force_login(self.user)
         url = reverse('production:add_meal_to_menu', kwargs={'menu_pk': self.menu_plan.pk})
         
         response = self.client.post(
@@ -241,7 +241,7 @@ class AddMealToMenuAjaxTest(TestCase):
     
     def test_add_meal_invalid_json(self):
         """Test s nevalidním JSON"""
-        self.client.login(username='testuser', password='testpass123')
+        self.client.force_login(self.user)
         url = reverse('production:add_meal_to_menu', kwargs={'menu_pk': self.menu_plan.pk})
         
         response = self.client.post(
@@ -265,7 +265,7 @@ class AddMealToMenuAjaxTest(TestCase):
             date_to=date.today() + timedelta(days=7)
         )
         
-        self.client.login(username='testuser', password='testpass123')
+        self.client.force_login(self.user)
         url = reverse('production:add_meal_to_menu', kwargs={'menu_pk': other_menu.pk})
         
         response = self.client.post(
@@ -299,7 +299,7 @@ class AddMealToMenuAjaxTest(TestCase):
             order=0
         )
         
-        self.client.login(username='admin', password='adminpass123')
+        self.client.force_login(self.superuser)
         url = reverse('production:add_meal_to_menu', kwargs={'menu_pk': other_menu.pk})
         
         response = self.client.post(
@@ -318,7 +318,7 @@ class AddMealToMenuAjaxTest(TestCase):
     
     def test_add_meal_duplicate_prevention(self):
         """Test že můžeme přidat stejné jídlo vícekrát (není duplicita)"""
-        self.client.login(username='testuser', password='testpass123')
+        self.client.force_login(self.user)
         
         meal_date = date.today() + timedelta(days=1)
         url = reverse('production:add_meal_to_menu', kwargs={'menu_pk': self.menu_plan.pk})

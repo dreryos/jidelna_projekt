@@ -13,7 +13,6 @@
 }
 
 .formset-table th {
-    background-color: #f8f9fa;
     padding: 10px 6px;
     border: 1px solid #dee2e6;
     font-weight: 600;
@@ -26,31 +25,12 @@
     vertical-align: middle;
 }
 
-.formset-table tbody tr:hover {
-    background-color: #f8f9fa;
-}
-
 .match-badge {
     display: inline-block;
     padding: 2px 8px;
     border-radius: 10px;
     font-size: 0.75rem;
     font-weight: 600;
-}
-
-.match-high {
-    background-color: #d4edda;
-    color: #155724;
-}
-
-.match-medium {
-    background-color: #fff3cd;
-    color: #856404;
-}
-
-.match-low {
-    background-color: #f8d7da;
-    color: #721c24;
 }
 
 .xml-name {
@@ -65,7 +45,6 @@
 }
 
 .info-section {
-    background-color: #e7f3ff;
     padding: 15px;
     border-radius: 5px;
     margin-bottom: 20px;
@@ -88,7 +67,7 @@
 </div>
 
 <!-- Informace o příjmu -->
-<div class="info-section">
+<div class="info-section bg-info bg-opacity-10">
   <div class="row">
     <div class="col-md-3">
       <strong>Číslo dokladu:</strong> {{ receipt_data.receipt_number }}
@@ -116,7 +95,7 @@
       
       <div class="table-responsive">
         <table class="formset-table">
-          <thead>
+          <thead class="bg-light">
             <tr>
               <th style="width: 18%;">Název z XML<br><small class="text-muted">Kód</small></th>
               <th style="width: 18%;">Mapování suroviny<br><small class="text-muted">Shoda</small></th>
@@ -153,7 +132,7 @@
                         {% endif %}
                       {% endfor %}
                     </select>
-                    <span class="match-badge {% if item.match_ratio >= 80 %}match-high{% elif item.match_ratio >= 60 %}match-medium{% else %}match-low{% endif %}">
+                    <span class="match-badge {% if item.match_ratio >= 80 %}bg-success bg-opacity-25 text-success{% elif item.match_ratio >= 60 %}bg-warning bg-opacity-25 text-warning{% else %}bg-danger bg-opacity-25 text-danger{% endif %}">
                       {{ item.match_ratio }}%
                     </span>
                   {% else %}

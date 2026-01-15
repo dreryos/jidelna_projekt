@@ -109,6 +109,13 @@ a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
   - `sqlparse`: 0.5.3 → 0.5.5
   - `weasyprint`: 66.0 → 67.0
   - `pydyf`: 0.11.0 → 0.12.1
+- **Čištění testů v production modulu**: Odstranění nepotřebných testů a zlepšení bezpečnosti
+  - Odstraněny TODO testovací soubory bez skutečných testů (`test_import_views.py`, `test_xml_parser.py`)
+  - Odstranění hardcoded hesel ze všech testů (bezpečnostní best practice)
+  - Použití `force_login()` místo `login()` s heslem pro autentizaci v testech
+  - Změna `create_user(username, password)` → `create_user(username)` bez hesla
+  - Úpravy v souborech: `test_ajax_endpoints.py`, `test_archive.py`, `test_stock_blocking.py`
+  - Celkem odstraněno 77 řádků, zachováno 35 funkčních testů
 
 ### Fixed
 - **Přihlašovací stránka**: Opraveno zobrazování zavádějících validačních zaškrtávacích políček při chybě přihlášení

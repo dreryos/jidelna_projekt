@@ -7,9 +7,10 @@ Tento soubor sleduje hlavní úkoly, bugy a nápady pro projekt. Pro detailněj�
 ## 🚀 Priorita / Urgentní
 *Věci, které je třeba vyřešit co nejdříve (např. blokující chyby).*
 
-- [ ] Příjem zboží, po získání XML souboru od dodavatele implementovat import.
+- [x] Příjem zboží, po získání XML souboru od dodavatele implementovat import.
 - [ ] Připravit pro zelináře tabulku pro import (ať se nemusí vše zadávat ručně) - přidat dodavatele k surovinám.
-- [ ] Vyřešit změnu ceny suroviny z nového příjmu - jak aktualizovat skladové ceny a historii cen.
+- [x] Vyřešit změnu ceny suroviny z nového příjmu - jak aktualizovat skladové ceny a historii cen.
+- [ ] Možnost uživatelsky příjemné editace šablony jídelníčku.
 
 ---
 
@@ -19,6 +20,7 @@ Tento soubor sleduje hlavní úkoly, bugy a nápady pro projekt. Pro detailněj�
 - [x] Zpříjemnit práci s koeficienty porcí v jídelníčku (aktuálně se musí upravovat v detailu jídla).
 - [x] DPH u příjmu zboží - zajistit správné zaokrouhlování a výpočet celkové ceny s DPH.
 - [ ] DPH u prodeje jídel - zajistit správné zaokrouhlování a výpočet celkové ceny s DPH.
+- [ ] Tmavý režim někde blbne (některé prvky zůstávají světlé).
 
 ---
 

@@ -12,7 +12,6 @@
 }
 
 .formset-table th {
-    background-color: #f8f9fa;
     padding: 12px 8px;
     border: 1px solid #dee2e6;
     font-weight: 600;
@@ -26,17 +25,10 @@
     vertical-align: middle;
 }
 
-.formset-row:hover {
-    background-color: #f8f9fa;
-}
-
 .vat-preview {
-    background-color: #d4edda;
-    border: 1px solid #c3e6cb;
     padding: 6px 12px;
     border-radius: 4px;
     font-weight: 600;
-    color: #155724;
     text-align: right;
     display: inline-block;
     min-width: 80px;
@@ -49,7 +41,6 @@
 }
 
 .row-to-delete {
-    background-color: #f8d7da !important;
     opacity: 0.6;
     text-decoration: line-through;
 }
@@ -86,7 +77,6 @@ label.required::after {
 }
 
 .main-form-section {
-    background-color: #f8f9fa;
     padding: 20px;
     border-radius: 5px;
     margin-bottom: 20px;
@@ -110,7 +100,7 @@ label.required::after {
       {% csrf_token %}
       
       <!-- Základní údaje -->
-      <div class="main-form-section">
+      <div class="main-form-section bg-light">
         <h5 class="mb-3">Základní údaje</h5>
         <div class="row">
           <div class="col-md-3">
@@ -177,7 +167,7 @@ label.required::after {
       
       <div class="table-responsive">
         <table class="formset-table">
-          <thead>
+          <thead class="bg-light">
             <tr>
               <th style="width: 25%;">Surovina <span class="text-danger">*</span></th>
               <th style="width: 15%;">Sklad <span class="text-danger">*</span></th>
@@ -223,7 +213,7 @@ label.required::after {
                   {% endif %}
                 </td>
                 <td>
-                  <span class="vat-preview" id="preview-{{ forloop.counter0 }}">-</span>
+                  <span class="vat-preview bg-success bg-opacity-25 text-success border border-success" id="preview-{{ forloop.counter0 }}">-</span>
                 </td>
                 <td>
                   {{ form.notes }}

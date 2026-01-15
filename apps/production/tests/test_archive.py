@@ -18,8 +18,7 @@ class PickingListArchiveTest(TestCase):
         """Set up test data"""
         # Create user (profile is created automatically via signal)
         self.user = User.objects.create_user(
-            username='testuser', 
-            password='testpass123',
+            username='testuser',
             email='test@test.com'
         )
         self.profile = self.user.profile
@@ -94,7 +93,7 @@ class PickingListArchiveTest(TestCase):
         
         # Set up client (without CSRF enforcement for tests)
         self.client = Client(enforce_csrf_checks=False)
-        self.client.login(username='testuser', password='testpass123')
+        self.client.force_login(self.user)
 
     def test_can_be_archived_returns_false_when_not_all_completed(self):
         """Test that can_be_archived returns False when not all items are COMPLETED"""

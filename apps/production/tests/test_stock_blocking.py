@@ -36,7 +36,7 @@ class StockBlockingTest(TestCase):
             quantity_per_portion=Decimal('1.000')
         )
         
-        self.user = User.objects.create_user(username='testuser', password='testpass')
+        self.user = User.objects.create_user(username='testuser')
 
     def test_blocking_when_document_assigned(self):
         """
