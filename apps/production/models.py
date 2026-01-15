@@ -358,6 +358,13 @@ class PickingList(models.Model):
         if self.warehouse and order_canteen and self.warehouse.canteen != order_canteen:
             raise ValidationError(f"Sklad '{self.warehouse}' nepatří k jídelně '{order_canteen}'.")
         
+        # Kontrola, zda sklad není uzamčen
+        if self.warehouse and self.warehouse.is_locked:
+            raise ValidationError(
+                f"Sklad '{self.warehouse.name}' je uzamčen kvůli probíhající inventuře. "
+                f"Nelze vytvářet ani dokončovat výdejky na uzamčený sklad."
+            )
+        
         # Kontrola, zda je vyplněno skutečné množství při dokončení
         if self.status == self.Status.COMPLETED and self.quantity_actual is None:
             raise ValidationError("Při dokončení výdeje musí být vyplněno skutečné množství.")

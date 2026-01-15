@@ -3,8 +3,12 @@ from django.utils import timezone
 from decimal import Decimal
 from datetime import datetime
 from django.db import transaction
+from django.core.exceptions import ValidationError
 from apps.core.models import Ingredient
 from apps.canteens.models import Warehouse
+import logging
+
+logger = logging.getLogger(__name__)
 
 """
 Model pro evidenci zásob v konkrétních skladech.
@@ -256,6 +260,13 @@ class GoodsReceipt(models.Model):
         if self.status != self.Status.DRAFT:
             raise ValueError("Příjem lze potvrdit pouze ve stavu Koncept")
         
+        # Kontrola zda sklad není uzamčen
+        if self.warehouse.is_locked:
+            raise ValidationError(
+                f"Sklad '{self.warehouse.name}' je uzamčen kvůli probíhající inventuře. "
+                f"Nelze potvrdit příjem zboží na uzamčený sklad."
+            )
+        
         with transaction.atomic():
             for item in self.items.all():
                 # Získání nebo vytvoření skladové položky
@@ -370,16 +381,23 @@ class GoodsReceiptItem(models.Model):
         return Decimal('0')
     
     def calculate_vat_fields(self):
-        """Vypočítá DPH pole z ceny s DPH a sazby DPH"""
-        if self.price and self.vat_rate is not None:
-            # Cena s DPH / (1 + sazba/100) = cena bez DPH
+        """Vypočítá všechny DPH pole"""
+        if self.price_without_vat and self.vat_rate is not None:
+            # Výpočet z ceny bez DPH
+            vat_multiplier = 1 + (self.vat_rate / Decimal('100'))
+            self.vat_amount = (self.price_without_vat * self.vat_rate / Decimal('100')).quantize(Decimal('0.01'))
+            self.price = (self.price_without_vat + self.vat_amount).quantize(Decimal('0.01'))
+        elif self.price and self.vat_rate is not None:
+            # Výpočet z ceny s DPH (zpětný výpočet)
             vat_multiplier = 1 + (self.vat_rate / Decimal('100'))
             self.price_without_vat = (self.price / vat_multiplier).quantize(Decimal('0.01'))
             self.vat_amount = (self.price - self.price_without_vat).quantize(Decimal('0.01'))
     
     def save(self, *args, **kwargs):
-        # Automatický výpočet DPH polí pokud nejsou vyplněny
-        if self.price and not self.price_without_vat:
+        # Automatický výpočet DPH polí
+        if self.price_without_vat and self.vat_rate is not None and not self.price:
+            self.calculate_vat_fields()
+        elif self.price and self.vat_rate is not None and not self.price_without_vat:
             self.calculate_vat_fields()
         super().save(*args, **kwargs)
     
@@ -387,3 +405,332 @@ class GoodsReceiptItem(models.Model):
         verbose_name = "Položka příjmu zboží"
         verbose_name_plural = "Položky příjmu zboží"
         ordering = ['ingredient__name']
+
+
+class InventoryVerification(models.Model):
+    """
+    Inventura skladu.
+    Umožňuje fyzickou kontrolu stavu zásob a aktualizaci skladových množství.
+    Během inventury je sklad zamčen - nelze provádět příjmy ani výdeje.
+    """
+    class Status(models.TextChoices):
+        DRAFT = 'DRAFT', 'Koncept'
+        IN_PROGRESS = 'IN_PROGRESS', 'Probíhá'
+        COMPLETED = 'COMPLETED', 'Dokončeno'
+        CANCELLED = 'CANCELLED', 'Zrušeno'
+    
+    warehouse = models.ForeignKey(
+        Warehouse,
+        on_delete=models.PROTECT,
+        related_name='inventory_verifications',
+        verbose_name="Sklad"
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.DRAFT,
+        verbose_name="Stav"
+    )
+    notes = models.TextField(
+        blank=True,
+        verbose_name="Poznámky"
+    )
+    
+    # Audit pole
+    started_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Zahájeno"
+    )
+    started_by = models.ForeignKey(
+        'auth.User',
+        on_delete=models.PROTECT,
+        related_name='inventories_started',
+        null=True,
+        blank=True,
+        verbose_name="Zahájil"
+    )
+    completed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Dokončeno"
+    )
+    completed_by = models.ForeignKey(
+        'auth.User',
+        on_delete=models.PROTECT,
+        related_name='inventories_completed',
+        null=True,
+        blank=True,
+        verbose_name="Dokončil"
+    )
+    cancelled_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Zrušeno"
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Vytvořeno"
+    )
+    created_by = models.ForeignKey(
+        'auth.User',
+        on_delete=models.PROTECT,
+        related_name='inventories_created',
+        verbose_name="Vytvořil"
+    )
+    
+    class Meta:
+        verbose_name = "Inventura"
+        verbose_name_plural = "Inventury"
+        ordering = ['-started_at', '-created_at']
+    
+    def __str__(self):
+        return f"Inventura {self.warehouse.name} - {self.get_status_display()}"
+    
+    def start(self, user):
+        """
+        Zahájí inventuru - zamkne sklad a vytvoří položky pro všechny StockItem.
+        
+        Args:
+            user: User objekt, který inventuru zahajuje
+            
+        Raises:
+            ValidationError: Pokud je sklad již zamčen nebo inventura není ve stavu DRAFT
+        """
+        if self.status != self.Status.DRAFT:
+            raise ValidationError("Inventuru lze zahájit pouze ve stavu Koncept")
+        
+        # Kontrola zda sklad není již zamčen
+        if self.warehouse.is_locked:
+            locked_by = self.warehouse.locked_by_inventory
+            raise ValidationError(
+                f"Sklad je již uzamčen inventurou zahájenou "
+                f"{locked_by.started_by.get_full_name() or locked_by.started_by.username} "
+                f"dne {locked_by.started_at.strftime('%d.%m.%Y %H:%M')}"
+            )
+        
+        with transaction.atomic():
+            # Zamknout sklad
+            self.warehouse.is_locked = True
+            self.warehouse.locked_by_inventory = self
+            self.warehouse.save(update_fields=['is_locked', 'locked_by_inventory'])
+            
+            # Nastavit stav a audit pole
+            self.status = self.Status.IN_PROGRESS
+            self.started_at = timezone.now()
+            self.started_by = user
+            self.save()
+            
+            # Vytvořit položky pro všechny existující StockItem
+            stock_items = StockItem.objects.filter(warehouse=self.warehouse).select_related('ingredient')
+            for stock_item in stock_items:
+                InventoryVerificationItem.objects.create(
+                    verification=self,
+                    ingredient=stock_item.ingredient,
+                    system_quantity=stock_item.quantity,
+                    is_newly_found=False
+                )
+            
+            # Logování
+            logger.info(
+                f"Inventory verification {self.id} STARTED by user {user.id} ({user.username}) "
+                f"for warehouse {self.warehouse.id} ({self.warehouse.name}) at {self.started_at}. "
+                f"Items to verify: {stock_items.count()}"
+            )
+    
+    def complete(self, user):
+        """
+        Dokončí inventuru - aktualizuje StockItem dle spočítaných množství a odemkne sklad.
+        
+        Args:
+            user: User objekt, který inventuru dokončuje
+            
+        Raises:
+            ValidationError: Pokud inventura není ve stavu IN_PROGRESS
+        """
+        if self.status != self.Status.IN_PROGRESS:
+            raise ValidationError("Dokončit lze pouze probíhající inventuru")
+        
+        with transaction.atomic():
+            items_updated = 0
+            items_created = 0
+            total_discrepancies = 0
+            
+            for item in self.items.all():
+                if item.counted_quantity is None:
+                    continue
+                
+                # Vypočítat rozdíl
+                item.difference = item.counted_quantity - item.system_quantity
+                item.save(update_fields=['difference'])
+                
+                if item.difference != 0:
+                    total_discrepancies += 1
+                
+                # Aktualizovat nebo vytvořit StockItem
+                if item.is_newly_found:
+                    # Nově nalezená surovina
+                    stock_item, created = StockItem.objects.get_or_create(
+                        ingredient=item.ingredient,
+                        warehouse=self.warehouse,
+                        defaults={
+                            'quantity': item.counted_quantity,
+                            'price': Decimal('0')  # Cena bude doplněna později
+                        }
+                    )
+                    if created:
+                        items_created += 1
+                        logger.info(
+                            f"Inventory {self.id} - NEW item created: {item.ingredient.name}, "
+                            f"quantity: {item.counted_quantity}"
+                        )
+                    else:
+                        stock_item.quantity = item.counted_quantity
+                        stock_item.save(update_fields=['quantity'])
+                        items_updated += 1
+                else:
+                    # Aktualizace existující položky
+                    try:
+                        stock_item = StockItem.objects.get(
+                            ingredient=item.ingredient,
+                            warehouse=self.warehouse
+                        )
+                        stock_item.quantity = item.counted_quantity
+                        stock_item.save(update_fields=['quantity'])
+                        items_updated += 1
+                        
+                        # Detailní log položky s rozdílem
+                        logger.info(
+                            f"Inventory {self.id} - Item: {item.ingredient.name}, "
+                            f"expected: {item.system_quantity}, counted: {item.counted_quantity}, "
+                            f"diff: {item.difference}"
+                        )
+                    except StockItem.DoesNotExist:
+                        logger.warning(
+                            f"Inventory {self.id} - StockItem not found for {item.ingredient.name}, "
+                            f"creating new with quantity {item.counted_quantity}"
+                        )
+                        StockItem.objects.create(
+                            ingredient=item.ingredient,
+                            warehouse=self.warehouse,
+                            quantity=item.counted_quantity,
+                            price=Decimal('0')
+                        )
+                        items_created += 1
+            
+            # Odemknout sklad
+            self.warehouse.is_locked = False
+            self.warehouse.locked_by_inventory = None
+            self.warehouse.save(update_fields=['is_locked', 'locked_by_inventory'])
+            
+            # Nastavit stav a audit pole
+            self.status = self.Status.COMPLETED
+            self.completed_at = timezone.now()
+            self.completed_by = user
+            self.save()
+            
+            # Summary log
+            logger.info(
+                f"Inventory verification {self.id} COMPLETED by user {user.id} ({user.username}) "
+                f"for warehouse {self.warehouse.name} at {self.completed_at}. "
+                f"Items updated: {items_updated}, Items created: {items_created}, "
+                f"Discrepancies: {total_discrepancies}"
+            )
+    
+    def cancel(self, user):
+        """
+        Zruší probíhající inventuru - odemkne sklad bez aktualizace množství.
+        Může zrušit pouze uživatel, který inventuru zahájil.
+        
+        Args:
+            user: User objekt, který inventuru ruší
+            
+        Raises:
+            ValidationError: Pokud inventura není ve stavu IN_PROGRESS nebo user není started_by
+        """
+        if self.status != self.Status.IN_PROGRESS:
+            raise ValidationError("Zrušit lze pouze probíhající inventuru")
+        
+        if self.started_by != user:
+            raise ValidationError(
+                f"Inventuru může zrušit pouze uživatel, který ji zahájil "
+                f"({self.started_by.get_full_name() or self.started_by.username})"
+            )
+        
+        with transaction.atomic():
+            # Odemknout sklad
+            self.warehouse.is_locked = False
+            self.warehouse.locked_by_inventory = None
+            self.warehouse.save(update_fields=['is_locked', 'locked_by_inventory'])
+            
+            # Nastavit stav
+            self.status = self.Status.CANCELLED
+            self.cancelled_at = timezone.now()
+            self.save()
+            
+            # Logování
+            logger.warning(
+                f"Inventory verification {self.id} CANCELLED by user {user.id} ({user.username}) "
+                f"for warehouse {self.warehouse.name} at {self.cancelled_at}"
+            )
+    
+    def get_discrepancy_count(self):
+        """Vrátí počet položek s rozdílem mezi evidencí a skutečností"""
+        return self.items.exclude(difference=0).count()
+
+
+class InventoryVerificationItem(models.Model):
+    """
+    Položka inventury - surovina se systémovým a spočítaným množstvím.
+    """
+    verification = models.ForeignKey(
+        InventoryVerification,
+        on_delete=models.CASCADE,
+        related_name='items',
+        verbose_name="Inventura"
+    )
+    ingredient = models.ForeignKey(
+        Ingredient,
+        on_delete=models.PROTECT,
+        verbose_name="Surovina"
+    )
+    system_quantity = models.DecimalField(
+        max_digits=10,
+        decimal_places=3,
+        default=0,
+        verbose_name="Množství v evidenci",
+        help_text="Množství dle systému před inventurou"
+    )
+    counted_quantity = models.DecimalField(
+        max_digits=10,
+        decimal_places=3,
+        null=True,
+        blank=True,
+        verbose_name="Spočítané množství",
+        help_text="Skutečně nalezené množství při inventuře"
+    )
+    difference = models.DecimalField(
+        max_digits=10,
+        decimal_places=3,
+        default=0,
+        verbose_name="Rozdíl",
+        help_text="Rozdíl mezi spočítaným a systémovým množstvím"
+    )
+    is_newly_found = models.BooleanField(
+        default=False,
+        verbose_name="Nově nalezeno",
+        help_text="Surovina nebyla v evidenci, ale byla nalezena při inventuře"
+    )
+    notes = models.TextField(
+        blank=True,
+        verbose_name="Poznámka"
+    )
+    
+    class Meta:
+        verbose_name = "Položka inventury"
+        verbose_name_plural = "Položky inventury"
+        ordering = ['ingredient__name']
+        unique_together = ('verification', 'ingredient')
+    
+    def __str__(self):
+        return f"{self.ingredient.name}: {self.counted_quantity or '?'} / {self.system_quantity}"

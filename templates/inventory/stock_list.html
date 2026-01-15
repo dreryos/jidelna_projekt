@@ -27,6 +27,9 @@
     <i class="fas fa-warehouse me-2"></i>Skladové položky
   </h1>
   <div>
+    <a href="{% url 'inventory:inventory_verification_list' %}" class="btn btn-outline-warning me-2">
+      <i class="fas fa-clipboard-check me-2"></i>Inventury
+    </a>
     <a href="{% url 'inventory:canteen_list' %}" class="btn btn-outline-success me-2">
       <i class="fas fa-utensils me-2"></i>Spravovat jídelny
     </a>
@@ -84,6 +87,11 @@
                      {% if warehouse.id|stringformat:"s" in selected_warehouses %}checked{% endif %}>
               <label class="form-check-label" for="warehouse{{ warehouse.id }}">
                 {{ warehouse.name }} <small class="text-muted">({{ warehouse.canteen.name }})</small>
+                {% if warehouse.is_locked %}
+                  <span class="badge bg-warning text-dark ms-1">
+                    <i class="fas fa-lock me-1"></i>Zamčeno
+                  </span>
+                {% endif %}
               </label>
             </div>
             {% endfor %}
@@ -142,6 +150,11 @@
               </td>
               <td>
                 {{ item.warehouse.name }}
+                {% if item.warehouse.is_locked %}
+                  <span class="badge bg-warning text-dark ms-1">
+                    <i class="fas fa-lock me-1"></i>
+                  </span>
+                {% endif %}
                 <small class="text-muted d-block">{{ item.warehouse.canteen.name }}</small>
               </td>
               <td>

@@ -28,7 +28,7 @@ Tento soubor sleduje hlavní úkoly, bugy a nápady pro projekt. Pro detailněj�
 - [x] Předpřipravené jídelníčky na nejčastější akce (ŠVP, tábor - týden nebo 14 dní).
 - [ ] Převodky, přesun surovin mezi sklady jídelen, přes mezisklad.
 - [ ] "Předpověď ceny" jídelníčku na základě historických dat o cenách surovin.
-- [ ] Modul Inventura - možnost provádět inventury skladů, generovat inventurní soupisy, porovnávat s evidencí skladu, upozornění dlouho neinventurovaných skladů.
+- [x] Modul Inventura - možnost provádět inventury skladů, generovat inventurní soupisy, porovnávat s evidencí skladu, upozornění dlouho neinventurovaných skladů.
 
 ---
 

@@ -936,6 +936,28 @@ def picking_list_edit(request, document_id):
             'ingredient', 'production_order__recipe', 'warehouse'
         ).order_by('ingredient__name')
         
+        # Kontrola zda některý sklad není uzamčen
+        locked_warehouses = set()
+        for item in picking_items:
+            if item.warehouse and item.warehouse.is_locked:
+                locked_warehouses.add(item.warehouse)
+        
+        if locked_warehouses:
+            for warehouse in locked_warehouses:
+                messages.error(
+                    request,
+                    f"Sklad '{warehouse.name}' je uzamčen kvůli probíhající inventuře "
+                    f"zahájené {warehouse.locked_by_inventory.started_by.get_full_name() or warehouse.locked_by_inventory.started_by.username} "
+                    f"dne {warehouse.locked_by_inventory.started_at.strftime('%d.%m.%Y %H:%M')}. "
+                    f"Nelze editovat výdejky na uzamčených skladech."
+                )
+            # Zobrazíme detail, ale bez možnosti editace
+            context = {
+                'document': document,
+                'locked': True,
+            }
+            return render(request, 'production/picking_list_edit.html', context)
+        
         if request.method == 'POST':
             # Zpracování formuláře s editací skutečných množství
             updated_count = 0

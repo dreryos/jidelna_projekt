@@ -1,7 +1,8 @@
 from decimal import Decimal
 from django import forms
 from django.forms import inlineformset_factory
-from .models import GoodsReceipt, GoodsReceiptItem, Warehouse, Ingredient
+from django.core.exceptions import ValidationError
+from .models import GoodsReceipt, GoodsReceiptItem, Warehouse, Ingredient, InventoryVerification, InventoryVerificationItem
 
 # České DPH sazby platné v roce 2026
 VAT_RATE_CHOICES = [
@@ -44,6 +45,21 @@ class GoodsReceiptForm(forms.ModelForm):
         # Warehouse je hlavní pole, default_warehouse je pomocné
         if 'warehouse' in self.fields:
             self.fields['warehouse'].widget = forms.HiddenInput()
+            self.fields['warehouse'].required = False  # Nebude se validovat, protože je skryté
+    
+    def clean(self):
+        cleaned_data = super().clean()
+        warehouse = cleaned_data.get('warehouse')
+        
+        if warehouse and warehouse.is_locked:
+            raise ValidationError(
+                f"Sklad '{warehouse.name}' je uzamčen kvůli probíhající inventuře "
+                f"zahájené {warehouse.locked_by_inventory.started_by.get_full_name() or warehouse.locked_by_inventory.started_by.username} "
+                f"dne {warehouse.locked_by_inventory.started_at.strftime('%d.%m.%Y %H:%M')}. "
+                f"Nelze vytvářet příjmy zboží na uzamčený sklad."
+            )
+        
+        return cleaned_data
 
 
 class GoodsReceiptItemForm(forms.ModelForm):
@@ -104,9 +120,72 @@ GoodsReceiptItemFormSet = inlineformset_factory(
     GoodsReceipt,
     GoodsReceiptItem,
     form=GoodsReceiptItemForm,
-    extra=3,  # 3 prázdné formuláře při vytváření
+    extra=0,  # 0 prázdných formulářů při vytváření
     min_num=1,  # Minimálně 1 položka
     max_num=100,  # Maximum 100 položek
     validate_min=True,
     can_delete=True,  # Možnost smazání položky
+)
+
+
+class InventoryVerificationForm(forms.ModelForm):
+    """Formulář pro vytvoření inventury."""
+    
+    class Meta:
+        model = InventoryVerification
+        fields = ['warehouse', 'notes']
+        widgets = {
+            'warehouse': forms.Select(attrs={'class': 'form-select'}),
+            'notes': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+        }
+        labels = {
+            'warehouse': 'Sklad',
+            'notes': 'Poznámky',
+        }
+    
+    def clean_warehouse(self):
+        warehouse = self.cleaned_data.get('warehouse')
+        
+        if warehouse and warehouse.is_locked:
+            raise ValidationError(
+                f"Sklad '{warehouse.name}' je již uzamčen kvůli probíhající inventuře "
+                f"zahájené {warehouse.locked_by_inventory.started_by.get_full_name() or warehouse.locked_by_inventory.started_by.username} "
+                f"dne {warehouse.locked_by_inventory.started_at.strftime('%d.%m.%Y %H:%M')}."
+            )
+        
+        return warehouse
+
+
+class InventoryVerificationItemForm(forms.ModelForm):
+    """Formulář pro zadání spočítaného množství u položky inventury."""
+    
+    class Meta:
+        model = InventoryVerificationItem
+        fields = ['ingredient', 'counted_quantity', 'notes']
+        widgets = {
+            'ingredient': forms.Select(attrs={'class': 'form-select'}),
+            'counted_quantity': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'step': '0.001',
+                'min': '0',
+                'required': True
+            }),
+            'notes': forms.TextInput(attrs={'class': 'form-control'}),
+        }
+        labels = {
+            'ingredient': 'Surovina',
+            'counted_quantity': 'Spočítané množství',
+            'notes': 'Poznámka',
+        }
+
+
+# Formset pro položky inventury
+InventoryVerificationItemFormSet = inlineformset_factory(
+    InventoryVerification,
+    InventoryVerificationItem,
+    form=InventoryVerificationItemForm,
+    extra=1,  # 1 prázdný formulář pro přidání nové suroviny
+    min_num=0,
+    max_num=500,
+    can_delete=False,
 )

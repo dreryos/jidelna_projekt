@@ -1,0 +1,92 @@
+{% extends 'base.html' %}
+{% load django_bootstrap5 %}
+
+{% block title %}Zadání spočítaných množství{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <h1 class="mb-4">
+        <i class="fas fa-calculator me-2"></i>
+        Zadání spočítaných množství - {{ verification.warehouse.name }}
+    </h1>
+
+    <div class="alert alert-warning">
+        <i class="fas fa-exclamation-triangle me-2"></i>
+        <strong>Probíhá inventura</strong> - Sklad je uzamčen. 
+        Zadejte skutečně spočítaná množství všech surovin. 
+        Můžete také přidat nově nalezené suroviny, které nebyly v evidenci.
+    </div>
+
+    <form method="post">
+        {% csrf_token %}
+        {{ formset.management_form }}
+        
+        <div class="card">
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover" id="inventory-table">
+                        <thead>
+                            <tr>
+                                <th>Surovina</th>
+                                <th class="text-end">Jednotka</th>
+                                <th class="text-end">V evidenci</th>
+                                <th class="text-end">Spočítáno</th>
+                                <th>Poznámka</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for form in formset %}
+                            <tr>
+                                <td>
+                                    {{ form.id }}
+                                    {% if form.instance.pk %}
+                                        {{ form.instance.ingredient.name }}
+                                        {{ form.ingredient.as_hidden }}
+                                    {% else %}
+                                        {% bootstrap_field form.ingredient show_label=False %}
+                                    {% endif %}
+                                </td>
+                                <td class="text-end">
+                                    {% if form.instance.pk %}
+                                        {{ form.instance.ingredient.unit }}
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-end">
+                                    {% if form.instance.pk %}
+                                        {{ form.instance.system_quantity|floatformat:3 }}
+                                    {% else %}
+                                        <span class="text-muted">Nová</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% bootstrap_field form.counted_quantity show_label=False %}
+                                </td>
+                                <td>
+                                    {% bootstrap_field form.notes show_label=False %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                
+                <div class="alert alert-info mt-3">
+                    <i class="fas fa-info-circle me-2"></i>
+                    <strong>Tip:</strong> Pro přidání nově nalezené suroviny použijte prázdný řádek na konci tabulky.
+                </div>
+            </div>
+        </div>
+
+        <div class="d-flex justify-content-between mt-4">
+            <a href="{% url 'inventory:inventory_verification_detail' verification.pk %}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left me-1"></i>Zpět bez uložení
+            </a>
+            <button type="submit" class="btn btn-primary">
+                <i class="fas fa-save me-1"></i>Uložit spočítané množství
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

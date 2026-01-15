@@ -68,13 +68,19 @@
                   </a>
                 </li>
                 <li>
-                  <a class="dropdown-item text-warning" href="{% url 'inventory:canteen_list' %}">
-                    <i class="fas fa-utensils me-2"></i>Spravovat jídelny
+                  <a class="dropdown-item text-warning" href="{% url 'inventory:management' %}">
+                    <i class="fas fa-cog me-2"></i>Správa jídelen a skladů
+                  </a>
+                </li>
+                <li><hr class="dropdown-divider"></li>
+                <li>
+                  <a class="dropdown-item text-warning" href="{% url 'inventory:goods_receipt_list' %}">
+                    <i class="fas fa-truck-loading me-2"></i>Příjmy zboží
                   </a>
                 </li>
                 <li>
-                  <a class="dropdown-item text-warning" href="{% url 'inventory:warehouse_list' %}">
-                    <i class="fas fa-building me-2"></i>Spravovat sklady
+                  <a class="dropdown-item text-warning" href="{% url 'inventory:inventory_verification_list' %}">
+                    <i class="fas fa-clipboard-check me-2"></i>Inventury
                   </a>
                 </li>
               </ul>

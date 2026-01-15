@@ -1,0 +1,213 @@
+{% extends 'base.html' %}
+{% load django_bootstrap5 %}
+
+{% block title %}Inventura - {{ verification.warehouse.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>
+            <i class="fas fa-clipboard-check me-2"></i>
+            Inventura: {{ verification.warehouse.name }}
+        </h1>
+        <div class="btn-group" role="group">
+            <a href="{% url 'inventory:inventory_verification_list' %}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left me-1"></i>Zpět
+            </a>
+            {% if verification.status == 'IN_PROGRESS' or verification.status == 'COMPLETED' %}
+            <a href="{% url 'inventory:inventory_verification_pdf' verification.pk %}" class="btn btn-outline-primary">
+                <i class="fas fa-file-pdf me-1"></i>Tisk PDF
+            </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Základní info a stav -->
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Informace o inventuře</h5>
+                    <table class="table table-sm">
+                        <tr>
+                            <th style="width: 30%;">Sklad:</th>
+                            <td><strong>{{ verification.warehouse.name }}</strong> ({{ verification.warehouse.canteen.name }})</td>
+                        </tr>
+                        <tr>
+                            <th>Stav:</th>
+                            <td>
+                                {% if verification.status == 'DRAFT' %}
+                                    <span class="badge bg-secondary">{{ verification.get_status_display }}</span>
+                                {% elif verification.status == 'IN_PROGRESS' %}
+                                    <span class="badge bg-warning text-dark">
+                                        <i class="fas fa-lock me-1"></i>{{ verification.get_status_display }}
+                                    </span>
+                                {% elif verification.status == 'COMPLETED' %}
+                                    <span class="badge bg-success">{{ verification.get_status_display }}</span>
+                                {% elif verification.status == 'CANCELLED' %}
+                                    <span class="badge bg-danger">{{ verification.get_status_display }}</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Vytvořeno:</th>
+                            <td>{{ verification.created_at|date:"d.m.Y H:i" }} ({{ verification.created_by.get_full_name|default:verification.created_by.username }})</td>
+                        </tr>
+                        {% if verification.started_at %}
+                        <tr>
+                            <th>Zahájeno:</th>
+                            <td>{{ verification.started_at|date:"d.m.Y H:i" }} ({{ verification.started_by.get_full_name|default:verification.started_by.username }})</td>
+                        </tr>
+                        {% endif %}
+                        {% if verification.completed_at %}
+                        <tr>
+                            <th>Dokončeno:</th>
+                            <td>{{ verification.completed_at|date:"d.m.Y H:i" }} ({{ verification.completed_by.get_full_name|default:verification.completed_by.username }})</td>
+                        </tr>
+                        {% endif %}
+                        {% if verification.cancelled_at %}
+                        <tr>
+                            <th>Zrušeno:</th>
+                            <td>{{ verification.cancelled_at|date:"d.m.Y H:i" }}</td>
+                        </tr>
+                        {% endif %}
+                        {% if verification.notes %}
+                        <tr>
+                            <th>Poznámky:</th>
+                            <td>{{ verification.notes }}</td>
+                        </tr>
+                        {% endif %}
+                    </table>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Statistiky</h5>
+                    <div class="mb-2">
+                        <strong>Celkem položek:</strong> {{ stats.total_items }}
+                    </div>
+                    <div class="mb-2">
+                        <strong>Spočítáno:</strong> {{ stats.counted_items }}
+                    </div>
+                    {% if verification.status == 'COMPLETED' %}
+                    <div class="mb-2">
+                        <strong>Rozdíly:</strong> 
+                        {% if stats.discrepancies > 0 %}
+                            <span class="badge bg-warning text-dark">{{ stats.discrepancies }}</span>
+                        {% else %}
+                            <span class="badge bg-success">{{ stats.discrepancies }}</span>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Akce -->
+            {% if user.is_staff %}
+            <div class="card mt-3">
+                <div class="card-body">
+                    <h5 class="card-title">Akce</h5>
+                    {% if verification.status == 'DRAFT' %}
+                        <a href="{% url 'inventory:inventory_verification_start' verification.pk %}" 
+                           class="btn btn-warning w-100 mb-2">
+                            <i class="fas fa-play me-1"></i>Zahájit inventuru
+                        </a>
+                    {% elif verification.status == 'IN_PROGRESS' %}
+                        <a href="{% url 'inventory:inventory_verification_count' verification.pk %}" 
+                           class="btn btn-primary w-100 mb-2">
+                            <i class="fas fa-edit me-1"></i>Zadat spočítané množství
+                        </a>
+                        <a href="{% url 'inventory:inventory_verification_complete' verification.pk %}" 
+                           class="btn btn-success w-100 mb-2">
+                            <i class="fas fa-check me-1"></i>Dokončit inventuru
+                        </a>
+                        {% if verification.started_by == user %}
+                        <a href="{% url 'inventory:inventory_verification_cancel' verification.pk %}" 
+                           class="btn btn-danger w-100">
+                            <i class="fas fa-times me-1"></i>Zrušit inventuru
+                        </a>
+                        {% endif %}
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Seznam položek -->
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0">Položky inventury</h5>
+        </div>
+        <div class="card-body">
+            {% if items %}
+            <div class="table-responsive">
+                <table class="table table-hover table-sm">
+                    <thead>
+                        <tr>
+                            <th>Surovina</th>
+                            <th class="text-end">Jednotka</th>
+                            <th class="text-end">V evidenci</th>
+                            <th class="text-end">Spočítáno</th>
+                            {% if verification.status == 'COMPLETED' %}
+                            <th class="text-end">Rozdíl</th>
+                            {% endif %}
+                            {% if verification.status == 'IN_PROGRESS' or verification.status == 'COMPLETED' %}
+                            <th>Poznámka</th>
+                            {% endif %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in items %}
+                        <tr {% if item.is_newly_found %}class="table-info"{% endif %}>
+                            <td>
+                                {{ item.ingredient.name }}
+                                {% if item.is_newly_found %}
+                                    <span class="badge bg-info text-dark ms-1">Nově nalezeno</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end">{{ item.ingredient.unit }}</td>
+                            <td class="text-end">{{ item.system_quantity|floatformat:3 }}</td>
+                            <td class="text-end">
+                                {% if item.counted_quantity is not None %}
+                                    <strong>{{ item.counted_quantity|floatformat:3 }}</strong>
+                                {% else %}
+                                    <span class="text-muted">—</span>
+                                {% endif %}
+                            </td>
+                            {% if verification.status == 'COMPLETED' %}
+                            <td class="text-end">
+                                {% if item.difference > 0 %}
+                                    <span class="text-success">+{{ item.difference|floatformat:3 }}</span>
+                                {% elif item.difference < 0 %}
+                                    <span class="text-danger">{{ item.difference|floatformat:3 }}</span>
+                                {% else %}
+                                    <span class="text-muted">0</span>
+                                {% endif %}
+                            </td>
+                            {% endif %}
+                            {% if verification.status == 'IN_PROGRESS' or verification.status == 'COMPLETED' %}
+                            <td>
+                                {% if item.notes %}
+                                    <small>{{ item.notes }}</small>
+                                {% endif %}
+                            </td>
+                            {% endif %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle me-2"></i>
+                Inventura nemá žádné položky. Položky budou vytvořeny při zahájení inventury.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

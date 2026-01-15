@@ -1,6 +1,9 @@
 from django.contrib import admin
 from decimal import Decimal
-from .models import StockItem, IngredientPriceHistory, GoodsReceipt, GoodsReceiptItem
+from .models import (
+    StockItem, IngredientPriceHistory, GoodsReceipt, GoodsReceiptItem,
+    InventoryVerification, InventoryVerificationItem
+)
 from .forms import VAT_RATE_CHOICES
 
 # Admin pro skladové položky. Zde se nastavuje vyhledávání a filtr podle skladu.
@@ -63,3 +66,64 @@ class GoodsReceiptItemAdmin(admin.ModelAdmin):
     search_fields = ('ingredient__name', 'goods_receipt__receipt_number')
     autocomplete_fields = ['ingredient', 'goods_receipt']
     readonly_fields = ('vat_amount', 'price', 'total_price')
+
+
+class InventoryVerificationItemInline(admin.TabularInline):
+    model = InventoryVerificationItem
+    extra = 0
+    fields = ['ingredient', 'system_quantity', 'counted_quantity', 'difference', 'is_newly_found', 'notes']
+    readonly_fields = ['system_quantity', 'difference']
+    autocomplete_fields = ['ingredient']
+    
+    def has_add_permission(self, request, obj=None):
+        """Přidávání položek možné pouze když je inventura IN_PROGRESS"""
+        if obj and obj.status == InventoryVerification.Status.IN_PROGRESS:
+            return True
+        return False
+    
+    def has_delete_permission(self, request, obj=None):
+        """Mazání položek možné pouze když je inventura IN_PROGRESS"""
+        if obj and obj.status == InventoryVerification.Status.IN_PROGRESS:
+            return True
+        return False
+
+
+@admin.register(InventoryVerification)
+class InventoryVerificationAdmin(admin.ModelAdmin):
+    list_display = ('warehouse', 'status', 'started_at', 'started_by', 'completed_at', 'created_by')
+    list_filter = ('status', 'warehouse', 'started_at', 'completed_at')
+    search_fields = ('warehouse__name', 'started_by__username', 'created_by__username')
+    autocomplete_fields = ['warehouse']
+    date_hierarchy = 'started_at'
+    readonly_fields = ('created_at', 'created_by', 'started_at', 'started_by', 'completed_at', 'completed_by', 'cancelled_at')
+    inlines = [InventoryVerificationItemInline]
+    
+    fieldsets = (
+        ('Základní informace', {
+            'fields': ('warehouse', 'status', 'notes')
+        }),
+        ('Audit trail', {
+            'fields': ('created_at', 'created_by', 'started_at', 'started_by', 'completed_at', 'completed_by', 'cancelled_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def save_model(self, request, obj, form, change):
+        if not change:  # Pouze při vytváření
+            obj.created_by = request.user
+        super().save_model(request, obj, form, change)
+    
+    def has_delete_permission(self, request, obj=None):
+        """Mazání inventury možné pouze když je ve stavu DRAFT nebo CANCELLED"""
+        if obj and obj.status in [InventoryVerification.Status.DRAFT, InventoryVerification.Status.CANCELLED]:
+            return super().has_delete_permission(request, obj)
+        return False
+
+
+@admin.register(InventoryVerificationItem)
+class InventoryVerificationItemAdmin(admin.ModelAdmin):
+    list_display = ('verification', 'ingredient', 'system_quantity', 'counted_quantity', 'difference', 'is_newly_found')
+    list_filter = ('verification__warehouse', 'is_newly_found', 'verification__status')
+    search_fields = ('ingredient__name', 'verification__warehouse__name')
+    autocomplete_fields = ['ingredient', 'verification']
+    readonly_fields = ('system_quantity', 'difference')

@@ -20,8 +20,19 @@ def index(request):
 
 @login_required
 def home(request):
-	# Simple homepage showing links based on permissions
-	return render(request, 'home.html', {'user': request.user})
+    # Simple homepage showing links based on permissions
+    # Načteme probíhající inventury pro upozornění
+    from apps.inventory.models import InventoryVerification
+    
+    active_verifications = InventoryVerification.objects.filter(
+        status=InventoryVerification.Status.IN_PROGRESS
+    ).select_related('warehouse', 'started_by').order_by('-started_at')[:5]
+    
+    context = {
+        'user': request.user,
+        'active_verifications': active_verifications,
+    }
+    return render(request, 'home.html', context)
 
 
 from django.views.decorators.http import require_POST

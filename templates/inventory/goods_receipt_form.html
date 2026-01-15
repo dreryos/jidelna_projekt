@@ -48,6 +48,17 @@
     cursor: pointer;
 }
 
+.row-to-delete {
+    background-color: #f8d7da !important;
+    opacity: 0.6;
+    text-decoration: line-through;
+}
+
+.delete-btn {
+    padding: 2px 8px;
+    font-size: 0.85rem;
+}
+
 .add-row-btn {
     margin-top: 10px;
 }
@@ -175,7 +186,7 @@ label.required::after {
               <th style="width: 8%;">DPH % <span class="text-danger">*</span></th>
               <th style="width: 12%;">Cena s DPH</th>
               <th style="width: 13%;">Poznámka</th>
-              <th style="width: 5%;">Smazat</th>
+              <th style="width: 5%; text-align: center;">Akce</th>
             </tr>
           </thead>
           <tbody id="formset-body">
@@ -221,7 +232,12 @@ label.required::after {
                   {% endif %}
                 </td>
                 <td class="text-center">
-                  {{ form.DELETE }}
+                  <button type="button" class="btn btn-sm btn-outline-danger delete-btn" onclick="toggleDeleteRow(this)" title="Označit řádek ke smazání">
+                    <i class="fas fa-trash"></i>
+                  </button>
+                  <div style="display: none;">
+                    {{ form.DELETE }}
+                  </div>
                 </td>
                 {{ form.id }}
               </tr>
@@ -276,6 +292,45 @@ function calculateVAT(element) {
   
   const priceWithVat = priceWithoutVat * (1 + vatRate / 100);
   previewSpan.textContent = priceWithVat.toFixed(2) + ' Kč';
+}
+
+// Označit/odznačit řádek ke smazání
+function toggleDeleteRow(button) {
+  const row = button.closest('tr');
+  const deleteCheckbox = row.querySelector('input[name$="-DELETE"]');
+  
+  if (!deleteCheckbox) return;
+  
+  // Toggle checkbox
+  deleteCheckbox.checked = !deleteCheckbox.checked;
+  
+  // Získat všechny inputy a selecty v řádku
+  const inputs = row.querySelectorAll('input:not([name$="-DELETE"]):not([name$="-id"]), select, textarea');
+  
+  // Přidat/odebrat vizuální označení a zakázat/povolit validaci
+  if (deleteCheckbox.checked) {
+    // Skrýt řádek úplně
+    row.style.display = 'none';
+    
+    // Zakázat validaci pro smazané řádky
+    inputs.forEach(input => {
+      input.removeAttribute('required');
+      input.disabled = true;
+    });
+  } else {
+    // Zobrazit řádek zpět
+    row.style.display = '';
+    
+    // Povolit zpět validaci
+    inputs.forEach(input => {
+      input.disabled = false;
+      // Obnovit required atribut pro povinná pole
+      const fieldName = input.name.split('-').pop();
+      if (['ingredient', 'warehouse', 'quantity', 'price_without_vat', 'vat_rate'].includes(fieldName)) {
+        input.setAttribute('required', 'required');
+      }
+    });
+  }
 }
 
 // Synchronizovat výchozí sklad do všech řádků
@@ -346,6 +401,20 @@ function addFormsetRow() {
     previewSpan.id = `preview-${currentTotal}`;
     previewSpan.textContent = '-';
   }
+  
+  // Vyčistit DELETE checkbox a tlačítko
+  const deleteBtn = newRow.querySelector('.delete-btn');
+  if (deleteBtn) {
+    deleteBtn.classList.remove('btn-danger');
+    deleteBtn.classList.add('btn-outline-danger');
+    deleteBtn.title = 'Označit řádek ke smazání';
+    const icon = deleteBtn.querySelector('i');
+    if (icon) {
+      icon.classList.remove('fa-undo');
+      icon.classList.add('fa-trash');
+    }
+  }
+  newRow.classList.remove('row-to-delete');
   
   // Předvyplnit sklad z výchozího skladu
   const defaultWarehouseSelect = document.getElementById('default-warehouse');

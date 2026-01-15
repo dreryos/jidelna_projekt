@@ -26,6 +26,19 @@ class Warehouse(models.Model):
     """Sklad"""
     name = models.CharField(max_length=100, verbose_name="Název skladu")
     canteen = models.ForeignKey(Canteen, on_delete=models.CASCADE, related_name='warehouses', verbose_name="Jídelna")
+    is_locked = models.BooleanField(
+        default=False,
+        verbose_name="Zamčeno",
+        help_text="Sklad je zamčen kvůli probíhající inventuře"
+    )
+    locked_by_inventory = models.ForeignKey(
+        'inventory.InventoryVerification',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='+',
+        verbose_name="Zamčeno inventurou"
+    )
 
     def __str__(self):
         return f"{self.name} ({self.canteen.name})"

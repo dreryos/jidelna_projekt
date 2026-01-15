@@ -1,0 +1,387 @@
+{% extends 'base.html' %}
+{% load django_bootstrap5 %}
+{% load static %}
+
+{% block title %}Správa jídelen a skladů{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1><i class="fas fa-cog me-2"></i>Správa jídelen a skladů</h1>
+        <div>
+            <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#canteenCreateModal">
+                <i class="fas fa-plus me-2"></i>Nová jídelna
+            </button>
+        </div>
+    </div>
+
+    <!-- KPI Statistiky -->
+    <div class="row g-4 mb-4">
+        <div class="col-md-3">
+            <div class="card bg-success text-white shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-title mb-1">Celkem jídelen</h6>
+                            <h3 class="mb-0">{{ kpi.total_canteens }}</h3>
+                        </div>
+                        <div>
+                            <i class="fas fa-utensils fa-2x opacity-50"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-warning text-dark shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-title mb-1">Celkem skladů</h6>
+                            <h3 class="mb-0">{{ kpi.total_warehouses }}</h3>
+                        </div>
+                        <div>
+                            <i class="fas fa-warehouse fa-2x opacity-50"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-danger text-white shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-title mb-1">Zamčené sklady</h6>
+                            <h3 class="mb-0">{{ kpi.locked_warehouses }}</h3>
+                        </div>
+                        <div>
+                            <i class="fas fa-lock fa-2x opacity-50"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-info text-white shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-title mb-1">Skladových položek</h6>
+                            <h3 class="mb-0">{{ kpi.total_stock_items }}</h3>
+                        </div>
+                        <div>
+                            <i class="fas fa-boxes fa-2x opacity-50"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Accordion s jídelnami -->
+    <div class="accordion" id="canteenAccordion">
+        {% for canteen in canteens %}
+        <div class="card mb-3 shadow-sm" id="canteen-card-{{ canteen.id }}">
+            <div class="card-header bg-success text-white">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div class="flex-grow-1">
+                        <h5 class="mb-0">
+                            <button class="btn btn-link text-white text-decoration-none p-0" type="button" 
+                                    data-bs-toggle="collapse" data-bs-target="#collapse-{{ canteen.id }}" 
+                                    aria-expanded="false" aria-controls="collapse-{{ canteen.id }}">
+                                <i class="fas fa-utensils me-2"></i>
+                                <span id="canteen-name-{{ canteen.id }}">{{ canteen.name }}</span>
+                            </button>
+                        </h5>
+                        <small id="canteen-address-{{ canteen.id }}">{{ canteen.address|default:"—" }}</small>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <span class="badge bg-light text-dark">
+                            <i class="fas fa-warehouse me-1"></i>
+                            <span id="canteen-warehouse-count-{{ canteen.id }}">{{ canteen.warehouses.count }}</span> skladů
+                        </span>
+                        <button class="btn btn-sm btn-light" onclick="openEditCanteenModal({{ canteen.id }}, '{{ canteen.name|escapejs }}', '{{ canteen.address|escapejs }}')" title="Upravit jídelnu">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="btn btn-sm btn-danger" onclick="openDeleteCanteenModal({{ canteen.id }}, '{{ canteen.name|escapejs }}', {{ canteen.warehouses.count }})" title="Smazat jídelnu">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                        <button class="btn btn-sm btn-light" type="button" 
+                                data-bs-toggle="collapse" data-bs-target="#collapse-{{ canteen.id }}">
+                            <i class="fas fa-chevron-down"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="collapse-{{ canteen.id }}" class="collapse" data-bs-parent="#canteenAccordion">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h6><i class="fas fa-warehouse me-2"></i>Sklady</h6>
+                        <button class="btn btn-sm btn-warning" onclick="openCreateWarehouseModal({{ canteen.id }})">
+                            <i class="fas fa-plus me-1"></i>Nový sklad
+                        </button>
+                    </div>
+                    
+                    {% if canteen.warehouses.all %}
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover" id="warehouse-table-{{ canteen.id }}">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Název skladu</th>
+                                    <th>Položek</th>
+                                    <th>Stav</th>
+                                    <th width="100">Akce</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for warehouse in canteen.warehouses.all %}
+                                <tr id="warehouse-row-{{ warehouse.id }}">
+                                    <td><strong id="warehouse-name-{{ warehouse.id }}">{{ warehouse.name }}</strong></td>
+                                    <td>
+                                        <span class="badge bg-info" id="warehouse-stock-count-{{ warehouse.id }}">
+                                            {{ warehouse.stock_items.count }}
+                                        </span>
+                                    </td>
+                                    <td id="warehouse-status-{{ warehouse.id }}">
+                                        {% if warehouse.is_locked %}
+                                        <span class="badge bg-warning text-dark">
+                                            <i class="fas fa-lock me-1"></i>Zamčeno
+                                        </span>
+                                        {% else %}
+                                        <span class="badge bg-success">Aktivní</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            <button class="btn btn-outline-primary" 
+                                                    onclick="openEditWarehouseModal({{ warehouse.id }}, '{{ warehouse.name|escapejs }}')" 
+                                                    title="Upravit">
+                                                <i class="fas fa-edit"></i>
+                                            </button>
+                                            <button class="btn btn-outline-danger" 
+                                                    onclick="openDeleteWarehouseModal({{ warehouse.id }}, '{{ warehouse.name|escapejs }}', {{ warehouse.stock_items.count }}, {{ warehouse.is_locked|lower }})" 
+                                                    title="Smazat"
+                                                    {% if warehouse.is_locked %}disabled{% endif %}>
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center text-muted py-4" id="no-warehouses-{{ canteen.id }}">
+                        <i class="fas fa-inbox fa-2x mb-2"></i>
+                        <p class="mb-0">Zatím žádné sklady</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% empty %}
+        <div class="text-center text-muted py-5">
+            <i class="fas fa-inbox fa-3x mb-3"></i>
+            <p class="mb-0">Zatím žádné jídelny. Začněte vytvořením nové jídelny.</p>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- Toast Container -->
+<div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 11">
+    <div id="mainToast" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+        <div class="toast-header">
+            <i id="toastIcon" class="me-2"></i>
+            <strong id="toastTitle" class="me-auto">Oznámení</strong>
+            <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+        </div>
+        <div class="toast-body" id="toastMessage"></div>
+    </div>
+</div>
+
+<!-- Modal: Vytvoření jídelny -->
+<div class="modal fade" id="canteenCreateModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title"><i class="fas fa-plus me-2"></i>Nová jídelna</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="canteenCreateForm">
+                    <div class="mb-3">
+                        <label for="canteen_create_name" class="form-label">Název jídelny <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="canteen_create_name" required>
+                        <div class="invalid-feedback"></div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="canteen_create_address" class="form-label">Adresa</label>
+                        <input type="text" class="form-control" id="canteen_create_address">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Zrušit</button>
+                <button type="button" class="btn btn-success" onclick="submitCreateCanteen()" id="canteen_create_submit">
+                    <span class="spinner-border spinner-border-sm me-2 d-none" id="canteen_create_spinner"></span>
+                    Vytvořit
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Úprava jídelny -->
+<div class="modal fade" id="canteenEditModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title"><i class="fas fa-edit me-2"></i>Upravit jídelnu</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="canteenEditForm">
+                    <input type="hidden" id="canteen_edit_id">
+                    <div class="mb-3">
+                        <label for="canteen_edit_name" class="form-label">Název jídelny <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="canteen_edit_name" required>
+                        <div class="invalid-feedback"></div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="canteen_edit_address" class="form-label">Adresa</label>
+                        <input type="text" class="form-control" id="canteen_edit_address">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Zrušit</button>
+                <button type="button" class="btn btn-primary" onclick="submitEditCanteen()" id="canteen_edit_submit">
+                    <span class="spinner-border spinner-border-sm me-2 d-none" id="canteen_edit_spinner"></span>
+                    Uložit změny
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Smazání jídelny -->
+<div class="modal fade" id="canteenDeleteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title"><i class="fas fa-trash me-2"></i>Smazat jídelnu</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="canteen_delete_id">
+                <div class="alert alert-danger">
+                    <h6 class="alert-heading"><i class="fas fa-exclamation-triangle me-2"></i>Varování</h6>
+                    <p class="mb-0">Opravdu chcete smazat jídelnu <strong id="canteen_delete_name"></strong>?</p>
+                    <p class="mb-0 mt-2">Budou smazány také <strong id="canteen_delete_warehouse_count"></strong> sklady a všechny jejich položky.</p>
+                </div>
+                <p class="text-danger"><strong>Tato akce je nevratná!</strong></p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Zrušit</button>
+                <button type="button" class="btn btn-danger" onclick="submitDeleteCanteen()" id="canteen_delete_submit">
+                    <span class="spinner-border spinner-border-sm me-2 d-none" id="canteen_delete_spinner"></span>
+                    Ano, smazat
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Vytvoření skladu -->
+<div class="modal fade" id="warehouseCreateModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title"><i class="fas fa-plus me-2"></i>Nový sklad</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="warehouseCreateForm">
+                    <input type="hidden" id="warehouse_create_canteen_id">
+                    <div class="mb-3">
+                        <label for="warehouse_create_name" class="form-label">Název skladu <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="warehouse_create_name" required>
+                        <div class="invalid-feedback"></div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Zrušit</button>
+                <button type="button" class="btn btn-warning" onclick="submitCreateWarehouse()" id="warehouse_create_submit">
+                    <span class="spinner-border spinner-border-sm me-2 d-none" id="warehouse_create_spinner"></span>
+                    Vytvořit
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Úprava skladu -->
+<div class="modal fade" id="warehouseEditModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title"><i class="fas fa-edit me-2"></i>Upravit sklad</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="warehouseEditForm">
+                    <input type="hidden" id="warehouse_edit_id">
+                    <div class="mb-3">
+                        <label for="warehouse_edit_name" class="form-label">Název skladu <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="warehouse_edit_name" required>
+                        <div class="invalid-feedback"></div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Zrušit</button>
+                <button type="button" class="btn btn-primary" onclick="submitEditWarehouse()" id="warehouse_edit_submit">
+                    <span class="spinner-border spinner-border-sm me-2 d-none" id="warehouse_edit_spinner"></span>
+                    Uložit změny
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Smazání skladu -->
+<div class="modal fade" id="warehouseDeleteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title"><i class="fas fa-trash me-2"></i>Smazat sklad</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="warehouse_delete_id">
+                <div class="alert alert-danger">
+                    <h6 class="alert-heading"><i class="fas fa-exclamation-triangle me-2"></i>Varování</h6>
+                    <p class="mb-0">Opravdu chcete smazat sklad <strong id="warehouse_delete_name"></strong>?</p>
+                    <p class="mb-0 mt-2">Budou smazány také <strong id="warehouse_delete_stock_count"></strong> skladových položek.</p>
+                </div>
+                <p class="text-danger"><strong>Tato akce je nevratná!</strong></p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Zrušit</button>
+                <button type="button" class="btn btn-danger" onclick="submitDeleteWarehouse()" id="warehouse_delete_submit">
+                    <span class="spinner-border spinner-border-sm me-2 d-none" id="warehouse_delete_spinner"></span>
+                    Ano, smazat
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="{% static 'js/management.js' %}"></script>
+{% endblock %}

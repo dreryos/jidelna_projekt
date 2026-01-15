@@ -1,0 +1,79 @@
+{% extends 'base.html' %}
+
+{% block title %}Dokončit inventuru{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h3 class="mb-0"><i class="fas fa-check me-2"></i>Potvrdit dokončení inventury</h3>
+                </div>
+                <div class="card-body">
+                    <p class="lead">
+                        Opravdu chcete dokončit inventuru skladu <strong>{{ verification.warehouse.name }}</strong>?
+                    </p>
+                    
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        Po dokončení budou skladové stavy aktualizovány podle spočítaných množství a sklad bude odemčen.
+                    </div>
+                    
+                    {% if items_with_discrepancies %}
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Pozor:</strong> Byly nalezeny rozdíly u {{ items_with_discrepancies.count }} položek.
+                    </div>
+                    
+                    <h5>Položky s rozdíly:</h5>
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Surovina</th>
+                                    <th class="text-end">V evidenci</th>
+                                    <th class="text-end">Spočítáno</th>
+                                    <th class="text-end">Rozdíl</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in items_with_discrepancies %}
+                                <tr>
+                                    <td>{{ item.ingredient.name }}</td>
+                                    <td class="text-end">{{ item.system_quantity|floatformat:3 }}</td>
+                                    <td class="text-end">{{ item.counted_quantity|floatformat:3 }}</td>
+                                    <td class="text-end">
+                                        {% with diff=item.counted_quantity|add:"-"|add:item.system_quantity|floatformat:3 %}
+                                        {% if diff|slice:":1" == "-" %}
+                                            <span class="text-danger">{{ diff }}</span>
+                                        {% else %}
+                                            <span class="text-success">+{{ diff }}</span>
+                                        {% endif %}
+                                        {% endwith %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% endif %}
+                    
+                    <form method="post" class="mt-4">
+                        {% csrf_token %}
+                        <div class="d-flex justify-content-between">
+                            <a href="{% url 'inventory:inventory_verification_detail' verification.pk %}" 
+                               class="btn btn-secondary">
+                                <i class="fas fa-times me-1"></i>Zrušit
+                            </a>
+                            <button type="submit" class="btn btn-success">
+                                <i class="fas fa-check me-1"></i>Dokončit inventuru
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

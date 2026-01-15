@@ -1,16 +1,29 @@
 from django.urls import reverse_lazy, reverse
-from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.views.generic import ListView, CreateView, UpdateView, DeleteView, DetailView
 from django.contrib import messages
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
+from django.utils import timezone
+from django.http import HttpResponse, JsonResponse
+from django.template.loader import render_to_string
+from django.core.exceptions import ValidationError
+from django.views.decorators.http import require_POST
+from django.db.models import Count, Q
 from decimal import Decimal, InvalidOperation
+import logging
+import json
 
-from .models import StockItem, GoodsReceipt, GoodsReceiptItem
-from .forms import GoodsReceiptForm, GoodsReceiptItemFormSet
+from .models import StockItem, GoodsReceipt, GoodsReceiptItem, InventoryVerification, InventoryVerificationItem
+from .forms import (
+    GoodsReceiptForm, GoodsReceiptItemFormSet,
+    InventoryVerificationForm, InventoryVerificationItemFormSet
+)
 from apps.canteens.models import Warehouse, Canteen
 from apps.core.models import Ingredient
+
+logger = logging.getLogger(__name__)
 
 
 class StockListView(LoginRequiredMixin, ListView):
@@ -78,7 +91,16 @@ class WarehouseListView(LoginRequiredMixin, ListView):
     context_object_name = 'warehouses'
     
     def get_queryset(self):
-        return Warehouse.objects.select_related('canteen').order_by('canteen__name', 'name')
+        from django.db.models import Prefetch
+        
+        # Prefetch pouze COMPLETED inventur seřazených sestupně
+        completed_verifications = InventoryVerification.objects.filter(
+            status=InventoryVerification.Status.COMPLETED
+        ).order_by('-completed_at')
+        
+        return Warehouse.objects.select_related('canteen').prefetch_related(
+            Prefetch('inventory_verifications', queryset=completed_verifications, to_attr='completed_inventories')
+        ).order_by('canteen__name', 'name')
 
 
 class WarehouseCreateView(LoginRequiredMixin, CreateView):
@@ -160,6 +182,245 @@ class CanteenDeleteView(LoginRequiredMixin, DeleteView):
         return super().delete(request, *args, **kwargs)
 
 
+# Unified Management View - Správa jídelen a skladů
+
+class CanteenWarehouseManagementView(LoginRequiredMixin, ListView):
+    model = Canteen
+    template_name = 'inventory/management.html'
+    context_object_name = 'canteens'
+    
+    def get_queryset(self):
+        return Canteen.objects.prefetch_related(
+            'warehouses__stock_items__ingredient',
+            'warehouses__inventory_verifications'
+        ).order_by('name')
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        
+        # KPI statistiky
+        total_canteens = Canteen.objects.count()
+        total_warehouses = Warehouse.objects.count()
+        locked_warehouses = Warehouse.objects.filter(is_locked=True).count()
+        total_stock_items = StockItem.objects.count()
+        
+        context['kpi'] = {
+            'total_canteens': total_canteens,
+            'total_warehouses': total_warehouses,
+            'locked_warehouses': locked_warehouses,
+            'total_stock_items': total_stock_items,
+        }
+        
+        return context
+
+
+# AJAX Endpoints pro jídelny
+
+@login_required
+@require_POST
+def canteen_ajax_create(request):
+    """AJAX endpoint pro vytvoření nové jídelny"""
+    try:
+        data = json.loads(request.body)
+        name = data.get('name', '').strip()
+        address = data.get('address', '').strip()
+        
+        # Validace
+        if not name:
+            return JsonResponse({'success': False, 'error': 'Název jídelny je povinný.'}, status=400)
+        
+        if Canteen.objects.filter(name=name).exists():
+            return JsonResponse({'success': False, 'error': 'Jídelna s tímto názvem už existuje.'}, status=400)
+        
+        # Vytvoření jídelny
+        canteen = Canteen.objects.create(name=name, address=address)
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'Jídelna "{canteen.name}" byla úspěšně vytvořena.',
+            'canteen': {
+                'id': canteen.id,
+                'name': canteen.name,
+                'address': canteen.address,
+                'warehouse_count': 0,
+                'stock_item_count': 0,
+            }
+        })
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'Neplatná data.'}, status=400)
+    except Exception as e:
+        logger.error(f'Error creating canteen via AJAX: {e}')
+        return JsonResponse({'success': False, 'error': 'Chyba při vytváření jídelny.'}, status=500)
+
+
+@login_required
+@require_POST
+def canteen_ajax_update(request, pk):
+    """AJAX endpoint pro úpravu jídelny"""
+    try:
+        canteen = get_object_or_404(Canteen, pk=pk)
+        data = json.loads(request.body)
+        name = data.get('name', '').strip()
+        address = data.get('address', '').strip()
+        
+        # Validace
+        if not name:
+            return JsonResponse({'success': False, 'error': 'Název jídelny je povinný.'}, status=400)
+        
+        if Canteen.objects.filter(name=name).exclude(pk=pk).exists():
+            return JsonResponse({'success': False, 'error': 'Jídelna s tímto názvem už existuje.'}, status=400)
+        
+        # Úprava jídelny
+        canteen.name = name
+        canteen.address = address
+        canteen.save()
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'Jídelna "{canteen.name}" byla úspěšně upravena.',
+            'canteen': {
+                'id': canteen.id,
+                'name': canteen.name,
+                'address': canteen.address,
+            }
+        })
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'Neplatná data.'}, status=400)
+    except Exception as e:
+        logger.error(f'Error updating canteen via AJAX: {e}')
+        return JsonResponse({'success': False, 'error': 'Chyba při úpravě jídelny.'}, status=500)
+
+
+@login_required
+@require_POST
+def canteen_ajax_delete(request, pk):
+    """AJAX endpoint pro smazání jídelny"""
+    try:
+        canteen = get_object_or_404(Canteen, pk=pk)
+        canteen_name = canteen.name
+        warehouse_count = canteen.warehouses.count()
+        
+        # Smazání jídelny (automaticky smaže sklady díky CASCADE)
+        canteen.delete()
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'Jídelna "{canteen_name}" a {warehouse_count} skladů bylo smazáno.',
+        })
+    except Exception as e:
+        logger.error(f'Error deleting canteen via AJAX: {e}')
+        return JsonResponse({'success': False, 'error': 'Chyba při mazání jídelny.'}, status=500)
+
+
+# AJAX Endpoints pro sklady
+
+@login_required
+@require_POST
+def warehouse_ajax_create(request):
+    """AJAX endpoint pro vytvoření nového skladu"""
+    try:
+        data = json.loads(request.body)
+        name = data.get('name', '').strip()
+        canteen_id = data.get('canteen_id')
+        
+        # Validace
+        if not name:
+            return JsonResponse({'success': False, 'error': 'Název skladu je povinný.'}, status=400)
+        
+        if not canteen_id:
+            return JsonResponse({'success': False, 'error': 'Jídelna musí být vybrána.'}, status=400)
+        
+        canteen = get_object_or_404(Canteen, pk=canteen_id)
+        
+        # Kontrola unique_together (name, canteen)
+        if Warehouse.objects.filter(name=name, canteen=canteen).exists():
+            return JsonResponse({'success': False, 'error': 'Sklad s tímto názvem už v této jídelně existuje.'}, status=400)
+        
+        # Vytvoření skladu
+        warehouse = Warehouse.objects.create(name=name, canteen=canteen)
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'Sklad "{warehouse.name}" byl úspěšně vytvořen.',
+            'warehouse': {
+                'id': warehouse.id,
+                'name': warehouse.name,
+                'canteen_id': warehouse.canteen_id,
+                'is_locked': warehouse.is_locked,
+                'stock_item_count': 0,
+            }
+        })
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'Neplatná data.'}, status=400)
+    except Exception as e:
+        logger.error(f'Error creating warehouse via AJAX: {e}')
+        return JsonResponse({'success': False, 'error': 'Chyba při vytváření skladu.'}, status=500)
+
+
+@login_required
+@require_POST
+def warehouse_ajax_update(request, pk):
+    """AJAX endpoint pro úpravu skladu"""
+    try:
+        warehouse = get_object_or_404(Warehouse, pk=pk)
+        data = json.loads(request.body)
+        name = data.get('name', '').strip()
+        
+        # Validace
+        if not name:
+            return JsonResponse({'success': False, 'error': 'Název skladu je povinný.'}, status=400)
+        
+        # Kontrola unique_together (name, canteen)
+        if Warehouse.objects.filter(name=name, canteen=warehouse.canteen).exclude(pk=pk).exists():
+            return JsonResponse({'success': False, 'error': 'Sklad s tímto názvem už v této jídelně existuje.'}, status=400)
+        
+        # Úprava skladu
+        warehouse.name = name
+        warehouse.save()
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'Sklad "{warehouse.name}" byl úspěšně upraven.',
+            'warehouse': {
+                'id': warehouse.id,
+                'name': warehouse.name,
+            }
+        })
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'Neplatná data.'}, status=400)
+    except Exception as e:
+        logger.error(f'Error updating warehouse via AJAX: {e}')
+        return JsonResponse({'success': False, 'error': 'Chyba při úpravě skladu.'}, status=500)
+
+
+@login_required
+@require_POST
+def warehouse_ajax_delete(request, pk):
+    """AJAX endpoint pro smazání skladu"""
+    try:
+        warehouse = get_object_or_404(Warehouse, pk=pk)
+        warehouse_name = warehouse.name
+        stock_item_count = warehouse.stock_items.count()
+        
+        # Kontrola, zda není zamčený
+        if warehouse.is_locked:
+            return JsonResponse({
+                'success': False,
+                'error': f'Sklad "{warehouse_name}" je zamčený kvůli inventuře a nelze ho smazat.'
+            }, status=400)
+        
+        # Smazání skladu
+        warehouse.delete()
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'Sklad "{warehouse_name}" a {stock_item_count} položek bylo smazáno.',
+        })
+    except Exception as e:
+        logger.error(f'Error deleting warehouse via AJAX: {e}')
+        return JsonResponse({'success': False, 'error': 'Chyba při mazání skladu.'}, status=500)
+
+
 # CRUD pro příjem zboží (GoodsReceipt)
 
 class GoodsReceiptListView(LoginRequiredMixin, ListView):
@@ -214,7 +475,9 @@ def goods_receipt_create(request):
                     # Uložit hlavní příjem
                     goods_receipt = form.save(commit=False)
                     # Nastavit warehouse z default_warehouse
-                    goods_receipt.warehouse = form.cleaned_data['default_warehouse']
+                    default_warehouse = form.cleaned_data.get('default_warehouse')
+                    if default_warehouse:
+                        goods_receipt.warehouse = default_warehouse
                     goods_receipt.created_by = request.user
                     goods_receipt.save()
                     
@@ -474,14 +737,18 @@ def bidfood_xml_import_step3(request):
         
         # Získání nebo vytvoření suroviny
         if create_new:
-            # Vytvoření nové suroviny
-            ingredient = Ingredient.objects.create(
+            # Vytvoření nové suroviny (nebo použití existující, pokud už existuje)
+            ingredient, created = Ingredient.objects.get_or_create(
                 name=item['item_name'],
-                unit=unit,
-                code=item['item_id'],
-                allergens=''
+                defaults={
+                    'unit': unit,
+                    'base_unit': unit,
+                    'recipe_unit': 'g' if unit == 'kg' else ('ml' if unit == 'l' else 'ks'),
+                    'conversion_factor': Decimal('1000') if unit in ['kg', 'l'] else Decimal('1')
+                }
             )
-            created_ingredients_count += 1
+            if created:
+                created_ingredients_count += 1
         else:
             # Použití existující suroviny
             if not ingredient_id:
@@ -531,4 +798,270 @@ def bidfood_xml_import_step3(request):
     )
     
     return redirect('inventory:goods_receipt_detail', pk=goods_receipt.pk)
+
+
+# CRUD a akce pro inventuru (InventoryVerification)
+
+class IsStaffMixin(UserPassesTestMixin):
+    """Mixin pro kontrolu, zda je uživatel staff."""
+    def test_func(self):
+        return self.request.user.is_staff
+
+
+class InventoryVerificationListView(LoginRequiredMixin, ListView):
+    """Seznam všech inventur."""
+    model = InventoryVerification
+    template_name = 'inventory/inventory_verification_list.html'
+    context_object_name = 'verifications'
+    
+    def get_queryset(self):
+        queryset = InventoryVerification.objects.select_related(
+            'warehouse', 'warehouse__canteen', 'started_by', 'completed_by', 'created_by'
+        ).all()
+        
+        # Filtrování podle skladu
+        warehouse_id = self.request.GET.get('warehouse')
+        if warehouse_id:
+            queryset = queryset.filter(warehouse_id=warehouse_id)
+        
+        # Filtrování podle statusu
+        status = self.request.GET.get('status')
+        if status:
+            queryset = queryset.filter(status=status)
+        
+        return queryset.order_by('-started_at', '-created_at')
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['warehouses'] = Warehouse.objects.select_related('canteen').all()
+        context['statuses'] = InventoryVerification.Status.choices
+        return context
+
+
+class InventoryVerificationCreateView(IsStaffMixin, CreateView):
+    """Vytvoření nové inventury."""
+    model = InventoryVerification
+    form_class = InventoryVerificationForm
+    template_name = 'inventory/inventory_verification_form.html'
+    
+    def get_initial(self):
+        """Předvyplnění skladu z URL parametru."""
+        initial = super().get_initial()
+        warehouse_id = self.request.GET.get('warehouse')
+        if warehouse_id:
+            initial['warehouse'] = warehouse_id
+        return initial
+    
+    def form_valid(self, form):
+        form.instance.created_by = self.request.user
+        messages.success(
+            self.request,
+            f'Inventura skladu "{form.instance.warehouse.name}" byla vytvořena. '
+            f'Pro zahájení použijte tlačítko "Zahájit inventuru".'
+        )
+        return super().form_valid(form)
+    
+    def get_success_url(self):
+        return reverse('inventory:inventory_verification_detail', kwargs={'pk': self.object.pk})
+
+
+class InventoryVerificationDetailView(LoginRequiredMixin, DetailView):
+    """Detail inventury včetně seznamu položek."""
+    model = InventoryVerification
+    template_name = 'inventory/inventory_verification_detail.html'
+    context_object_name = 'verification'
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        verification = self.object
+        
+        # Načteme položky inventury
+        items = verification.items.select_related('ingredient').order_by('ingredient__name')
+        context['items'] = items
+        
+        # Statistiky
+        context['stats'] = {
+            'total_items': items.count(),
+            'counted_items': items.filter(counted_quantity__isnull=False).count(),
+            'discrepancies': items.exclude(difference=0).count() if verification.status == InventoryVerification.Status.COMPLETED else 0,
+        }
+        
+        return context
+
+
+@login_required
+def inventory_verification_count(request, pk):
+    """Formulář pro zadání spočítaných množství."""
+    verification = get_object_or_404(InventoryVerification, pk=pk)
+    
+    # Kontrola oprávnění
+    if not request.user.is_staff:
+        messages.error(request, 'Nemáte oprávnění k této akci.')
+        return redirect('inventory:inventory_verification_detail', pk=pk)
+    
+    # Kontrola stavu
+    if verification.status != InventoryVerification.Status.IN_PROGRESS:
+        messages.error(request, 'Inventura není v probíhajícím stavu.')
+        return redirect('inventory:inventory_verification_detail', pk=pk)
+    
+    if request.method == 'POST':
+        formset = InventoryVerificationItemFormSet(request.POST, instance=verification)
+        
+        if formset.is_valid():
+            formset.save()
+            messages.success(request, 'Spočítaná množství byla uložena.')
+            return redirect('inventory:inventory_verification_detail', pk=pk)
+    else:
+        formset = InventoryVerificationItemFormSet(instance=verification)
+    
+    context = {
+        'verification': verification,
+        'formset': formset,
+    }
+    return render(request, 'inventory/inventory_verification_count.html', context)
+
+
+@login_required
+def inventory_verification_start(request, pk):
+    """Zahájení inventury - zamkne sklad."""
+    verification = get_object_or_404(InventoryVerification, pk=pk)
+    
+    # Kontrola oprávnění
+    if not request.user.is_staff:
+        messages.error(request, 'Nemáte oprávnění k této akci.')
+        return redirect('inventory:inventory_verification_detail', pk=pk)
+    
+    if request.method == 'POST':
+        try:
+            verification.start(request.user)
+            messages.success(
+                request,
+                f'Inventura skladu "{verification.warehouse.name}" byla zahájena. '
+                f'Sklad je nyní uzamčen.'
+            )
+        except ValidationError as e:
+            messages.error(request, str(e))
+        
+        return redirect('inventory:inventory_verification_count', pk=pk)
+    
+    # GET - zobrazíme potvrzovací stránku
+    context = {
+        'verification': verification,
+    }
+    return render(request, 'inventory/inventory_verification_start_confirm.html', context)
+
+
+@login_required
+def inventory_verification_complete(request, pk):
+    """Dokončení inventury - aktualizuje stavy a odemkne sklad."""
+    verification = get_object_or_404(InventoryVerification, pk=pk)
+    
+    # Kontrola oprávnění
+    if not request.user.is_staff:
+        messages.error(request, 'Nemáte oprávnění k této akci.')
+        return redirect('inventory:inventory_verification_detail', pk=pk)
+    
+    if request.method == 'POST':
+        try:
+            verification.complete(request.user)
+            messages.success(
+                request,
+                f'Inventura skladu "{verification.warehouse.name}" byla dokončena. '
+                f'Skladové stavy byly aktualizovány a sklad byl odemčen.'
+            )
+        except ValidationError as e:
+            messages.error(request, str(e))
+        
+        return redirect('inventory:inventory_verification_detail', pk=pk)
+    
+    # GET - zobrazíme potvrzovací stránku
+    items = verification.items.select_related('ingredient').order_by('ingredient__name')
+    context = {
+        'verification': verification,
+        'items': items,
+        'items_with_discrepancies': items.exclude(counted_quantity=None).exclude(difference=0),
+    }
+    return render(request, 'inventory/inventory_verification_complete_confirm.html', context)
+
+
+@login_required
+def inventory_verification_cancel(request, pk):
+    """Zrušení probíhající inventury - odemkne sklad bez aktualizace."""
+    verification = get_object_or_404(InventoryVerification, pk=pk)
+    
+    # Kontrola oprávnění - pouze ten kdo zahájil
+    if verification.started_by != request.user:
+        messages.error(
+            request,
+            f'Inventuru může zrušit pouze uživatel, který ji zahájil '
+            f'({verification.started_by.get_full_name() or verification.started_by.username}).'
+        )
+        return redirect('inventory:inventory_verification_detail', pk=pk)
+    
+    if request.method == 'POST':
+        try:
+            verification.cancel(request.user)
+            messages.warning(
+                request,
+                f'Inventura skladu "{verification.warehouse.name}" byla zrušena. '
+                f'Sklad byl odemčen, stavy nebyly změněny.'
+            )
+        except ValidationError as e:
+            messages.error(request, str(e))
+        
+        return redirect('inventory:inventory_verification_list')
+    
+    # GET - zobrazíme potvrzovací stránku
+    context = {
+        'verification': verification,
+    }
+    return render(request, 'inventory/inventory_verification_cancel_confirm.html', context)
+
+
+@login_required
+def inventory_verification_pdf(request, pk):
+    """Export inventury do PDF (tisk inventurního soupisu)."""
+    verification = get_object_or_404(
+        InventoryVerification.objects.select_related('warehouse', 'warehouse__canteen'),
+        pk=pk
+    )
+    
+    # Kontrola oprávnění
+    if not request.user.is_staff:
+        messages.error(request, 'Nemáte oprávnění k této akci.')
+        return redirect('inventory:inventory_verification_detail', pk=pk)
+    
+    # Načteme položky
+    items = verification.items.select_related('ingredient').order_by('ingredient__name')
+    
+    context = {
+        'verification': verification,
+        'items': items,
+        'generated_at': timezone.now(),
+        'generated_by': request.user,
+    }
+    
+    # Renderování HTML template
+    html_string = render_to_string('inventory/verification_pdf.html', context)
+    
+    # Generování PDF pomocí WeasyPrint
+    try:
+        from weasyprint import HTML
+        
+        html = HTML(string=html_string, base_url=request.build_absolute_uri())
+        response = HttpResponse(content_type='application/pdf')
+        
+        filename = f'inventura_{verification.warehouse.name}_{verification.started_at.strftime("%Y%m%d") if verification.started_at else "koncept"}.pdf'
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        
+        html.write_pdf(response)
+        
+        return response
+    except ImportError:
+        messages.error(request, 'WeasyPrint není nainstalován. PDF export není dostupný.')
+        return redirect('inventory:inventory_verification_detail', pk=pk)
+    except Exception as e:
+        logger.error(f'Error generating PDF for verification {pk}: {e}', exc_info=True)
+        messages.error(request, f'Chyba při generování PDF: {str(e)}')
+        return redirect('inventory:inventory_verification_detail', pk=pk)
 

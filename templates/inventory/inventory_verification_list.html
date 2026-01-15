@@ -1,0 +1,138 @@
+{% extends 'base.html' %}
+{% load django_bootstrap5 %}
+
+{% block title %}Inventury{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1><i class="fas fa-clipboard-check me-2"></i>Inventury</h1>
+        {% if user.is_staff %}
+        <a href="{% url 'inventory:inventory_verification_create' %}" class="btn btn-primary">
+            <i class="fas fa-plus me-1"></i>Nová inventura
+        </a>
+        {% endif %}
+    </div>
+
+    <!-- Filtry -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-3">
+                <div class="col-md-4">
+                    <label for="warehouse" class="form-label">Sklad</label>
+                    <select name="warehouse" id="warehouse" class="form-select">
+                        <option value="">Všechny sklady</option>
+                        {% for warehouse in warehouses %}
+                        <option value="{{ warehouse.id }}" {% if request.GET.warehouse == warehouse.id|stringformat:"s" %}selected{% endif %}>
+                            {{ warehouse.name }} ({{ warehouse.canteen.name }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label for="status" class="form-label">Stav</label>
+                    <select name="status" id="status" class="form-select">
+                        <option value="">Všechny stavy</option>
+                        {% for value, label in statuses %}
+                        <option value="{{ value }}" {% if request.GET.status == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary me-2">
+                        <i class="fas fa-filter me-1"></i>Filtrovat
+                    </button>
+                    <a href="{% url 'inventory:inventory_verification_list' %}" class="btn btn-outline-secondary">
+                        <i class="fas fa-times me-1"></i>Zrušit filtry
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Seznam inventur -->
+    <div class="card">
+        <div class="card-body">
+            {% if verifications %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Sklad</th>
+                            <th>Stav</th>
+                            <th>Zahájeno</th>
+                            <th>Dokončeno</th>
+                            <th>Zahájil</th>
+                            <th>Akce</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for verification in verifications %}
+                        <tr>
+                            <td>
+                                <strong>{{ verification.warehouse.name }}</strong><br>
+                                <small class="text-muted">{{ verification.warehouse.canteen.name }}</small>
+                            </td>
+                            <td>
+                                {% if verification.status == 'DRAFT' %}
+                                    <span class="badge bg-secondary">{{ verification.get_status_display }}</span>
+                                {% elif verification.status == 'IN_PROGRESS' %}
+                                    <span class="badge bg-warning text-dark">
+                                        <i class="fas fa-lock me-1"></i>{{ verification.get_status_display }}
+                                    </span>
+                                {% elif verification.status == 'COMPLETED' %}
+                                    <span class="badge bg-success">{{ verification.get_status_display }}</span>
+                                {% elif verification.status == 'CANCELLED' %}
+                                    <span class="badge bg-danger">{{ verification.get_status_display }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if verification.started_at %}
+                                    {{ verification.started_at|date:"d.m.Y H:i" }}
+                                {% else %}
+                                    <span class="text-muted">—</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if verification.completed_at %}
+                                    {{ verification.completed_at|date:"d.m.Y H:i" }}
+                                {% else %}
+                                    <span class="text-muted">—</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if verification.started_by %}
+                                    {{ verification.started_by.get_full_name|default:verification.started_by.username }}
+                                {% else %}
+                                    <span class="text-muted">—</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="btn-group btn-group-sm" role="group">
+                                    <a href="{% url 'inventory:inventory_verification_detail' verification.pk %}" 
+                                       class="btn btn-outline-primary" title="Detail">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
+                                    {% if verification.status == 'IN_PROGRESS' or verification.status == 'COMPLETED' %}
+                                    <a href="{% url 'inventory:inventory_verification_pdf' verification.pk %}" 
+                                       class="btn btn-outline-secondary" title="PDF">
+                                        <i class="fas fa-file-pdf"></i>
+                                    </a>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle me-2"></i>
+                Žádné inventury nenalezeny.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
