@@ -2,10 +2,13 @@ from django.db import models
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from decimal import Decimal
+import xml.etree.ElementTree as ET
+import uuid
 
 from apps.core.models import Recipe, Ingredient
 from apps.canteens.models import Canteen, Warehouse
 from apps.inventory.models import StockItem
+from .xml_parser import parse_menu_template_xml, MEAL_TYPE_MAPPING
 
 
 """
@@ -31,6 +34,139 @@ class MenuTemplate(models.Model):
 
     def __str__(self):
         return self.name
+
+    def parse_schedule_to_dict(self):
+        """
+        Parsuje XML harmonogram do struktury vhodné pro vizuální editor.
+        
+        Returns:
+            dict: {
+                day_index: [
+                    {
+                        'recipe_code': str,
+                        'meal_type': str,
+                        'note': str,
+                        'unique_id': str,  # pro drag-drop tracking
+                        'portion_count': int|None
+                    },
+                    ...
+                ]
+            }
+        """
+        if not self.xml_content:
+            return {}
+        
+        try:
+            parsed = parse_menu_template_xml(self.xml_content)
+            schedule_dict = {}
+            
+            for day in parsed.get('schedule', []):
+                day_index = day.get('date_offset', 0)
+                meals = []
+                
+                for meal in day.get('meals', []):
+                    meals.append({
+                        'recipe_code': meal['recipe_code'],
+                        'meal_type': meal['meal_type'],
+                        'note': meal.get('note', ''),
+                        'unique_id': str(uuid.uuid4()),
+                        'portion_count': meal.get('portion_count')
+                    })
+                
+                schedule_dict[day_index] = meals
+            
+            return schedule_dict
+        except ValidationError:
+            return {}
+    
+    def update_schedule_from_dict(self, schedule_dict):
+        """
+        Aktualizuje XML harmonogram ze slovníku z vizuálního editoru.
+        
+        Args:
+            schedule_dict: dict ve formátu z parse_schedule_to_dict()
+        
+        Raises:
+            ValidationError: pokud se nepodaří sestavit validní XML
+        """
+        if not self.xml_content:
+            raise ValidationError("Šablona nemá XML obsah")
+        
+        try:
+            root = ET.fromstring(self.xml_content)
+        except ET.ParseError as e:
+            raise ValidationError(f"Chyba při parsování XML: {str(e)}")
+        
+        # Najdeme nebo vytvoříme MenuSchedule sekci
+        schedule_section = root.find('MenuSchedule')
+        if schedule_section is None:
+            schedule_section = ET.SubElement(root, 'MenuSchedule')
+        
+        # Odstraníme všechny existující dny
+        for day_elem in list(schedule_section.findall('Day')):
+            schedule_section.remove(day_elem)
+        
+        # Reverse mapping pro meal types
+        meal_type_reverse = {v: k for k, v in MEAL_TYPE_MAPPING.items()}
+        
+        # Přidáme nové dny podle slovníku
+        for day_index in sorted(schedule_dict.keys()):
+            meals = schedule_dict[day_index]
+            
+            day_elem = ET.SubElement(schedule_section, 'Day')
+            day_elem.set('name', f'Den {day_index + 1}')
+            day_elem.set('dateOffset', str(day_index))
+            
+            for meal in meals:
+                meal_elem = ET.SubElement(day_elem, 'Meal')
+                meal_elem.set('recipeCode', meal['recipe_code'])
+                meal_elem.set('type', meal_type_reverse.get(meal['meal_type'], 'obed'))
+                
+                if meal.get('note'):
+                    meal_elem.set('note', meal['note'])
+                if meal.get('portion_count') is not None:
+                    meal_elem.set('portionCount', str(meal['portion_count']))
+        
+        # Převedeme zpět na string s pretty printing
+        ET.indent(root, space='  ')
+        self.xml_content = ET.tostring(root, encoding='unicode', xml_declaration=True)
+        
+        # Validujeme nové XML
+        parse_menu_template_xml(self.xml_content)
+    
+    def get_stats(self):
+        """
+        Vrací statistiky šablony pro live preview.
+        
+        Returns:
+            dict: {
+                'days': int,
+                'meals': int,
+                'unique_recipes': int
+            }
+        """
+        if not self.xml_content:
+            return {'days': 0, 'meals': 0, 'unique_recipes': 0}
+        
+        try:
+            parsed = parse_menu_template_xml(self.xml_content)
+            schedule = parsed.get('schedule', [])
+            
+            total_meals = 0
+            unique_recipes = set()
+            
+            for day in schedule:
+                for meal in day.get('meals', []):
+                    total_meals += 1
+                    unique_recipes.add(meal['recipe_code'])
+            
+            return {
+                'days': len(schedule),
+                'meals': total_meals,
+                'unique_recipes': len(unique_recipes)
+            }
+        except ValidationError:
+            return {'days': 0, 'meals': 0, 'unique_recipes': 0}
 
     class Meta:
         verbose_name = "Šablona jídelníčku"

@@ -8,6 +8,21 @@ a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
 ## [0.9.1] - 2026-01-15
 
 ### Added
+- **Vizuální editor šablon jídelníčků**: Nové drag-drop rozhraní pro úpravu šablon
+  - Interaktivní editor s přetahováním jídel mezi dny (`menu_template_visual_edit.html`)
+  - JavaScript modul s SortableJS a Select2 integrac (`menu_template_visual_edit.js`, 700+ řádků)
+  - Helper metody v `MenuTemplate` modelu: `parse_schedule_to_dict()`, `update_schedule_from_dict()`, `get_stats()`
+  - 5 AJAX endpointů pro operace: add-meal, remove-meal, reorder, copy-day, clear-day
+  - Live statistiky (počet dnů, jídel, unikátních receptů)
+  - Bulk operace: kopírování celého dne, vymazání dne
+  - Autocomplete pro výběr receptů (Select2 4.1.0-rc.0)
+  - Touch podpora pro tablety a mobily (SortableJS 1.15.0)
+  - Confirm dialogy pro destruktivní akce
+  - Toast notifikace pro zpětnou vazbu
+  - Přepínač mezi vizuálním a XML režimem
+  - Transparentní efekty v dark mode
+  - Server-side validace s transaction atomicity
+  - Dokumentace v `docs/visual_editor.md`
 - **Import jídelníčku z XML šablony**: Trojkrokový proces importu jídelníčků
   - Krok 1: Výběr XML šablony pro import
   - Krok 2: Náhled importovaného menu s možností nastavení koeficientů pro jednotlivé varianty porcí
@@ -48,6 +63,7 @@ a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
   - `analytics.md` - popis modulu analytiky
   - `core_admin.md` - správa receptů a surovin
   - `inventory.md` - skladové hospodářství
+  - `visual_editor.md` - vizuální editor šablon jídelníčků
   - `production.md` - výrobní plánování
   - `reports.md` - reporty
   - `overview.md` - celkový přehled projektu

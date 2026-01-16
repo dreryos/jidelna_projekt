@@ -506,4 +506,304 @@
     color: #f8f9fa;
     border-color: #6c757d;
   }
+
+  /* Template create visual - drag & drop zone */
+  .drop-zone {
+    border-color: #6c757d !important;
+    background-color: #343a40 !important;
+  }
+
+  .drop-zone.drag-over {
+    border-color: #0d6efd !important;
+    background-color: rgba(13, 110, 253, 0.1) !important;
+  }
+
+  .drop-zone.has-file {
+    border-color: #198754 !important;
+    background-color: rgba(25, 135, 84, 0.1) !important;
+  }
+
+  .drop-zone-content i,
+  .drop-zone-file i {
+    color: #adb5bd !important;
+  }
+
+  /* Preview panel */
+  .preview-panel {
+    background-color: #343a40;
+    border-color: #495057;
+  }
+
+  .preview-panel .card {
+    background-color: #495057;
+    border-color: #6c757d;
+  }
+
+  /* Create type cards */
+  .create-type-card {
+    background-color: #343a40 !important;
+    border-color: #495057 !important;
+  }
+
+  .create-type-card:hover {
+    background-color: #495057 !important;
+    border-color: #0d6efd !important;
+  }
+
+  /* Auto-save indicator */
+  .autosave-indicator {
+    color: #adb5bd;
+  }
+
+  .autosave-indicator.text-success {
+    color: #198754 !important;
+  }
+
+  /* Alerts in dark mode */
+  .alert-info {
+    background-color: rgba(13, 202, 240, 0.2);
+    color: #6ea8fe;
+    border-color: rgba(13, 202, 240, 0.3);
+  }
+
+  .alert-warning {
+    background-color: rgba(255, 193, 7, 0.2);
+    color: #ffda6a;
+    border-color: rgba(255, 193, 7, 0.3);
+  }
+
+  .alert-secondary {
+    background-color: rgba(108, 117, 125, 0.2);
+    color: #adb5bd;
+    border-color: rgba(108, 117, 125, 0.3);
+  }
+
+  /* Draft restore alert */
+  .draft-restore-alert {
+    background-color: rgba(13, 202, 240, 0.15);
+  }
+
+  /* Ambiguous ingredients list */
+  #ambiguousIngredientsList .form-select {
+    background-color: #495057;
+    color: #f8f9fa;
+    border-color: #6c757d;
+  }
+
+  #ambiguousIngredientsList .form-select:focus {
+    background-color: #495057;
+    color: #f8f9fa;
+    border-color: #86b7fe;
+  }
+}
+
+/* Společné styly pro oba režimy */
+
+/* Drop zone */
+.drop-zone {
+  min-height: 200px;
+  border: 2px dashed #dee2e6;
+  border-radius: 0.5rem;
+  padding: 2rem;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+  background-color: #f8f9fa;
+}
+
+.drop-zone:hover {
+  border-color: #0d6efd;
+  background-color: rgba(13, 110, 253, 0.05);
+}
+
+.drop-zone.drag-over {
+  border-color: #0d6efd;
+  background-color: rgba(13, 110, 253, 0.1);
+  transform: scale(1.02);
+}
+
+.drop-zone.has-file {
+  border-color: #198754;
+  border-style: solid;
+}
+
+.drop-zone-content,
+.drop-zone-file,
+.drop-zone-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.drop-zone-file .file-name {
+  font-weight: 600;
+  font-size: 1.1rem;
+}
+
+.drop-zone-file .file-size {
+  font-size: 0.9rem;
+}
+
+/* Create type cards */
+.create-type-card {
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border: 2px solid #dee2e6;
+}
+
+.create-type-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+  border-color: #0d6efd;
+}
+
+.create-type-card i {
+  transition: transform 0.3s ease;
+}
+
+.create-type-card:hover i {
+  transform: scale(1.1);
+}
+
+/* Preview panel */
+.preview-panel {
+  padding: 1.5rem;
+  border: 1px solid #dee2e6;
+  border-radius: 0.5rem;
+  background-color: #f8f9fa;
+}
+
+.preview-panel .card {
+  border: 1px solid #dee2e6;
+}
+
+/* Auto-save indicator */
+.autosave-indicator {
+  font-size: 0.875rem;
+  padding: 0.25rem 0.75rem;
+  border-radius: 0.25rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.autosave-indicator i {
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.autosave-indicator.text-success i {
+  animation: none;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* Ingredient mapping dropdowns */
+#ambiguousIngredientsList .form-select {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+#ambiguousIngredientsList label {
+  font-weight: 600;
+}
+
+/* File info badges */
+.file-name {
+  color: #198754;
+  font-weight: 600;
+}
+
+.file-size {
+  color: #6c757d;
+}
+
+/* Timeout warning */
+.timeout-warning {
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Modal styling */
+.modal-content {
+  border-radius: 0.5rem;
+}
+
+.modal-header {
+  border-bottom: 1px solid #dee2e6;
+}
+
+.modal-footer {
+  border-top: 1px solid #dee2e6;
+}
+
+/* Validation summary */
+.validation-summary-modal dl {
+  margin-bottom: 0;
+}
+
+.validation-summary-modal dt {
+  font-weight: 600;
+}
+
+.validation-summary-modal dd {
+  margin-bottom: 0.5rem;
+}
+
+/* Toast styling */
+.toast {
+  min-width: 300px;
+}
+
+.toast-body {
+  padding: 1rem;
+}
+
+/* Draft restore alert */
+.draft-restore-alert {
+  animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .drop-zone {
+    min-height: 150px;
+    padding: 1rem;
+  }
+  
+  .create-type-card {
+    margin-bottom: 1rem;
+  }
+  
+  .preview-panel {
+    padding: 1rem;
+  }
 }

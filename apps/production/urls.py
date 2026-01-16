@@ -14,10 +14,25 @@ urlpatterns = [
     
     # Šablony jídelníčků
     path('sablony/', template_views.MenuTemplateListView.as_view(), name='template_list'),
-    path('sablony/nova/', template_views.MenuTemplateCreateView.as_view(), name='template_create'),
-    path('sablony/<int:pk>/upravit/', template_views.MenuTemplateUpdateView.as_view(), name='template_edit'),
+    path('sablony/nova/', template_views.MenuTemplateCreateVisualView.as_view(), name='template_create'),
+    path('sablony/nova-xml/', template_views.MenuTemplateCreateView.as_view(), name='template_create_xml'),
+    path('sablony/<int:pk>/upravit/', template_views.MenuTemplateUpdateView.as_view(), name='template_update'),
+    path('sablony/<int:pk>/vizualni-editor/', template_views.MenuTemplateVisualEditView.as_view(), name='template_visual_edit'),
     path('sablony/<int:pk>/smazat/', template_views.MenuTemplateDeleteView.as_view(), name='template_delete'),
     path('sablony/<int:pk>/duplikovat/', template_views.duplicate_template, name='template_duplicate'),
+    
+    # AJAX endpointy pro vizuální vytváření šablon
+    path('sablony/ajax/preview-xml/', template_views.template_preview_xml_ajax, name='template_preview_xml_ajax'),
+    path('sablony/ajax/vytvorit/', template_views.template_create_ajax, name='template_create_ajax'),
+    path('sablony/ajax/check-name/', template_views.template_check_name_ajax, name='template_check_name_ajax'),
+    path('sablony/ajax/autosave/', template_views.template_autosave_ajax, name='template_autosave_ajax'),
+    
+    # AJAX endpointy pro vizuální editor šablon
+    path('template/<int:pk>/add-meal/', template_views.template_add_meal_ajax, name='template_add_meal_ajax'),
+    path('template/<int:pk>/remove-meal/', template_views.template_remove_meal_ajax, name='template_remove_meal_ajax'),
+    path('template/<int:pk>/reorder/', template_views.template_reorder_ajax, name='template_reorder_ajax'),
+    path('template/<int:pk>/copy-day/', template_views.template_copy_day_ajax, name='template_copy_day_ajax'),
+    path('template/<int:pk>/clear-day/', template_views.template_clear_day_ajax, name='template_clear_day_ajax'),
     
     # Import jídelníčku ze šablony
     path('import-jidelnicku/', template_views.menu_import_step1, name='menu_import_step1'),

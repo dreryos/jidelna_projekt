@@ -348,3 +348,130 @@ class MenuImportForm(forms.Form):
         
         return cleaned_data
 
+
+class MenuTemplateQuickCreateForm(forms.Form):
+    """Formulář pro rychlé vytvoření šablony ve vizuálním editoru"""
+    
+    name = forms.CharField(
+        max_length=200,
+        required=True,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'Např. "Šablona 4denní menu"',
+            'id': 'id_template_name'
+        }),
+        label='Název šablony',
+        help_text='Jedinečný název pro identifikaci šablony'
+    )
+    
+    days = forms.IntegerField(
+        min_value=1,
+        max_value=30,
+        initial=14,
+        required=True,
+        widget=forms.NumberInput(attrs={
+            'class': 'form-control',
+            'placeholder': '14',
+            'id': 'id_template_days'
+        }),
+        label='Počet dnů',
+        help_text='Kolik dnů bude šablona obsahovat (1-30)'
+    )
+    
+    xml_file = forms.FileField(
+        required=False,
+        widget=forms.FileInput(attrs={
+            'class': 'form-control',
+            'accept': '.xml,text/xml,application/xml',
+            'id': 'id_template_xml_file'
+        }),
+        label='XML soubor (volitelné)',
+        help_text='Nahrajte XML soubor pro import šablony (max 5 MB)'
+    )
+    
+    def clean_name(self):
+        """Kontrola, zda název šablony již neexistuje"""
+        name = self.cleaned_data.get('name')
+        
+        if name:
+            # Kontrola duplicity
+            if MenuTemplate.objects.filter(name__iexact=name).exists():
+                raise forms.ValidationError(
+                    f'Šablona s názvem "{name}" již existuje. '
+                    'Prosím zvolte jiný název.'
+                )
+        
+        return name
+    
+    def clean_xml_file(self):
+        """Validace velikosti a formátu XML souboru"""
+        xml_file = self.cleaned_data.get('xml_file')
+        
+        if xml_file:
+            # Kontrola velikosti (5 MB = 5 * 1024 * 1024 bytes)
+            max_size = 5 * 1024 * 1024
+            if xml_file.size > max_size:
+                raise forms.ValidationError(
+                    f'Soubor je příliš velký ({xml_file.size / (1024*1024):.1f} MB). '
+                    f'Maximální povolená velikost je 5 MB.'
+                )
+            
+            # Kontrola, že soubor má XML extension
+            if not xml_file.name.lower().endswith('.xml'):
+                raise forms.ValidationError(
+                    'Soubor musí mít příponu .xml'
+                )
+        
+        return xml_file
+    
+    def clean(self):
+        """Validace XML struktury pokud je soubor nahrán"""
+        from .xml_parser import parse_menu_template_xml, validate_units
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        
+        cleaned_data = super().clean()
+        xml_file = cleaned_data.get('xml_file')
+        
+        if xml_file:
+            try:
+                # Přečtení obsahu souboru
+                xml_content = xml_file.read().decode('utf-8')
+                # Reset file pointer pro pozdější použití
+                xml_file.seek(0)
+                
+                # Parsování a validace XML
+                parsed_data = parse_menu_template_xml(xml_content)
+                
+                # Validace jednotek u ingrediencí
+                for recipe in parsed_data.get('recipes', []):
+                    for ingredient in recipe.get('ingredients', []):
+                        unit = ingredient.get('unit', '')
+                        if not validate_units(unit):
+                            raise forms.ValidationError(
+                                f'Neplatná jednotka "{unit}" u ingredience '
+                                f'"{ingredient.get("name")}" v receptu '
+                                f'"{recipe.get("code")}". '
+                                f'Povolené jednotky: kg, g, l, ml, ks'
+                            )
+                
+                # Uložení parsovaných dat pro pozdější použití
+                cleaned_data['parsed_xml'] = parsed_data
+                cleaned_data['xml_content'] = xml_content
+                
+                # Pokud XML obsahuje název, použijeme ho jako výchozí
+                # (může být přepsán uživatelem)
+                if parsed_data.get('schedule'):
+                    # XML je validní, uložíme metadata
+                    cleaned_data['recipe_count'] = len(parsed_data.get('recipes', []))
+                    cleaned_data['day_count'] = len(parsed_data.get('schedule', []))
+                
+            except UnicodeDecodeError:
+                raise forms.ValidationError(
+                    'Soubor není v UTF-8 kódování. '
+                    'Prosím uložte XML soubor v UTF-8.'
+                )
+            except DjangoValidationError as e:
+                raise forms.ValidationError(f'Chyba v XML struktuře: {str(e)}')
+        
+        return cleaned_data
+

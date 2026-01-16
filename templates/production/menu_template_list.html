@@ -16,9 +16,22 @@
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h1>Šablony jídelníčků</h1>
         {% if user.is_staff %}
-        <a href="{% url 'production:template_create' %}" class="btn btn-primary">
-            <i class="fas fa-plus-circle"></i> Nová šablona
-        </a>
+        <div class="btn-group">
+            <a href="{% url 'production:template_create' %}" class="btn btn-primary">
+                <i class="fas fa-magic"></i> Nová šablona
+            </a>
+            <button type="button" class="btn btn-outline-secondary dropdown-toggle dropdown-toggle-split" 
+                    data-bs-toggle="dropdown" aria-expanded="false">
+                <span class="visually-hidden">Další možnosti</span>
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end">
+                <li>
+                    <a class="dropdown-item" href="{% url 'production:template_create_xml' %}">
+                        <i class="fas fa-code"></i> XML režim
+                    </a>
+                </li>
+            </ul>
+        </div>
         {% endif %}
     </div>
 
@@ -48,9 +61,13 @@
                                 <i class="fas fa-play"></i> Použít
                             </a>
                             {% if user.is_staff %}
-                            <a href="{% url 'production:template_edit' template.pk %}" 
-                               class="btn btn-warning" title="Upravit">
+                            <a href="{% url 'production:template_visual_edit' template.pk %}" 
+                               class="btn btn-primary" title="Vizuální editor">
                                 <i class="fas fa-edit"></i>
+                            </a>
+                            <a href="{% url 'production:template_update' template.pk %}" 
+                               class="btn btn-outline-secondary" title="XML režim">
+                                <i class="fas fa-code"></i>
                             </a>
                             <form method="post" action="{% url 'production:template_duplicate' template.pk %}" 
                                   style="display: inline;">

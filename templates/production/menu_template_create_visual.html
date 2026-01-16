@@ -1,0 +1,322 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Nová šablona jídelníčku{% endblock %}
+
+{% block extra_css %}
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet" />
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'home' %}">Domů</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'production:menu_list' %}">Výroba</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'production:template_list' %}">Šablony jídelníčků</a></li>
+            <li class="breadcrumb-item active">Nová šablona</li>
+        </ol>
+    </nav>
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1><i class="fas fa-magic"></i> Nová šablona jídelníčku</h1>
+        <div>
+            <span class="autosave-indicator d-none" id="autosaveIndicator">
+                <i class="fas fa-circle-notch fa-spin"></i> Ukládání...
+            </span>
+            <span class="autosave-indicator text-success d-none" id="autosaveSaved">
+                <i class="fas fa-check-circle"></i> Uloženo
+            </span>
+        </div>
+    </div>
+
+    {% if has_draft %}
+    <!-- Alert pro obnovení draftu -->
+    <div class="alert alert-info alert-dismissible fade show draft-restore-alert" role="alert">
+        <i class="fas fa-info-circle"></i>
+        <strong>Nalezen neuložený draft!</strong> 
+        Máte rozdělanou šablonu z {{ draft_data.timestamp|date:"d.m.Y H:i" }}. Chcete ji obnovit?
+        <div class="mt-2">
+            <button type="button" class="btn btn-sm btn-primary" id="restoreDraftBtn">
+                <i class="fas fa-undo"></i> Obnovit draft
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="alert">
+                <i class="fas fa-times"></i> Začít novou
+            </button>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Úvodní modální dialog pro výběr typu -->
+    <div class="modal fade" id="createTypeModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-magic"></i> Vyberte typ šablony</h5>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <div class="card create-type-card h-100" id="emptyTemplateCard" role="button">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-file-alt fa-4x mb-3 text-primary"></i>
+                                    <h5 class="card-title">Prázdná šablona</h5>
+                                    <p class="card-text">Vytvořte šablonu od začátku pomocí vizuálního editoru</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card create-type-card h-100" id="importXmlCard" role="button">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-file-import fa-4x mb-3 text-success"></i>
+                                    <h5 class="card-title">Importovat XML</h5>
+                                    <p class="card-text">Nahrajte existující XML soubor se šablonou</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Sekce s ukázkovými šablonami -->
+                    <div class="mt-4 pt-4 border-top">
+                        <h6 class="text-muted mb-3"><i class="fas fa-download"></i> Ukázkové šablony</h6>
+                        <div class="d-flex gap-2 flex-wrap">
+                            <a href="{% static 'sablona_4denni.xml' %}" download class="btn btn-sm btn-outline-primary">
+                                <i class="fas fa-file-download"></i> 4denní menu
+                            </a>
+                            <a href="{% static 'sablona_14denni.xml' %}" download class="btn btn-sm btn-outline-primary">
+                                <i class="fas fa-file-download"></i> 14denní menu
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Formulář pro prázdnou šablonu -->
+    <div class="card d-none" id="emptyTemplateForm">
+        <div class="card-header">
+            <h5><i class="fas fa-file-alt"></i> Prázdná šablona</h5>
+        </div>
+        <div class="card-body">
+            <form id="createEmptyForm">
+                <div class="row">
+                    <div class="col-md-8">
+                        <div class="mb-3">
+                            <label for="emptyTemplateName" class="form-label">Název šablony *</label>
+                            <input type="text" class="form-control" id="emptyTemplateName" 
+                                   placeholder="Např. Šablona 4denní menu" required>
+                            <div class="invalid-feedback" id="emptyNameFeedback"></div>
+                            <div class="alert alert-warning mt-2 d-none" id="emptyNameWarning">
+                                <i class="fas fa-exclamation-triangle"></i>
+                                <span id="emptyNameWarningText"></span>
+                                <button type="button" class="btn btn-sm btn-warning ms-2" id="emptyUseSuggestion">
+                                    Použít návrh
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label for="emptyTemplateDays" class="form-label">Počet dnů *</label>
+                            <input type="number" class="form-control" id="emptyTemplateDays" 
+                                   value="14" min="1" max="30" required>
+                            <div class="form-text">1-30 dnů</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="d-flex justify-content-between">
+                    <button type="button" class="btn btn-outline-secondary" id="backFromEmpty">
+                        <i class="fas fa-arrow-left"></i> Zpět
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-check"></i> Vytvořit šablonu
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Formulář pro XML import -->
+    <div class="card d-none" id="importXmlForm">
+        <div class="card-header">
+            <h5><i class="fas fa-file-import"></i> Import XML šablony</h5>
+        </div>
+        <div class="card-body">
+            <form id="createImportForm">
+                <!-- Drag & Drop zóna -->
+                <div class="drop-zone mb-3" id="dropZone">
+                    <div class="drop-zone-content">
+                        <i class="fas fa-cloud-upload-alt fa-3x mb-2 text-muted"></i>
+                        <p class="mb-2">Přetáhněte XML soubor sem nebo klikněte pro výběr</p>
+                        <p class="text-muted small">Maximální velikost: {{ max_file_size_mb }} MB</p>
+                        <input type="file" class="d-none" id="xmlFileInput" accept=".xml,text/xml,application/xml">
+                    </div>
+                    <div class="drop-zone-file d-none" id="dropZoneFile">
+                        <i class="fas fa-file-code fa-2x mb-2"></i>
+                        <p class="mb-1 file-name"></p>
+                        <p class="text-muted small file-size"></p>
+                        <button type="button" class="btn btn-sm btn-outline-danger mt-2" id="removeFile">
+                            <i class="fas fa-times"></i> Odebrat soubor
+                        </button>
+                    </div>
+                    <div class="drop-zone-loading d-none" id="dropZoneLoading">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Načítání...</span>
+                        </div>
+                        <p class="mt-2">Parsování XML...</p>
+                    </div>
+                </div>
+
+                <!-- Preview panel (zobrazí se po nahrání XML) -->
+                <div class="preview-panel d-none" id="previewPanel">
+                    <h6 class="mb-3"><i class="fas fa-eye"></i> Náhled importu</h6>
+                    
+                    <div class="mb-3">
+                        <label for="importTemplateName" class="form-label">Název šablony *</label>
+                        <input type="text" class="form-control" id="importTemplateName" required>
+                        <div class="invalid-feedback" id="importNameFeedback"></div>
+                        <div class="alert alert-warning mt-2 d-none" id="importNameWarning">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <span id="importNameWarningText"></span>
+                            <button type="button" class="btn btn-sm btn-warning ms-2" id="importUseSuggestion">
+                                Použít návrh
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h6><i class="fas fa-book"></i> Recepty</h6>
+                                    <p class="mb-0 fs-4" id="previewRecipeCount">0</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h6><i class="fas fa-calendar"></i> Dny</h6>
+                                    <p class="mb-0 fs-4" id="previewDayCount">0</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Varování o chybějících receptech -->
+                    <div class="alert alert-warning d-none" id="missingRecipesWarning">
+                        <h6><i class="fas fa-exclamation-triangle"></i> Chybějící recepty</h6>
+                        <p>XML obsahuje <strong id="missingRecipeCount">0</strong> receptů, které neexistují v databázi.</p>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="createMissingRecipes" checked>
+                            <label class="form-check-label" for="createMissingRecipes">
+                                Vytvořit chybějící recepty včetně ingrediencí
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Modal pro výběr ingrediencí (zobrazí se pokud jsou ambiguózní matche) -->
+                    <div class="alert alert-info d-none" id="ambiguousIngredientsInfo">
+                        <h6><i class="fas fa-question-circle"></i> Ingredience k propojení</h6>
+                        <p>Některé ingredience mají více možných shod v databázi. Vyberte prosím správné propojení.</p>
+                        <div id="ambiguousIngredientsList"></div>
+                    </div>
+
+                    <!-- Varování ze XML parseru -->
+                    <div class="alert alert-secondary d-none" id="xmlWarnings">
+                        <h6><i class="fas fa-info-circle"></i> Upozornění</h6>
+                        <ul class="mb-0" id="xmlWarningsList"></ul>
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-between mt-3">
+                    <button type="button" class="btn btn-outline-secondary" id="backFromImport">
+                        <i class="fas fa-arrow-left"></i> Zpět
+                    </button>
+                    <button type="submit" class="btn btn-success" id="createFromXmlBtn" disabled>
+                        <i class="fas fa-check"></i> Vytvořit šablonu
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Validační souhrn modal -->
+    <div class="modal fade" id="validationSummaryModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-check-circle text-success"></i> Validační souhrn</h5>
+                </div>
+                <div class="modal-body">
+                    <p>Šablona bude vytvořena s následujícími parametry:</p>
+                    <dl class="row">
+                        <dt class="col-sm-6">Název:</dt>
+                        <dd class="col-sm-6" id="summaryName"></dd>
+                        
+                        <dt class="col-sm-6">Počet dnů:</dt>
+                        <dd class="col-sm-6" id="summaryDays"></dd>
+                        
+                        <dt class="col-sm-6">Nových receptů:</dt>
+                        <dd class="col-sm-6" id="summaryRecipes"></dd>
+                        
+                        <dt class="col-sm-6">Nových ingrediencí:</dt>
+                        <dd class="col-sm-6" id="summaryIngredients"></dd>
+                    </dl>
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i> Po vytvoření budete přesměrováni do vizuálního editoru.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Zrušit</button>
+                    <button type="button" class="btn btn-primary" id="confirmCreateBtn">
+                        <i class="fas fa-check"></i> Vytvořit
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast kontejner pro notifikace -->
+    <div class="toast-container position-fixed bottom-0 end-0 p-3">
+        <div id="errorToast" class="toast align-items-center text-white bg-danger border-0" role="alert">
+            <div class="d-flex">
+                <div class="toast-body" id="errorToastBody"></div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+            </div>
+        </div>
+        <div id="successToast" class="toast align-items-center text-white bg-success border-0" role="alert">
+            <div class="d-flex">
+                <div class="toast-body" id="successToastBody"></div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Předání dat do JavaScriptu -->
+<script>
+    window.templateCreateData = {
+        hasDraft: {{ has_draft|yesno:"true,false" }},
+        draftData: {{ draft_data|default:"null"|safe }},
+        maxFileSizeMb: {{ max_file_size_mb }},
+        maxDays: {{ max_days }},
+        recipeChoices: {{ recipe_choices|safe }},
+        mealTypeChoices: {{ meal_type_choices_json|safe }},
+        urls: {
+            previewXml: "{% url 'production:template_preview_xml_ajax' %}",
+            create: "{% url 'production:template_create_ajax' %}",
+            checkName: "{% url 'production:template_check_name_ajax' %}",
+            autosave: "{% url 'production:template_autosave_ajax' %}"
+        }
+    };
+</script>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script src="{% static 'js/menu_template_create_visual.js' %}"></script>
+{% endblock %}

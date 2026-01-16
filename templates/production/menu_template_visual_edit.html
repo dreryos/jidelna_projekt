@@ -1,0 +1,318 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Vizuální editor - {{ object.name }}{% endblock %}
+
+{% block extra_css %}
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet" />
+<style>
+    .day-container {
+        border: 2px dashed #dee2e6;
+        border-radius: 8px;
+        padding: 15px;
+        margin-bottom: 20px;
+        min-height: 100px;
+        transition: all 0.3s ease;
+    }
+    
+    .day-container:hover {
+        border-color: #0d6efd;
+        background: rgba(13, 110, 253, 0.05);
+    }
+    
+    .day-container.empty {
+        background: rgba(108, 117, 125, 0.05);
+    }
+    
+    .meal-card {
+        border: 1px solid #dee2e6;
+        border-radius: 6px;
+        padding: 12px;
+        margin-bottom: 10px;
+        background: white;
+        cursor: move;
+        transition: all 0.2s ease;
+    }
+    
+    .meal-card:hover {
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        transform: translateY(-2px);
+    }
+    
+    .meal-card.sortable-ghost {
+        opacity: 0.4;
+        background: #f8f9fa;
+    }
+    
+    .meal-card.sortable-drag {
+        opacity: 0.8;
+        box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+    }
+    
+    .meal-type-badge {
+        font-size: 0.75rem;
+        padding: 4px 8px;
+        border-radius: 4px;
+        text-transform: uppercase;
+        font-weight: 600;
+    }
+    
+    .stats-card {
+        position: sticky;
+        top: 80px;
+        z-index: 100;
+    }
+    
+    .add-meal-form {
+        background: rgba(13, 110, 253, 0.05);
+        border: 2px dashed #0d6efd;
+        border-radius: 8px;
+        padding: 15px;
+        margin-bottom: 15px;
+    }
+    
+    @media (prefers-color-scheme: dark) {
+        .meal-card {
+            background: #343a40;
+            border-color: #495057;
+        }
+        
+        .meal-card:hover {
+            background: #495057;
+        }
+        
+        .day-container {
+            border-color: #495057;
+        }
+        
+        .day-container:hover {
+            border-color: #0d6efd;
+            background: rgba(13, 110, 253, 0.1);
+        }
+        
+        .add-meal-form {
+            background: rgba(13, 110, 253, 0.1);
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'home' %}">Domů</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'production:menu_list' %}">Výroba</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'production:template_list' %}">Šablony</a></li>
+            <li class="breadcrumb-item active">{{ object.name }}</li>
+        </ol>
+    </nav>
+
+    <div class="row">
+        <div class="col-md-9">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1><i class="fas fa-calendar-alt"></i> {{ object.name }}</h1>
+                <div class="btn-group">
+                    <a href="{% url 'production:template_update' object.pk %}" class="btn btn-outline-secondary">
+                        <i class="fas fa-code"></i> XML režim
+                    </a>
+                    <a href="{% url 'production:template_list' %}" class="btn btn-outline-secondary">
+                        <i class="fas fa-arrow-left"></i> Zpět
+                    </a>
+                </div>
+            </div>
+
+            {% if object.description %}
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle"></i> {{ object.description }}
+            </div>
+            {% endif %}
+
+            <!-- Dny jídelníčku -->
+            <div id="days-container">
+                {% for day_num in "0123456789012345678901234567890"|make_list %}
+                    {% if forloop.counter0 < max_days %}
+                <div class="card mb-4 day-card-wrapper" data-day-index="{{ forloop.counter0 }}">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="fas fa-calendar-day"></i> Den {{ forloop.counter }}
+                        </h5>
+                        <div class="btn-group btn-group-sm">
+                            <button type="button" class="btn btn-outline-primary btn-add-meal-toggle" 
+                                    data-day="{{ forloop.counter0 }}">
+                                <i class="fas fa-plus"></i> Přidat jídlo
+                            </button>
+                            <button type="button" class="btn btn-outline-info btn-copy-day" 
+                                    data-day="{{ forloop.counter0 }}">
+                                <i class="fas fa-copy"></i>
+                            </button>
+                            <button type="button" class="btn btn-outline-danger btn-clear-day" 
+                                    data-day="{{ forloop.counter0 }}">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <!-- Formulář pro přidání jídla (skrytý) -->
+                        <div class="add-meal-form" style="display: none;" data-day="{{ forloop.counter0 }}">
+                            <h6><i class="fas fa-plus-circle"></i> Přidat nové jídlo</h6>
+                            <div class="row g-2">
+                                <div class="col-md-6">
+                                    <select class="form-select recipe-select" data-day="{{ forloop.counter0 }}">
+                                        <option value="">-- Vyberte recept --</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <select class="form-select meal-type-select" data-day="{{ forloop.counter0 }}">
+                                        {% for choice in meal_type_choices %}
+                                        <option value="{{ choice.value }}">{{ choice.label }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-md-2">
+                                    <button type="button" class="btn btn-primary w-100 btn-add-meal-submit" 
+                                            data-day="{{ forloop.counter0 }}">
+                                        <i class="fas fa-check"></i> Přidat
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="row mt-2">
+                                <div class="col-12">
+                                    <input type="text" class="form-control form-control-sm note-input" 
+                                           placeholder="Poznámka (volitelné)" data-day="{{ forloop.counter0 }}">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Kontejner pro jídla (SortableJS) -->
+                        <div class="day-container sortable-container" 
+                             data-day="{{ forloop.counter0 }}"
+                             id="day-{{ forloop.counter0 }}">
+                            <div class="text-center text-muted py-4 empty-message">
+                                <i class="fas fa-inbox"></i> Přetáhněte sem jídla nebo klikněte na "Přidat jídlo"
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                    {% endif %}
+                {% endfor %}
+            </div>
+
+            <!-- Tlačítko pro přidání nového dne -->
+            <div class="text-center mb-4">
+                <button type="button" class="btn btn-lg btn-outline-primary" id="btn-add-day">
+                    <i class="fas fa-plus-circle"></i> Přidat den
+                </button>
+            </div>
+        </div>
+
+        <!-- Pravý panel - statistiky a nástroje -->
+        <div class="col-md-3">
+            <div class="card stats-card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-chart-bar"></i> Statistiky</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <h6 class="text-muted mb-1">Počet dnů</h6>
+                        <h3 class="mb-0" id="stat-days">{{ stats.days }}</h3>
+                    </div>
+                    <div class="mb-3">
+                        <h6 class="text-muted mb-1">Celkem jídel</h6>
+                        <h3 class="mb-0" id="stat-meals">{{ stats.meals }}</h3>
+                    </div>
+                    <div class="mb-3">
+                        <h6 class="text-muted mb-1">Unikátní recepty</h6>
+                        <h3 class="mb-0" id="stat-recipes">{{ stats.unique_recipes }}</h3>
+                    </div>
+                    <hr>
+                    <div class="d-grid gap-2">
+                        <button type="button" class="btn btn-success" id="btn-save-changes">
+                            <i class="fas fa-save"></i> Uložit změny
+                        </button>
+                        <a href="{% url 'production:template_update' object.pk %}" 
+                           class="btn btn-outline-secondary">
+                            <i class="fas fa-code"></i> Zobrazit XML
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Nápověda -->
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h6 class="mb-0"><i class="fas fa-question-circle"></i> Nápověda</h6>
+                </div>
+                <div class="card-body small">
+                    <ul class="mb-0 ps-3">
+                        <li>Přetahujte jídla mezi dny</li>
+                        <li>Klikněte na <i class="fas fa-copy"></i> pro zkopírování dne</li>
+                        <li>Použijte <i class="fas fa-trash"></i> pro vymazání dne</li>
+                        <li>Změny se ukládají automaticky</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal pro kopírování dne -->
+<div class="modal fade" id="copyDayModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-copy"></i> Zkopírovat den</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Vyberte cílový den, kam chcete zkopírovat jídla:</p>
+                <select class="form-select" id="copy-target-day">
+                    {% for day_num in "0123456789012345678901234567890"|make_list %}
+                        {% if forloop.counter0 < max_days %}
+                    <option value="{{ forloop.counter0 }}">Den {{ forloop.counter }}</option>
+                        {% endif %}
+                    {% endfor %}
+                </select>
+                <div class="alert alert-warning mt-3">
+                    <i class="fas fa-exclamation-triangle"></i> Existující jídla v cílovém dni budou přepsána!
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Zrušit</button>
+                <button type="button" class="btn btn-primary" id="btn-copy-confirm">Zkopírovat</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Toast pro notifikace -->
+<div class="position-fixed bottom-0 end-0 p-3" style="z-index: 11">
+    <div id="notification-toast" class="toast" role="alert">
+        <div class="toast-header">
+            <strong class="me-auto" id="toast-title">Notifikace</strong>
+            <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
+        </div>
+        <div class="toast-body" id="toast-message"></div>
+    </div>
+</div>
+
+<!-- Template data -->
+<script id="template-data" type="application/json">
+{
+    "pk": {{ object.pk }},
+    "name": "{{ object.name|escapejs }}",
+    "scheduleDict": {{ schedule_dict_json|safe }},
+    "recipeChoices": {{ recipe_choices|safe }},
+    "mealTypeChoices": {{ meal_type_choices_json|safe }},
+    "csrfToken": "{{ csrf_token }}"
+}
+</script>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://code.jquery.com/jquery-3.7.1.min.js" integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script src="{% static 'js/menu_template_visual_edit.js' %}"></script>
+{% endblock %}

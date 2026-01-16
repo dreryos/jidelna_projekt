@@ -7,7 +7,8 @@ Parsuje XML soubory ve formátu MenuImportDescription a validuje jejich struktur
 import xml.etree.ElementTree as ET
 from django.core.exceptions import ValidationError
 from decimal import Decimal, InvalidOperation
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Tuple, Optional
+from rapidfuzz import fuzz
 
 
 # Mapování XML type atributů na MealType choices
@@ -243,3 +244,142 @@ def _parse_meal(meal_elem: ET.Element, day_name: str, warnings: List[str]) -> Di
         'note': note,
         'portion_count': portion_count
     }
+
+
+# Validované jednotky pro ingredience
+VALID_UNITS = {'kg', 'g', 'l', 'ml', 'ks'}
+
+
+def validate_units(unit: str) -> bool:
+    """
+    Ověří, zda je jednotka platná.
+    
+    Args:
+        unit: Jednotka k ověření (kg, g, l, ml, ks)
+        
+    Returns:
+        True pokud je jednotka platná, False jinak
+    """
+    return unit.lower() in VALID_UNITS
+
+
+def fuzzy_match_ingredients(ingredient_name: str, threshold: int = 70) -> List[Tuple[Any, float]]:
+    """
+    Najde existující ingredience v databázi pomocí fuzzy matchingu.
+    
+    Args:
+        ingredient_name: Název ingredience k vyhledání
+        threshold: Minimální procento podobnosti (výchozí 70)
+        
+    Returns:
+        Seznam tuple (ingredient_obj, similarity_score) seřazených podle skóre
+        
+    Note:
+        Importuje Ingredient model dynamicky, aby se předešlo circular imports.
+    """
+    from apps.core.models import Ingredient
+    
+    # Získat všechny ingredience z databáze
+    all_ingredients = Ingredient.objects.all()
+    
+    matches = []
+    for ingredient in all_ingredients:
+        # Vypočítat podobnost (case-insensitive)
+        similarity = fuzz.ratio(
+            ingredient_name.lower().strip(),
+            ingredient.name.lower().strip()
+        )
+        
+        if similarity >= threshold:
+            matches.append((ingredient, similarity))
+    
+    # Seřadit podle skóre (nejvyšší první)
+    matches.sort(key=lambda x: x[1], reverse=True)
+    
+    return matches
+
+
+def create_empty_template_xml(days: int) -> str:
+    """
+    Vytvoří prázdnou XML šablonu s validní strukturou.
+    
+    Args:
+        days: Počet dnů v šabloně (1-30)
+        
+    Returns:
+        XML string s prázdnými tagy <Recipes> a <MenuSchedule>
+        
+    Raises:
+        ValueError: Pokud je days mimo rozsah 1-30
+    """
+    if not (1 <= days <= 30):
+        raise ValueError("Počet dnů musí být mezi 1 a 30")
+    
+    # Vytvořit root element
+    root = ET.Element('MenuImportDescription')
+    
+    # Přidat prázdnou sekci Recipes
+    recipes_section = ET.SubElement(root, 'Recipes')
+    ET.SubElement(recipes_section, 'Recipe', attrib={
+        'code': 'TEMPLATE',
+        'name': 'Ukázkový recept',
+        'category': 'HJ',
+        'basePortions': '10'
+    })
+    ingredients = ET.SubElement(recipes_section.find('Recipe'), 'Ingredients')
+    ET.SubElement(ingredients, 'Ingredient', attrib={
+        'name': 'Ukázková surovina',
+        'quantity': '1.0',
+        'unit': 'kg'
+    })
+    
+    # Přidat sekci MenuSchedule s prázdnými dny
+    schedule_section = ET.SubElement(root, 'MenuSchedule')
+    
+    day_names = [
+        'Pondělí', 'Úterý', 'Středa', 'Čtvrtek', 'Pátek',
+        'Sobota', 'Neděle'
+    ]
+    
+    for i in range(days):
+        day_name = day_names[i % 7] if i < 7 else f'Den {i + 1}'
+        ET.SubElement(schedule_section, 'Day', attrib={
+            'name': day_name,
+            'dateOffset': str(i)
+        })
+    
+    # Převést na string s deklarací
+    xml_string = ET.tostring(root, encoding='utf-8', xml_declaration=True).decode('utf-8')
+    
+    # Přidat komentáře a formátování
+    formatted_xml = f'''<?xml version="1.0" encoding="UTF-8"?>
+<MenuImportDescription>
+  <!-- Sekce s definicemi receptů -->
+  <Recipes>
+    <!-- Zde přidejte recepty pomocí vizuálního editoru -->
+  </Recipes>
+
+  <!-- Sekce s harmonogramem jídelníčku -->
+  <MenuSchedule>
+{_format_days_xml(days)}
+  </MenuSchedule>
+</MenuImportDescription>'''
+    
+    return formatted_xml
+
+
+def _format_days_xml(days: int) -> str:
+    """Pomocná funkce pro formátování dnů v XML."""
+    day_names = [
+        'Pondělí', 'Úterý', 'Středa', 'Čtvrtek', 'Pátek',
+        'Sobota', 'Neděle'
+    ]
+    
+    lines = []
+    for i in range(days):
+        day_name = day_names[i % 7] if i < 7 else f'Den {i + 1}'
+        lines.append(f'    <Day name="{day_name}" dateOffset="{i}">')
+        lines.append(f'      <!-- Přidejte jídla pro {day_name} -->')
+        lines.append('    </Day>')
+    
+    return '\n'.join(lines)
