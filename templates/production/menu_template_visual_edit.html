@@ -308,6 +308,14 @@
     "csrfToken": "{{ csrf_token }}"
 }
 </script>
+
+{% if ajax_urls %}
+<script>
+    // Adapter: poskytne endpointy pro MenuPlan visual editor
+    window.ajaxUrls = {{ ajax_urls|safe }};
+</script>
+{% endif %}
+
 {% endblock %}
 
 {% block extra_js %}

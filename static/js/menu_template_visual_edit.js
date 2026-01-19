@@ -313,7 +313,7 @@
      * AJAX: Přidání jídla
      */
     function addMealAjax(dayIndex, recipeCode, mealType, note, portionCount) {
-        const url = `/production/template/${pk}/add-meal/`;
+        const url = (window.ajaxUrls && window.ajaxUrls.addMeal) ? window.ajaxUrls.addMeal : `/production/template/${pk}/add-meal/`;
         
         fetch(url, {
             method: 'POST',
@@ -371,18 +371,28 @@
             return;
         }
 
-        const url = `/production/template/${pk}/remove-meal/`;
+        const url = (window.ajaxUrls && window.ajaxUrls.removeMeal) ? window.ajaxUrls.removeMeal : `/production/template/${pk}/remove-meal/`;
         
+        // Prepare payload; include unique order id if available for MenuPlan adapters
+        const payload = { day_index: dayIndex, meal_index: mealIndex };
+        try {
+            const mealObj = currentSchedule[dayIndex] && currentSchedule[dayIndex][mealIndex];
+            if (mealObj && (mealObj.order_id || mealObj.unique_id)) {
+                // Adapter for MenuPlan will send order_id or unique_id
+                if (mealObj.order_id) payload.order_id = mealObj.order_id;
+                else payload.unique_id = mealObj.unique_id;
+            }
+        } catch (e) {
+            // ignore
+        }
+
         fetch(url, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'X-CSRFToken': csrfToken
             },
-            body: JSON.stringify({
-                day_index: dayIndex,
-                meal_index: mealIndex
-            })
+            body: JSON.stringify(payload)
         })
         .then(response => response.json())
         .then(data => {
@@ -452,7 +462,7 @@
         const [movedIndex] = mealIndices.splice(oldIndex, 1);
         mealIndices.splice(newIndex, 0, movedIndex);
 
-        const url = `/production/template/${pk}/reorder/`;
+        const url = (window.ajaxUrls && window.ajaxUrls.reorder) ? window.ajaxUrls.reorder : `/production/template/${pk}/reorder/`;
         
         fetch(url, {
             method: 'POST',
@@ -604,7 +614,7 @@
             return;
         }
         
-        const url = `/production/template/${pk}/copy-day/`;
+        const url = (window.ajaxUrls && window.ajaxUrls.copyDay) ? window.ajaxUrls.copyDay : `/production/template/${pk}/copy-day/`;
         
         fetch(url, {
             method: 'POST',
@@ -665,7 +675,7 @@
             return;
         }
         
-        const url = `/production/template/${pk}/clear-day/`;
+        const url = (window.ajaxUrls && window.ajaxUrls.clearDay) ? window.ajaxUrls.clearDay : `/production/template/${pk}/clear-day/`;
         
         fetch(url, {
             method: 'POST',

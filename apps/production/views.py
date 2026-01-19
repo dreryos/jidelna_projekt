@@ -317,6 +317,261 @@ class MenuPlanDeleteView(CanteenOwnerMixin, DeleteView):
         return response
 
 
+# ---------------------------------------------------------------------------
+# Visual editor for MenuPlan (adapter for template-based visual editor)
+# ---------------------------------------------------------------------------
+class MenuPlanVisualEditView(CanteenOwnerMixin, UpdateView):
+    """Vizuální editor pro manuální jídelníček (adapter používá šablonový UI)"""
+    model = MenuPlan
+    template_name = 'production/menu_template_visual_edit.html'
+    fields = []
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        # Build schedule dict in the same shape as MenuTemplate.parse_schedule_to_dict()
+        from collections import defaultdict
+        schedule = defaultdict(list)
+        date_from = self.object.date_from
+        for order in self.object.production_orders.all().select_related('recipe'):
+            day_index = (order.date - date_from).days
+            schedule[day_index].append({
+                'recipe_code': order.recipe.code,
+                'meal_type': order.meal_type,
+                'note': '',
+                'unique_id': f'order-{order.id}',
+                'order_id': order.id,
+                'portion_count': None
+            })
+
+        import json
+        context['schedule_dict'] = schedule
+        context['schedule_dict_json'] = json.dumps({str(k): v for k, v in schedule.items()})
+
+        # Recipes choices for Select2 (use recipe.code to match template format)
+        recipes = Recipe.objects.all().order_by('name')
+        context['recipe_choices'] = json.dumps([
+            {'id': r.code, 'text': r.name}
+            for r in recipes
+        ])
+
+        # Meal type choices
+        from .models import ProductionOrder
+        context['meal_type_choices'] = [
+            {'value': choice[0], 'label': choice[1]}
+            for choice in ProductionOrder.MealType.choices
+        ]
+        context['meal_type_choices_json'] = json.dumps(context['meal_type_choices'])
+
+        # Simple stats
+        context['stats'] = {
+            'days': self.object.get_days_count(),
+            'total_meals': self.object.get_total_orders(),
+            'total_portions': 0
+        }
+
+        # Provide AJAX endpoints for the template JS to call
+        from django.urls import reverse
+        ajax_urls = {
+            'addMeal': reverse('production:menu_visual_add_meal_ajax', kwargs={'menu_pk': self.object.pk}),
+            'removeMeal': reverse('production:menu_visual_remove_meal_ajax', kwargs={'menu_pk': self.object.pk}),
+            'reorder': reverse('production:menu_visual_reorder_ajax', kwargs={'menu_pk': self.object.pk}),
+            'copyDay': reverse('production:menu_visual_copy_day_ajax', kwargs={'menu_pk': self.object.pk}),
+            'clearDay': reverse('production:menu_visual_clear_day_ajax', kwargs={'menu_pk': self.object.pk}),
+        }
+        context['ajax_urls'] = json.dumps(ajax_urls)
+
+        # Maximum days
+        context['max_days'] = 30
+
+        return context
+
+
+@login_required
+@user_can_access_canteen_object(MenuPlan)
+def menu_visual_add_meal_ajax(request, menu_pk, *args, **kwargs):
+    """AJAX: Přidání jídla do MenuPlan prostřednictvím vizuálního editoru"""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Pouze POST metoda'}, status=405)
+
+    menu_plan = request.instance
+
+    try:
+        data = json.loads(request.body)
+        day_index = int(data.get('day_index'))
+        recipe_code = data['recipe_code']
+        meal_type = data.get('meal_type', 'LUNCH')
+        note = data.get('note', '')
+        portion_count = data.get('portion_count')
+
+        recipe = get_object_or_404(Recipe, code=recipe_code)
+        meal_date = menu_plan.date_from + timedelta(days=day_index)
+
+        with transaction.atomic():
+            order = ProductionOrder.objects.create(
+                menu_plan=menu_plan,
+                recipe=recipe,
+                date=meal_date,
+                meal_type=meal_type
+            )
+
+        meal_obj = {
+            'recipe_code': recipe.code,
+            'meal_type': meal_type,
+            'note': note,
+            'unique_id': f'order-{order.id}',
+            'order_id': order.id,
+            'portion_count': portion_count
+        }
+
+        stats = {
+            'days': menu_plan.get_days_count(),
+            'total_meals': menu_plan.get_total_orders(),
+            'total_portions': 0
+        }
+
+        return JsonResponse({'success': True, 'meal': meal_obj, 'stats': stats})
+
+    except (json.JSONDecodeError, KeyError, TypeError, ValueError) as e:
+        logger.error(f"Error in menu_visual_add_meal_ajax for menu {menu_pk}: {e}", exc_info=True)
+        return JsonResponse({'success': False, 'error': 'Invalid data provided.'}, status=400)
+
+
+@login_required
+@user_can_access_canteen_object(MenuPlan)
+def menu_visual_remove_meal_ajax(request, menu_pk, *args, **kwargs):
+    """AJAX: Odstranění jídla (podpora unique_id nebo order_id)"""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Pouze POST metoda'}, status=405)
+
+    menu_plan = request.instance
+
+    try:
+        data = json.loads(request.body)
+        order_id = data.get('order_id')
+        unique_id = data.get('unique_id')
+
+        if unique_id and unique_id.startswith('order-'):
+            try:
+                order_id = int(unique_id.split('-', 1)[1])
+            except Exception:
+                order_id = None
+
+        if not order_id:
+            return JsonResponse({'success': False, 'error': 'Chybí order_id'}, status=400)
+
+        order = get_object_or_404(ProductionOrder, pk=order_id, menu_plan=menu_plan)
+
+        if order.has_issued_picking_list():
+            return JsonResponse({'success': False, 'error': 'Nelze odstranit jídlo s vydanou výdejkou.'}, status=403)
+
+        with transaction.atomic():
+            removed_id = order.id
+            order.delete()
+
+        stats = {
+            'days': menu_plan.get_days_count(),
+            'total_meals': menu_plan.get_total_orders(),
+            'total_portions': 0
+        }
+
+        return JsonResponse({'success': True, 'removed_order_id': removed_id, 'stats': stats})
+
+    except (json.JSONDecodeError, KeyError, TypeError, ValueError) as e:
+        logger.error(f"Error in menu_visual_remove_meal_ajax for menu {menu_pk}: {e}", exc_info=True)
+        return JsonResponse({'success': False, 'error': 'Invalid data provided.'}, status=400)
+
+
+@login_required
+@user_can_access_canteen_object(MenuPlan)
+def menu_visual_reorder_ajax(request, menu_pk, *args, **kwargs):
+    """AJAX: Reorder within day - no-op for now (frontend persists order)"""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Pouze POST metoda'}, status=405)
+
+    return JsonResponse({'success': True})
+
+
+@login_required
+@user_can_access_canteen_object(MenuPlan)
+def menu_visual_copy_day_ajax(request, menu_pk, *args, **kwargs):
+    """AJAX: Copy meals from one day to another (simple implementation)"""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Pouze POST metoda'}, status=405)
+
+    menu_plan = request.instance
+
+    try:
+        data = json.loads(request.body)
+        source_day = int(data['source_day'])
+        target_day = int(data['target_day'])
+
+        source_date = menu_plan.date_from + timedelta(days=source_day)
+        target_date = menu_plan.date_from + timedelta(days=target_day)
+
+        source_orders = menu_plan.production_orders.filter(date=source_date).exclude(picking_list_items__document__isnull=False)
+        copied_meals = []
+        with transaction.atomic():
+            for ord in source_orders:
+                new_ord = ProductionOrder.objects.create(
+                    menu_plan=menu_plan,
+                    recipe=ord.recipe,
+                    date=target_date,
+                    meal_type=ord.meal_type
+                )
+                copied_meals.append({
+                    'recipe_code': new_ord.recipe.code,
+                    'meal_type': new_ord.meal_type,
+                    'note': '',
+                    'unique_id': f'order-{new_ord.id}',
+                    'order_id': new_ord.id,
+                    'portion_count': None
+                })
+
+        stats = {
+            'days': menu_plan.get_days_count(),
+            'total_meals': menu_plan.get_total_orders(),
+            'total_portions': 0
+        }
+
+        return JsonResponse({'success': True, 'copied_meals': copied_meals, 'stats': stats})
+
+    except Exception as e:
+        logger.error(f"Error in menu_visual_copy_day_ajax for menu {menu_pk}: {e}", exc_info=True)
+        return JsonResponse({'success': False, 'error': 'Chyba při kopírování dne.'}, status=400)
+
+
+@login_required
+@user_can_access_canteen_object(MenuPlan)
+def menu_visual_clear_day_ajax(request, menu_pk, *args, **kwargs):
+    """AJAX: Clear all meals for a day in MenuPlan"""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Pouze POST metoda'}, status=405)
+
+    menu_plan = request.instance
+
+    try:
+        data = json.loads(request.body)
+        day_index = int(data['day_index'])
+        target_date = menu_plan.date_from + timedelta(days=day_index)
+
+        orders_to_delete = menu_plan.production_orders.filter(date=target_date).exclude(picking_list_items__document__isnull=False)
+        count = orders_to_delete.count()
+        with transaction.atomic():
+            orders_to_delete.delete()
+
+        stats = {
+            'days': menu_plan.get_days_count(),
+            'total_meals': menu_plan.get_total_orders(),
+            'total_portions': 0
+        }
+
+        return JsonResponse({'success': True, 'removed_count': count, 'stats': stats})
+
+    except Exception as e:
+        logger.error(f"Error in menu_visual_clear_day_ajax for menu {menu_pk}: {e}", exc_info=True)
+        return JsonResponse({'success': False, 'error': 'Chyba při čištění dne.'}, status=400)
+
+
 @login_required
 @user_can_access_canteen_object(MenuPlan)
 def add_meal_to_menu(request, menu_pk, *args, **kwargs):

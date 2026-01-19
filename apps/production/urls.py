@@ -11,6 +11,8 @@ urlpatterns = [
     path('jidelnicky/novy/', views.MenuPlanCreateView.as_view(), name='menu_create'),
     path('jidelnicky/<int:pk>/', views.MenuPlanDetailView.as_view(), name='menu_detail'),
     path('jidelnicky/<int:pk>/smazat/', views.MenuPlanDeleteView.as_view(), name='menu_delete'),
+    path('jidelnicky/<int:pk>/vizualni-editor/', views.MenuPlanVisualEditView.as_view(), name='menu_visual_edit'),
+
     
     # Šablony jídelníčků
     path('sablony/', template_views.MenuTemplateListView.as_view(), name='template_list'),
@@ -42,6 +44,13 @@ urlpatterns = [
     # AJAX endpointy pro jídelníčky
     path('jidelnicky/<int:menu_pk>/pridat-jidlo/', views.add_meal_to_menu, name='add_meal_to_menu'),
     path('jidelnicky/<int:menu_pk>/upravit-porce/', views.update_portions_bulk, name='update_portions_bulk'),
+
+    # AJAX endpointy pro vizuální editor MenuPlan (adapter)
+    path('jidelnicky/<int:menu_pk>/visual/add-meal/', views.menu_visual_add_meal_ajax, name='menu_visual_add_meal_ajax'),
+    path('jidelnicky/<int:menu_pk>/visual/remove-meal/', views.menu_visual_remove_meal_ajax, name='menu_visual_remove_meal_ajax'),
+    path('jidelnicky/<int:menu_pk>/visual/reorder/', views.menu_visual_reorder_ajax, name='menu_visual_reorder_ajax'),
+    path('jidelnicky/<int:menu_pk>/visual/copy-day/', views.menu_visual_copy_day_ajax, name='menu_visual_copy_day_ajax'),
+    path('jidelnicky/<int:menu_pk>/visual/clear-day/', views.menu_visual_clear_day_ajax, name='menu_visual_clear_day_ajax'),
     
     # AJAX endpointy pro jednotlivé výrobní příkazy
     path('vyrobni-prikazy/<int:order_pk>/upravit-porce/', views.update_order_portions, name='update_order_portions'),

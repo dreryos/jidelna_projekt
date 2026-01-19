@@ -45,6 +45,7 @@ Vizuální editor umožňuje upravovat šablony jídelníčků pomocí intuitivn
 - Live statistiky
 - Okamžitá validace
 - Přístupný na: `/production/sablony/<id>/vizualni-editor/`
+- Nově také přístupný pro manuální jídelníčky: `/production/jidelnicky/<id>/vizualni-editor/`
 
 #### XML režim (pokročilý)
 - Přímá editace XML kódu
