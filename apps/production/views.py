@@ -35,6 +35,27 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# --- Helper Functions ---
+
+def _get_menu_plan_stats(menu_plan):
+    """
+    Calculate statistics for a MenuPlan (for visual editor).
+    
+    Returns:
+        dict: {
+            'days': int,
+            'meals': int (renamed from total_meals for template compatibility),
+            'unique_recipes': int
+        }
+    """
+    unique_recipes = menu_plan.production_orders.values('recipe').distinct().count()
+    return {
+        'days': menu_plan.get_days_count(),
+        'meals': menu_plan.get_total_orders(),
+        'unique_recipes': unique_recipes
+    }
+
+
 # --- Authorization Helpers ---
 
 class CanteenOwnerMixin(LoginRequiredMixin):
@@ -362,12 +383,8 @@ class MenuPlanVisualEditView(CanteenOwnerMixin, UpdateView):
         ]
         context['meal_type_choices_json'] = json.dumps(context['meal_type_choices'])
 
-        # Simple stats
-        context['stats'] = {
-            'days': self.object.get_days_count(),
-            'total_meals': self.object.get_total_orders(),
-            'total_portions': 0
-        }
+        # Stats (including unique_recipes for template compatibility)
+        context['stats'] = _get_menu_plan_stats(self.object)
 
         # Provide AJAX endpoints for the template JS to call
         from django.urls import reverse
@@ -423,11 +440,7 @@ def menu_visual_add_meal_ajax(request, menu_pk, *args, **kwargs):
             'portion_count': portion_count
         }
 
-        stats = {
-            'days': menu_plan.get_days_count(),
-            'total_meals': menu_plan.get_total_orders(),
-            'total_portions': 0
-        }
+        stats = _get_menu_plan_stats(menu_plan)
 
         return JsonResponse({'success': True, 'meal': meal_obj, 'stats': stats})
 
@@ -468,11 +481,7 @@ def menu_visual_remove_meal_ajax(request, menu_pk, *args, **kwargs):
             removed_id = order.id
             order.delete()
 
-        stats = {
-            'days': menu_plan.get_days_count(),
-            'total_meals': menu_plan.get_total_orders(),
-            'total_portions': 0
-        }
+        stats = _get_menu_plan_stats(menu_plan)
 
         return JsonResponse({'success': True, 'removed_order_id': removed_id, 'stats': stats})
 
@@ -527,11 +536,7 @@ def menu_visual_copy_day_ajax(request, menu_pk, *args, **kwargs):
                     'portion_count': None
                 })
 
-        stats = {
-            'days': menu_plan.get_days_count(),
-            'total_meals': menu_plan.get_total_orders(),
-            'total_portions': 0
-        }
+        stats = _get_menu_plan_stats(menu_plan)
 
         return JsonResponse({'success': True, 'copied_meals': copied_meals, 'stats': stats})
 
@@ -559,11 +564,7 @@ def menu_visual_clear_day_ajax(request, menu_pk, *args, **kwargs):
         with transaction.atomic():
             orders_to_delete.delete()
 
-        stats = {
-            'days': menu_plan.get_days_count(),
-            'total_meals': menu_plan.get_total_orders(),
-            'total_portions': 0
-        }
+        stats = _get_menu_plan_stats(menu_plan)
 
         return JsonResponse({'success': True, 'removed_count': count, 'stats': stats})
 

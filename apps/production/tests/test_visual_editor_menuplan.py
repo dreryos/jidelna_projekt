@@ -2,7 +2,7 @@ from django.test import TestCase, Client
 from django.urls import reverse
 from django.contrib.auth import get_user_model
 from apps.production.models import MenuPlan, ProductionOrder
-from apps.core.models import Recipe
+from apps.core.models import Recipe, UserProfile
 from apps.canteens.models import Canteen
 import json
 from datetime import date
@@ -13,6 +13,11 @@ class MenuPlanVisualEditorTests(TestCase):
         User = get_user_model()
         self.user = User.objects.create_user('tester', 'tester@example.com', 'password')
         self.canteen = Canteen.objects.create(name='Test Canteen')
+        
+        # Create UserProfile and assign canteen (required by CanteenOwnerMixin)
+        self.profile = self.user.profile
+        self.profile.canteens.add(self.canteen)
+        
         self.recipe = Recipe.objects.create(code='R100', name='Test Recipe')
         self.menu = MenuPlan.objects.create(
             name='Test Menu',
