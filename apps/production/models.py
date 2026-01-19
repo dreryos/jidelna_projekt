@@ -6,6 +6,7 @@ import xml.etree.ElementTree as ET
 import uuid
 
 from apps.core.models import Recipe, Ingredient
+from apps.core.constants import VAT_RATE_CHOICES
 from apps.canteens.models import Canteen, Warehouse
 from apps.inventory.models import StockItem
 from .xml_parser import parse_menu_template_xml, MEAL_TYPE_MAPPING
@@ -251,6 +252,14 @@ class ProductionOrder(models.Model):
         verbose_name="Typ jídla",
         help_text="Kategorie jídla (snídaně, oběd, večeře, svačina)",
         db_index=True
+    )
+    selling_vat_rate = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal('12.00'),
+        choices=VAT_RATE_CHOICES,
+        verbose_name="Sazba DPH při prodeji (%)",
+        help_text="DPH sazba pro prodej tohoto jídla (zkopíruje se z receptu při vytvoření)"
     )
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Vytvořeno")
     

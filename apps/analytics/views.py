@@ -92,8 +92,11 @@ def menu_detail_analytics(request, menu_id):
     # Pro každý výrobní příkaz vypočítáme náklady
     meals_data = []
     total_cost = Decimal('0')
+    total_cost_with_vat = Decimal('0')
+    total_vat_amount = Decimal('0')
     total_portions = 0
-    cost_per_person = Decimal('0')  # Součet cen za porci všech jídel
+    cost_per_person = Decimal('0')  # Součet cen za porci všech jídel (bez DPH)
+    cost_per_person_with_vat = Decimal('0')  # Součet cen za porci s DPH
     
     for order in orders:
         canteen = order.resolved_canteen
@@ -105,11 +108,12 @@ def menu_detail_analytics(request, menu_id):
         if portions <= 0:
             continue
             
-        # Vypočítáme cenu za všechny porce s použitím historických cen
+        # Vypočítáme cenu za všechny porce s použitím historických cen a DPH
         price_info = order.recipe.calculate_portion_price(
             canteen, 
             portions=int(portions),
-            price_date=order.date
+            price_date=order.date,
+            vat_rate=order.selling_vat_rate
         )
         
         # Získáme ingredience a jejich ceny (s historickými cenami)
@@ -149,6 +153,11 @@ def menu_detail_analytics(request, menu_id):
             'portions': int(portions),
             'total_cost': price_info['total'],
             'cost_per_portion': price_info['per_portion'],
+            'total_cost_with_vat': price_info.get('total_with_vat', price_info['total']),
+            'cost_per_portion_with_vat': price_info.get('per_portion_with_vat', price_info['per_portion']),
+            'vat_amount': price_info.get('vat_amount', Decimal('0')),
+            'vat_amount_per_portion': price_info.get('vat_amount_per_portion', Decimal('0')),
+            'vat_rate': price_info.get('vat_rate', order.selling_vat_rate),
             'ingredients': ingredients_breakdown,
         })
         
@@ -156,16 +165,30 @@ def menu_detail_analytics(request, menu_id):
         total_portions += int(portions)
         # Přidáme cenu za porci tohoto jídla do celkové ceny na osobu
         cost_per_person += price_info['per_portion']
+        
+        # DPH údaje
+        if 'total_with_vat' in price_info:
+            total_cost_with_vat += price_info['total_with_vat']
+            total_vat_amount += price_info['vat_amount']
+            cost_per_person_with_vat += price_info['per_portion_with_vat']
+        else:
+            total_cost_with_vat += price_info['total']
+            cost_per_person_with_vat += price_info['per_portion']
     
     avg_cost = total_cost / Decimal(str(total_portions)) if total_portions > 0 else Decimal('0')
+    avg_cost_with_vat = total_cost_with_vat / Decimal(str(total_portions)) if total_portions > 0 else Decimal('0')
     
     context = {
         'menu_plan': menu_plan,
         'meals_data': meals_data,
         'total_cost': round(total_cost, 2),
+        'total_cost_with_vat': round(total_cost_with_vat, 2),
+        'total_vat_amount': round(total_vat_amount, 2),
         'total_portions': total_portions,
         'avg_cost': round(avg_cost, 2),
-        'cost_per_person': round(cost_per_person, 2),  # Nová metrika: cena na osobu
+        'avg_cost_with_vat': round(avg_cost_with_vat, 2),
+        'cost_per_person': round(cost_per_person, 2),
+        'cost_per_person_with_vat': round(cost_per_person_with_vat, 2),
     }
     
     return render(request, 'analytics/menu_detail.html', context)
@@ -288,6 +311,7 @@ def recipe_cost_detail(request, recipe_id):
     # Vypočítáme náklady pro každé použití
     usage_history = []
     costs_list = []
+    costs_with_vat_list = []
     
     for order in orders:
         canteen = order.resolved_canteen
@@ -298,14 +322,18 @@ def recipe_cost_detail(request, recipe_id):
         if portions <= 0:
             continue
         
-        # Použijeme historické ceny pro datum objednávky
+        # Použijeme historické ceny pro datum objednávky a DPH z objednávky
         price_info = recipe.calculate_portion_price(
             canteen, 
             portions=1,
-            price_date=order.date
+            price_date=order.date,
+            vat_rate=order.selling_vat_rate
         )
         cost_per_portion = price_info['per_portion']
         costs_list.append(cost_per_portion)
+        
+        cost_per_portion_with_vat = price_info.get('per_portion_with_vat', cost_per_portion)
+        costs_with_vat_list.append(cost_per_portion_with_vat)
         
         usage_history.append({
             'date': order.date,
@@ -313,6 +341,9 @@ def recipe_cost_detail(request, recipe_id):
             'menu_plan': order.menu_plan,
             'portions': int(portions),
             'cost_per_portion': cost_per_portion,
+            'cost_per_portion_with_vat': cost_per_portion_with_vat,
+            'vat_amount_per_portion': price_info.get('vat_amount_per_portion', Decimal('0')),
+            'vat_rate': price_info.get('vat_rate', order.selling_vat_rate),
         })
     
     # Vypočítáme statistiky
@@ -320,10 +351,16 @@ def recipe_cost_detail(request, recipe_id):
         avg_cost = sum(costs_list) / len(costs_list)
         min_cost = min(costs_list)
         max_cost = max(costs_list)
+        avg_cost_with_vat = sum(costs_with_vat_list) / len(costs_with_vat_list)
+        min_cost_with_vat = min(costs_with_vat_list)
+        max_cost_with_vat = max(costs_with_vat_list)
     else:
         avg_cost = Decimal('0')
         min_cost = Decimal('0')
         max_cost = Decimal('0')
+        avg_cost_with_vat = Decimal('0')
+        min_cost_with_vat = Decimal('0')
+        max_cost_with_vat = Decimal('0')
     
     # Získáme aktuální rozklad surovin
     # Používáme první jídelnu pro výpočet aktuálních cen
@@ -358,6 +395,9 @@ def recipe_cost_detail(request, recipe_id):
         'avg_cost': round(avg_cost, 2),
         'min_cost': round(min_cost, 2),
         'max_cost': round(max_cost, 2),
+        'avg_cost_with_vat': round(avg_cost_with_vat, 2),
+        'min_cost_with_vat': round(min_cost_with_vat, 2),
+        'max_cost_with_vat': round(max_cost_with_vat, 2),
         'usage_count': len(costs_list),
         'usage_history': usage_history,
         'ingredients_breakdown': ingredients_breakdown,

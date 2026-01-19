@@ -92,6 +92,22 @@ a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
   - Vyčištěné šablony: goods_receipt_detail.html, bidfood_import_step2.html, goods_receipt_form.html, stock_list.html, goods_receipt_list.html
   - CSS variables pro tabulky (--bs-table-bg, --bs-table-striped-bg, --bs-table-hover-bg)
   - Správné zobrazení .table-dark, .table-secondary, .table-light v obou režimech
+- **DPH v modulu Analytika**: Počítání a zobrazování cen s DPH u jídelníčků a receptů
+  - Nový soubor `apps/core/constants.py` s definicí `VAT_RATE_CHOICES` (21%, 12%, 0%)
+  - Pole `selling_vat_rate` v modelu `Recipe` - výchozí DPH sazba 12% s možností volby
+  - Pole `selling_vat_rate` v modelu `ProductionOrder` - DPH sazba pro každý výrobní příkaz
+  - Signal `copy_vat_rate_from_recipe` v `apps/production/signals.py` - automatické kopírování DPH z receptu při vytváření nového příkazu
+  - Rozšíření metody `Recipe.calculate_portion_price()` o parametr `vat_rate` a výpočet cen s DPH
+    - Nový výstup: `{'total', 'per_portion', 'total_with_vat', 'per_portion_with_vat', 'vat_amount', 'vat_amount_per_portion', 'vat_rate'}`
+    - Správné zaokrouhlování na 2 desetinná místa
+  - Rozšíření admin rozhraní ProductionOrder o fieldset "Prodejní informace" s DPH sazbou
+  - Aktualizace views `menu_detail_analytics` a `recipe_cost_detail` s výpočtem DPH
+  - Rozšíření templates `menu_detail.html` a `recipe_cost_detail.html` o zobrazení cen s DPH
+    - Zobrazení nákladové ceny bez DPH a prodejní ceny s DPH
+    - Výpis výše DPH a DPH sazby
+    - Celkové součty včetně DPH
+  - Testovací skript `test_vat_implementation.py` pro ověření funkcionality
+  - Migrace: `core/0005_recipe_selling_vat_rate.py`, `production/0015_productionorder_selling_vat_rate.py`
 
 ### Changed
 - **Rebranding z "Jídelna" na "Spíž"**: Kompletní přejmenování projektu

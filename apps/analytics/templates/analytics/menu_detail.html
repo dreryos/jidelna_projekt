@@ -46,7 +46,7 @@
       <div class="card-body text-center">
         <i class="fas fa-coins fa-2x mb-2"></i>
         <h4>{{ avg_cost }} Kč</h4>
-        <small>Průměrné náklady/porce</small>
+        <small>Průměrné náklady/porce (bez DPH)</small>
       </div>
     </div>
   </div>
@@ -55,21 +55,29 @@
       <div class="card-body text-center">
         <i class="fas fa-user fa-2x mb-2"></i>
         <h4>{{ cost_per_person }} Kč</h4>
-        <small>Cena na osobu</small>
+        <small>Náklady na osobu (bez DPH)</small>
       </div>
     </div>
   </div>
 </div>
 
 <div class="alert alert-info">
-  <div class="d-flex justify-content-between align-items-center">
-    <div>
-      <h5 class="mb-0">
+  <div class="row">
+    <div class="col-md-6">
+      <h5 class="mb-2">
         <i class="fas fa-calculator me-2"></i>Celkové náklady jídelníčku
       </h5>
+      <p class="mb-0"><strong>Bez DPH:</strong> {{ total_cost }} Kč</p>
+      <p class="mb-0"><strong>S DPH:</strong> {{ total_cost_with_vat }} Kč</p>
+      <p class="mb-0"><strong>DPH celkem:</strong> {{ total_vat_amount }} Kč</p>
     </div>
-    <div>
-      <h3 class="mb-0">{{ total_cost }} Kč</h3>
+    <div class="col-md-6">
+      <h5 class="mb-2">
+        <i class="fas fa-user me-2"></i>Cena na osobu
+      </h5>
+      <p class="mb-0"><strong>Bez DPH:</strong> {{ cost_per_person }} Kč</p>
+      <p class="mb-0"><strong>S DPH:</strong> {{ cost_per_person_with_vat }} Kč</p>
+      <p class="mb-0"><small class="text-muted">Součet cen za porci všech jídel</small></p>
     </div>
   </div>
 </div>
@@ -86,12 +94,20 @@
         </h5>
         <small>
           <i class="fas fa-calendar me-1"></i>{{ meal.date|date:"d.m.Y" }} | 
-          <i class="fas fa-users me-1"></i>{{ meal.portions }} porcí
+          <i class="fas fa-users me-1"></i>{{ meal.portions }} porcí | 
+          <i class="fas fa-percent me-1"></i>DPH {{ meal.vat_rate }}%
         </small>
       </div>
       <div class="text-end">
-        <h5 class="mb-0">{{ meal.cost_per_portion }} Kč/porce</h5>
-        <small>Celkem: {{ meal.total_cost }} Kč</small>
+        <div class="mb-1">
+          <strong>Náklady bez DPH:</strong> {{ meal.cost_per_portion }} Kč/porce
+        </div>
+        <div class="mb-1">
+          <strong>S DPH ({{ meal.vat_rate }}%):</strong> {{ meal.cost_per_portion_with_vat }} Kč/porce
+        </div>
+        <div class="text-muted" style="font-size: 0.85em;">
+          Celkem bez DPH: {{ meal.total_cost }} Kč | S DPH: {{ meal.total_cost_with_vat }} Kč
+        </div>
       </div>
     </div>
   </div>

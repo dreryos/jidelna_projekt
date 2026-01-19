@@ -28,7 +28,7 @@
       <div class="card-body text-center">
         <i class="fas fa-coins fa-2x mb-2"></i>
         <h4>{{ avg_cost }} Kč</h4>
-        <small>Průměrné náklady/porce</small>
+        <small>Průměrné náklady/porce (bez DPH)</small>
       </div>
     </div>
   </div>
@@ -37,7 +37,7 @@
       <div class="card-body text-center">
         <i class="fas fa-arrow-down fa-2x mb-2"></i>
         <h4>{{ min_cost }} Kč</h4>
-        <small>Minimální náklady</small>
+        <small>Minimální náklady (bez DPH)</small>
       </div>
     </div>
   </div>
@@ -46,7 +46,7 @@
       <div class="card-body text-center">
         <i class="fas fa-arrow-up fa-2x mb-2"></i>
         <h4>{{ max_cost }} Kč</h4>
-        <small>Maximální náklady</small>
+        <small>Maximální náklady (bez DPH)</small>
       </div>
     </div>
   </div>
@@ -56,6 +56,37 @@
         <i class="fas fa-history fa-2x mb-2"></i>
         <h4>{{ usage_count }}</h4>
         <small>Počet použití</small>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Statistiky s DPH -->
+<div class="row mb-4">
+  <div class="col-md-4">
+    <div class="card border-primary">
+      <div class="card-body text-center">
+        <i class="fas fa-percent fa-2x mb-2 text-primary"></i>
+        <h5>{{ avg_cost_with_vat }} Kč</h5>
+        <small>Průměrná cena s DPH/porce</small>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card border-success">
+      <div class="card-body text-center">
+        <i class="fas fa-arrow-down fa-2x mb-2 text-success"></i>
+        <h5>{{ min_cost_with_vat }} Kč</h5>
+        <small>Minimální cena s DPH</small>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card border-warning">
+      <div class="card-body text-center">
+        <i class="fas fa-arrow-up fa-2x mb-2 text-warning"></i>
+        <h5>{{ max_cost_with_vat }} Kč</h5>
+        <small>Maximální cena s DPH</small>
       </div>
     </div>
   </div>
@@ -123,7 +154,9 @@
             <th><i class="fas fa-building me-1"></i>Jídelna</th>
             <th><i class="fas fa-book me-1"></i>Jídelníček</th>
             <th class="text-end"><i class="fas fa-users me-1"></i>Porcí</th>
+            <th class="text-end"><i class="fas fa-percent me-1"></i>DPH</th>
             <th class="text-end"><i class="fas fa-coins me-1"></i>Náklady/porce</th>
+            <th class="text-end"><i class="fas fa-coins me-1"></i>S DPH/porce</th>
           </tr>
         </thead>
         <tbody>
@@ -144,7 +177,13 @@
               <span class="badge bg-info">{{ usage.portions }}</span>
             </td>
             <td class="text-end">
+              <span class="badge bg-secondary">{{ usage.vat_rate }}%</span>
+            </td>
+            <td class="text-end">
               <strong>{{ usage.cost_per_portion }} Kč</strong>
+            </td>
+            <td class="text-end">
+              <strong class="text-primary">{{ usage.cost_per_portion_with_vat }} Kč</strong>
             </td>
           </tr>
           {% endfor %}

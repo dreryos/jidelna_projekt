@@ -68,10 +68,10 @@ class CategoryAdmin(admin.ModelAdmin):
 @admin.register(Recipe)
 class RecipeAdmin(admin.ModelAdmin):
     inlines = [RecipeIngredientInline]
-    list_display = ('code', 'name', 'category')
-    list_filter = ('category',)
+    list_display = ('code', 'name', 'category', 'selling_vat_rate')
+    list_filter = ('category', 'selling_vat_rate')
     search_fields = ('code', 'name')
-    fields = ('category', 'name', 'description', 'code')
+    fields = ('category', 'name', 'description', 'selling_vat_rate', 'code')
     readonly_fields = ('code',)
     
     def get_readonly_fields(self, request, obj=None):

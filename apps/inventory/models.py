@@ -5,6 +5,7 @@ from datetime import datetime
 from django.db import transaction
 from django.core.exceptions import ValidationError
 from apps.core.models import Ingredient
+from apps.core.constants import VAT_RATE_CHOICES
 from apps.canteens.models import Warehouse
 import logging
 
@@ -28,6 +29,20 @@ class StockItem(models.Model):
     quantity = models.DecimalField(max_digits=10, decimal_places=3, default=0, verbose_name="Množství na skladě")
     quantity_blocked = models.DecimalField(max_digits=10, decimal_places=3, default=0, verbose_name="Blokované množství")
     price = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Nákupní cena za jednotku")
+    vat_rate = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        choices=VAT_RATE_CHOICES,
+        default=Decimal('12'),
+        verbose_name="Sazba DPH"
+    )
+    price_without_vat = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name="Cena bez DPH"
+    )
 
     def __str__(self):
         return f"{self.ingredient.name} v {self.warehouse.name}: {self.quantity} {self.ingredient.unit}"
@@ -67,6 +82,11 @@ class StockItem(models.Model):
         self.save(update_fields=['quantity_blocked'])
 
     def save(self, *args, **kwargs):
+        # Výpočet ceny bez DPH (price je cena s DPH)
+        if self.price is not None and self.vat_rate is not None:
+             vat_multiplier = 1 + (self.vat_rate / Decimal('100'))
+             self.price_without_vat = (self.price / vat_multiplier).quantize(Decimal('0.01'))
+
         # Automatická oprava nepřesností pro kusové položky
         if self.ingredient.base_unit in ['ks', 'kus', 'kusy']:
              # Pokud je množství velmi blízko celému číslu (chyba < 0.005), zaokrouhlíme ho
@@ -275,16 +295,19 @@ class GoodsReceipt(models.Model):
                     warehouse=self.warehouse,
                     defaults={
                         'quantity': Decimal('0'),
-                        'price': item.price
+                        'price': item.price,
+                        'vat_rate': item.vat_rate,
+                        'price_without_vat': item.price_without_vat
                     }
                 )
                 
                 # Přičtení množství
                 stock_item.quantity += item.quantity
                 
-                # Aktualizace ceny - zapíše se do historie automaticky v save() StockItem
-                if stock_item.price != item.price:
+                # Aktualizace ceny a DPH - zapíše se do historie automaticky v save() StockItem
+                if stock_item.price != item.price or stock_item.vat_rate != item.vat_rate:
                     stock_item.price = item.price
+                    stock_item.vat_rate = item.vat_rate
                 
                 stock_item.save()
             

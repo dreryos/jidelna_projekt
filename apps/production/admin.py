@@ -40,14 +40,18 @@ class MenuPlanAdmin(admin.ModelAdmin):
 @admin.register(ProductionOrder)
 class ProductionOrderAdmin(admin.ModelAdmin):
     inlines = [PickingListInline]
-    list_display = ('recipe', 'meal_type', 'canteen', 'date', 'total_portions', 'created_at')
-    list_filter = ('meal_type', 'canteen', 'date', 'menu_plan')
+    list_display = ('recipe', 'meal_type', 'canteen', 'date', 'total_portions', 'selling_vat_rate', 'created_at')
+    list_filter = ('meal_type', 'canteen', 'date', 'menu_plan', 'selling_vat_rate')
     autocomplete_fields = ['recipe', 'canteen', 'menu_plan']
     readonly_fields = ('price_per_portion', 'total_price')
     
     fieldsets = (
         (None, {
             'fields': ('menu_plan', 'recipe', 'canteen', 'date', 'meal_type')
+        }),
+        ('Prodejní informace', {
+            'fields': ('selling_vat_rate',),
+            'description': 'DPH sazba pro prodej tohoto jídla (zkopíruje se automaticky z receptu)'
         }),
         ('Vypočtené ceny', {
             'fields': ('price_per_portion', 'total_price'),
@@ -65,11 +69,17 @@ class ProductionOrderAdmin(admin.ModelAdmin):
             prices = obj.recipe.calculate_portion_price(
                 obj.canteen, 
                 portions=1,
-                portion_coefficient=1.0
+                portion_coefficient=1.0,
+                vat_rate=obj.selling_vat_rate
             )
-            return f"{prices['per_portion']} Kč"
+            cost_info = f"Náklady: {prices['per_portion']} Kč"
+            if 'per_portion_with_vat' in prices:
+                vat_info = f"<br>S DPH ({prices['vat_rate']}%): {prices['per_portion_with_vat']} Kč"
+                return f"{cost_info}{vat_info}"
+            return cost_info
         return "N/A"
     price_per_portion.short_description = "Cena/porce"
+    price_per_portion.allow_tags = True
 
     def total_price(self, obj):
         if obj.recipe and obj.canteen:
@@ -77,11 +87,17 @@ class ProductionOrderAdmin(admin.ModelAdmin):
             prices = obj.recipe.calculate_portion_price(
                 obj.canteen,
                 portions=int(obj.total_effective_portions),
-                portion_coefficient=1.0
+                portion_coefficient=1.0,
+                vat_rate=obj.selling_vat_rate
             )
-            return f"{prices['total']} Kč"
+            cost_info = f"Náklady: {prices['total']} Kč"
+            if 'total_with_vat' in prices:
+                vat_info = f"<br>S DPH ({prices['vat_rate']}%): {prices['total_with_vat']} Kč<br>DPH: {prices['vat_amount']} Kč"
+                return f"{cost_info}{vat_info}"
+            return cost_info
         return "N/A"
     total_price.short_description = "Celková cena výroby"
+    total_price.allow_tags = True
 
 
 @admin.register(PickingListDocument)

@@ -6,6 +6,7 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 
 from apps.canteens.models import Canteen
+from apps.core.constants import VAT_RATE_CHOICES
 
 # Create your models here.
 
@@ -85,6 +86,16 @@ class Recipe(models.Model):
     base_portions = models.PositiveIntegerField(default=10, verbose_name="Základní počet porcí",
                                                 help_text="Referenční počet porcí pro normu (obvykle 10)")
     
+    # DPH při prodeji
+    selling_vat_rate = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal('12.00'),
+        choices=VAT_RATE_CHOICES,
+        verbose_name="Výchozí sazba DPH při prodeji (%)",
+        help_text="Výchozí DPH sazba pro tento recept (lze změnit při výrobě)"
+    )
+    
     ingredients = models.ManyToManyField(
         Ingredient,
         through='RecipeIngredient',
@@ -118,7 +129,7 @@ class Recipe(models.Model):
         
         super().save(*args, **kwargs)
 
-    def calculate_portion_price(self, canteen, portions=1, portion_coefficient=1.0, price_date=None):
+    def calculate_portion_price(self, canteen, portions=1, portion_coefficient=1.0, price_date=None, vat_rate=None):
         """
         Vypočítá cenu porce pro danou jídelnu.
         Cena se počítá na základě průměrné ceny surovin ve skladech dané jídelny.
@@ -128,9 +139,14 @@ class Recipe(models.Model):
             portions: Počet porcí (výchozí 1)
             portion_coefficient: Koeficient velikosti porce (1.0 = normální, 0.5 = poloviční atd.)
             price_date: Datum pro historické ceny (None = aktuální ceny)
+            vat_rate: Sazba DPH v procentech (None = bez výpočtu DPH)
         
         Returns:
-            dict: {'total': celková cena, 'per_portion': cena za porci}
+            dict: {'total': celková cena, 'per_portion': cena za porci, 
+                   'total_with_vat': cena s DPH (pokud je vat_rate zadán),
+                   'per_portion_with_vat': cena za porci s DPH,
+                   'vat_amount': částka DPH,
+                   'vat_rate': použitá sazba DPH}
         """
         from apps.inventory.models import StockItem, IngredientPriceHistory
         from django.db.models import Avg
@@ -171,10 +187,30 @@ class Recipe(models.Model):
 
         price_per_portion = total_price / Decimal(str(portions)) if portions > 0 else Decimal('0')
 
-        return {
+        result = {
             'total': round(total_price, 2),
             'per_portion': round(price_per_portion, 2)
         }
+        
+        # Pokud je zadána DPH sazba, vypočítáme ceny s DPH
+        if vat_rate is not None:
+            vat_rate_decimal = Decimal(str(vat_rate))
+            vat_multiplier = 1 + (vat_rate_decimal / Decimal('100'))
+            
+            total_with_vat = total_price * vat_multiplier
+            per_portion_with_vat = price_per_portion * vat_multiplier
+            vat_amount_total = total_with_vat - total_price
+            vat_amount_per_portion = per_portion_with_vat - price_per_portion
+            
+            result.update({
+                'total_with_vat': round(total_with_vat, 2),
+                'per_portion_with_vat': round(per_portion_with_vat, 2),
+                'vat_amount': round(vat_amount_total, 2),
+                'vat_amount_per_portion': round(vat_amount_per_portion, 2),
+                'vat_rate': vat_rate_decimal
+            })
+        
+        return result
 
     def __str__(self):
         if self.code and self.category:
