@@ -44,7 +44,7 @@ def _get_menu_plan_stats(menu_plan):
     Returns:
         dict: {
             'days': int,
-            'meals': int (renamed from total_meals for template compatibility),
+            'meals': int,
             'unique_recipes': int
         }
     """
