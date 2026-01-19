@@ -2,7 +2,7 @@ from django.test import TestCase, Client
 from django.urls import reverse
 from django.contrib.auth import get_user_model
 from apps.production.models import MenuPlan, ProductionOrder
-from apps.core.models import Recipe, UserProfile
+from apps.core.models import Recipe
 from apps.canteens.models import Canteen
 import json
 from datetime import date
