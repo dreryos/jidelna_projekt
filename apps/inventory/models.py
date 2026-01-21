@@ -4,12 +4,126 @@ from decimal import Decimal
 from datetime import datetime
 from django.db import transaction
 from django.core.exceptions import ValidationError
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+from django.core.cache import cache
 from apps.core.models import Ingredient
 from apps.core.constants import VAT_RATE_CHOICES
 from apps.canteens.models import Warehouse
 import logging
 
 logger = logging.getLogger(__name__)
+
+class Supplier(models.Model):
+    """Dodavatel s možností šablon surovin"""
+    name = models.CharField(
+        max_length=200,
+        unique=True,
+        verbose_name="Název dodavatele"
+    )
+    slug = models.SlugField(
+        max_length=50,
+        unique=True,
+        verbose_name="Identifikátor",
+        help_text="Jednoznačný identifikátor pro API (např. 'zelinar', 'pekarna')"
+    )
+    is_active = models.BooleanField(
+        default=True,
+        verbose_name="Aktivní",
+        help_text="Deaktivování skryje dodavatele ze šablon"
+    )
+    template_cache_key = models.CharField(
+        max_length=100,
+        blank=True,
+        verbose_name="Cache klíč",
+        help_text="Auto-generovaný klíč pro cache"
+    )
+    
+    def __str__(self):
+        return self.name
+    
+    def save(self, *args, **kwargs):
+        if not self.template_cache_key:
+            self.template_cache_key = f"supplier_template_{self.slug}"
+        super().save(*args, **kwargs)
+    
+    def get_template_ingredients(self):
+        """Vrátí všechny suroviny pro šablonu dodavatele"""
+        return self.template_ingredients.select_related('ingredient').all()
+    
+    def invalidate_cache(self):
+        """Invaliduje cache pro šablony tohoto dodavatele"""
+        cache.delete(self.template_cache_key)
+    
+    class Meta:
+        verbose_name = "Dodavatel"
+        verbose_name_plural = "Dodavatelé"
+        ordering = ['name']
+
+
+class SupplierIngredientTemplate(models.Model):
+    """Šablona surovin pro dodavatele s výchozími hodnotami"""
+    supplier = models.ForeignKey(
+        Supplier,
+        on_delete=models.CASCADE,
+        related_name='template_ingredients',
+        verbose_name="Dodavatel"
+    )
+    ingredient = models.ForeignKey(
+        Ingredient,
+        on_delete=models.CASCADE,
+        verbose_name="Surovina"
+    )
+    default_price_without_vat = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name="Výchozí cena bez DPH",
+        help_text="Přednastavená cena bez DPH pro rychlejší vyplnění"
+    )
+    default_vat_rate = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        choices=VAT_RATE_CHOICES,
+        default=Decimal('12'),
+        verbose_name="Výchozí sazba DPH"
+    )
+    sort_order = models.PositiveIntegerField(
+        default=0,
+        verbose_name="Pořadí",
+        help_text="Pořadí zobrazení v šabloně (0 = první)"
+    )
+    
+    def __str__(self):
+        return f"{self.supplier.name} - {self.ingredient.name}"
+    
+    @property
+    def default_price_with_vat(self):
+        """Vypočítá cenu s DPH pokud je zadána cena bez DPH"""
+        if self.default_price_without_vat:
+            vat_multiplier = Decimal('1') + (self.default_vat_rate / Decimal('100'))
+            return self.default_price_without_vat * vat_multiplier
+        return None
+    
+    class Meta:
+        verbose_name = "Šablona suroviny"
+        verbose_name_plural = "Šablony surovin"
+        unique_together = ('supplier', 'ingredient')
+        ordering = ['sort_order', 'ingredient__name']
+
+
+# Signály pro automatické cache invalidation
+@receiver(post_save, sender=Supplier)
+def invalidate_supplier_cache_on_save(sender, instance, **kwargs):
+    """Invaliduje cache při změně dodavatele"""
+    instance.invalidate_cache()
+
+
+@receiver(post_save, sender=SupplierIngredientTemplate)
+def invalidate_supplier_template_cache_on_save(sender, instance, **kwargs):
+    """Invaliduje cache při změně šablony surovin"""
+    instance.supplier.invalidate_cache()
 
 """
 Model pro evidenci zásob v konkrétních skladech.
@@ -235,7 +349,16 @@ class GoodsReceipt(models.Model):
         max_length=200,
         blank=True,
         verbose_name="Dodavatel",
-        help_text="Název dodavatele"
+        help_text="Název dodavatele (pro postupnou migraci)"
+    )
+    supplier_obj = models.ForeignKey(
+        Supplier,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='goods_receipts',
+        verbose_name="Dodavatel (nový)",
+        help_text="Dodavatel s možností šablon"
     )
     status = models.CharField(
         max_length=10,

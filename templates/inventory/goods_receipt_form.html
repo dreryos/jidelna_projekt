@@ -81,6 +81,52 @@ label.required::after {
     border-radius: 5px;
     margin-bottom: 20px;
 }
+
+/* Template selector styly */
+.template-selector-section .template-btn {
+    min-height: 60px;
+    font-weight: 600;
+    touch-action: manipulation;
+}
+
+.template-btn:hover:not(:disabled) {
+    transform: translateY(-2px);
+    transition: transform 0.15s ease-in-out;
+}
+
+.template-btn:active {
+    transform: translateY(0);
+}
+
+.template-btn .fas {
+    font-size: 1.2rem;
+}
+
+.undo-btn {
+    border-style: dashed !important;
+}
+
+@media (max-width: 576px) {
+    .template-btn {
+        min-width: 70px;
+        font-size: 0.9rem;
+    }
+}
+
+/* Auto-generate receipt number styly */
+.input-group .btn {
+    z-index: 3;
+}
+
+#generateReceiptNumberBtn:hover {
+    background-color: #e9ecef;
+    border-color: #adb5bd;
+}
+
+#generateReceiptNumberBtn:active {
+    background-color: #dee2e6;
+    border-color: #6c757d;
+}
 </style>
 {% endblock %}
 
@@ -105,7 +151,17 @@ label.required::after {
         <div class="row">
           <div class="col-md-3">
             <label for="{{ form.receipt_number.id_for_label }}" class="form-label required">Číslo dokladu</label>
-            {{ form.receipt_number }}
+            <div class="input-group">
+              {{ form.receipt_number }}
+              <button type="button" 
+                      class="btn btn-outline-secondary" 
+                      id="generateReceiptNumberBtn"
+                      data-bs-toggle="tooltip" 
+                      title="Automaticky vygenerovat číslo dokladu">
+                <i class="fas fa-magic"></i>
+              </button>
+            </div>
+            <small class="form-text text-muted">Nebo klikněte na <i class="fas fa-magic"></i> pro automatické generování</small>
             {% if form.receipt_number.errors %}
               <div class="text-danger">{{ form.receipt_number.errors }}</div>
             {% endif %}
@@ -151,6 +207,59 @@ label.required::after {
       </div>
       
       <hr class="my-4">
+      
+      <!-- Šablony dodavatelů -->
+      <div class="mb-4">
+        <h5 class="mb-3">
+          <i class="fas fa-clipboard-list me-2"></i>Rychlé šablony
+          <small class="text-muted">(volitelné)</small>
+        </h5>
+        <div class="template-selector-section">
+          <div class="d-flex flex-wrap gap-3 mb-3">
+            <button type="button" 
+                    class="btn btn-outline-success btn-lg template-btn" 
+                    data-supplier="zelinar"
+                    data-bs-toggle="tooltip" 
+                    title="Načíst šablonu pro ovoce a zeleninu">
+              <i class="fas fa-carrot me-2"></i>
+              <span class="d-none d-sm-inline">Zelinář</span>
+              <span class="d-inline d-sm-none">🥕</span>
+            </button>
+            <button type="button" 
+                    class="btn btn-outline-warning btn-lg template-btn" 
+                    data-supplier="pekarna"
+                    data-bs-toggle="tooltip" 
+                    title="Načíst šablonu pro pečivo">
+              <i class="fas fa-bread-slice me-2"></i>
+              <span class="d-none d-sm-inline">Pekárna</span>
+              <span class="d-inline d-sm-none">🍞</span>
+            </button>
+            <button type="button" 
+                    class="btn btn-outline-secondary undo-btn" 
+                    id="undoTemplateBtn" 
+                    style="display: none;"
+                    data-bs-toggle="tooltip" 
+                    title="Vrátit předchozí stav">
+              <i class="fas fa-undo me-2"></i>
+              <span class="d-none d-sm-inline">Zpět</span>
+              <span class="d-inline d-sm-none">↶</span>
+            </button>
+          </div>
+          
+          <!-- Loading indikátor -->
+          <div class="template-loading d-none mb-3">
+            <div class="alert alert-info d-flex align-items-center">
+              <div class="spinner-border spinner-border-sm me-3" role="status">
+                <span class="visually-hidden">Loading...</span>
+              </div>
+              <span>Načítám šablonu...</span>
+            </div>
+          </div>
+          
+          <!-- Error/success alerts -->
+          <div class="template-alerts"></div>
+        </div>
+      </div>
       
       <!-- Položky příjmu -->
       <div class="mb-3">
@@ -441,6 +550,396 @@ document.addEventListener('DOMContentLoaded', function() {
   
   // Předvyplnit sklady pokud je výchozí sklad již nastaven
   syncDefaultWarehouse();
+  
+  // Template loading funkcionalita
+  initializeTemplateSelector();
+  
+  // Auto-generate receipt number funcionalita
+  initializeReceiptNumberGenerator();
 });
+
+// Template loading system s undo funkcionalitou
+let templateUndoState = null;
+
+function initializeTemplateSelector() {
+  // Event listeners pro template buttons
+  document.querySelectorAll('.template-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+      const supplierSlug = this.dataset.supplier;
+      if (supplierSlug) {
+        loadSupplierTemplate(supplierSlug);
+      }
+    });
+  });
+  
+  // Undo button
+  document.getElementById('undoTemplateBtn').addEventListener('click', function() {
+    if (templateUndoState) {
+      restoreFormsetState(templateUndoState);
+      hideUndoButton();
+      showTemplateAlert('success', 'Předchozí stav byl obnoven');
+    }
+  });
+  
+  // Initialize tooltips
+  var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+  var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+    return new bootstrap.Tooltip(tooltipTriggerEl);
+  });
+}
+
+function loadSupplierTemplate(supplierSlug) {
+  // Uložit současný stav pro undo
+  saveFormsetState();
+  
+  // Zobrazit loading
+  showTemplateLoading(true);
+  clearTemplateAlerts();
+  
+  // AJAX request
+  fetch(`{% url 'inventory:supplier_template' supplier_slug='SUPPLIER_SLUG' %}`.replace('SUPPLIER_SLUG', supplierSlug), {
+    method: 'GET',
+    headers: {
+      'X-Requested-With': 'XMLHttpRequest',
+    }
+  })
+  .then(response => response.json())
+  .then(data => {
+    showTemplateLoading(false);
+    
+    if (data.success) {
+      applyTemplateToFormset(data);
+      showTemplateAlert('success', `Načtena šablona: ${data.supplier_name} (${data.total_count} položek)`);
+      showUndoButton();
+    } else {
+      showTemplateAlert('danger', `Chyba: ${data.error}`);
+    }
+  })
+  .catch(error => {
+    console.error('Template loading error:', error);
+    showTemplateLoading(false);
+    showTemplateAlert('danger', 'Chyba při komunikaci se serverem');
+  });
+}
+
+function applyTemplateToFormset(templateData) {
+  const formsetBody = document.querySelector('.formset-table tbody');
+  const totalFormsInput = document.querySelector('input[name$="-TOTAL_FORMS"]');
+  
+  if (!formsetBody || !totalFormsInput) {
+    console.error('Formset elements not found');
+    return;
+  }
+  
+  // Vymazat současné řádky (kromě prvního prázdného)
+  const existingRows = formsetBody.querySelectorAll('tr.formset-row');
+  existingRows.forEach((row, index) => {
+    if (index > 0) {
+      row.remove();
+    }
+  });
+  
+  // Aplikovat template data na první řádek a přidat další
+  templateData.ingredients.forEach((ingredient, index) => {
+    let targetRow;
+    
+    if (index === 0) {
+      // Použít první existující řádek
+      targetRow = formsetBody.querySelector('tr.formset-row');
+    } else {
+      // Přidat nový řádek
+      addFormsetRow();
+      targetRow = formsetBody.querySelector(`tr.formset-row:nth-child(${index + 1})`);
+    }
+    
+    if (targetRow) {
+      fillRowWithIngredient(targetRow, ingredient, index);
+    }
+  });
+  
+  // Aktualizovat total forms
+  totalFormsInput.value = templateData.ingredients.length;
+}
+
+function fillRowWithIngredient(row, ingredient, index) {
+  // Vyplnit surovinu
+  const ingredientSelect = row.querySelector(`select[name$="-ingredient"]`);
+  if (ingredientSelect) {
+    ingredientSelect.value = ingredient.ingredient_id;
+  }
+  
+  // Vyplnit cenu bez DPH
+  const priceInput = row.querySelector(`input[name$="-price_without_vat"]`);
+  if (priceInput && ingredient.default_price_without_vat) {
+    priceInput.value = ingredient.default_price_without_vat;
+  }
+  
+  // Vyplnit DPH sazbu
+  const vatRateSelect = row.querySelector(`select[name$="-vat_rate"]`);
+  if (vatRateSelect) {
+    vatRateSelect.value = ingredient.default_vat_rate;
+  }
+  
+  // Synchronizovat sklad z výchozího
+  syncRowWarehouse(row);
+  
+  // Vypočítat DPH
+  if (priceInput) {
+    calculateVAT(priceInput);
+  }
+}
+
+function saveFormsetState() {
+  const formsetRows = document.querySelectorAll('.formset-table tbody tr.formset-row');
+  const state = [];
+  
+  formsetRows.forEach((row, index) => {
+    const ingredientSelect = row.querySelector(`select[name$="-ingredient"]`);
+    const warehouseSelect = row.querySelector(`select[name$="-warehouse"]`);
+    const quantityInput = row.querySelector(`input[name$="-quantity"]`);
+    const priceInput = row.querySelector(`input[name$="-price_without_vat"]`);
+    const vatRateSelect = row.querySelector(`select[name$="-vat_rate"]`);
+    const notesInput = row.querySelector(`input[name$="-notes"], textarea[name$="-notes"]`);
+    
+    state.push({
+      ingredient: ingredientSelect ? ingredientSelect.value : '',
+      warehouse: warehouseSelect ? warehouseSelect.value : '',
+      quantity: quantityInput ? quantityInput.value : '',
+      price_without_vat: priceInput ? priceInput.value : '',
+      vat_rate: vatRateSelect ? vatRateSelect.value : '',
+      notes: notesInput ? notesInput.value : ''
+    });
+  });
+  
+  templateUndoState = state;
+}
+
+function restoreFormsetState(state) {
+  if (!state) return;
+  
+  const formsetBody = document.querySelector('.formset-table tbody');
+  const totalFormsInput = document.querySelector('input[name$="-TOTAL_FORMS"]');
+  
+  // Vymazat současné řádky
+  const existingRows = formsetBody.querySelectorAll('tr.formset-row');
+  existingRows.forEach((row, index) => {
+    if (index > 0) {
+      row.remove();
+    }
+  });
+  
+  // Obnovit řádky ze stavu
+  state.forEach((rowData, index) => {
+    let targetRow;
+    
+    if (index === 0) {
+      targetRow = formsetBody.querySelector('tr.formset-row');
+    } else {
+      addFormsetRow();
+      targetRow = formsetBody.querySelector(`tr.formset-row:nth-child(${index + 1})`);
+    }
+    
+    if (targetRow) {
+      restoreRowData(targetRow, rowData);
+    }
+  });
+  
+  totalFormsInput.value = state.length;
+}
+
+function restoreRowData(row, data) {
+  const fields = ['ingredient', 'warehouse', 'quantity', 'price_without_vat', 'vat_rate', 'notes'];
+  
+  fields.forEach(field => {
+    const element = row.querySelector(`select[name$="-${field}"], input[name$="-${field}"], textarea[name$="-${field}"]`);
+    if (element && data[field] !== undefined) {
+      element.value = data[field];
+    }
+  });
+  
+  // Recalculate VAT
+  const priceInput = row.querySelector(`input[name$="-price_without_vat"]`);
+  if (priceInput) {
+    calculateVAT(priceInput);
+  }
+}
+
+function syncRowWarehouse(row) {
+  const defaultWarehouseSelect = document.getElementById('default-warehouse');
+  const rowWarehouseSelect = row.querySelector(`select[name$="-warehouse"]`);
+  
+  if (defaultWarehouseSelect && rowWarehouseSelect && defaultWarehouseSelect.value) {
+    rowWarehouseSelect.value = defaultWarehouseSelect.value;
+  }
+}
+
+function showTemplateLoading(show) {
+  const loadingDiv = document.querySelector('.template-loading');
+  if (loadingDiv) {
+    loadingDiv.classList.toggle('d-none', !show);
+  }
+  
+  // Disable template buttons during loading
+  document.querySelectorAll('.template-btn').forEach(btn => {
+    btn.disabled = show;
+  });
+}
+
+function showTemplateAlert(type, message) {
+  const alertsContainer = document.querySelector('.template-alerts');
+  if (!alertsContainer) return;
+  
+  const alertHtml = `
+    <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+      ${message}
+      <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+  `;
+  
+  alertsContainer.innerHTML = alertHtml;
+  
+  // Auto-dismiss success alerts after 5 seconds
+  if (type === 'success') {
+    setTimeout(() => {
+      const alert = alertsContainer.querySelector('.alert');
+      if (alert) {
+        const bsAlert = new bootstrap.Alert(alert);
+        bsAlert.close();
+      }
+    }, 5000);
+  }
+}
+
+function clearTemplateAlerts() {
+  const alertsContainer = document.querySelector('.template-alerts');
+  if (alertsContainer) {
+    alertsContainer.innerHTML = '';
+  }
+}
+
+function showUndoButton() {
+  const undoBtn = document.getElementById('undoTemplateBtn');
+  if (undoBtn) {
+    undoBtn.style.display = 'block';
+  }
+}
+
+function hideUndoButton() {
+  const undoBtn = document.getElementById('undoTemplateBtn');
+  if (undoBtn) {
+    undoBtn.style.display = 'none';
+  }
+  templateUndoState = null;
+}
+
+// Auto-generate receipt number system
+function initializeReceiptNumberGenerator() {
+  const generateBtn = document.getElementById('generateReceiptNumberBtn');
+  
+  if (generateBtn) {
+    generateBtn.addEventListener('click', generateReceiptNumber);
+  }
+  
+  // Initialize tooltips for the generate button
+  const generateTooltip = document.querySelector('#generateReceiptNumberBtn[data-bs-toggle="tooltip"]');
+  if (generateTooltip && typeof bootstrap !== 'undefined') {
+    new bootstrap.Tooltip(generateTooltip);
+  }
+}
+
+function generateReceiptNumber() {
+  const receiptNumberInput = document.querySelector('input[name="receipt_number"]');
+  const generateBtn = document.getElementById('generateReceiptNumberBtn');
+  
+  if (!receiptNumberInput || !generateBtn) {
+    console.error('Receipt number input or generate button not found');
+    return;
+  }
+  
+  // Zobrazit loading stav
+  const originalIcon = generateBtn.innerHTML;
+  generateBtn.disabled = true;
+  generateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+  
+  // Pokusit se o server-side generování
+  fetch('{% url "inventory:generate_receipt_number" %}', {
+    method: 'GET',
+    headers: {
+      'X-Requested-With': 'XMLHttpRequest',
+    }
+  })
+  .then(response => response.json())
+  .then(data => {
+    generateBtn.disabled = false;
+    generateBtn.innerHTML = originalIcon;
+    
+    if (data.success) {
+      receiptNumberInput.value = data.receipt_number;
+      
+      // Vizuální feedback úspěchu
+      receiptNumberInput.classList.add('border-success');
+      setTimeout(() => {
+        receiptNumberInput.classList.remove('border-success');
+      }, 2000);
+      
+      // Focus na další pole
+      const dateField = document.querySelector('input[name="receipt_date"]');
+      if (dateField) {
+        dateField.focus();
+      }
+      
+      console.log(`Generated receipt number: ${data.receipt_number} (sequence: ${data.sequence})`);
+    } else {
+      // Fallback na client-side generování při chybě
+      console.warn('Server-side generation failed, falling back to client-side');
+      generateReceiptNumberClientSide();
+    }
+  })
+  .catch(error => {
+    console.error('Error generating receipt number from server:', error);
+    
+    // Fallback na client-side generování při network chybě
+    generateReceiptNumberClientSide();
+  });
+}
+
+// Fallback client-side generování
+function generateReceiptNumberClientSide() {
+  const receiptNumberInput = document.querySelector('input[name="receipt_number"]');
+  const generateBtn = document.getElementById('generateReceiptNumberBtn');
+  
+  if (!receiptNumberInput || !generateBtn) return;
+  
+  // Generovat číslo ve formátu PZ-YYYY-MM-NNNN
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  
+  // Získat timestamp pro jedinečnost
+  const timestamp = now.getTime();
+  const sequential = String(timestamp).slice(-4); // Posledních 4 číslic timestampu
+  
+  const generatedNumber = `PZ-${year}-${month}-${sequential}`;
+  
+  receiptNumberInput.value = generatedNumber;
+  
+  // Obnovit tlačítko
+  generateBtn.disabled = false;
+  generateBtn.innerHTML = '<i class="fas fa-magic"></i>';
+  
+  // Vizuální feedback
+  receiptNumberInput.classList.add('border-warning');
+  setTimeout(() => {
+    receiptNumberInput.classList.remove('border-warning');
+  }, 2000);
+  
+  // Focus na další pole
+  const dateField = document.querySelector('input[name="receipt_date"]');
+  if (dateField) {
+    dateField.focus();
+  }
+  
+  console.log(`Generated receipt number (client-side): ${generatedNumber}`);
+}
 </script>
 {% endblock %}

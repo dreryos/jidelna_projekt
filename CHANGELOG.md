@@ -5,6 +5,36 @@ Všechny významné změny v tomto projektu budou zdokumentovány v tomto soubor
 Formát je založen na [Keep a Changelog](https://keepachangelog.com/cs/1.0.0/),
 a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
 
+## [0.10.0] - 2026-01-21
+
+### Added
+- **Šablony příjmu zboží podle dodavatelů**: Rychlá funkcionalita pro příjem od nejčastějších dodavatelů
+  - Model `Supplier` pro správu dodavatelů s možností šablon surovin
+  - Model `SupplierIngredientTemplate` pro přednastavené suroviny s výchozími cenami a DPH sazbami
+  - Hybrid systém: přidán `supplier_obj` ForeignKey do `GoodsReceipt` vedle stávajícího `supplier` CharField
+  - AJAX API endpoint `/inventory/api/supplier-template/<slug>/` s automatickým cache management (15 min cache + invalidation při změnách)
+  - Template selector v příjmu zboží s touch-friendly tlačítky "Zelinář" a "Pekárna"
+  - JavaScript funkcionalita s in-memory undo systémem a silent fallback handling
+  - Automatické předvyplnění formset řádků při výběru šablony s možností manuálních úprav
+  - Exclusive template selection s loading states a inline error alerts
+  - Cache invalidation přes Django signals (`post_save`) při změnách dodavatelů nebo šablon
+  - Admin interface `SupplierAdmin` s inline editing `SupplierIngredientTemplateInline`
+  - Data fixtures: "Zelinář" (12 surovin - ovoce/zelenina) a "Pekárna" (7 surovin - pečivo)
+  - Migrace `inventory/0012` - vytvoření tabulek Supplier a SupplierIngredientTemplate
+  - Migrace `inventory/0013` - data migrace s výchozími dodavateli a šablonami surovin
+  - Responsivní design s Bootstrap konzistentním stylingem a mobile optimalizací
+  - Automatické nastavení výchozích DPH sazeb (12%) a synchronizace skladů
+  - Cache strategie: `@cache_page(15 min)` + automatic invalidation pro optimální performance
+- **Automatické generování čísla dokladu**: Funkcionalita pro rychlé vytváření čísel příjmů zboží
+  - Tlačítko "Auto-generate" vedle pole číslo dokladu s ikonou <i class="fas fa-magic"></i>
+  - Server-side generování ve formátu `PZ-YYYY-MM-NNNN` na základě databáze s automatickou sekvenční numerací
+  - AJAX endpoint `/inventory/api/generate-receipt-number/` pro získání dalšího čísla v pořadí
+  - Intelligent fallback na client-side generování při network chybách (formát `PZ-YYYY-MM-TTTT`)
+  - Kontrola jedinečnosti čísla před uložením + visual feedback (zelený/žlutý border)
+  - Automatický focus na další pole (datum příjmu) po vygenerování
+  - Loading states s spinner během generování pro lepší UX
+  - Tooltip nápověda a responsive design pro touch zařízení
+
 ## [0.9.1] - 2026-01-15
 
 ### Added

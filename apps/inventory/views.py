@@ -10,6 +10,8 @@ from django.http import HttpResponse, JsonResponse
 from django.template.loader import render_to_string
 from django.core.exceptions import ValidationError
 from django.views.decorators.http import require_POST
+from django.views.decorators.cache import cache_page
+from django.core.cache import cache
 from django.db.models import Count, Q
 from decimal import Decimal, InvalidOperation
 import logging
@@ -18,7 +20,8 @@ import json
 from .models import (
     StockItem, GoodsReceipt, GoodsReceiptItem, 
     InventoryVerification, InventoryVerificationItem,
-    StockTransfer, StockTransferItem
+    StockTransfer, StockTransferItem,
+    Supplier, SupplierIngredientTemplate
 )
 from .forms import (
     GoodsReceiptForm, GoodsReceiptItemFormSet,
@@ -1386,4 +1389,121 @@ def get_stock_item_price(request):
         return JsonResponse({
             'success': False,
             'error': str(e)
+        })
+
+
+@login_required
+@cache_page(60 * 15)  # Cache na 15 minut
+def get_supplier_template(request, supplier_slug):
+    """
+    AJAX endpoint pro načítání šablon surovin podle dodavatele.
+    Vrací JSON s přednastavenými surovinami a jejich výchozími cenami.
+    """
+    try:
+        # Pokusíme se načíst z cache
+        cache_key = f"supplier_template_{supplier_slug}"
+        cached_data = cache.get(cache_key)
+        
+        if cached_data:
+            return JsonResponse(cached_data)
+        
+        # Načteme dodavatele a jeho šablonu surovin
+        supplier = get_object_or_404(Supplier, slug=supplier_slug, is_active=True)
+        
+        template_items = supplier.get_template_ingredients()
+        
+        # Připravíme data pro frontend
+        ingredients_data = []
+        for template_item in template_items:
+            ingredient_data = {
+                'ingredient_id': template_item.ingredient.id,
+                'ingredient_name': template_item.ingredient.name,
+                'unit': template_item.ingredient.base_unit,
+                'default_price_without_vat': str(template_item.default_price_without_vat) if template_item.default_price_without_vat else '',
+                'default_vat_rate': str(template_item.default_vat_rate),
+                'default_price_with_vat': str(template_item.default_price_with_vat) if template_item.default_price_with_vat else '',
+                'sort_order': template_item.sort_order
+            }
+            ingredients_data.append(ingredient_data)
+        
+        response_data = {
+            'success': True,
+            'supplier_name': supplier.name,
+            'supplier_slug': supplier.slug,
+            'ingredients': ingredients_data,
+            'total_count': len(ingredients_data)
+        }
+        
+        # Uložíme do cache
+        cache.set(cache_key, response_data, 60 * 60)  # Cache na 1 hodinu
+        
+        return JsonResponse(response_data)
+    
+    except Supplier.DoesNotExist:
+        return JsonResponse({
+            'success': False,
+            'error': f'Dodavatel "{supplier_slug}" nenalezen nebo není aktivní'
+        })
+    except Exception as e:
+        logger.error(f'Error loading supplier template for {supplier_slug}: {e}', exc_info=True)
+        return JsonResponse({
+            'success': False,
+            'error': 'Chyba při načítání šablony dodavatele'
+        })
+
+
+@login_required
+def generate_receipt_number(request):
+    """
+    AJAX endpoint pro generování jedinečného čísla příjmu zboží.
+    Vrací číslo ve formátu PZ-YYYY-MM-NNNN na základě posledního čísla v databázi.
+    """
+    try:
+        from datetime import datetime
+        
+        current_date = datetime.now()
+        year = current_date.year
+        month = current_date.month
+        
+        # Najít poslední příjem v aktuálním měsíci
+        month_prefix = f"PZ-{year}-{month:02d}-"
+        
+        last_receipt = GoodsReceipt.objects.filter(
+            receipt_number__startswith=month_prefix
+        ).order_by('-receipt_number').first()
+        
+        if last_receipt:
+            # Extrahovat číselnou část z posledního čísla
+            try:
+                last_number_str = last_receipt.receipt_number.split('-')[-1]
+                last_number = int(last_number_str)
+                next_number = last_number + 1
+            except (ValueError, IndexError):
+                # Pokud se nepodaří parsovat, začneme od 1
+                next_number = 1
+        else:
+            # První příjem v měsíci
+            next_number = 1
+        
+        # Vygenerovat nové číslo
+        receipt_number = f"PZ-{year}-{month:02d}-{next_number:04d}"
+        
+        # Kontrola jedinečnosti (pro případ souběžného vytváření)
+        while GoodsReceipt.objects.filter(receipt_number=receipt_number).exists():
+            next_number += 1
+            receipt_number = f"PZ-{year}-{month:02d}-{next_number:04d}"
+        
+        return JsonResponse({
+            'success': True,
+            'receipt_number': receipt_number,
+            'year': year,
+            'month': month,
+            'sequence': next_number
+        })
+    
+    except Exception as e:
+        logger.error(f'Error generating receipt number: {e}', exc_info=True)
+        return JsonResponse({
+            'success': False,
+            'error': 'Chyba při generování čísla dokladu'
         })
