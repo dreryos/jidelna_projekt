@@ -1,0 +1,323 @@
+{% extends 'base.html' %}
+{% load django_bootstrap5 %}
+
+{% block title %}Nová převodka - Spíž{% endblock %}
+
+{% block extra_css %}
+<style>
+.formset-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+}
+
+.formset-table th {
+    padding: 12px 8px;
+    border: 1px solid #dee2e6;
+    font-weight: 600;
+    text-align: left;
+    font-size: 0.9rem;
+}
+
+.formset-table td {
+    padding: 8px;
+    border: 1px solid #dee2e6;
+    vertical-align: middle;
+}
+
+.delete-row-btn {
+    padding: 4px 8px;
+    font-size: 0.85rem;
+}
+
+input[name*="DELETE"] {
+    display: none;
+}
+
+.row-to-delete {
+    opacity: 0.6;
+    text-decoration: line-through;
+}
+
+label.required::after {
+    content: " *";
+    color: #dc3545;
+    font-weight: bold;
+}
+
+.form-select, .form-control {
+    font-size: 0.9rem;
+}
+
+.main-form-section {
+    padding: 20px;
+    border-radius: 5px;
+    margin-bottom: 20px;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h1>
+    <i class="fas fa-exchange-alt me-2"></i>Nová převodka
+  </h1>
+  <a href="{% url 'inventory:stock_transfer_list' %}" class="btn btn-secondary">
+    <i class="fas fa-arrow-left me-2"></i>Zpět na seznam
+  </a>
+</div>
+
+<div class="card">
+  <div class="card-body">
+    <form method="post" id="stockTransferForm">
+      {% csrf_token %}
+      
+      <!-- Základní údaje -->
+      <div class="main-form-section bg-light">
+        <h5 class="mb-3">Základní údaje</h5>
+        <div class="row">
+          <div class="col-md-3">
+            <label for="{{ form.warehouse_from.id_for_label }}" class="form-label required">Ze skladu</label>
+            {{ form.warehouse_from }}
+            {% if form.warehouse_from.errors %}
+              <div class="text-danger">{{ form.warehouse_from.errors }}</div>
+            {% endif %}
+          </div>
+          
+          <div class="col-md-3">
+            <label for="{{ form.warehouse_to.id_for_label }}" class="form-label required">Do skladu</label>
+            {{ form.warehouse_to }}
+            {% if form.warehouse_to.errors %}
+              <div class="text-danger">{{ form.warehouse_to.errors }}</div>
+            {% endif %}
+          </div>
+          
+          <div class="col-md-3">
+            <label for="{{ form.transfer_date.id_for_label }}" class="form-label required">Datum převodu</label>
+            {{ form.transfer_date }}
+            {% if form.transfer_date.errors %}
+              <div class="text-danger">{{ form.transfer_date.errors }}</div>
+            {% endif %}
+          </div>
+        </div>
+        
+        <div class="row mt-3">
+          <div class="col-md-12">
+            <label for="{{ form.notes.id_for_label }}" class="form-label">Poznámky</label>
+            {{ form.notes }}
+            {% if form.notes.errors %}
+              <div class="text-danger">{{ form.notes.errors }}</div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+      
+      <!-- Formset chyby -->
+      {% if formset.non_form_errors %}
+        <div class="alert alert-danger">
+          {{ formset.non_form_errors }}
+        </div>
+      {% endif %}
+      
+      <!-- Položky převodky -->
+      <div class="mb-3">
+        <h5>Položky převodky</h5>
+        <p class="text-muted">Cena bude automaticky převzata ze zdrojového skladu.</p>
+        
+        <div class="table-responsive">
+          {{ formset.management_form }}
+          
+          <table class="formset-table" id="formset-table">
+            <thead>
+              <tr>
+                <th style="width: 35%;">Surovina <span class="text-danger">*</span></th>
+                <th style="width: 15%;">Dostupné množství</th>
+                <th style="width: 15%;">Množství <span class="text-danger">*</span></th>
+                <th style="width: 15%;">Jednotka</th>
+                <th style="width: 15%;">Cena s DPH</th>
+                <th style="width: 5%;">Smazat</th>
+              </tr>
+            </thead>
+            <tbody id="formset-body">
+              {% for item_form in formset %}
+                <tr class="formset-row {% if item_form.instance.DELETE %}row-to-delete{% endif %}" data-form-index="{{ forloop.counter0 }}">
+                  <td>
+                    {{ item_form.ingredient }}
+                    {% if item_form.ingredient.errors %}
+                      <div class="text-danger small">{{ item_form.ingredient.errors }}</div>
+                    {% endif %}
+                  </td>
+                  <td>
+                    <span class="available-quantity text-muted">-</span>
+                  </td>
+                  <td>
+                    {{ item_form.quantity }}
+                    {% if item_form.quantity.errors %}
+                      <div class="text-danger small">{{ item_form.quantity.errors }}</div>
+                    {% endif %}
+                  </td>
+                  <td>
+                    <span class="unit-display text-muted">-</span>
+                  </td>
+                  <td>
+                    {{ item_form.unit_price_with_vat }}
+                    {% if item_form.unit_price_with_vat.errors %}
+                      <div class="text-danger small">{{ item_form.unit_price_with_vat.errors }}</div>
+                    {% endif %}
+                  </td>
+                  <td class="text-center">
+                    <button type="button" class="btn btn-sm btn-danger delete-row-btn" title="Smazat řádek">
+                      <i class="fas fa-trash"></i>
+                    </button>
+                    {{ item_form.DELETE }}
+                  </td>
+                  {{ item_form.id }}
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        
+        <button type="button" class="btn btn-sm btn-outline-secondary add-row-btn" id="add-row">
+          <i class="fas fa-plus me-1"></i>Přidat položku
+        </button>
+      </div>
+      
+      <!-- Tlačítka pro odeslání -->
+      <div class="d-flex justify-content-between">
+        <a href="{% url 'inventory:stock_transfer_list' %}" class="btn btn-secondary">
+          <i class="fas fa-times me-2"></i>Zrušit
+        </a>
+        <button type="submit" class="btn btn-success">
+          <i class="fas fa-save me-2"></i>Vytvořit převodku
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const formsetBody = document.getElementById('formset-body');
+    const addRowBtn = document.getElementById('add-row');
+    const totalFormsInput = document.getElementById('id_items-TOTAL_FORMS');
+    const warehouseFromSelect = document.getElementById('id_warehouse_from');
+    
+    let formIndex = parseInt(totalFormsInput.value);
+    
+    // Přidání nového řádku
+    addRowBtn.addEventListener('click', function() {
+        const emptyRow = formsetBody.querySelector('.formset-row:last-child');
+        if (!emptyRow) return;
+        
+        const newRow = emptyRow.cloneNode(true);
+        
+        // Aktualizace indexů v nově vytvořeném řádku
+        newRow.innerHTML = newRow.innerHTML.replace(/items-\d+-/g, `items-${formIndex}-`);
+        newRow.setAttribute('data-form-index', formIndex);
+        
+        // Vyčistit hodnoty
+        const inputs = newRow.querySelectorAll('input:not([type="checkbox"]), select');
+        inputs.forEach(input => {
+            if (input.type !== 'hidden' || input.name.includes('DELETE')) {
+                input.value = '';
+            }
+        });
+        
+        // Reset checkbox
+        const checkbox = newRow.querySelector('input[type="checkbox"]');
+        if (checkbox && checkbox.name.includes('DELETE')) {
+            checkbox.checked = false;
+        }
+        
+        newRow.classList.remove('row-to-delete');
+        formsetBody.appendChild(newRow);
+        
+        formIndex++;
+        totalFormsInput.value = formIndex;
+        
+        attachIngredientListener(newRow);
+    });
+    
+    // Sledování DELETE checkboxu
+    formsetBody.addEventListener('change', function(e) {
+        if (e.target.type === 'checkbox' && e.target.name.includes('DELETE')) {
+            const row = e.target.closest('.formset-row');
+            if (e.target.checked) {
+                row.classList.add('row-to-delete');
+            } else {
+                row.classList.remove('row-to-delete');
+            }
+        }
+    });
+    
+    // Obsluha tlačítka pro smazání řádku
+    formsetBody.addEventListener('click', function(e) {
+        if (e.target.closest('.delete-row-btn')) {
+            const btn = e.target.closest('.delete-row-btn');
+            const row = btn.closest('.formset-row');
+            const deleteCheckbox = row.querySelector('input[type="checkbox"][name*="DELETE"]');
+            const idInput = row.querySelector('input[name*="-id"]');
+            
+            // Pokud má řádek ID (je uložený v DB), označíme ho ke smazání
+            if (idInput && idInput.value) {
+                deleteCheckbox.checked = true;
+                row.classList.add('row-to-delete');
+            } else {
+                // Pokud je to nový řádek (nemá ID), rovnou ho odstraníme
+                row.remove();
+                // Přepočítáme počet formulářů
+                formIndex--;
+                totalFormsInput.value = formIndex;
+            }
+        }
+    });
+    
+    // Funkce pro načtení ceny a dostupného množství při výběru suroviny
+    function attachIngredientListener(row) {
+        const ingredientSelect = row.querySelector('[name*="ingredient"]');
+        const priceInput = row.querySelector('[name*="unit_price_with_vat"]');
+        const availableSpan = row.querySelector('.available-quantity');
+        const unitSpan = row.querySelector('.unit-display');
+        
+        if (!ingredientSelect) return;
+        
+        ingredientSelect.addEventListener('change', function() {
+            const ingredientId = this.value;
+            const warehouseId = warehouseFromSelect.value;
+            
+            if (!ingredientId || !warehouseId) {
+                if (priceInput) priceInput.value = '';
+                if (availableSpan) availableSpan.textContent = '-';
+                if (unitSpan) unitSpan.textContent = '-';
+                return;
+            }
+            
+            // AJAX dotaz na získání ceny a dostupného množství
+            fetch(`/inventory/api/stock-item-price/?ingredient=${ingredientId}&warehouse=${warehouseId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        if (priceInput) priceInput.value = data.price;
+                        if (availableSpan) availableSpan.textContent = `${data.available_quantity} ${data.unit}`;
+                        if (unitSpan) unitSpan.textContent = data.unit;
+                    } else {
+                        if (priceInput) priceInput.value = '0.00';
+                        if (availableSpan) availableSpan.textContent = 'Není na skladu';
+                        if (unitSpan) unitSpan.textContent = '-';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching price:', error);
+                });
+        });
+    }
+    
+    // Připojit listenery ke všem existujícím řádkům
+    document.querySelectorAll('.formset-row').forEach(attachIngredientListener);
+});
+</script>
+{% endblock %}

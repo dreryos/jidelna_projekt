@@ -7,30 +7,22 @@ Tento soubor sleduje hlavní úkoly, bugy a nápady pro projekt. Pro detailněj�
 ## 🚀 Priorita / Urgentní
 *Věci, které je třeba vyřešit co nejdříve (např. blokující chyby).*
 
-- [x] Příjem zboží, po získání XML souboru od dodavatele implementovat import.
 - [ ] Připravit pro zelináře tabulku pro import (ať se nemusí vše zadávat ručně) - přidat dodavatele k surovinám.
-- [x] Vyřešit změnu ceny suroviny z nového příjmu - jak aktualizovat skladové ceny a historii cen.
-- [ ] Možnost uživatelsky příjemné editace šablony jídelníčku.
+
 
 ---
 
 ## 🐛 Bugy (Chyby)
 *Nalezené chyby, které neblokují hlavní funkčnost, ale je třeba je opravit.*
 
-- [x] Zpříjemnit práci s koeficienty porcí v jídelníčku (aktuálně se musí upravovat v detailu jídla).
-- [x] DPH u příjmu zboží - zajistit správné zaokrouhlování a výpočet celkové ceny s DPH.
-- [ ] DPH u prodeje jídel - zajistit správné zaokrouhlování a výpočet celkové ceny s DPH.
-- [x] Tmavý režim někde blbne (některé prvky zůstávají světlé).
-
 ---
 
 ## ✨ Nové Funkce (Features)
 *Nové části aplikace, které se mají implementovat.*
 
-- [x] Předpřipravené jídelníčky na nejčastější akce (ŠVP, tábor - týden nebo 14 dní).
-- [ ] Převodky, přesun surovin mezi sklady jídelen, přes mezisklad.
+- [x] Převodky, přesun surovin mezi sklady jídelen, přes mezisklad.
 - [ ] "Předpověď ceny" jídelníčku na základě historických dat o cenách surovin.
-- [x] Modul Inventura - možnost provádět inventury skladů, generovat inventurní soupisy, porovnávat s evidencí skladu, upozornění dlouho neinventurovaných skladů.
+
 
 ---
 
@@ -52,7 +44,7 @@ Tento soubor sleduje hlavní úkoly, bugy a nápady pro projekt. Pro detailněj�
 ## 💡 Nápady / Budoucnost (Backlog)
 *Věci, které by bylo fajn mít, ale nespěchají. Slouží jako zásobník nápadů.*
 
-- [ ] Zvážit přidání tmavého režimu (dark mode).
+- [x] Zvážit přidání tmavého režimu (dark mode).
 
 ---
 
@@ -74,3 +66,12 @@ Tento soubor sleduje hlavní úkoly, bugy a nápady pro projekt. Pro detailněj�
 - [x] Přidat favicon aplikace.
 - [x] Přejmenování projektu.
 - [x] Správa uživatelů a oprávnění (přiřazení uživatele k jídelně, omezení přístupu k datům jídelny).
+- [x] Vyřešit změnu ceny suroviny z nového příjmu - jak aktualizovat skladové ceny a historii cen.
+- [x] Možnost uživatelsky příjemné editace šablony jídelníčku.
+- [x] Příjem zboží, po získání XML souboru od dodavatele implementovat import.
+- [x] Zpříjemnit práci s koeficienty porcí v jídelníčku (aktuálně se musí upravovat v detailu jídla).
+- [x] DPH u příjmu zboží - zajistit správné zaokrouhlování a výpočet celkové ceny s DPH.
+- [x] DPH u prodeje jídel - zajistit správné zaokrouhlování a výpočet celkové ceny s DPH.
+- [x] Tmavý režim někde blbne (některé prvky zůstávají světlé).
+- [x] Modul Inventura - možnost provádět inventury skladů, generovat inventurní soupisy, porovnávat s evidencí skladu, upozornění dlouho neinventurovaných skladů.
+- [x] Předpřipravené jídelníčky na nejčastější akce (ŠVP, tábor - týden nebo 14 dní).

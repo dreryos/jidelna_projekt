@@ -15,10 +15,15 @@ from decimal import Decimal, InvalidOperation
 import logging
 import json
 
-from .models import StockItem, GoodsReceipt, GoodsReceiptItem, InventoryVerification, InventoryVerificationItem
+from .models import (
+    StockItem, GoodsReceipt, GoodsReceiptItem, 
+    InventoryVerification, InventoryVerificationItem,
+    StockTransfer, StockTransferItem
+)
 from .forms import (
     GoodsReceiptForm, GoodsReceiptItemFormSet,
-    InventoryVerificationForm, InventoryVerificationItemFormSet
+    InventoryVerificationForm, InventoryVerificationItemFormSet,
+    StockTransferForm, StockTransferItemFormSet
 )
 from apps.canteens.models import Warehouse, Canteen
 from apps.core.models import Ingredient
@@ -38,6 +43,10 @@ class StockListView(LoginRequiredMixin, ListView):
         warehouse_ids = self.request.GET.getlist('warehouse')
         if warehouse_ids:
             queryset = queryset.filter(warehouse_id__in=warehouse_ids)
+        else:
+            # Pokud není vybrán konkrétní sklad, vyfiltrujeme mezisklady
+            if not self.request.GET.get('show_transit'):
+                queryset = queryset.exclude(warehouse__is_transit_warehouse=True)
         
         # Řazení podle názvu suroviny
         queryset = queryset.order_by('ingredient__name')
@@ -48,6 +57,7 @@ class StockListView(LoginRequiredMixin, ListView):
         context = super().get_context_data(**kwargs)
         context['warehouses'] = Warehouse.objects.select_related('canteen').all()
         context['selected_warehouses'] = self.request.GET.getlist('warehouse')
+        context['show_transit'] = self.request.GET.get('show_transit', False)
         
         # Přidáme statistiky
         stock_items = context['stock_items']
@@ -56,6 +66,25 @@ class StockListView(LoginRequiredMixin, ListView):
             'blocked_count': sum(1 for item in stock_items if item.quantity_blocked > 0),
             'low_stock_count': sum(1 for item in stock_items if item.quantity_available <= 10),
         }
+        
+        # Načteme aktivní převody pro mezisklady
+        transit_warehouse_ids = Warehouse.objects.filter(is_transit_warehouse=True).values_list('id', flat=True)
+        if transit_warehouse_ids:
+            active_transfers = StockTransfer.objects.filter(
+                Q(status='IN_TRANSIT'),
+                Q(warehouse_from__canteen__warehouses__id__in=transit_warehouse_ids) |
+                Q(warehouse_to__canteen__warehouses__id__in=transit_warehouse_ids)
+            ).select_related('warehouse_from', 'warehouse_to').prefetch_related('items__ingredient')
+            
+            # Vytvoříme slovník ingredient_id -> transfer pro rychlé vyhledání
+            context['transit_transfers'] = {}
+            for transfer in active_transfers:
+                for item in transfer.items.all():
+                    if item.ingredient_id not in context['transit_transfers']:
+                        context['transit_transfers'][item.ingredient_id] = []
+                    context['transit_transfers'][item.ingredient_id].append(transfer)
+        else:
+            context['transit_transfers'] = {}
         
         return context
 
@@ -1065,3 +1094,296 @@ def inventory_verification_pdf(request, pk):
         messages.error(request, f'Chyba při generování PDF: {str(e)}')
         return redirect('inventory:inventory_verification_detail', pk=pk)
 
+
+# ==============================
+# Stock Transfer Views (Převodky)
+# ==============================
+
+class IsStaffMixin(UserPassesTestMixin):
+    """Mixin pro kontrolu, zda je uživatel staff."""
+    def test_func(self):
+        return self.request.user.is_staff
+
+
+class StockTransferListView(LoginRequiredMixin, ListView):
+    """Seznam převodek s filtrováním."""
+    model = StockTransfer
+    template_name = 'inventory/stock_transfer_list.html'
+    context_object_name = 'transfers'
+    paginate_by = 20
+    
+    def get_queryset(self):
+        queryset = StockTransfer.objects.select_related(
+            'warehouse_from', 'warehouse_to',
+            'warehouse_from__canteen', 'warehouse_to__canteen',
+            'created_by'
+        ).prefetch_related('items__ingredient')
+        
+        # Filtrování podle skladu (from nebo to)
+        warehouse_id = self.request.GET.get('warehouse')
+        if warehouse_id:
+            queryset = queryset.filter(
+                Q(warehouse_from_id=warehouse_id) | Q(warehouse_to_id=warehouse_id)
+            )
+        
+        # Filtrování podle statusu
+        status = self.request.GET.get('status')
+        if status:
+            queryset = queryset.filter(status=status)
+        
+        return queryset.order_by('-created_at')
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['warehouses'] = Warehouse.objects.filter(
+            is_transit_warehouse=False
+        ).select_related('canteen')
+        context['selected_warehouse'] = self.request.GET.get('warehouse', '')
+        context['selected_status'] = self.request.GET.get('status', '')
+        context['status_choices'] = StockTransfer.STATUS_CHOICES
+        return context
+
+
+class StockTransferCreateView(IsStaffMixin, CreateView):
+    """Vytvoření nové převodky."""
+    model = StockTransfer
+    form_class = StockTransferForm
+    template_name = 'inventory/stock_transfer_form.html'
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        if self.request.POST:
+            context['formset'] = StockTransferItemFormSet(self.request.POST)
+        else:
+            context['formset'] = StockTransferItemFormSet()
+        return context
+    
+    def form_valid(self, form):
+        context = self.get_context_data()
+        formset = context['formset']
+        
+        with transaction.atomic():
+            # Nastavíme created_by
+            form.instance.created_by = self.request.user
+            self.object = form.save()
+            
+            if formset.is_valid():
+                formset.instance = self.object
+                
+                # Pro každou položku nastavíme cenu ze zdrojového skladu
+                for item_form in formset:
+                    if item_form.cleaned_data and not item_form.cleaned_data.get('DELETE', False):
+                        ingredient = item_form.cleaned_data.get('ingredient')
+                        if ingredient:
+                            try:
+                                stock_item = StockItem.objects.get(
+                                    ingredient=ingredient,
+                                    warehouse=self.object.warehouse_from
+                                )
+                                item_form.instance.unit_price_with_vat = stock_item.price
+                            except StockItem.DoesNotExist:
+                                pass
+                
+                formset.save()
+                messages.success(self.request, f'Převodka {self.object.transfer_number} byla vytvořena.')
+                return redirect('inventory:stock_transfer_detail', pk=self.object.pk)
+            else:
+                return self.form_invalid(form)
+        
+        return super().form_valid(form)
+    
+    def get_success_url(self):
+        return reverse('inventory:stock_transfer_detail', kwargs={'pk': self.object.pk})
+
+
+class StockTransferDetailView(LoginRequiredMixin, DetailView):
+    """Detail převodky."""
+    model = StockTransfer
+    template_name = 'inventory/stock_transfer_detail.html'
+    context_object_name = 'transfer'
+    
+    def get_queryset(self):
+        return StockTransfer.objects.select_related(
+            'warehouse_from', 'warehouse_to',
+            'warehouse_from__canteen', 'warehouse_to__canteen',
+            'created_by'
+        ).prefetch_related('items__ingredient')
+
+
+@login_required
+@require_POST
+def stock_transfer_start(request, pk):
+    """Zahájit převod - přesun do meziskladu."""
+    transfer = get_object_or_404(StockTransfer, pk=pk)
+    
+    if not request.user.is_staff:
+        messages.error(request, 'Nemáte oprávnění k této akci.')
+        return redirect('inventory:stock_transfer_detail', pk=pk)
+    
+    try:
+        with transaction.atomic():
+            transfer.start_transfer()
+            messages.success(request, f'Převodka {transfer.transfer_number} byla zahájena. Zboží je nyní v meziskladu.')
+    except ValidationError as e:
+        messages.error(request, f'Chyba při zahájení převodu: {e.message}')
+    except Exception as e:
+        logger.error(f'Error starting transfer {pk}: {e}', exc_info=True)
+        messages.error(request, f'Neočekávaná chyba: {str(e)}')
+    
+    return redirect('inventory:stock_transfer_detail', pk=pk)
+
+
+@login_required
+@require_POST
+def stock_transfer_complete(request, pk):
+    """Dokončit převod - přesun z meziskladu do cílového skladu."""
+    transfer = get_object_or_404(StockTransfer, pk=pk)
+    
+    if not request.user.is_staff:
+        messages.error(request, 'Nemáte oprávnění k této akci.')
+        return redirect('inventory:stock_transfer_detail', pk=pk)
+    
+    try:
+        with transaction.atomic():
+            transfer.complete_transfer()
+            messages.success(request, f'Převodka {transfer.transfer_number} byla dokončena. Zboží je nyní v cílovém skladu.')
+    except ValidationError as e:
+        messages.error(request, f'Chyba při dokončení převodu: {e.message}')
+    except Exception as e:
+        logger.error(f'Error completing transfer {pk}: {e}', exc_info=True)
+        messages.error(request, f'Neočekávaná chyba: {str(e)}')
+    
+    return redirect('inventory:stock_transfer_detail', pk=pk)
+
+
+@login_required
+@require_POST
+def stock_transfer_start_and_complete(request, pk):
+    """Zahájit a okamžitě dokončit převod (bez meziskladu)."""
+    transfer = get_object_or_404(StockTransfer, pk=pk)
+    
+    if not request.user.is_staff:
+        messages.error(request, 'Nemáte oprávnění k této akci.')
+        return redirect('inventory:stock_transfer_detail', pk=pk)
+    
+    try:
+        with transaction.atomic():
+            transfer.start_and_complete()
+            messages.success(request, f'Převodka {transfer.transfer_number} byla okamžitě dokončena.')
+    except ValidationError as e:
+        messages.error(request, f'Chyba při převodu: {e.message}')
+    except Exception as e:
+        logger.error(f'Error in instant transfer {pk}: {e}', exc_info=True)
+        messages.error(request, f'Neočekávaná chyba: {str(e)}')
+    
+    return redirect('inventory:stock_transfer_detail', pk=pk)
+
+
+@login_required
+@require_POST
+def stock_transfer_cancel(request, pk):
+    """Zrušit převod."""
+    transfer = get_object_or_404(StockTransfer, pk=pk)
+    
+    if not request.user.is_staff:
+        messages.error(request, 'Nemáte oprávnění k této akci.')
+        return redirect('inventory:stock_transfer_detail', pk=pk)
+    
+    try:
+        with transaction.atomic():
+            transfer.cancel()
+            messages.success(request, f'Převodka {transfer.transfer_number} byla zrušena.')
+    except ValidationError as e:
+        messages.error(request, f'Chyba při rušení převodu: {e.message}')
+    except Exception as e:
+        logger.error(f'Error cancelling transfer {pk}: {e}', exc_info=True)
+        messages.error(request, f'Neočekávaná chyba: {str(e)}')
+    
+    return redirect('inventory:stock_transfer_detail', pk=pk)
+
+
+@login_required
+def stock_transfer_pdf(request, pk):
+    """Export převodky do PDF (průvodka k převodu)."""
+    transfer = get_object_or_404(
+        StockTransfer.objects.select_related(
+            'warehouse_from', 'warehouse_to',
+            'warehouse_from__canteen', 'warehouse_to__canteen',
+            'created_by'
+        ).prefetch_related('items__ingredient'),
+        pk=pk
+    )
+    
+    # Kontrola oprávnění
+    if not request.user.is_staff:
+        messages.error(request, 'Nemáte oprávnění k této akci.')
+        return redirect('inventory:stock_transfer_detail', pk=pk)
+    
+    context = {
+        'transfer': transfer,
+        'items': transfer.items.all().order_by('ingredient__name'),
+        'generated_at': timezone.now(),
+        'generated_by': request.user,
+    }
+    
+    # Renderování HTML template
+    html_string = render_to_string('inventory/transfer_pdf.html', context)
+    
+    # Generování PDF pomocí WeasyPrint
+    try:
+        from weasyprint import HTML
+        
+        html = HTML(string=html_string, base_url=request.build_absolute_uri())
+        response = HttpResponse(content_type='application/pdf')
+        
+        filename = f'prevodka_{transfer.transfer_number}.pdf'
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        
+        html.write_pdf(response)
+        
+        return response
+    except ImportError:
+        messages.error(request, 'WeasyPrint není nainstalován. PDF export není dostupný.')
+        return redirect('inventory:stock_transfer_detail', pk=pk)
+    except Exception as e:
+        logger.error(f'Error generating PDF for transfer {pk}: {e}', exc_info=True)
+        messages.error(request, f'Chyba při generování PDF: {str(e)}')
+        return redirect('inventory:stock_transfer_detail', pk=pk)
+
+
+@login_required
+def get_stock_item_price(request):
+    """AJAX endpoint pro získání ceny a dostupného množství suroviny ze skladu."""
+    ingredient_id = request.GET.get('ingredient')
+    warehouse_id = request.GET.get('warehouse')
+    
+    if not ingredient_id or not warehouse_id:
+        return JsonResponse({
+            'success': False,
+            'error': 'Chybí parametry ingredient nebo warehouse'
+        })
+    
+    try:
+        stock_item = StockItem.objects.get(
+            ingredient_id=ingredient_id,
+            warehouse_id=warehouse_id
+        )
+        
+        return JsonResponse({
+            'success': True,
+            'price': str(stock_item.price),
+            'available_quantity': str(stock_item.quantity_available),
+            'unit': stock_item.ingredient.base_unit
+        })
+    
+    except StockItem.DoesNotExist:
+        return JsonResponse({
+            'success': False,
+            'error': 'Surovina není na tomto skladu'
+        })
+    except Exception as e:
+        logger.error(f'Error fetching stock item price: {e}', exc_info=True)
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        })

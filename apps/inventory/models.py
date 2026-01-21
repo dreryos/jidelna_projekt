@@ -757,3 +757,399 @@ class InventoryVerificationItem(models.Model):
     
     def __str__(self):
         return f"{self.ingredient.name}: {self.counted_quantity or '?'} / {self.system_quantity}"
+
+
+class StockTransfer(models.Model):
+    """
+    Převodka zboží mezi sklady.
+    Workflow: DRAFT → IN_TRANSIT → COMPLETED
+    - DRAFT: Návrh převodky, lze editovat
+    - IN_TRANSIT: Zboží odečteno ze source, přidáno do transit warehouse
+    - COMPLETED: Zboží převzato v cílovém skladu
+    - CANCELLED: Zrušeno (lze jen z DRAFT nebo IN_TRANSIT)
+    """
+    STATUS_CHOICES = [
+        ('DRAFT', 'Návrh'),
+        ('IN_TRANSIT', 'V převozu'),
+        ('COMPLETED', 'Dokončeno'),
+        ('CANCELLED', 'Zrušeno'),
+    ]
+    
+    warehouse_from = models.ForeignKey(
+        Warehouse,
+        on_delete=models.PROTECT,
+        related_name='transfers_out',
+        verbose_name="Ze skladu"
+    )
+    warehouse_to = models.ForeignKey(
+        Warehouse,
+        on_delete=models.PROTECT,
+        related_name='transfers_in',
+        verbose_name="Do skladu"
+    )
+    transfer_number = models.CharField(
+        max_length=50,
+        unique=True,
+        verbose_name="Číslo převodky",
+        help_text="Automaticky generované číslo převodky"
+    )
+    transfer_date = models.DateField(
+        default=timezone.now,
+        verbose_name="Datum převodky"
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='DRAFT',
+        verbose_name="Stav"
+    )
+    notes = models.TextField(
+        blank=True,
+        verbose_name="Poznámka"
+    )
+    created_by = models.ForeignKey(
+        'auth.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='created_transfers',
+        verbose_name="Vytvořil"
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Vytvořeno"
+    )
+    started_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Zahájeno"
+    )
+    completed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Dokončeno"
+    )
+    
+    class Meta:
+        verbose_name = "Převodka"
+        verbose_name_plural = "Převodky"
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"Převodka {self.transfer_number} ({self.warehouse_from} → {self.warehouse_to})"
+    
+    def save(self, *args, **kwargs):
+        """Automatické generování čísla převodky"""
+        if not self.transfer_number:
+            # Generujeme unikátní číslo ve formátu PRE-YYYYMMDD-XXX
+            from datetime import datetime
+            today = datetime.now()
+            prefix = f"PRE-{today.strftime('%Y%m%d')}"
+            
+            # Najdeme nejvyšší číslo dnes
+            last_transfer = StockTransfer.objects.filter(
+                transfer_number__startswith=prefix
+            ).order_by('-transfer_number').first()
+            
+            if last_transfer:
+                # Extrahujeme číslo a zvýšíme o 1
+                last_num = int(last_transfer.transfer_number.split('-')[-1])
+                new_num = last_num + 1
+            else:
+                new_num = 1
+            
+            self.transfer_number = f"{prefix}-{new_num:03d}"
+        
+        super().save(*args, **kwargs)
+    
+    def clean(self):
+        """Validace před uložením"""
+        super().clean()
+        
+        # Kontrola že source != target
+        if self.warehouse_from_id == self.warehouse_to_id:
+            raise ValidationError("Zdrojový a cílový sklad musí být různé.")
+        
+        # Kontrola že není použit transit warehouse jako source nebo target
+        from apps.canteens.models import Warehouse as WarehouseModel
+        if hasattr(self.warehouse_from, 'is_transit_warehouse') and self.warehouse_from.is_transit_warehouse:
+            raise ValidationError("Nelze převádět z meziskladu.")
+        if hasattr(self.warehouse_to, 'is_transit_warehouse') and self.warehouse_to.is_transit_warehouse:
+            raise ValidationError("Nelze převádět do meziskladu.")
+    
+    @transaction.atomic
+    def start_transfer(self):
+        """
+        Zahájí převod - odečte zboží ze source a přidá do transit warehouse.
+        Změní status na IN_TRANSIT.
+        """
+        if self.status != 'DRAFT':
+            raise ValidationError(f"Nelze zahájit převod ve stavu {self.get_status_display()}.")
+        
+        # Kontrola zamčených skladů
+        if self.warehouse_from.is_locked:
+            raise ValidationError(f"Sklad {self.warehouse_from} je zamčen.")
+        
+        # Získáme transit warehouse
+        transit_warehouse = self.warehouse_from.canteen.get_or_create_transit_warehouse()
+        
+        if transit_warehouse.is_locked:
+            raise ValidationError(f"Mezisklad je zamčen.")
+        
+        # Zpracujeme všechny položky
+        for item in self.items.all():
+            # Najdeme StockItem ve zdrojovém skladu
+            try:
+                source_stock = StockItem.objects.select_for_update().get(
+                    ingredient=item.ingredient,
+                    warehouse=self.warehouse_from
+                )
+            except StockItem.DoesNotExist:
+                raise ValidationError(
+                    f"Surovina {item.ingredient.name} není na skladu {self.warehouse_from}."
+                )
+            
+            # Kontrola dostupnosti
+            if source_stock.quantity_available < item.quantity:
+                raise ValidationError(
+                    f"Nedostatečné množství {item.ingredient.name}. "
+                    f"Dostupné: {source_stock.quantity_available}, požadováno: {item.quantity}"
+                )
+            
+            # Odečteme ze source
+            source_stock.quantity -= item.quantity
+            source_stock.save(update_fields=['quantity'])
+            
+            # Přidáme do transit warehouse
+            transit_stock, created = StockItem.objects.get_or_create(
+                ingredient=item.ingredient,
+                warehouse=transit_warehouse,
+                defaults={
+                    'quantity': item.quantity,
+                    'price': item.unit_price_with_vat,
+                    'vat_rate': source_stock.vat_rate,
+                }
+            )
+            if not created:
+                transit_stock.quantity += item.quantity
+                transit_stock.save(update_fields=['quantity'])
+        
+        # Aktualizujeme status
+        self.status = 'IN_TRANSIT'
+        self.started_at = timezone.now()
+        self.save(update_fields=['status', 'started_at'])
+    
+    @transaction.atomic
+    def complete_transfer(self):
+        """
+        Dokončí převod - odečte z transit warehouse a přidá do target.
+        Změní status na COMPLETED.
+        """
+        if self.status != 'IN_TRANSIT':
+            raise ValidationError(f"Nelze dokončit převod ve stavu {self.get_status_display()}.")
+        
+        # Kontrola zamčených skladů
+        if self.warehouse_to.is_locked:
+            raise ValidationError(f"Sklad {self.warehouse_to} je zamčen.")
+        
+        # Získáme transit warehouse
+        transit_warehouse = self.warehouse_from.canteen.get_or_create_transit_warehouse()
+        
+        # Zpracujeme všechny položky
+        for item in self.items.all():
+            # Najdeme StockItem v transit warehouse
+            try:
+                transit_stock = StockItem.objects.select_for_update().get(
+                    ingredient=item.ingredient,
+                    warehouse=transit_warehouse
+                )
+            except StockItem.DoesNotExist:
+                raise ValidationError(
+                    f"Surovina {item.ingredient.name} není v meziskladu."
+                )
+            
+            # Kontrola množství
+            if transit_stock.quantity < item.quantity:
+                raise ValidationError(
+                    f"Nedostatečné množství {item.ingredient.name} v meziskladu. "
+                    f"Dostupné: {transit_stock.quantity}, požadováno: {item.quantity}"
+                )
+            
+            # Odečteme z transit
+            transit_stock.quantity -= item.quantity
+            transit_stock.save(update_fields=['quantity'])
+            
+            # Přidáme do target
+            target_stock, created = StockItem.objects.get_or_create(
+                ingredient=item.ingredient,
+                warehouse=self.warehouse_to,
+                defaults={
+                    'quantity': item.quantity,
+                    'price': item.unit_price_with_vat,
+                    'vat_rate': transit_stock.vat_rate,
+                }
+            )
+            if not created:
+                target_stock.quantity += item.quantity
+                # Aktualizujeme cenu vážený průměrem
+                total_value = (target_stock.quantity - item.quantity) * target_stock.price + item.quantity * item.unit_price_with_vat
+                target_stock.price = (total_value / target_stock.quantity).quantize(Decimal('0.01'))
+                target_stock.save(update_fields=['quantity', 'price'])
+        
+        # Aktualizujeme status
+        self.status = 'COMPLETED'
+        self.completed_at = timezone.now()
+        self.save(update_fields=['status', 'completed_at'])
+    
+    @transaction.atomic
+    def start_and_complete(self):
+        """
+        Zahájí a okamžitě dokončí převod (pro rychlé převody v rámci lokality).
+        Přeskočí mezisklad - přímo ze source do target.
+        """
+        if self.status != 'DRAFT':
+            raise ValidationError(f"Nelze zahájit převod ve stavu {self.get_status_display()}.")
+        
+        # Kontrola zamčených skladů
+        if self.warehouse_from.is_locked:
+            raise ValidationError(f"Sklad {self.warehouse_from} je zamčen.")
+        if self.warehouse_to.is_locked:
+            raise ValidationError(f"Sklad {self.warehouse_to} je zamčen.")
+        
+        # Zpracujeme všechny položky
+        for item in self.items.all():
+            # Najdeme StockItem ve zdrojovém skladu
+            try:
+                source_stock = StockItem.objects.select_for_update().get(
+                    ingredient=item.ingredient,
+                    warehouse=self.warehouse_from
+                )
+            except StockItem.DoesNotExist:
+                raise ValidationError(
+                    f"Surovina {item.ingredient.name} není na skladu {self.warehouse_from}."
+                )
+            
+            # Kontrola dostupnosti
+            if source_stock.quantity_available < item.quantity:
+                raise ValidationError(
+                    f"Nedostatečné množství {item.ingredient.name}. "
+                    f"Dostupné: {source_stock.quantity_available}, požadováno: {item.quantity}"
+                )
+            
+            # Odečteme ze source
+            source_stock.quantity -= item.quantity
+            source_stock.save(update_fields=['quantity'])
+            
+            # Přidáme do target
+            target_stock, created = StockItem.objects.get_or_create(
+                ingredient=item.ingredient,
+                warehouse=self.warehouse_to,
+                defaults={
+                    'quantity': item.quantity,
+                    'price': item.unit_price_with_vat,
+                    'vat_rate': source_stock.vat_rate,
+                }
+            )
+            if not created:
+                target_stock.quantity += item.quantity
+                # Aktualizujeme cenu vážený průměrem
+                total_value = (target_stock.quantity - item.quantity) * target_stock.price + item.quantity * item.unit_price_with_vat
+                target_stock.price = (total_value / target_stock.quantity).quantize(Decimal('0.01'))
+                target_stock.save(update_fields=['quantity', 'price'])
+        
+        # Aktualizujeme status
+        self.status = 'COMPLETED'
+        self.started_at = timezone.now()
+        self.completed_at = timezone.now()
+        self.save(update_fields=['status', 'started_at', 'completed_at'])
+    
+    @transaction.atomic
+    def cancel(self):
+        """
+        Zruší převod. Pokud je IN_TRANSIT, vrátí zboží z transit warehouse zpět do source.
+        """
+        if self.status not in ['DRAFT', 'IN_TRANSIT']:
+            raise ValidationError(f"Nelze zrušit převod ve stavu {self.get_status_display()}.")
+        
+        if self.status == 'IN_TRANSIT':
+            # Musíme vrátit zboží z transit warehouse zpět do source
+            transit_warehouse = self.warehouse_from.canteen.get_or_create_transit_warehouse()
+            
+            for item in self.items.all():
+                # Odečteme z transit
+                try:
+                    transit_stock = StockItem.objects.select_for_update().get(
+                        ingredient=item.ingredient,
+                        warehouse=transit_warehouse
+                    )
+                    transit_stock.quantity -= item.quantity
+                    transit_stock.save(update_fields=['quantity'])
+                except StockItem.DoesNotExist:
+                    logger.warning(
+                        f"StockItem pro {item.ingredient} v transit warehouse nenalezen při rušení převodu."
+                    )
+                
+                # Vrátíme zpět do source
+                source_stock, created = StockItem.objects.get_or_create(
+                    ingredient=item.ingredient,
+                    warehouse=self.warehouse_from,
+                    defaults={
+                        'quantity': item.quantity,
+                        'price': item.unit_price_with_vat,
+                        'vat_rate': Decimal('12'),  # default vat rate
+                    }
+                )
+                if not created:
+                    source_stock.quantity += item.quantity
+                    source_stock.save(update_fields=['quantity'])
+        
+        # Změníme status
+        self.status = 'CANCELLED'
+        self.save(update_fields=['status'])
+    
+    def get_total_value(self):
+        """Vrátí celkovou hodnotu převodky"""
+        total = Decimal('0')
+        for item in self.items.all():
+            total += item.get_total_price()
+        return total
+
+
+class StockTransferItem(models.Model):
+    """
+    Položka převodky - jednotlivá surovina s množstvím a cenou.
+    """
+    stock_transfer = models.ForeignKey(
+        StockTransfer,
+        on_delete=models.CASCADE,
+        related_name='items',
+        verbose_name="Převodka"
+    )
+    ingredient = models.ForeignKey(
+        Ingredient,
+        on_delete=models.PROTECT,
+        verbose_name="Surovina"
+    )
+    quantity = models.DecimalField(
+        max_digits=10,
+        decimal_places=3,
+        verbose_name="Množství"
+    )
+    unit_price_with_vat = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        verbose_name="Jednotková cena s DPH",
+        help_text="Automaticky převzato ze zdrojového skladu"
+    )
+    
+    class Meta:
+        verbose_name = "Položka převodky"
+        verbose_name_plural = "Položky převodky"
+        ordering = ['ingredient__name']
+        unique_together = ('stock_transfer', 'ingredient')
+    
+    def __str__(self):
+        return f"{self.ingredient.name}: {self.quantity} {self.ingredient.base_unit}"
+    
+    def get_total_price(self):
+        """Vrátí celkovou cenu položky (množství × jednotková cena)"""
+        return self.quantity * self.unit_price_with_vat

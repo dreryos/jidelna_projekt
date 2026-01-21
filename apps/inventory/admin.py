@@ -2,7 +2,7 @@ from django.contrib import admin
 from decimal import Decimal
 from .models import (
     StockItem, IngredientPriceHistory, GoodsReceipt, GoodsReceiptItem,
-    InventoryVerification, InventoryVerificationItem
+    InventoryVerification, InventoryVerificationItem, StockTransfer, StockTransferItem
 )
 from .forms import VAT_RATE_CHOICES
 
@@ -127,3 +127,82 @@ class InventoryVerificationItemAdmin(admin.ModelAdmin):
     search_fields = ('ingredient__name', 'verification__warehouse__name')
     autocomplete_fields = ['ingredient', 'verification']
     readonly_fields = ('system_quantity', 'difference')
+
+
+class StockTransferItemInline(admin.TabularInline):
+    model = StockTransferItem
+    extra = 1
+    fields = ['ingredient', 'quantity', 'unit_price_with_vat']
+    autocomplete_fields = ['ingredient']
+    
+    def has_add_permission(self, request, obj=None):
+        """Přidávání položek možné pouze ve stavu DRAFT"""
+        if obj and obj.status == 'DRAFT':
+            return True
+        return not obj  # Povolit při vytváření nového objektu
+    
+    def has_change_permission(self, request, obj=None):
+        """Editace položek možná pouze ve stavu DRAFT"""
+        if obj and obj.status == 'DRAFT':
+            return True
+        return not obj
+    
+    def has_delete_permission(self, request, obj=None):
+        """Mazání položek možné pouze ve stavu DRAFT"""
+        if obj and obj.status == 'DRAFT':
+            return True
+        return False
+
+
+@admin.register(StockTransfer)
+class StockTransferAdmin(admin.ModelAdmin):
+    list_display = ('transfer_number', 'warehouse_from', 'warehouse_to', 'transfer_date', 'status', 'created_at', 'created_by')
+    list_filter = ('status', 'warehouse_from', 'warehouse_to', 'transfer_date')
+    search_fields = ('transfer_number', 'warehouse_from__name', 'warehouse_to__name')
+    autocomplete_fields = ['warehouse_from', 'warehouse_to']
+    date_hierarchy = 'transfer_date'
+    readonly_fields = ('transfer_number', 'created_at', 'created_by', 'started_at', 'completed_at')
+    inlines = [StockTransferItemInline]
+    
+    fieldsets = (
+        ('Základní informace', {
+            'fields': ('transfer_number', 'warehouse_from', 'warehouse_to', 'transfer_date', 'status', 'notes')
+        }),
+        ('Audit trail', {
+            'fields': ('created_at', 'created_by', 'started_at', 'completed_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def get_readonly_fields(self, request, obj=None):
+        """Dynamické readonly pole podle statusu"""
+        readonly = list(self.readonly_fields)
+        if obj and obj.status != 'DRAFT':
+            # Po zahájení nelze měnit základní údaje
+            readonly.extend(['warehouse_from', 'warehouse_to', 'transfer_date', 'status'])
+        return readonly
+    
+    def save_model(self, request, obj, form, change):
+        if not change:  # Pouze při vytváření
+            obj.created_by = request.user
+        super().save_model(request, obj, form, change)
+    
+    def has_delete_permission(self, request, obj=None):
+        """Mazání převodky možné pouze ve stavu DRAFT nebo CANCELLED"""
+        if obj and obj.status in ['DRAFT', 'CANCELLED']:
+            return super().has_delete_permission(request, obj)
+        return not obj  # Povolit při vytváření
+
+
+@admin.register(StockTransferItem)
+class StockTransferItemAdmin(admin.ModelAdmin):
+    list_display = ('stock_transfer', 'ingredient', 'quantity', 'unit_price_with_vat', 'get_total_price')
+    list_filter = ('stock_transfer__status', 'stock_transfer__warehouse_from', 'stock_transfer__warehouse_to')
+    search_fields = ('ingredient__name', 'stock_transfer__transfer_number')
+    autocomplete_fields = ['ingredient', 'stock_transfer']
+    readonly_fields = ('get_total_price',)
+    
+    def get_total_price(self, obj):
+        """Zobrazí celkovou cenu položky"""
+        return obj.get_total_price()
+    get_total_price.short_description = 'Celková cena'

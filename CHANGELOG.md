@@ -8,6 +8,26 @@ a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
 ## [0.9.1] - 2026-01-15
 
 ### Added
+- **Převodky mezi sklady**: Kompletní systém pro správu přesunů zboží mezi sklady
+  - Model `StockTransfer` s workflow stavy (DRAFT → IN_TRANSIT → COMPLETED/CANCELLED)
+  - Model `StockTransferItem` pro položky převodky
+  - Automatické mezisklady (transit warehouses) - jeden pro každou jídelnu
+  - Migrace `canteens/0004` a `0005` - přidání pole `is_transit_warehouse` a automatické vytvoření meziskladů
+  - Migrace `inventory/0011` - vytvoření tabulek pro převodky
+  - Metody workflow: `start_transfer()`, `complete_transfer()`, `start_and_complete()`, `cancel()`
+  - Automatické přenesení ceny ze zdrojového skladu při výběru suroviny
+  - Výpočet vážené průměrné ceny při dokončení převodu na cílový sklad
+  - AJAX endpoint `/inventory/api/stock-item-price/` pro načtení ceny a dostupnosti suroviny
+  - Admin rozhraní `StockTransferAdmin` s dynamickými readonly poli podle stavu
+  - Formuláře `StockTransferForm` a `StockTransferItemFormSet` s validací dostupnosti zásob
+  - Views: list, create, detail, workflow akce (start, complete, cancel)
+  - PDF export převodky s podpisovými poli
+  - Šablony: `stock_transfer_list.html`, `stock_transfer_form.html`, `stock_transfer_detail.html`, `transfer_pdf.html`
+  - Validace: zámek skladů, dostupné množství, ochrana proti převodu na stejný sklad
+  - Transakční bezpečnost s `select_for_update()` pro thread-safe operace
+  - Integrace do navigace a homepage
+  - UI vylepšení: tlačítka pro smazání řádků místo checkboxů
+  - Dokumentace v `docs/inventory.md`
 - **Vizuální editor šablon jídelníčků**: Nové drag-drop rozhraní pro úpravu šablon
   - Interaktivní editor s přetahováním jídel mezi dny (`menu_template_visual_edit.html`)
   - JavaScript modul s SortableJS a Select2 integrac (`menu_template_visual_edit.js`, 700+ řádků)

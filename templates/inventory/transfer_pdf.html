@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Převodka - {{ transfer.transfer_number }}</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 2cm;
+        }
+        
+        body {
+            font-family: DejaVu Sans, sans-serif;
+            font-size: 10pt;
+            line-height: 1.4;
+        }
+        
+        h1 {
+            font-size: 18pt;
+            margin-bottom: 10pt;
+            border-bottom: 2pt solid #333;
+            padding-bottom: 5pt;
+        }
+        
+        h2 {
+            font-size: 14pt;
+            margin-top: 15pt;
+            margin-bottom: 8pt;
+        }
+        
+        .header-info {
+            margin-bottom: 20pt;
+        }
+        
+        .header-info table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .header-info td {
+            padding: 3pt 0;
+        }
+        
+        .header-info td:first-child {
+            font-weight: bold;
+            width: 30%;
+        }
+        
+        table.transfer-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10pt;
+        }
+        
+        table.transfer-table th {
+            background-color: #e0e0e0;
+            padding: 8pt;
+            text-align: left;
+            border: 1pt solid #999;
+            font-weight: bold;
+        }
+        
+        table.transfer-table td {
+            padding: 6pt 8pt;
+            border: 1pt solid #ccc;
+        }
+        
+        table.transfer-table tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        
+        table.transfer-table tfoot {
+            font-weight: bold;
+            background-color: #e0e0e0;
+        }
+        
+        .text-right {
+            text-align: right;
+        }
+        
+        .text-center {
+            text-align: center;
+        }
+        
+        .footer {
+            margin-top: 30pt;
+            padding-top: 10pt;
+            border-top: 1pt solid #ccc;
+            font-size: 8pt;
+            color: #666;
+        }
+        
+        .signature-section {
+            margin-top: 40pt;
+            display: flex;
+            justify-content: space-between;
+        }
+        
+        .signature-box {
+            width: 45%;
+        }
+        
+        .signature-line {
+            margin-top: 40pt;
+            border-top: 1pt solid #333;
+            padding-top: 5pt;
+            text-align: center;
+        }
+        
+        .status-badge {
+            display: inline-block;
+            padding: 3pt 8pt;
+            background-color: #f0f0f0;
+            border-radius: 3pt;
+            font-weight: bold;
+        }
+        
+        .status-draft { background-color: #6c757d; color: white; }
+        .status-transit { background-color: #ffc107; color: black; }
+        .status-completed { background-color: #28a745; color: white; }
+        .status-cancelled { background-color: #dc3545; color: white; }
+    </style>
+</head>
+<body>
+    <h1>PŘEVODKA ZBOŽÍ</h1>
+    
+    <div class="header-info">
+        <table>
+            <tr>
+                <td>Číslo převodky:</td>
+                <td><strong>{{ transfer.transfer_number }}</strong></td>
+            </tr>
+            <tr>
+                <td>Datum převodu:</td>
+                <td>{{ transfer.transfer_date|date:"d.m.Y" }}</td>
+            </tr>
+            <tr>
+                <td>Stav:</td>
+                <td>
+                    {% if transfer.status == 'DRAFT' %}
+                        <span class="status-badge status-draft">Návrh</span>
+                    {% elif transfer.status == 'IN_TRANSIT' %}
+                        <span class="status-badge status-transit">V převozu</span>
+                    {% elif transfer.status == 'COMPLETED' %}
+                        <span class="status-badge status-completed">Dokončeno</span>
+                    {% elif transfer.status == 'CANCELLED' %}
+                        <span class="status-badge status-cancelled">Zrušeno</span>
+                    {% endif %}
+                </td>
+            </tr>
+        </table>
+    </div>
+    
+    <h2>Přesun zboží</h2>
+    <div class="header-info">
+        <table>
+            <tr>
+                <td><strong>Ze skladu:</strong></td>
+                <td>
+                    {{ transfer.warehouse_from.name }}<br>
+                    <small>{{ transfer.warehouse_from.canteen.name }}, {{ transfer.warehouse_from.canteen.address }}</small>
+                </td>
+            </tr>
+            <tr>
+                <td><strong>Do skladu:</strong></td>
+                <td>
+                    {{ transfer.warehouse_to.name }}<br>
+                    <small>{{ transfer.warehouse_to.canteen.name }}, {{ transfer.warehouse_to.canteen.address }}</small>
+                </td>
+            </tr>
+        </table>
+    </div>
+    
+    {% if transfer.notes %}
+    <h2>Poznámky</h2>
+    <p>{{ transfer.notes }}</p>
+    {% endif %}
+    
+    <h2>Převáděné položky</h2>
+    <table class="transfer-table">
+        <thead>
+            <tr>
+                <th style="width: 5%;">#</th>
+                <th style="width: 50%;">Název suroviny</th>
+                <th style="width: 15%;" class="text-right">Množství</th>
+                <th style="width: 10%;">Jednotka</th>
+                <th style="width: 20%;" class="text-right">Cena s DPH</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in items %}
+            <tr>
+                <td class="text-center">{{ forloop.counter }}</td>
+                <td>{{ item.ingredient.name }}</td>
+                <td class="text-right">{{ item.quantity|floatformat:3 }}</td>
+                <td>{{ item.ingredient.base_unit }}</td>
+                <td class="text-right">{{ item.get_total_price|floatformat:2 }} Kč</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+        <tfoot>
+            <tr>
+                <td colspan="4" class="text-right">Celková hodnota:</td>
+                <td class="text-right">{{ transfer.get_total_value|floatformat:2 }} Kč</td>
+            </tr>
+        </tfoot>
+    </table>
+    
+    <div class="signature-section">
+        <div class="signature-box">
+            <p><strong>Předávající:</strong></p>
+            <div class="signature-line">
+                Jméno, podpis, datum
+            </div>
+        </div>
+        
+        <div class="signature-box">
+            <p><strong>Přebírající:</strong></p>
+            <div class="signature-line">
+                Jméno, podpis, datum
+            </div>
+        </div>
+    </div>
+    
+    <div class="footer">
+        <p>
+            Převodka vytvořena: {{ transfer.created_at|date:"d.m.Y H:i" }}
+            {% if transfer.created_by %}
+                ({{ transfer.created_by.get_full_name|default:transfer.created_by.username }})
+            {% endif %}
+        </p>
+        {% if transfer.started_at %}
+        <p>Zahájeno: {{ transfer.started_at|date:"d.m.Y H:i" }}</p>
+        {% endif %}
+        {% if transfer.completed_at %}
+        <p>Dokončeno: {{ transfer.completed_at|date:"d.m.Y H:i" }}</p>
+        {% endif %}
+        <p>
+            Dokument vygenerován: {{ generated_at|date:"d.m.Y H:i" }}
+            ({{ generated_by.get_full_name|default:generated_by.username }})
+        </p>
+    </div>
+</body>
+</html>

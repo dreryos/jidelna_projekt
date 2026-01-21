@@ -56,4 +56,17 @@ urlpatterns = [
     path('inventory-verifications/<int:pk>/complete/', views.inventory_verification_complete, name='inventory_verification_complete'),
     path('inventory-verifications/<int:pk>/cancel/', views.inventory_verification_cancel, name='inventory_verification_cancel'),
     path('inventory-verifications/<int:pk>/pdf/', views.inventory_verification_pdf, name='inventory_verification_pdf'),
+    
+    # Převodky (StockTransfer)
+    path('stock-transfers/', views.StockTransferListView.as_view(), name='stock_transfer_list'),
+    path('stock-transfers/create/', views.StockTransferCreateView.as_view(), name='stock_transfer_create'),
+    path('stock-transfers/<int:pk>/', views.StockTransferDetailView.as_view(), name='stock_transfer_detail'),
+    path('stock-transfers/<int:pk>/start/', views.stock_transfer_start, name='stock_transfer_start'),
+    path('stock-transfers/<int:pk>/complete/', views.stock_transfer_complete, name='stock_transfer_complete'),
+    path('stock-transfers/<int:pk>/start-and-complete/', views.stock_transfer_start_and_complete, name='stock_transfer_start_and_complete'),
+    path('stock-transfers/<int:pk>/cancel/', views.stock_transfer_cancel, name='stock_transfer_cancel'),
+    path('stock-transfers/<int:pk>/pdf/', views.stock_transfer_pdf, name='stock_transfer_pdf'),
+    
+    # AJAX endpoint pro načtení ceny suroviny ze skladu
+    path('api/stock-item-price/', views.get_stock_item_price, name='stock_item_price'),
 ]

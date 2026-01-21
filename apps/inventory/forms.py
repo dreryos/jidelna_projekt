@@ -2,7 +2,11 @@ from decimal import Decimal
 from django import forms
 from django.forms import inlineformset_factory
 from django.core.exceptions import ValidationError
-from .models import GoodsReceipt, GoodsReceiptItem, Warehouse, Ingredient, InventoryVerification, InventoryVerificationItem
+from .models import (
+    GoodsReceipt, GoodsReceiptItem, Warehouse, Ingredient, 
+    InventoryVerification, InventoryVerificationItem,
+    StockTransfer, StockTransferItem, StockItem
+)
 
 # České DPH sazby platné v roce 2026
 VAT_RATE_CHOICES = [
@@ -188,4 +192,159 @@ InventoryVerificationItemFormSet = inlineformset_factory(
     min_num=0,
     max_num=500,
     can_delete=False,
+)
+
+
+class StockTransferForm(forms.ModelForm):
+    """Formulář pro vytvoření/editaci převodky."""
+    
+    class Meta:
+        model = StockTransfer
+        fields = ['warehouse_from', 'warehouse_to', 'transfer_date', 'notes']
+        widgets = {
+            'warehouse_from': forms.Select(attrs={'class': 'form-select'}),
+            'warehouse_to': forms.Select(attrs={'class': 'form-select'}),
+            'transfer_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+            'notes': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+        }
+        labels = {
+            'warehouse_from': 'Ze skladu',
+            'warehouse_to': 'Do skladu',
+            'transfer_date': 'Datum převodu',
+            'notes': 'Poznámky',
+        }
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Odfiltrovat mezisklady - nelze je vybrat jako source nebo target
+        self.fields['warehouse_from'].queryset = Warehouse.objects.filter(is_transit_warehouse=False)
+        self.fields['warehouse_to'].queryset = Warehouse.objects.filter(is_transit_warehouse=False)
+    
+    def clean(self):
+        cleaned_data = super().clean()
+        warehouse_from = cleaned_data.get('warehouse_from')
+        warehouse_to = cleaned_data.get('warehouse_to')
+        
+        # Kontrola že source != target
+        if warehouse_from and warehouse_to and warehouse_from == warehouse_to:
+            raise ValidationError("Zdrojový a cílový sklad musí být různé.")
+        
+        # Kontrola že sklady nejsou mezisklady
+        if warehouse_from and warehouse_from.is_transit_warehouse:
+            raise ValidationError("Nelze převádět z meziskladu.")
+        if warehouse_to and warehouse_to.is_transit_warehouse:
+            raise ValidationError("Nelze převádět do meziskladu.")
+        
+        # Kontrola zamčení skladů
+        if warehouse_from and warehouse_from.is_locked:
+            raise ValidationError(
+                f"Sklad '{warehouse_from.name}' je uzamčen kvůli probíhající inventuře. "
+                f"Nelze vytvářet převodky ze zamčeného skladu."
+            )
+        if warehouse_to and warehouse_to.is_locked:
+            raise ValidationError(
+                f"Sklad '{warehouse_to.name}' je uzamčen kvůli probíhající inventuře. "
+                f"Nelze vytvářet převodky do zamčeného skladu."
+            )
+        
+        return cleaned_data
+
+
+class StockTransferItemForm(forms.ModelForm):
+    """Formulář pro jednu položku převodky."""
+    
+    # Přidáme pole pro zobrazení dostupného množství
+    available_quantity = forms.DecimalField(
+        required=False,
+        disabled=True,
+        label='Dostupné množství',
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'readonly': True})
+    )
+    
+    class Meta:
+        model = StockTransferItem
+        fields = ['ingredient', 'quantity', 'unit_price_with_vat']
+        widgets = {
+            'ingredient': forms.Select(attrs={
+                'class': 'form-select ingredient-select',
+                'required': True,
+                'onchange': 'loadIngredientPrice(this)'
+            }),
+            'quantity': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'step': '0.001',
+                'min': '0',
+                'required': True
+            }),
+            'unit_price_with_vat': forms.NumberInput(attrs={
+                'class': 'form-control unit-price',
+                'step': '0.01',
+                'min': '0',
+                'required': True,
+                'readonly': True  # Cena se vyplní automaticky
+            }),
+        }
+        labels = {
+            'ingredient': 'Surovina',
+            'quantity': 'Množství',
+            'unit_price_with_vat': 'Jednotková cena s DPH',
+        }
+    
+    def __init__(self, *args, warehouse_from=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.warehouse_from = warehouse_from
+        
+        # Pokud máme instance a warehouse_from, nastavíme dostupné množství
+        if self.instance.pk and self.instance.ingredient and warehouse_from:
+            try:
+                stock_item = StockItem.objects.get(
+                    ingredient=self.instance.ingredient,
+                    warehouse=warehouse_from
+                )
+                self.initial['available_quantity'] = stock_item.quantity_available
+            except StockItem.DoesNotExist:
+                self.initial['available_quantity'] = 0
+    
+    def clean(self):
+        cleaned_data = super().clean()
+        
+        # Pokud je řádek označen ke smazání, přeskočíme validaci
+        if cleaned_data.get('DELETE'):
+            return cleaned_data
+        
+        ingredient = cleaned_data.get('ingredient')
+        quantity = cleaned_data.get('quantity')
+        
+        # Pokud máme warehouse_from z formuláře, ověříme dostupnost
+        if self.warehouse_from and ingredient and quantity:
+            try:
+                stock_item = StockItem.objects.get(
+                    ingredient=ingredient,
+                    warehouse=self.warehouse_from
+                )
+                if stock_item.quantity_available < quantity:
+                    raise ValidationError({
+                        'quantity': f"Nedostatečné množství. Dostupné: {stock_item.quantity_available} {ingredient.base_unit}"
+                    })
+                
+                # Automaticky nastavit cenu ze skladu pokud není zadána
+                if not cleaned_data.get('unit_price_with_vat'):
+                    cleaned_data['unit_price_with_vat'] = stock_item.price
+            
+            except StockItem.DoesNotExist:
+                raise ValidationError({
+                    'ingredient': f"Surovina '{ingredient.name}' není na skladu {self.warehouse_from}."
+                })
+        
+        return cleaned_data
+
+
+# Formset pro položky převodky
+StockTransferItemFormSet = inlineformset_factory(
+    StockTransfer,
+    StockTransferItem,
+    form=StockTransferItemForm,
+    extra=1,  # 1 prázdný formulář
+    max_num=100,  # Maximum 100 položek
+    can_delete=True,  # Možnost smazání položky
 )

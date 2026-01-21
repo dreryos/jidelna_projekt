@@ -1,0 +1,224 @@
+{% extends 'base.html' %}
+{% load django_bootstrap5 %}
+
+{% block title %}Detail převodky - Spíž{% endblock %}
+
+{% block extra_css %}
+<style>
+.info-row {
+    padding: 10px 0;
+    border-bottom: 1px solid #dee2e6;
+}
+.info-row:last-child {
+    border-bottom: none;
+}
+.info-label {
+    font-weight: bold;
+    color: #6c757d;
+}
+.workflow-info {
+    background: #f8f9fa;
+    padding: 15px;
+    border-radius: 5px;
+    margin-bottom: 20px;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h1>
+    <i class="fas fa-exchange-alt me-2"></i>Detail převodky
+  </h1>
+  <div>
+    <a href="{% url 'inventory:stock_transfer_list' %}" class="btn btn-secondary">
+      <i class="fas fa-arrow-left me-2"></i>Zpět na seznam
+    </a>
+    <a href="{% url 'inventory:stock_transfer_pdf' transfer.pk %}" class="btn btn-outline-secondary">
+      <i class="fas fa-file-pdf me-2"></i>PDF průvodka
+    </a>
+  </div>
+</div>
+
+<!-- Workflow akce -->
+{% if user.is_staff %}
+<div class="workflow-info">
+  <h6>Akce:</h6>
+  <div class="btn-group" role="group">
+    {% if transfer.status == 'DRAFT' %}
+      <form method="post" action="{% url 'inventory:stock_transfer_start' transfer.pk %}" class="d-inline">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-warning" onclick="return confirm('Opravdu chcete zahájit převod? Zboží bude přesunuto do meziskladu.');">
+          <i class="fas fa-play me-1"></i>Zahájit převod
+        </button>
+      </form>
+      <form method="post" action="{% url 'inventory:stock_transfer_start_and_complete' transfer.pk %}" class="d-inline">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-success" onclick="return confirm('Opravdu chcete okamžitě dokončit převod? Zboží bude přímo převedeno do cílového skladu.');">
+          <i class="fas fa-bolt me-1"></i>Zahájit a dokončit
+        </button>
+      </form>
+      <form method="post" action="{% url 'inventory:stock_transfer_cancel' transfer.pk %}" class="d-inline">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-danger" onclick="return confirm('Opravdu chcete zrušit tuto převodku?');">
+          <i class="fas fa-times me-1"></i>Zrušit
+        </button>
+      </form>
+    {% elif transfer.status == 'IN_TRANSIT' %}
+      <form method="post" action="{% url 'inventory:stock_transfer_complete' transfer.pk %}" class="d-inline">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-success" onclick="return confirm('Opravdu chcete dokončit převod? Zboží bude převzato v cílovém skladu.');">
+          <i class="fas fa-check me-1"></i>Dokončit převod
+        </button>
+      </form>
+      <form method="post" action="{% url 'inventory:stock_transfer_cancel' transfer.pk %}" class="d-inline">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-danger" onclick="return confirm('Opravdu chcete zrušit převod? Zboží bude vráceno zpět do zdrojového skladu.');">
+          <i class="fas fa-undo me-1"></i>Zrušit a vrátit zboží
+        </button>
+      </form>
+    {% elif transfer.status == 'COMPLETED' %}
+      <span class="badge bg-success" style="font-size: 1rem; padding: 0.5rem 1rem;">
+        <i class="fas fa-check-circle me-1"></i>Převod byl úspěšně dokončen
+      </span>
+    {% elif transfer.status == 'CANCELLED' %}
+      <span class="badge bg-danger" style="font-size: 1rem; padding: 0.5rem 1rem;">
+        <i class="fas fa-times-circle me-1"></i>Převod byl zrušen
+      </span>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+<!-- Základní informace -->
+<div class="card mb-4">
+  <div class="card-header">
+    <h5 class="mb-0">Základní informace</h5>
+  </div>
+  <div class="card-body">
+    <div class="row">
+      <div class="col-md-6">
+        <div class="info-row">
+          <span class="info-label">Číslo převodky:</span>
+          <span class="ms-2"><strong>{{ transfer.transfer_number }}</strong></span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Ze skladu:</span>
+          <span class="ms-2">{{ transfer.warehouse_from.name }} ({{ transfer.warehouse_from.canteen.name }})</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Do skladu:</span>
+          <span class="ms-2">{{ transfer.warehouse_to.name }} ({{ transfer.warehouse_to.canteen.name }})</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Datum převodu:</span>
+          <span class="ms-2">{{ transfer.transfer_date|date:"d.m.Y" }}</span>
+        </div>
+      </div>
+      
+      <div class="col-md-6">
+        <div class="info-row">
+          <span class="info-label">Stav:</span>
+          <span class="ms-2">
+            {% if transfer.status == 'DRAFT' %}
+              <span class="badge bg-secondary">
+                <i class="fas fa-file me-1"></i>Návrh
+              </span>
+            {% elif transfer.status == 'IN_TRANSIT' %}
+              <span class="badge bg-warning text-dark">
+                <i class="fas fa-truck me-1"></i>V převozu
+              </span>
+            {% elif transfer.status == 'COMPLETED' %}
+              <span class="badge bg-success">
+                <i class="fas fa-check me-1"></i>Dokončeno
+              </span>
+            {% elif transfer.status == 'CANCELLED' %}
+              <span class="badge bg-danger">
+                <i class="fas fa-times me-1"></i>Zrušeno
+              </span>
+            {% endif %}
+          </span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Vytvořeno:</span>
+          <span class="ms-2">
+            {{ transfer.created_at|date:"d.m.Y H:i" }}
+            {% if transfer.created_by %}
+              ({{ transfer.created_by.get_full_name|default:transfer.created_by.username }})
+            {% endif %}
+          </span>
+        </div>
+        {% if transfer.started_at %}
+        <div class="info-row">
+          <span class="info-label">Zahájeno:</span>
+          <span class="ms-2">{{ transfer.started_at|date:"d.m.Y H:i" }}</span>
+        </div>
+        {% endif %}
+        {% if transfer.completed_at %}
+        <div class="info-row">
+          <span class="info-label">Dokončeno:</span>
+          <span class="ms-2">{{ transfer.completed_at|date:"d.m.Y H:i" }}</span>
+        </div>
+        {% endif %}
+        <div class="info-row">
+          <span class="info-label">Celková hodnota:</span>
+          <span class="ms-2"><strong>{{ transfer.get_total_value|floatformat:2 }} Kč</strong></span>
+        </div>
+      </div>
+    </div>
+    
+    {% if transfer.notes %}
+    <div class="info-row mt-3">
+      <span class="info-label">Poznámky:</span>
+      <div class="mt-2">{{ transfer.notes }}</div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Položky převodky -->
+<div class="card">
+  <div class="card-header">
+    <h5 class="mb-0">Položky převodky ({{ transfer.items.count }})</h5>
+  </div>
+  <div class="card-body">
+    {% if transfer.items.exists %}
+      <div class="table-responsive">
+        <table class="table table-hover">
+          <thead>
+            <tr>
+              <th>Surovina</th>
+              <th class="text-end">Množství</th>
+              <th>Jednotka</th>
+              <th class="text-end">Jedn. cena s DPH</th>
+              <th class="text-end">Celkem s DPH</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in items %}
+              <tr>
+                <td><strong>{{ item.ingredient.name }}</strong></td>
+                <td class="text-end">{{ item.quantity|floatformat:3 }}</td>
+                <td>{{ item.ingredient.base_unit }}</td>
+                <td class="text-end">{{ item.unit_price_with_vat|floatformat:2 }} Kč</td>
+                <td class="text-end"><strong>{{ item.get_total_price|floatformat:2 }} Kč</strong></td>
+              </tr>
+            {% endfor %}
+          </tbody>
+          <tfoot>
+            <tr class="table-secondary">
+              <td colspan="4" class="text-end"><strong>Celkem:</strong></td>
+              <td class="text-end"><strong>{{ transfer.get_total_value|floatformat:2 }} Kč</strong></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    {% else %}
+      <div class="alert alert-info">
+        <i class="fas fa-info-circle me-2"></i>Převodka neobsahuje žádné položky.
+      </div>
+    {% endif %}
+  </div>
+</div>
+
+{% endblock %}
