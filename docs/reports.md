@@ -18,10 +18,17 @@ Tento report pomáhá vedoucímu jídelny určit, co je potřeba objednat.
     *   **To Order**: `max(0, Needed - Stock)` - kolik chybí a je třeba objednat.
 
 ### Exporty
-*   **PDF**: Generováno pomocí knihovny ReportLab. Obsahuje přehlednou tabulku s diakritikou (používá font DejaVuSans, pokud je dostupný).
-*   **Excel**: Generováno pomocí knihovny openpyxl. Vhodné pro další zpracování dat.
+*   **PDF**: Generováno pomocí knihovny WeasyPrint (od verze 1.x - sloučený vizuál s ostatními PDF reporty). Obsahuje:
+    *   Přehlednou hlavičku s informacemi o jídelně a období
+    *   Sumární statistiky (celkem surovin, dostačující zásoby, k objednání)
+    *   Tabulku se sloupci: Surovina, Jednotka, Potřeba, Na skladě, K objednání, **Poznámky**
+    *   Sloupec Poznámky je prázdný pro ruční vyplnění (dodavatel, termín, apod.)
+    *   Zvýraznění položek k objednání tučným levým okrajem
+    *   Vysvětlivky a legendu
+*   **Excel**: Generováno pomocí knihovny openpyxl. Obsahuje stejné sloupce včetně prázdného sloupce Poznámky. Vhodné pro další zpracování dat.
 
 ## Pro vývojáře
 
 *   Logika je implementována ve funkci `generate_order_report` v `apps/reports/views.py`.
-*   Pro PDF generování se dynamicky hledají fonty v systému, aby se správně zobrazovala čeština.
+*   PDF používá HTML template `apps/reports/templates/reports/order_report_pdf.html` renderovaný přes WeasyPrint (konzistentní s výdejkami a převodkami).
+*   Webové zobrazení v `report_result.html` také obsahuje sloupec Poznámky pro konzistenci.

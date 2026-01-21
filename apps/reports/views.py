@@ -25,18 +25,6 @@ try:
 except Exception:
     openpyxl = None
 
-try:
-    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
-    from reportlab.lib import colors
-    from reportlab.lib.pagesizes import A4
-    from reportlab.lib.styles import getSampleStyleSheet
-    from reportlab.pdfbase import pdfmetrics
-    from reportlab.pdfbase.ttfonts import TTFont
-    import os
-except Exception:
-    SimpleDocTemplate = None
-    Table = None
-
 
 class ReportForm(forms.Form):
     canteen = forms.ModelChoiceField(queryset=Canteen.objects.all())
@@ -172,9 +160,9 @@ def generate_excel_response(report):
     ws = wb.active
     ws.title = 'Order report'
 
-    ws.append(['Surovina', 'Jednotka', 'Potřeba', 'Sklad', 'K objednání'])
+    ws.append(['Surovina', 'Jednotka', 'Potřeba', 'Sklad', 'K objednání', 'Poznámky'])
     for it in report['items']:
-        ws.append([it['ingredient'].name, it['unit'], it['needed'], it['stock'], it['to_order']])
+        ws.append([it['ingredient'].name, it['unit'], it['needed'], it['stock'], it['to_order'], ''])
 
     stream = io.BytesIO()
     wb.save(stream)
@@ -187,82 +175,39 @@ def generate_excel_response(report):
 
 
 def generate_pdf_response(report):
-    if SimpleDocTemplate is None:
-        return HttpResponse('reportlab not installed', status=500)
-
-    buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4)
-
-    # Register a TTF font that supports Czech diacritics if available (DejaVu Sans)
-    font_name = 'Helvetica'
+    """Generuje PDF report pomocí WeasyPrint s HTML templatem (konzistentní s ostatními PDF)."""
+    from django.template.loader import render_to_string
+    
     try:
-        # prefer project-local font (static files)
-        proj_local = os.path.join(os.path.dirname(__file__), 'static', 'fonts', 'DejaVuSans.ttf')
-        possible_paths = [
-            proj_local,
-            '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
-            '/usr/local/share/fonts/DejaVuSans.ttf',
-            '/Library/Fonts/DejaVuSans.ttf',
-            '/System/Library/Fonts/Arial Unicode.ttf',
-        ]
-        for p in possible_paths:
-            if p and os.path.exists(p):
-                pdfmetrics.registerFont(TTFont('DejaVuSans', p))
-                font_name = 'DejaVuSans'
-                break
-    except Exception:
-        # If registration fails, fallback to default
-        font_name = 'Helvetica'
-
-    styles = getSampleStyleSheet()
-    # ensure styles use the registered font
-    for s in styles.byName.values():
-        try:
-            s.fontName = font_name
-        except Exception:
-            pass
-
-    elems = []
-
-    title = Paragraph(f"Report objednávek", styles['Heading1'])
-    elems.append(title)
-    elems.append(Spacer(1, 12))
-
-    # Header info
-    header_style = styles['Normal']
+        from weasyprint import HTML
+    except ImportError:
+        return HttpResponse('WeasyPrint není nainstalován. PDF export není dostupný.', status=500)
+    except OSError as e:
+        if "libgobject" in str(e) or "cannot load library" in str(e):
+            return HttpResponse('Chyba: V systému chybí knihovny GTK3 potřebné pro generování PDF (WeasyPrint). Prosím nainstalujte GTK3 Runtime.', status=500)
+        raise e
     
-    canteen_info = Paragraph(f"<b>Jídelna:</b> {report['canteen'].name}", header_style)
-    period_info = Paragraph(f"<b>Období:</b> {report['date_from']} - {report['date_to']}", header_style)
+    # Připravíme kontext pro template
+    context = {
+        'report': report,
+    }
     
-    generated_at_val = report.get('generated_at', timezone.now())
-    # Handle both datetime and date objects safely
-    if hasattr(generated_at_val, 'strftime'):
-        generated_at_str = generated_at_val.strftime('%d.%m.%Y %H:%M')
-    else:
-        generated_at_str = str(generated_at_val)
+    # Vyrenderujeme HTML
+    html_string = render_to_string('reports/order_report_pdf.html', context)
+    
+    # Vygenerujeme PDF
+    try:
+        html = HTML(string=html_string)
+        response = HttpResponse(content_type='application/pdf')
         
-    generated_by_str = str(report.get('generated_by', 'Neznámý'))
-    
-    gen_info = Paragraph(f"<b>Generováno:</b> {generated_at_str} (uživatel: {generated_by_str})", header_style)
-    
-    elems.extend([canteen_info, period_info, gen_info, Spacer(1, 12)])
-
-    data = [['Surovina', 'Jednotka', 'Potřeba', 'Sklad', 'K objednání']]
-    data.extend([[it['ingredient'].name, it['unit'], str(it['needed']), str(it['stock']), str(it['to_order'])] for it in report['items']])
-
-    table = Table(data, hAlign='LEFT')
-    table.setStyle(TableStyle([
-        ('FONT', (0, 0), (-1, -1), font_name),
-        ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
-    ]))
-    elems.append(table)
-
-    doc.build(elems)
-    pdf = buffer.getvalue()
-    buffer.close()
-
-    resp = HttpResponse(pdf, content_type='application/pdf')
-    filename = f"order_report_{report['canteen'].name}_{report['date_from']}_{report['date_to']}.pdf"
-    resp['Content-Disposition'] = f'attachment; filename="{filename}"'
-    return resp
+        filename = f"order_report_{report['canteen'].name}_{report['date_from']}_{report['date_to']}.pdf"
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        
+        html.write_pdf(response)
+        
+        return response
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f'Error generating PDF for order report: {e}', exc_info=True)
+        return HttpResponse(f'Chyba při generování PDF: {str(e)}', status=500)
