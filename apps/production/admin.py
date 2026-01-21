@@ -1,19 +1,37 @@
 from django.contrib import admin
-from .models import ProductionOrder, PickingList, MenuPlan, MenuPlanCoefficient, PickingListDocument, MenuTemplate
+from django.utils.html import format_html
+from .models import (
+    ProductionOrder, PickingList, MenuPlan, MenuPlanCoefficient, 
+    PickingListDocument, MenuTemplate, ProductionOrderRecipeOverride,
+    ProductionOrderIngredientOverride
+)
 
 # Tento admin modul umožňuje správu výrobních příkazů a zobrazení souvisejících výdejek.
 # Výpočty cen používají metodu `calculate_portion_price` z modelu Recipe.
 
 class PickingListInline(admin.TabularInline):
     model = PickingList
-    fields = ('ingredient', 'warehouse', 'quantity_planned', 'quantity_actual', 'status')
-    readonly_fields = ('ingredient', 'quantity_planned')
+    fields = ('ingredient', 'warehouse', 'quantity_planned', 'quantity_actual', 'status', 'is_customized')
+    readonly_fields = ('ingredient', 'quantity_planned', 'is_customized')
     autocomplete_fields = ['warehouse']
     extra = 0
     can_delete = False
 
     def has_add_permission(self, request, obj=None):
         return False
+
+
+class ProductionOrderIngredientOverrideInline(admin.TabularInline):
+    model = ProductionOrderIngredientOverride
+    fields = ('ingredient', 'quantity_per_portion', 'original_quantity', 'is_added', 'is_removed', 'notes')
+    autocomplete_fields = ['ingredient']
+    extra = 0
+    
+    def get_readonly_fields(self, request, obj=None):
+        # original_quantity je readonly při editaci
+        if obj:
+            return ['original_quantity']
+        return []
 
 
 class MenuPlanCoefficientInline(admin.TabularInline):
@@ -39,11 +57,13 @@ class MenuPlanAdmin(admin.ModelAdmin):
 
 @admin.register(ProductionOrder)
 class ProductionOrderAdmin(admin.ModelAdmin):
-    inlines = [PickingListInline]
-    list_display = ('recipe', 'meal_type', 'canteen', 'date', 'total_portions', 'selling_vat_rate', 'created_at')
+    inlines = [ProductionOrderIngredientOverrideInline, PickingListInline]
+    list_display = ('recipe', 'meal_type', 'canteen', 'date', 'total_portions', 'customization_indicator', 'selling_vat_rate', 'created_at')
     list_filter = ('meal_type', 'canteen', 'date', 'menu_plan', 'selling_vat_rate')
+    search_fields = ('recipe__name', 'canteen__name', 'menu_plan__name')
     autocomplete_fields = ['recipe', 'canteen', 'menu_plan']
     readonly_fields = ('price_per_portion', 'total_price')
+    actions = ['reset_ingredient_overrides']
     
     fieldsets = (
         (None, {
@@ -55,49 +75,89 @@ class ProductionOrderAdmin(admin.ModelAdmin):
         }),
         ('Vypočtené ceny', {
             'fields': ('price_per_portion', 'total_price'),
-            'description': 'Ceny jsou počítány ze všech variant porcí'
+            'description': 'Ceny jsou počítány ze všech variant porcí a respektují úpravy ingrediencí'
         }),
     )
 
     def get_queryset(self, request):
         # Optimalizace pro načítání souvisejících objektů
-        return super().get_queryset(request).select_related('recipe', 'canteen', 'menu_plan')
+        return super().get_queryset(request).select_related('recipe', 'canteen', 'menu_plan').prefetch_related('ingredient_overrides')
+    
+    def customization_indicator(self, obj):
+        """Zobrazí ikonu pokud má jídlo upravené ingredience"""
+        if obj.has_overrides:
+            return format_html(
+                '<span title="Upravené ingredience" style="color: orange; font-weight: bold;">✏️</span>'
+            )
+        return ''
+    customization_indicator.short_description = 'Úpravy'
+    
+    def reset_ingredient_overrides(self, request, queryset):
+        """Admin action pro hromadné resetování overrides"""
+        count = 0
+        for order in queryset:
+            if order.has_overrides and not order.has_issued_picking_list():
+                # Smazat overrides
+                order.ingredient_overrides.all().delete()
+                ProductionOrderRecipeOverride.objects.filter(production_order=order).delete()
+                
+                # Regenerovat výdejku
+                order.picking_list_items.all().delete()
+                order.generate_picking_list()
+                count += 1
+        
+        self.message_user(request, f'Úpravy byly resetovány u {count} výrobních příkazů.')
+    reset_ingredient_overrides.short_description = 'Resetovat úpravy ingrediencí'
 
     def price_per_portion(self, obj):
         if obj.recipe and obj.canteen:
-            # Průměrná cena na porci (bez koeficientů)
-            prices = obj.recipe.calculate_portion_price(
-                obj.canteen, 
-                portions=1,
-                portion_coefficient=1.0,
-                vat_rate=obj.selling_vat_rate
-            )
-            cost_info = f"Náklady: {prices['per_portion']} Kč"
-            if 'per_portion_with_vat' in prices:
+            # Použijeme nové metody, které respektují overrides
+            if obj.has_overrides:
+                prices = obj.calculate_selling_price()
+                cost_info = f"Náklady: {prices['per_portion']} Kč"
                 vat_info = f"<br>S DPH ({prices['vat_rate']}%): {prices['per_portion_with_vat']} Kč"
-                return f"{cost_info}{vat_info}"
-            return cost_info
+                warning = "<br><small style='color: orange;'>⚠️ Upravené ingredience</small>"
+                return format_html(f"{cost_info}{vat_info}{warning}")
+            else:
+                # Původní výpočet z receptu
+                prices = obj.recipe.calculate_portion_price(
+                    obj.canteen, 
+                    portions=1,
+                    portion_coefficient=1.0,
+                    vat_rate=obj.selling_vat_rate
+                )
+                cost_info = f"Náklady: {prices['per_portion']} Kč"
+                if 'per_portion_with_vat' in prices:
+                    vat_info = f"<br>S DPH ({prices['vat_rate']}%): {prices['per_portion_with_vat']} Kč"
+                    return format_html(f"{cost_info}{vat_info}")
+                return cost_info
         return "N/A"
     price_per_portion.short_description = "Cena/porce"
-    price_per_portion.allow_tags = True
 
     def total_price(self, obj):
         if obj.recipe and obj.canteen:
-            # Celková cena ze všech efektivních porcí (s koeficienty)
-            prices = obj.recipe.calculate_portion_price(
-                obj.canteen,
-                portions=int(obj.total_effective_portions),
-                portion_coefficient=1.0,
-                vat_rate=obj.selling_vat_rate
-            )
-            cost_info = f"Náklady: {prices['total']} Kč"
-            if 'total_with_vat' in prices:
+            # Použijeme nové metody, které respektují overrides
+            if obj.has_overrides:
+                prices = obj.calculate_selling_price()
+                cost_info = f"Náklady: {prices['total']} Kč"
                 vat_info = f"<br>S DPH ({prices['vat_rate']}%): {prices['total_with_vat']} Kč<br>DPH: {prices['vat_amount']} Kč"
-                return f"{cost_info}{vat_info}"
-            return cost_info
+                warning = "<br><small style='color: orange;'>⚠️ Upravené ingredience</small>"
+                return format_html(f"{cost_info}{vat_info}{warning}")
+            else:
+                # Původní výpočet z receptu
+                prices = obj.recipe.calculate_portion_price(
+                    obj.canteen,
+                    portions=int(obj.total_effective_portions),
+                    portion_coefficient=1.0,
+                    vat_rate=obj.selling_vat_rate
+                )
+                cost_info = f"Náklady: {prices['total']} Kč"
+                if 'total_with_vat' in prices:
+                    vat_info = f"<br>S DPH ({prices['vat_rate']}%): {prices['total_with_vat']} Kč<br>DPH: {prices['vat_amount']} Kč"
+                    return format_html(f"{cost_info}{vat_info}")
+                return cost_info
         return "N/A"
     total_price.short_description = "Celková cena výroby"
-    total_price.allow_tags = True
 
 
 @admin.register(PickingListDocument)
@@ -137,6 +197,51 @@ class MenuTemplateAdmin(admin.ModelAdmin):
         }),
         ('XML obsah', {
             'fields': ('xml_content',)
+        }),
+        ('Metadata', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+
+
+@admin.register(ProductionOrderRecipeOverride)
+class ProductionOrderRecipeOverrideAdmin(admin.ModelAdmin):
+    """Admin pro override receptů"""
+    list_display = ('production_order', 'is_customized', 'created_at', 'updated_at')
+    list_filter = ('is_customized', 'created_at')
+    search_fields = ('production_order__recipe__name', 'customization_note')
+    readonly_fields = ('created_at', 'updated_at')
+    
+    fieldsets = (
+        (None, {
+            'fields': ('production_order', 'is_customized', 'customization_note')
+        }),
+        ('Metadata', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+
+
+@admin.register(ProductionOrderIngredientOverride)
+class ProductionOrderIngredientOverrideAdmin(admin.ModelAdmin):
+    """Admin pro override ingrediencí"""
+    list_display = ('production_order', 'ingredient', 'quantity_per_portion', 'original_quantity', 'is_added', 'is_removed')
+    list_filter = ('is_added', 'is_removed', 'created_at')
+    search_fields = ('production_order__recipe__name', 'ingredient__name')
+    autocomplete_fields = ['production_order', 'ingredient']
+    readonly_fields = ('created_at', 'updated_at')
+    
+    fieldsets = (
+        (None, {
+            'fields': ('production_order', 'ingredient')
+        }),
+        ('Množství', {
+            'fields': ('quantity_per_portion', 'original_quantity')
+        }),
+        ('Typ úpravy', {
+            'fields': ('is_added', 'is_removed', 'notes')
         }),
         ('Metadata', {
             'fields': ('created_at', 'updated_at'),

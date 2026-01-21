@@ -858,7 +858,8 @@ def picking_list_generator(request):
                 daily_picking_data[order.date].append({
                     'recipe_name': order.recipe.name,
                     'portions': order.total_portions,
-                    'ingredients': order_ingredients
+                    'ingredients': order_ingredients,
+                    'is_customized': order.has_overrides
                 })
             
             # Seřadíme dny
@@ -1090,7 +1091,8 @@ def picking_list_edit(request, document_id):
             daily_picking_data[order.date].append({
                 'recipe_name': order.recipe.name,
                 'portions': order.total_portions,
-                'ingredients': order_ingredients
+                'ingredients': order_ingredients,
+                'is_customized': order.has_overrides
             })
         
         # Seřadíme dny
@@ -1233,7 +1235,8 @@ def picking_list_pdf(request, document_id):
             daily_picking_data[order.date].append({
                 'recipe_name': order.recipe.name,
                 'portions': order.total_portions,
-                'ingredients': order_ingredients
+                'ingredients': order_ingredients,
+                'is_customized': order.has_overrides
             })
         
         # Seřadíme dny
@@ -1338,3 +1341,420 @@ def archive_picking_list(request, document_id):
     except Exception as e:
         logger.error(f"Error archiving picking list document {document_id}: {e}", exc_info=True)
         return JsonResponse({'success': False, 'error': 'Chyba při archivaci výdejky.'}, status=500)
+
+
+# --- Ingredient Override Views ---
+
+@login_required
+@user_can_access_canteen_object(ProductionOrder)
+def get_meal_ingredients(request, order_pk, *args, **kwargs):
+    """AJAX view pro získání seznamu ingrediencí jídla včetně overrides"""
+    production_order = request.instance
+    
+    if request.method != 'GET':
+        return JsonResponse({'success': False, 'error': 'Invalid request method.'}, status=405)
+    
+    try:
+        # Získáme overrides
+        overrides_dict = {}
+        for override in production_order.ingredient_overrides.select_related('ingredient'):
+            overrides_dict[override.ingredient_id] = {
+                'quantity_per_portion': str(override.quantity_per_portion) if override.quantity_per_portion else None,
+                'original_quantity': str(override.original_quantity),
+                'is_added': override.is_added,
+                'is_removed': override.is_removed,
+                'notes': override.notes,
+                'id': override.id
+            }
+        
+        # Sestavíme seznam ingrediencí
+        ingredients = []
+        
+        # Ingredience z receptu
+        for recipe_ing in production_order.recipe.recipeingredient_set.select_related('ingredient'):
+            ingredient = recipe_ing.ingredient
+            ingredient_id = ingredient.id
+            
+            is_removed = ingredient_id in overrides_dict and overrides_dict[ingredient_id]['is_removed']
+            is_modified = ingredient_id in overrides_dict and not overrides_dict[ingredient_id]['is_added'] and not is_removed
+            
+            current_quantity = (
+                overrides_dict[ingredient_id]['quantity_per_portion'] 
+                if is_modified and overrides_dict[ingredient_id]['quantity_per_portion'] 
+                else str(recipe_ing.quantity_per_portion)
+            )
+            
+            ingredients.append({
+                'id': ingredient_id,
+                'name': ingredient.name,
+                'quantity_per_portion': current_quantity,
+                'original_quantity': str(recipe_ing.quantity_per_portion),
+                'unit': ingredient.recipe_unit,
+                'is_removed': is_removed,
+                'is_modified': is_modified,
+                'is_added': False,
+                'notes': overrides_dict[ingredient_id]['notes'] if ingredient_id in overrides_dict else '',
+                'override_id': overrides_dict[ingredient_id]['id'] if ingredient_id in overrides_dict else None
+            })
+        
+        # Přidané ingredience
+        for override in production_order.ingredient_overrides.filter(is_added=True).select_related('ingredient'):
+            ingredient = override.ingredient
+            ingredients.append({
+                'id': ingredient.id,
+                'name': ingredient.name,
+                'quantity_per_portion': str(override.quantity_per_portion) if override.quantity_per_portion else '0',
+                'original_quantity': '0',
+                'unit': ingredient.recipe_unit,
+                'is_removed': False,
+                'is_modified': False,
+                'is_added': True,
+                'notes': override.notes,
+                'override_id': override.id
+            })
+        
+        return JsonResponse({
+            'success': True,
+            'ingredients': ingredients,
+            'recipe_name': production_order.recipe.name,
+            'has_issued_picking_list': production_order.has_issued_picking_list()
+        })
+        
+    except Exception as e:
+        logger.error(f"Error in get_meal_ingredients for order {order_pk}: {e}", exc_info=True)
+        return JsonResponse({'success': False, 'error': 'Chyba při načítání ingrediencí.'}, status=500)
+
+
+@login_required
+@user_can_access_canteen_object(ProductionOrder)
+def save_meal_ingredients(request, order_pk, *args, **kwargs):
+    """AJAX view pro uložení upravených ingrediencí jídla"""
+    production_order = request.instance
+    
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Invalid request method.'}, status=405)
+    
+    # Kontrola, zda existuje vydaná výdejka
+    if production_order.has_issued_picking_list():
+        return JsonResponse({
+            'success': False, 
+            'error': 'Nelze upravit ingredience - výdejka již byla vydána.'
+        }, status=400)
+    
+    try:
+        from .models import ProductionOrderIngredientOverride, ProductionOrderRecipeOverride
+        from apps.core.models import Ingredient
+        
+        data = json.loads(request.body)
+        ingredients_data = data.get('ingredients', [])
+        customization_note = data.get('customization_note', '')
+        
+        with transaction.atomic():
+            # Smažeme všechny existující overrides
+            production_order.ingredient_overrides.all().delete()
+            
+            # Slovník pro sledování ingrediencí z receptu
+            recipe_ingredient_ids = set(
+                production_order.recipe.recipeingredient_set.values_list('ingredient_id', flat=True)
+            )
+            
+            has_any_override = False
+            
+            for ing_data in ingredients_data:
+                ingredient_id = int(ing_data['id'])
+                is_removed = ing_data.get('is_removed', False)
+                is_added = ing_data.get('is_added', False)
+                quantity_str = ing_data.get('quantity_per_portion', '0')
+                notes = ing_data.get('notes', '')
+                
+                # Získáme ingredienci
+                ingredient = get_object_or_404(Ingredient, pk=ingredient_id)
+                
+                # Validace množství
+                try:
+                    quantity = Decimal(quantity_str) if quantity_str else Decimal('0')
+                    if quantity < 0:
+                        return JsonResponse({
+                            'success': False, 
+                            'error': f'Množství pro {ingredient.name} musí být nezáporné.'
+                        }, status=400)
+                except (ValueError, InvalidOperation):
+                    return JsonResponse({
+                        'success': False, 
+                        'error': f'Neplatné množství pro {ingredient.name}.'
+                    }, status=400)
+                
+                # Zjistíme původní množství
+                original_quantity = Decimal('0')
+                if ingredient_id in recipe_ingredient_ids:
+                    recipe_ing = production_order.recipe.recipeingredient_set.get(ingredient_id=ingredient_id)
+                    original_quantity = recipe_ing.quantity_per_portion
+                
+                # Kontrola, zda je potřeba vytvořit override
+                need_override = False
+                
+                if is_removed:
+                    # Ingredience odstraněna z receptu
+                    need_override = True
+                elif is_added:
+                    # Nově přidaná ingredience
+                    need_override = True
+                elif ingredient_id in recipe_ingredient_ids and quantity != original_quantity:
+                    # Upravené množství existující ingredience
+                    need_override = True
+                
+                if need_override:
+                    has_any_override = True
+                    ProductionOrderIngredientOverride.objects.create(
+                        production_order=production_order,
+                        ingredient=ingredient,
+                        quantity_per_portion=None if is_removed else quantity,
+                        original_quantity=original_quantity,
+                        is_added=is_added,
+                        is_removed=is_removed,
+                        notes=notes
+                    )
+            
+            # Vytvoř nebo aktualizuj ProductionOrderRecipeOverride
+            if has_any_override:
+                ProductionOrderRecipeOverride.objects.update_or_create(
+                    production_order=production_order,
+                    defaults={
+                        'is_customized': True,
+                        'customization_note': customization_note
+                    }
+                )
+            else:
+                # Žádné overrides - smažeme i recipe override pokud existuje
+                ProductionOrderRecipeOverride.objects.filter(
+                    production_order=production_order
+                ).delete()
+            
+            # Regenerujeme výdejku
+            production_order.picking_list_items.all().delete()
+            production_order.generate_picking_list()
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'Ingredience byly úspěšně uloženy.',
+            'has_overrides': has_any_override
+        })
+        
+    except (json.JSONDecodeError, KeyError, TypeError, ValueError) as e:
+        logger.error(f"Error in save_meal_ingredients for order {order_pk}: {e}", exc_info=True)
+        return JsonResponse({'success': False, 'error': 'Neplatná data.'}, status=400)
+    except Exception as e:
+        logger.error(f"Error in save_meal_ingredients for order {order_pk}: {e}", exc_info=True)
+        return JsonResponse({'success': False, 'error': 'Chyba při ukládání ingrediencí.'}, status=500)
+
+
+@login_required
+def search_ingredients(request):
+    """AJAX view pro vyhledávání ingrediencí (autocomplete)"""
+    if request.method != 'GET':
+        return JsonResponse({'success': False, 'error': 'Invalid request method.'}, status=405)
+    
+    try:
+        from apps.core.models import Ingredient
+        
+        query = request.GET.get('q', '').strip()
+        
+        if len(query) < 2:
+            return JsonResponse({'success': True, 'results': []})
+        
+        # Vyhledáme ingredience
+        ingredients = Ingredient.objects.filter(
+            name__icontains=query
+        ).order_by('name')[:20]
+        
+        results = [
+            {
+                'id': ing.id,
+                'name': ing.name,
+                'unit': ing.recipe_unit
+            }
+            for ing in ingredients
+        ]
+        
+        return JsonResponse({'success': True, 'results': results})
+        
+    except Exception as e:
+        logger.error(f"Error in search_ingredients: {e}", exc_info=True)
+        return JsonResponse({'success': False, 'error': 'Chyba při vyhledávání.'}, status=500)
+
+
+@login_required
+@user_can_access_canteen_object(ProductionOrder)
+def copy_meal_overrides(request, order_pk, *args, **kwargs):
+    """AJAX view pro zkopírování overrides z jednoho jídla do jiného"""
+    source_order = request.instance
+    
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Invalid request method.'}, status=405)
+    
+    try:
+        from .models import ProductionOrderIngredientOverride, ProductionOrderRecipeOverride
+        
+        data = json.loads(request.body)
+        target_order_id = int(data['target_order_id'])
+        
+        # Získáme cílový production order
+        target_order = get_object_or_404(ProductionOrder, pk=target_order_id)
+        
+        # Kontrola oprávnění - musí patřit do stejného MenuPlan
+        if target_order.menu_plan_id != source_order.menu_plan_id:
+            return JsonResponse({
+                'success': False, 
+                'error': 'Lze kopírovat pouze mezi jídly ve stejném jídelníčku.'
+            }, status=403)
+        
+        # Kontrola canteen ownership přes dekorátor už proběhla pro source_order
+        # Pro target_order musíme zkontrolovat také
+        user = cast('User', request.user)
+        target_canteen = target_order.get_canteen()
+        if not hasattr(user, 'userprofile') or target_canteen not in user.userprofile.canteens.all():
+            raise PermissionDenied("You don't have access to the target order's canteen.")
+        
+        # Kontrola, zda cílové jídlo nemá vydanou výdejku
+        if target_order.has_issued_picking_list():
+            return JsonResponse({
+                'success': False, 
+                'error': 'Cílové jídlo již má vydanou výdejku - nelze upravit.'
+            }, status=400)
+        
+        # Kontrola, zda source má overrides
+        if not source_order.has_overrides:
+            return JsonResponse({
+                'success': False, 
+                'error': 'Zdrojové jídlo nemá žádné úpravy ke zkopírování.'
+            }, status=400)
+        
+        with transaction.atomic():
+            # Smažeme existující overrides cílového jídla
+            target_order.ingredient_overrides.all().delete()
+            
+            # Zkopírujeme overrides
+            for source_override in source_order.ingredient_overrides.all():
+                ProductionOrderIngredientOverride.objects.create(
+                    production_order=target_order,
+                    ingredient=source_override.ingredient,
+                    quantity_per_portion=source_override.quantity_per_portion,
+                    original_quantity=source_override.original_quantity,
+                    is_added=source_override.is_added,
+                    is_removed=source_override.is_removed,
+                    notes=source_override.notes
+                )
+            
+            # Zkopírujeme recipe override
+            try:
+                source_recipe_override = source_order.recipe_override
+                ProductionOrderRecipeOverride.objects.update_or_create(
+                    production_order=target_order,
+                    defaults={
+                        'is_customized': source_recipe_override.is_customized,
+                        'customization_note': source_recipe_override.customization_note
+                    }
+                )
+            except ProductionOrderRecipeOverride.DoesNotExist:
+                # Source nemá recipe override, vytvoříme nový
+                ProductionOrderRecipeOverride.objects.update_or_create(
+                    production_order=target_order,
+                    defaults={
+                        'is_customized': True,
+                        'customization_note': f'Zkopírováno z: {source_order.recipe.name} ({source_order.date})'
+                    }
+                )
+            
+            # Regenerujeme výdejku cílového jídla
+            target_order.picking_list_items.all().delete()
+            target_order.generate_picking_list()
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'Úpravy byly zkopírovány do jídla "{target_order.recipe.name}".'
+        })
+        
+    except (json.JSONDecodeError, KeyError, TypeError, ValueError) as e:
+        logger.error(f"Error in copy_meal_overrides for order {order_pk}: {e}", exc_info=True)
+        return JsonResponse({'success': False, 'error': 'Neplatná data.'}, status=400)
+    except ProductionOrder.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Cílové jídlo nebylo nalezeno.'}, status=404)
+    except PermissionDenied as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=403)
+    except Exception as e:
+        logger.error(f"Error in copy_meal_overrides for order {order_pk}: {e}", exc_info=True)
+        return JsonResponse({'success': False, 'error': 'Chyba při kopírování úprav.'}, status=500)
+
+
+@login_required
+@user_can_access_canteen_object(MenuPlan)
+def bulk_reset_overrides(request, menu_pk, *args, **kwargs):
+    """AJAX view pro hromadné resetování overrides vybraných jídel"""
+    menu_plan = request.instance
+    
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Invalid request method.'}, status=405)
+    
+    try:
+        from .models import ProductionOrderRecipeOverride
+        
+        data = json.loads(request.body)
+        order_ids = data.get('order_ids', [])
+        
+        if not order_ids:
+            return JsonResponse({'success': False, 'error': 'Nebyla vybrána žádná jídla.'}, status=400)
+        
+        # Získáme production orders
+        orders = ProductionOrder.objects.filter(
+            id__in=order_ids,
+            menu_plan=menu_plan
+        )
+        
+        # Kontrola, že všechny ordery patří do menu_plan (bezpečnostní opatření)
+        if orders.count() != len(order_ids):
+            return JsonResponse({
+                'success': False, 
+                'error': 'Některá jídla nepatří do tohoto jídelníčku.'
+            }, status=400)
+        
+        # Kontrola, že žádné z orders nemá vydanou výdejku
+        orders_with_issued = []
+        for order in orders:
+            if order.has_issued_picking_list():
+                orders_with_issued.append(order.recipe.name)
+        
+        if orders_with_issued:
+            return JsonResponse({
+                'success': False, 
+                'error': f'Následující jídla již mají vydanou výdejku: {", ".join(orders_with_issued)}'
+            }, status=400)
+        
+        with transaction.atomic():
+            reset_count = 0
+            for order in orders:
+                if order.has_overrides:
+                    # Smažeme overrides
+                    order.ingredient_overrides.all().delete()
+                    ProductionOrderRecipeOverride.objects.filter(
+                        production_order=order
+                    ).delete()
+                    
+                    # Regenerujeme výdejku
+                    order.picking_list_items.all().delete()
+                    order.generate_picking_list()
+                    
+                    reset_count += 1
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'Úpravy byly resetovány u {reset_count} jídel.',
+            'reset_count': reset_count
+        })
+        
+    except (json.JSONDecodeError, KeyError, TypeError, ValueError) as e:
+        logger.error(f"Error in bulk_reset_overrides for menu {menu_pk}: {e}", exc_info=True)
+        return JsonResponse({'success': False, 'error': 'Neplatná data.'}, status=400)
+    except Exception as e:
+        logger.error(f"Error in bulk_reset_overrides for menu {menu_pk}: {e}", exc_info=True)
+        return JsonResponse({'success': False, 'error': 'Chyba při resetování úprav.'}, status=500)
+

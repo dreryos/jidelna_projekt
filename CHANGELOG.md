@@ -76,6 +76,24 @@ a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
   - AJAX operace pro všechny akce bez nutnosti reload stránky
   - JavaScript modul `management.js` (697 řádků) pro interaktivní správu
   - Zobrazení KPI statistik (počet jídelen, skladů, zamčených skladů, položek)
+- **Editace jídel v konkrétním jídelníčku**: Kompletní systém pro úpravu ingrediencí bez vlivu na globální recepty
+  - Modely `ProductionOrderRecipeOverride` a `ProductionOrderIngredientOverride` pro ukládání úprav
+  - Možnost přidávání, odebírání a modifikace ingrediencí přímo v jídelníčku
+  - Migrace `production/0016` s novým polem `is_customized` u PickingList
+  - 5 AJAX endpointů: `get_meal_ingredients`, `save_meal_ingredients`, `copy_meal_overrides`, `search_ingredients`, `bulk_reset_overrides`
+  - Modal "Upravit ingredience" s tabulkou ingrediencí a autocomplete vyhledáváním
+  - Autocomplete pro výběr ingrediencí s 2-znakowym minimem a 300ms debounce
+  - Ikona `fa-clipboard-list` pro tlačítko úpravy
+  - Možnost kopírování úprav mezi jídly ve stejném jídelníčku (modal "Kopírovat do jiného jídla")
+  - Hromadný reset úprav pro více vybraných jídel s potvrzovacím dialogem
+  - Označení upravených jídel v tabulce jídelníčku pomocí "Upraveno" badgea s ikonou `fa-edit`
+  - Customization badge (✏️ UPRAVENÉ INGREDIENCE) v PDF výdejkách
+  - Přepočet nákladů a prodejní ceny s DPH na základě úprav (`calculate_cost()`, `calculate_selling_price()`)
+  - Ochrana před editací jídel s vydanými výdejkami
+  - Kopírování omezeno na stejný MenuPlan pro integritu dat
+  - Oprávnění: přístup pouze pro vlastníky příslušné jídelny
+  - Admin rozhraní s inline editací přesunů a hromadnou akcí pro reset
+  - UI vylepšení: checkboxy pro hromadné operace, confirmation dialogy, toast notifikace
 - **Analýza nákladů na osobu**: Nový pohled v analytice zobrazující průměrné náklady na jednoho strávníka
   - Výpočet cen na porci pro různé varianty porcí
   - Možnost filtrování podle jídelny a časového období

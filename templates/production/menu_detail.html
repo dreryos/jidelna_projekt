@@ -76,7 +76,9 @@
                     {{ menu_plan.created_at|date:"d.m.Y H:i" }}
                 </div>
                 <div class="col-md-4 text-end">
-                    <!-- Tlačítka pro přidání jídla jsou u jednotlivých dnů -->
+                    <button type="button" class="btn btn-warning btn-sm" id="bulkResetBtn" title="Hromadně resetovat úpravy ingrediencí">
+                        <i class="fas fa-undo me-1"></i>Hromadný reset úprav
+                    </button>
                 </div>
             </div>
         </div>
@@ -106,16 +108,20 @@
                 <table class="table table-hover mb-0">
                     <thead class="table-light">
                         <tr>
+                            <th width="40">
+                                <input type="checkbox" class="form-check-input" id="selectAllMeals" title="Vybrat vše">
+                            </th>
                             <th><i class="fas fa-utensils me-1"></i>Jídlo</th>
                             <th width="180"><i class="fas fa-users me-1"></i>Varianty porcí</th>
                             <th width="120" class="text-center"><i class="fas fa-calculator me-1"></i>Efektivně</th>
-                            <th width="150" class="text-center"><i class="fas fa-cogs me-1"></i>Akce</th>
+                            <th width="200" class="text-center"><i class="fas fa-cogs me-1"></i>Akce</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for meal_type, meal_orders in date_meal_types.items %}
                             <!-- Hlavička typu jídla -->
                             <tr class="table-secondary">
+                                <td></td>
                                 <td colspan="4" class="fw-bold">
                                     {% if meal_type == 'BREAKFAST' %}
                                         🌅 Snídaně
@@ -133,12 +139,24 @@
                             
                             {% for order in meal_orders %}
                             <tr data-order-id="{{ order.id }}">
+                                <!-- Checkbox -->
+                                <td class="align-middle text-center">
+                                    <input type="checkbox" class="form-check-input meal-checkbox" 
+                                           value="{{ order.id }}"
+                                           {% if order.has_issued_picking_list %}disabled{% endif %}>
+                                </td>
+                                
                                 <!-- Název jídla -->
                                 <td class="align-middle">
                                     <div class="d-flex align-items-center">
                                         <i class="fas fa-utensils text-primary me-2"></i>
                                         <div>
                                             <strong>{{ order.recipe.name }}</strong>
+                                            {% if order.has_overrides %}
+                                            <span class="badge bg-warning text-dark ms-2" title="Upravené ingredience">
+                                                <i class="fas fa-edit"></i> Upraveno
+                                            </span>
+                                            {% endif %}
                                             {% if order.recipe.category %}
                                             <br><small class="text-muted">{{ order.recipe.category.name }}</small>
                                             {% endif %}
@@ -177,6 +195,12 @@
                                     <td class="align-middle text-center">
                                         <div class="btn-group btn-group-sm" role="group">
                                             {% if not order.has_issued_picking_list %}
+                                            <button type="button" 
+                                                    class="btn btn-outline-success edit-ingredients-btn"
+                                                    data-order-id="{{ order.id }}"
+                                                    title="Upravit ingredience">
+                                                <i class="fas fa-clipboard-list"></i>
+                                            </button>
                                             <button type="button" 
                                                     class="btn btn-outline-warning edit-portions-btn"
                                                     data-order-id="{{ order.id }}"
@@ -331,6 +355,125 @@
     <option value="1.0" label="Normální porce">
     <option value="1.5" label="Větší porce">
 </datalist>
+
+<!-- Modal pro editaci ingrediencí -->
+<div class="modal fade" id="editIngredientsModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Upravit ingredience jídla</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editIngredientsOrderId">
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i>
+                    <strong>Recept:</strong> <span id="editIngredientsRecipeName"></span>
+                    <br>
+                    <small>Úpravy ingrediencí v tomto jídle neovlivní globální recept.</small>
+                </div>
+                
+                <div class="mb-3">
+                    <button type="button" class="btn btn-sm btn-primary" id="addIngredientBtn">
+                        <i class="fas fa-plus me-1"></i>Přidat ingredienci
+                    </button>
+                    <button type="button" class="btn btn-sm btn-secondary" id="resetIngredientsBtn">
+                        <i class="fas fa-undo me-1"></i>Obnovit z receptu
+                    </button>
+                    <button type="button" class="btn btn-sm btn-info" id="copyIngredientsBtn">
+                        <i class="fas fa-copy me-1"></i>Kopírovat do jiného jídla
+                    </button>
+                </div>
+                
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover" id="ingredientsTable">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Surovina</th>
+                                <th width="150">Množství/porce</th>
+                                <th width="80">Jednotka</th>
+                                <th width="200">Poznámka</th>
+                                <th width="80">Akce</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ingredientsTableBody">
+                            <!-- Dynamicky naplněno pomocí JS -->
+                        </tbody>
+                    </table>
+                </div>
+                
+                <div id="addIngredientForm" class="border rounded p-3 mb-3" style="display: none;">
+                    <h6>Přidat novou ingredienci</h6>
+                    <div class="row">
+                        <div class="col-md-5">
+                            <label class="form-label small">Surovina:</label>
+                            <input type="text" class="form-control form-control-sm" id="newIngredientSearch" 
+                                   placeholder="Začněte psát název...">
+                            <div id="ingredientSearchResults" class="list-group mt-1" style="max-height: 200px; overflow-y: auto; display: none;">
+                            </div>
+                            <input type="hidden" id="newIngredientId">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small">Množství/porce:</label>
+                            <input type="number" class="form-control form-control-sm" id="newIngredientQuantity" 
+                                   step="0.001" min="0.001" placeholder="např. 150">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label small">Jednotka:</label>
+                            <input type="text" class="form-control form-control-sm" id="newIngredientUnit" readonly>
+                        </div>
+                        <div class="col-md-2 d-flex align-items-end">
+                            <button type="button" class="btn btn-sm btn-success me-1" id="confirmAddIngredient">
+                                <i class="fas fa-check"></i> Přidat
+                            </button>
+                            <button type="button" class="btn btn-sm btn-secondary" id="cancelAddIngredient">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label">Poznámka k úpravě (volitelné):</label>
+                    <textarea class="form-control form-control-sm" id="customizationNote" rows="2" 
+                              placeholder="Např. důvod změny ingrediencí..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Zrušit</button>
+                <button type="button" class="btn btn-primary" id="saveIngredientsBtn">
+                    <i class="fas fa-save me-1"></i>Uložit změny
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal pro kopírování ingrediencí -->
+<div class="modal fade" id="copyIngredientsModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Kopírovat úpravy ingrediencí</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Vyberte jídlo, do kterého chcete zkopírovat úpravy ingrediencí:</p>
+                <select class="form-select" id="copyTargetOrder">
+                    <option value="">Vyberte jídlo...</option>
+                </select>
+                <div class="alert alert-warning mt-3">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    Stávající úpravy v cílovém jídle budou přepsány.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Zrušit</button>
+                <button type="button" class="btn btn-primary" id="confirmCopyIngredients">Kopírovat</button>
+            </div>
+        </div>
+    </div>
+</div>
 
 <!-- Modal pro hromadnou úpravu porcí -->
 <div class="modal fade" id="bulkPortionsModal" tabindex="-1">
@@ -894,6 +1037,429 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
             }
         });
+    });
+    
+    // === Editace ingrediencí ===
+    let currentIngredientsData = [];
+    let currentOrderIdForIngredients = null;
+    
+    // Handler pro tlačítko "Upravit ingredience"
+    document.addEventListener('click', function(e) {
+        if (e.target.closest('.edit-ingredients-btn')) {
+            const btn = e.target.closest('.edit-ingredients-btn');
+            const orderId = btn.dataset.orderId;
+            currentOrderIdForIngredients = orderId;
+            document.getElementById('editIngredientsOrderId').value = orderId;
+            loadMealIngredients(orderId);
+        }
+    });
+    
+    function loadMealIngredients(orderId) {
+        fetch(`/production/vyrobni-prikazy/${orderId}/ingredience/`, {
+            headers: {'X-CSRFToken': csrfToken}
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                currentIngredientsData = data.ingredients;
+                document.getElementById('editIngredientsRecipeName').textContent = data.recipe_name;
+                renderIngredientsTable();
+                
+                // Disable save button if picking list issued
+                const saveBtn = document.getElementById('saveIngredientsBtn');
+                if (data.has_issued_picking_list) {
+                    saveBtn.disabled = true;
+                    saveBtn.title = 'Nelze upravit - vydaná výdejka';
+                } else {
+                    saveBtn.disabled = false;
+                    saveBtn.title = '';
+                }
+                
+                new bootstrap.Modal(document.getElementById('editIngredientsModal')).show();
+            } else {
+                alert('Chyba: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Nastala chyba při načítání ingrediencí.');
+        });
+    }
+    
+    function renderIngredientsTable() {
+        const tbody = document.getElementById('ingredientsTableBody');
+        tbody.innerHTML = '';
+        
+        currentIngredientsData.forEach((ing, index) => {
+            const row = document.createElement('tr');
+            row.dataset.index = index;
+            row.dataset.ingredientId = ing.id;
+            
+            // Určení stylu podle stavu
+            let rowClass = '';
+            let nameStyle = '';
+            if (ing.is_removed) {
+                rowClass = 'table-danger';
+                nameStyle = 'text-decoration: line-through; color: #999;';
+            } else if (ing.is_modified) {
+                nameStyle = 'font-weight: bold;';
+            } else if (ing.is_added) {
+                rowClass = 'table-success';
+                nameStyle = 'font-weight: bold;';
+            }
+            
+            row.className = rowClass;
+            
+            row.innerHTML = `
+                <td style="${nameStyle}">
+                    ${ing.name}
+                    ${ing.is_added ? '<span class="badge bg-success ms-2">Nové</span>' : ''}
+                    ${ing.is_modified ? '<span class="badge bg-warning ms-2">Upraveno</span>' : ''}
+                    ${ing.is_removed ? '<span class="badge bg-danger ms-2">Odstraněno</span>' : ''}
+                </td>
+                <td>
+                    <input type="number" class="form-control form-control-sm ingredient-quantity" 
+                           value="${ing.quantity_per_portion}" 
+                           step="0.001" min="0.001"
+                           data-original="${ing.original_quantity}"
+                           ${ing.is_removed ? 'disabled' : ''}>
+                    ${ing.is_modified && !ing.is_removed ? `<small class="text-muted">Původně: ${ing.original_quantity}</small>` : ''}
+                </td>
+                <td>${ing.unit}</td>
+                <td>
+                    <input type="text" class="form-control form-control-sm ingredient-notes" 
+                           value="${ing.notes || ''}" 
+                           placeholder="Poznámka..."
+                           ${ing.is_removed ? 'disabled' : ''}>
+                </td>
+                <td>
+                    ${ing.is_removed ? 
+                        `<button type="button" class="btn btn-sm btn-success restore-ingredient-btn" title="Obnovit">
+                            <i class="fas fa-undo"></i>
+                        </button>` :
+                        `<button type="button" class="btn btn-sm btn-danger remove-ingredient-btn" title="${ing.is_added ? 'Smazat' : 'Odstranit'}">
+                            <i class="fas fa-trash"></i>
+                        </button>`
+                    }
+                </td>
+            `;
+            
+            tbody.appendChild(row);
+        });
+        
+        // Attach handlers
+        tbody.querySelectorAll('.remove-ingredient-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const row = this.closest('tr');
+                const index = parseInt(row.dataset.index);
+                currentIngredientsData[index].is_removed = true;
+                renderIngredientsTable();
+            });
+        });
+        
+        tbody.querySelectorAll('.restore-ingredient-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const row = this.closest('tr');
+                const index = parseInt(row.dataset.index);
+                currentIngredientsData[index].is_removed = false;
+                renderIngredientsTable();
+            });
+        });
+        
+        // Update modified flag on quantity change
+        tbody.querySelectorAll('.ingredient-quantity').forEach(input => {
+            input.addEventListener('change', function() {
+                const row = this.closest('tr');
+                const index = parseInt(row.dataset.index);
+                const ing = currentIngredientsData[index];
+                
+                if (!ing.is_added) {
+                    const newValue = parseFloat(this.value);
+                    const originalValue = parseFloat(ing.original_quantity);
+                    ing.is_modified = Math.abs(newValue - originalValue) > 0.001;
+                }
+                
+                ing.quantity_per_portion = this.value;
+                renderIngredientsTable();
+            });
+        });
+        
+        // Update notes
+        tbody.querySelectorAll('.ingredient-notes').forEach(input => {
+            input.addEventListener('change', function() {
+                const row = this.closest('tr');
+                const index = parseInt(row.dataset.index);
+                currentIngredientsData[index].notes = this.value;
+            });
+        });
+    }
+    
+    // Přidat ingredienci
+    document.getElementById('addIngredientBtn').addEventListener('click', function() {
+        document.getElementById('addIngredientForm').style.display = 'block';
+        document.getElementById('newIngredientSearch').focus();
+    });
+    
+    document.getElementById('cancelAddIngredient').addEventListener('click', function() {
+        document.getElementById('addIngredientForm').style.display = 'none';
+        document.getElementById('newIngredientSearch').value = '';
+        document.getElementById('newIngredientId').value = '';
+        document.getElementById('newIngredientQuantity').value = '';
+        document.getElementById('newIngredientUnit').value = '';
+        document.getElementById('ingredientSearchResults').style.display = 'none';
+    });
+    
+    // Autocomplete pro hledání ingrediencí
+    let searchTimeout;
+    document.getElementById('newIngredientSearch').addEventListener('input', function() {
+        clearTimeout(searchTimeout);
+        const query = this.value.trim();
+        
+        if (query.length < 2) {
+            document.getElementById('ingredientSearchResults').style.display = 'none';
+            return;
+        }
+        
+        searchTimeout = setTimeout(() => {
+            fetch(`/production/ingredience/hledat/?q=${encodeURIComponent(query)}`, {
+                headers: {'X-CSRFToken': csrfToken}
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const resultsDiv = document.getElementById('ingredientSearchResults');
+                    resultsDiv.innerHTML = '';
+                    
+                    if (data.results.length === 0) {
+                        resultsDiv.innerHTML = '<div class="list-group-item">Nenalezeno</div>';
+                    } else {
+                        data.results.forEach(ing => {
+                            const item = document.createElement('a');
+                            item.href = '#';
+                            item.className = 'list-group-item list-group-item-action';
+                            item.textContent = `${ing.name} (${ing.unit})`;
+                            item.addEventListener('click', function(e) {
+                                e.preventDefault();
+                                document.getElementById('newIngredientSearch').value = ing.name;
+                                document.getElementById('newIngredientId').value = ing.id;
+                                document.getElementById('newIngredientUnit').value = ing.unit;
+                                resultsDiv.style.display = 'none';
+                            });
+                            resultsDiv.appendChild(item);
+                        });
+                    }
+                    
+                    resultsDiv.style.display = 'block';
+                }
+            })
+            .catch(error => console.error('Search error:', error));
+        }, 300);
+    });
+    
+    document.getElementById('confirmAddIngredient').addEventListener('click', function() {
+        const id = document.getElementById('newIngredientId').value;
+        const name = document.getElementById('newIngredientSearch').value;
+        const quantity = document.getElementById('newIngredientQuantity').value;
+        const unit = document.getElementById('newIngredientUnit').value;
+        
+        if (!id || !quantity) {
+            alert('Vyplňte všechna pole.');
+            return;
+        }
+        
+        // Check if already exists
+        const existing = currentIngredientsData.find(ing => ing.id == id);
+        if (existing) {
+            alert('Tato ingredience je již v seznamu.');
+            return;
+        }
+        
+        currentIngredientsData.push({
+            id: parseInt(id),
+            name: name,
+            quantity_per_portion: quantity,
+            original_quantity: '0',
+            unit: unit,
+            is_added: true,
+            is_removed: false,
+            is_modified: false,
+            notes: ''
+        });
+        
+        renderIngredientsTable();
+        document.getElementById('cancelAddIngredient').click();
+    });
+    
+    // Uložit ingredience
+    document.getElementById('saveIngredientsBtn').addEventListener('click', function() {
+        const orderId = currentOrderIdForIngredients;
+        const customizationNote = document.getElementById('customizationNote').value;
+        
+        // Sbíráme aktuální data z tabulky
+        const ingredients = currentIngredientsData.map((ing, index) => {
+            const row = document.querySelector(`#ingredientsTableBody tr[data-index="${index}"]`);
+            if (row) {
+                const quantityInput = row.querySelector('.ingredient-quantity');
+                const notesInput = row.querySelector('.ingredient-notes');
+                return {
+                    id: ing.id,
+                    quantity_per_portion: ing.is_removed ? null : (quantityInput ? quantityInput.value : ing.quantity_per_portion),
+                    is_added: ing.is_added,
+                    is_removed: ing.is_removed,
+                    notes: notesInput ? notesInput.value : ing.notes
+                };
+            }
+            return ing;
+        });
+        
+        fetch(`/production/vyrobni-prikazy/${orderId}/ingredience/ulozit/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify({
+                ingredients: ingredients,
+                customization_note: customizationNote
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Ingredience byly úspěšně uloženy.');
+                bootstrap.Modal.getInstance(document.getElementById('editIngredientsModal')).hide();
+                location.reload(); // Reload to show updated badge
+            } else {
+                alert('Chyba: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Nastala chyba při ukládání ingrediencí.');
+        });
+    });
+    
+    // Reset ingrediencí
+    document.getElementById('resetIngredientsBtn').addEventListener('click', function() {
+        if (confirm('Opravdu chcete obnovit ingredience z původního receptu? Všechny úpravy budou ztraceny.')) {
+            // Remove all overrides
+            currentIngredientsData = currentIngredientsData.filter(ing => !ing.is_added).map(ing => ({
+                ...ing,
+                is_removed: false,
+                is_modified: false,
+                quantity_per_portion: ing.original_quantity,
+                notes: ''
+            }));
+            renderIngredientsTable();
+        }
+    });
+    
+    // Kopírovat ingredience
+    document.getElementById('copyIngredientsBtn').addEventListener('click', function() {
+        // Load all meals in this menu plan
+        fetch(`/production/jidelnicky/${menuPlanId}/`)
+            .then(response => response.text())
+            .then(html => {
+                // Parse orders from current page
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+                const orderRows = doc.querySelectorAll('tr[data-order-id]');
+                
+                const select = document.getElementById('copyTargetOrder');
+                select.innerHTML = '<option value="">Vyberte jídlo...</option>';
+                
+                orderRows.forEach(row => {
+                    const orderId = row.dataset.orderId;
+                    if (orderId != currentOrderIdForIngredients) {
+                        const recipeName = row.querySelector('strong').textContent;
+                        const date = row.closest('.card').querySelector('.card-header h5 strong').textContent;
+                        
+                        const option = document.createElement('option');
+                        option.value = orderId;
+                        option.textContent = `${recipeName} (${date})`;
+                        select.appendChild(option);
+                    }
+                });
+                
+                new bootstrap.Modal(document.getElementById('copyIngredientsModal')).show();
+            });
+    });
+    
+    document.getElementById('confirmCopyIngredients').addEventListener('click', function() {
+        const targetOrderId = document.getElementById('copyTargetOrder').value;
+        
+        if (!targetOrderId) {
+            alert('Vyberte cílové jídlo.');
+            return;
+        }
+        
+        fetch(`/production/vyrobni-prikazy/${currentOrderIdForIngredients}/ingredience/kopirovat/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify({
+                target_order_id: targetOrderId
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert(data.message);
+                bootstrap.Modal.getInstance(document.getElementById('copyIngredientsModal')).hide();
+                location.reload();
+            } else {
+                alert('Chyba: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Nastala chyba při kopírování úprav.');
+        });
+    });
+    
+    // Hromadný reset
+    document.getElementById('bulkResetBtn').addEventListener('click', function() {
+        const checkboxes = document.querySelectorAll('.meal-checkbox:checked');
+        const orderIds = Array.from(checkboxes).map(cb => cb.value);
+        
+        if (orderIds.length === 0) {
+            alert('Vyberte alespoň jedno jídlo pomocí checkboxů.');
+            return;
+        }
+        
+        if (confirm(`Opravdu chcete resetovat úpravy ingrediencí u ${orderIds.length} vybraných jídel?`)) {
+            fetch(`/production/jidelnicky/${menuPlanId}/hromadny-reset/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
+                body: JSON.stringify({
+                    order_ids: orderIds
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert(data.message);
+                    location.reload();
+                } else {
+                    alert('Chyba: ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Nastala chyba při resetování úprav.');
+            });
+        }
+    });
+    
+    // Select all checkboxes
+    document.getElementById('selectAllMeals').addEventListener('change', function() {
+        const checkboxes = document.querySelectorAll('.meal-checkbox:not(:disabled)');
+        checkboxes.forEach(cb => cb.checked = this.checked);
     });
 });
 </script>

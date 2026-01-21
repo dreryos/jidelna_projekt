@@ -254,6 +254,9 @@
     <div style="margin-top: 20px; margin-bottom: 10px;">
         <h3 style="margin: 0; background-color: #eee; padding: 5px 10px; border: 1px solid #ccc;">
             {{ meal.recipe_name }} <span style="font-weight: normal; font-size: 10pt;">({{ meal.portions }} porcí)</span>
+            {% if meal.is_customized %}
+            <span style="background-color: #ff9800; color: #000; padding: 2px 6px; font-size: 9pt; border: 1px solid #000; margin-left: 10px;">✏️ UPRAVENÉ INGREDIENCE</span>
+            {% endif %}
         </h3>
         
         <table class="ingredients">

@@ -268,6 +268,11 @@ class ProductionOrder(models.Model):
         """Vrátí jídelnu - buď z FK nebo z menu_plan (centralizovaná logika)"""
         return self.canteen or getattr(self.menu_plan, 'canteen', None)
     
+    @property
+    def has_overrides(self):
+        """Vrátí True pokud existují nějaké overrides ingrediencí"""
+        return self.ingredient_overrides.exists()
+    
     def get_canteen(self):
         """Vrátí jídelnu - deprecated, použijte resolved_canteen"""
         return self.resolved_canteen
@@ -303,18 +308,61 @@ class ProductionOrder(models.Model):
         Množství se počítá ze všech variant porcí a převádí na základní jednotky (kg).
         Předvyplní sklad, který patří k jídelně a má danou surovinu.
         Zajistí, že všechny potřebné suroviny existují ve skladu s minimálně 0 ks.
+        Respektuje ingredient overrides (přidané/upravené/odstraněné ingredience).
         """
         if not self.recipe:
             return
 
+        # Zjistíme, zda existují overrides
+        has_overrides = self.ingredient_overrides.exists()
+
+        # Získáme slovník overrides pro rychlé vyhledávání
+        overrides_dict = {}
+        if has_overrides:
+            for override in self.ingredient_overrides.select_related('ingredient'):
+                overrides_dict[override.ingredient_id] = override
+
+        # Zpracujeme ingredience z receptu
+        processed_ingredient_ids = set()
+        
         for item in self.recipe.recipeingredient_set.all():
+            ingredient_id = item.ingredient_id
+            processed_ingredient_ids.add(ingredient_id)
+            
+            # Kontrola, zda je ingredience odstraněná
+            if ingredient_id in overrides_dict:
+                override = overrides_dict[ingredient_id]
+                if override.is_removed:
+                    # Smazat existující položku výdejky pokud existuje
+                    PickingList.objects.filter(
+                        production_order=self,
+                        ingredient=item.ingredient
+                    ).delete()
+                    continue
+            
             # Vypočítáme celkové množství ze všech variant
-            total_quantity = self._sum_variants(
-                lambda v: item.get_quantity_in_base_unit(
-                    portions=v.portions,
-                    coefficient=v.coefficient
+            # Pokud existuje override, použijeme jeho množství
+            if ingredient_id in overrides_dict and not overrides_dict[ingredient_id].is_removed:
+                override = overrides_dict[ingredient_id]
+                # Vytvoříme dočasný RecipeIngredient s přepsaným množstvím
+                from apps.core.models import RecipeIngredient
+                temp_item = RecipeIngredient(
+                    ingredient=item.ingredient,
+                    quantity_per_portion=override.quantity_per_portion or item.quantity_per_portion
                 )
-            )
+                total_quantity = self._sum_variants(
+                    lambda v: temp_item.get_quantity_in_base_unit(
+                        portions=v.portions,
+                        coefficient=v.coefficient
+                    )
+                )
+            else:
+                total_quantity = self._sum_variants(
+                    lambda v: item.get_quantity_in_base_unit(
+                        portions=v.portions,
+                        coefficient=v.coefficient
+                    )
+                )
 
             # Pokusíme se najít existující skladovou položku
             stock_item = None
@@ -347,29 +395,108 @@ class ProductionOrder(models.Model):
                 ingredient=item.ingredient,
                 defaults={
                     'quantity_planned': total_quantity,
-                    'warehouse': prefilled_warehouse
+                    'warehouse': prefilled_warehouse,
+                    'is_customized': has_overrides
                 }
             )
+        
+        # Zpracujeme přidané ingredience (které nebyly v receptu)
+        if has_overrides:
+            for override in overrides_dict.values():
+                if override.is_added and override.ingredient_id not in processed_ingredient_ids:
+                    # Vytvoříme dočasný RecipeIngredient pro přidanou ingredienci
+                    from apps.core.models import RecipeIngredient
+                    temp_item = RecipeIngredient(
+                        ingredient=override.ingredient,
+                        quantity_per_portion=override.quantity_per_portion or Decimal('0')
+                    )
+                    
+                    total_quantity = self._sum_variants(
+                        lambda v: temp_item.get_quantity_in_base_unit(
+                            portions=v.portions,
+                            coefficient=v.coefficient
+                        )
+                    )
+                    
+                    # Najdeme skladovou položku
+                    stock_item = None
+                    if self.resolved_canteen:
+                        stock_item = StockItem.objects.filter(
+                            ingredient=override.ingredient,
+                            warehouse__canteen=self.resolved_canteen
+                        ).first()
+                    
+                    # Vytvoříme skladovou položku pokud neexistuje
+                    if not stock_item and self.resolved_canteen:
+                        warehouse = self.resolved_canteen.warehouses.first()
+                        if warehouse:
+                            stock_item = StockItem.objects.create(
+                                ingredient=override.ingredient,
+                                warehouse=warehouse,
+                                quantity=Decimal('0'),
+                                price=Decimal('0')
+                            )
+                    
+                    prefilled_warehouse = stock_item.warehouse if stock_item else None
+                    
+                    PickingList.objects.update_or_create(
+                        production_order=self,
+                        ingredient=override.ingredient,
+                        defaults={
+                            'quantity_planned': total_quantity,
+                            'warehouse': prefilled_warehouse,
+                            'is_customized': True
+                        }
+                    )
 
     def get_required_ingredients(self):
-        """Vrátí seznam surovin potřebných pro tento výrobní příkaz s použitím všech variant"""
+        """Vrátí seznam surovin potřebných pro tento výrobní příkaz s použitím všech variant
+        Respektuje overrides (upravené/přidané/odstraněné ingredience)"""
         ingredients = []
         if not self.recipe:
             return ingredients
         
+        # Získáme slovník overrides pro rychlé vyhledávání
+        overrides_dict = {}
+        if self.has_overrides:
+            for override in self.ingredient_overrides.select_related('ingredient'):
+                overrides_dict[override.ingredient_id] = override
+        
+        # Zpracujeme ingredience z receptu
+        processed_ingredient_ids = set()
+        
         for recipe_ingredient in self.recipe.recipeingredient_set.all():
+            ingredient_id = recipe_ingredient.ingredient_id
+            processed_ingredient_ids.add(ingredient_id)
+            
+            # Kontrola, zda je ingredience odstraněná
+            if ingredient_id in overrides_dict and overrides_dict[ingredient_id].is_removed:
+                continue
+            
             # Vypočítáme celkové množství ze všech variant
             total_amount = Decimal('0')
             total_amount_recipe_unit = Decimal('0')
             
+            # Pokud existuje override, použijeme jeho množství
+            quantity_per_portion = recipe_ingredient.quantity_per_portion
+            if ingredient_id in overrides_dict and not overrides_dict[ingredient_id].is_removed:
+                override = overrides_dict[ingredient_id]
+                quantity_per_portion = override.quantity_per_portion or quantity_per_portion
+            
             for variant in self.portion_variants.all():
-                amount = recipe_ingredient.get_quantity_in_base_unit(
+                # Pro výpočet v base_unit musíme použít konverzi
+                from apps.core.models import RecipeIngredient
+                temp_item = RecipeIngredient(
+                    ingredient=recipe_ingredient.ingredient,
+                    quantity_per_portion=quantity_per_portion
+                )
+                amount = temp_item.get_quantity_in_base_unit(
                     portions=variant.portions,
                     coefficient=variant.coefficient
                 )
                 total_amount += amount
                 total_amount_recipe_unit += (
-                    recipe_ingredient.quantity_per_portion * 
+                    quantity_per_portion * 
                     variant.portions * 
                     variant.coefficient
                 )
@@ -382,7 +509,104 @@ class ProductionOrder(models.Model):
                 'recipe_unit': recipe_ingredient.ingredient.recipe_unit
             })
         
+        # Přidáme nové ingredience (které nejsou v receptu)
+        if overrides_dict:
+            for override in overrides_dict.values():
+                if override.is_added and override.ingredient_id not in processed_ingredient_ids:
+                    total_amount = Decimal('0')
+                    total_amount_recipe_unit = Decimal('0')
+                    
+                    for variant in self.portion_variants.all():
+                        from apps.core.models import RecipeIngredient
+                        temp_item = RecipeIngredient(
+                            ingredient=override.ingredient,
+                            quantity_per_portion=override.quantity_per_portion or Decimal('0')
+                        )
+                        amount = temp_item.get_quantity_in_base_unit(
+                            portions=variant.portions,
+                            coefficient=variant.coefficient
+                        )
+                        total_amount += amount
+                        total_amount_recipe_unit += (
+                            (override.quantity_per_portion or Decimal('0')) * 
+                            variant.portions * 
+                            variant.coefficient
+                        )
+                    
+                    ingredients.append({
+                        'ingredient': override.ingredient,
+                        'amount': total_amount,
+                        'unit': override.ingredient.base_unit,
+                        'amount_recipe_unit': total_amount_recipe_unit,
+                        'recipe_unit': override.ingredient.recipe_unit
+                    })
+        
         return ingredients
+    
+    def calculate_cost(self, canteen=None):
+        """
+        Vypočítá náklady na výrobu s respektováním ingredient overrides
+        Vrací slovník s detaily nákladů
+        """
+        if not self.recipe:
+            return {'total': Decimal('0'), 'per_portion': Decimal('0')}
+        
+        canteen = canteen or self.resolved_canteen
+        if not canteen:
+            return {'total': Decimal('0'), 'per_portion': Decimal('0')}
+        
+        total_cost = Decimal('0')
+        
+        # Získáme sloučené ingredience (s overrides)
+        ingredients = self.get_required_ingredients()
+        
+        # Importujeme StockItem zde aby se zabránilo circular import
+        from apps.inventory.models import StockItem
+        
+        for ing_data in ingredients:
+            ingredient = ing_data['ingredient']
+            amount = ing_data['amount']
+            
+            # Najdeme průměrnou cenu ingredience v této jídelně
+            avg_price = StockItem.objects.filter(
+                ingredient=ingredient,
+                warehouse__canteen=canteen
+            ).aggregate(avg_price=models.Avg('price'))['avg_price'] or Decimal('0')
+            
+            # Připočteme cenu této ingredience
+            total_cost += amount * avg_price
+        
+        # Vypočítáme cenu na porci
+        total_effective_portions = self.total_effective_portions
+        per_portion = total_cost / total_effective_portions if total_effective_portions > 0 else Decimal('0')
+        
+        return {
+            'total': total_cost.quantize(Decimal('0.01')),
+            'per_portion': per_portion.quantize(Decimal('0.01'))
+        }
+    
+    def calculate_selling_price(self, canteen=None):
+        """
+        Vypočítá prodejní cenu s DPH s respektováním ingredient overrides
+        Vrací slovník s detaily cen
+        """
+        cost_data = self.calculate_cost(canteen)
+        
+        # Připočteme DPH
+        vat_multiplier = Decimal('1') + (self.selling_vat_rate / Decimal('100'))
+        
+        total_with_vat = cost_data['total'] * vat_multiplier
+        per_portion_with_vat = cost_data['per_portion'] * vat_multiplier
+        vat_amount = total_with_vat - cost_data['total']
+        
+        return {
+            'total': cost_data['total'].quantize(Decimal('0.01')),
+            'per_portion': cost_data['per_portion'].quantize(Decimal('0.01')),
+            'total_with_vat': total_with_vat.quantize(Decimal('0.01')),
+            'per_portion_with_vat': per_portion_with_vat.quantize(Decimal('0.01')),
+            'vat_amount': vat_amount.quantize(Decimal('0.01')),
+            'vat_rate': self.selling_vat_rate
+        }
 
     @property
     def total_portions(self):
@@ -493,6 +717,11 @@ class PickingList(models.Model):
     quantity_planned = models.DecimalField(max_digits=10, decimal_places=3, verbose_name="Plánované množství")
     quantity_actual = models.DecimalField(max_digits=10, decimal_places=3, null=True, blank=True, verbose_name="Skutečně vydané množství")
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING, verbose_name="Stav")
+    is_customized = models.BooleanField(
+        default=False, 
+        verbose_name="Je upraveno",
+        help_text="Označuje, že tato výdejka patří k upravenému jídlu"
+    )
 
     def __str__(self):
         return f"Výdejka pro: {self.ingredient.name} ({self.quantity_planned} {self.ingredient.unit})"
@@ -577,4 +806,89 @@ class PickingList(models.Model):
     class Meta:
         verbose_name = "Položka výdejky"
         verbose_name_plural = "Položky výdejky"
+        unique_together = ('production_order', 'ingredient')
+
+
+class ProductionOrderRecipeOverride(models.Model):
+    """Override globálního receptu pro konkrétní výrobní příkaz"""
+    production_order = models.OneToOneField(
+        ProductionOrder, 
+        on_delete=models.CASCADE, 
+        related_name='recipe_override',
+        verbose_name="Výrobní příkaz"
+    )
+    is_customized = models.BooleanField(
+        default=False, 
+        verbose_name="Je upraveno",
+        help_text="Označuje, že tento výrobní příkaz má upravené ingredience"
+    )
+    customization_note = models.TextField(
+        blank=True, 
+        verbose_name="Poznámka k úpravě",
+        help_text="Důvod nebo popis úpravy receptu"
+    )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Vytvořeno")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Aktualizováno")
+
+    def __str__(self):
+        return f"Override pro: {self.production_order}"
+
+    class Meta:
+        verbose_name = "Override receptu"
+        verbose_name_plural = "Override receptů"
+
+
+class ProductionOrderIngredientOverride(models.Model):
+    """Override konkrétní ingredience pro výrobní příkaz"""
+    production_order = models.ForeignKey(
+        ProductionOrder, 
+        on_delete=models.CASCADE, 
+        related_name='ingredient_overrides',
+        verbose_name="Výrobní příkaz"
+    )
+    ingredient = models.ForeignKey(
+        Ingredient, 
+        on_delete=models.PROTECT, 
+        verbose_name="Surovina"
+    )
+    quantity_per_portion = models.DecimalField(
+        max_digits=10, 
+        decimal_places=3, 
+        null=True, 
+        blank=True,
+        verbose_name="Množství na porci (g)",
+        help_text="Přepsané množství na 1 porci. NULL = odstraněno z receptu"
+    )
+    original_quantity = models.DecimalField(
+        max_digits=10, 
+        decimal_places=3,
+        verbose_name="Původní množství (g)",
+        help_text="Původní množství z receptu pro referenci"
+    )
+    is_added = models.BooleanField(
+        default=False, 
+        verbose_name="Přidáno",
+        help_text="Ingredience přidaná navíc (nebyla v původním receptu)"
+    )
+    is_removed = models.BooleanField(
+        default=False, 
+        verbose_name="Odstraněno",
+        help_text="Ingredience odstraněná z receptu"
+    )
+    notes = models.CharField(
+        max_length=200, 
+        blank=True, 
+        verbose_name="Poznámka",
+        help_text="Poznámka k této úpravě"
+    )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Vytvořeno")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Aktualizováno")
+
+    def __str__(self):
+        status = "přidáno" if self.is_added else ("odstraněno" if self.is_removed else "upraveno")
+        return f"{self.ingredient.name} ({status})"
+
+    class Meta:
+        verbose_name = "Override ingredience"
+        verbose_name_plural = "Override ingrediencí"
         unique_together = ('production_order', 'ingredient')

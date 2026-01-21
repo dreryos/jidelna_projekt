@@ -48,6 +48,13 @@ urlpatterns = [
     path('vyrobni-prikazy/<int:order_pk>/upravit-varianty/', views.update_order_variants, name='update_order_variants'),
     path('vyrobni-prikazy/<int:order_pk>/smazat/', views.delete_order_ajax, name='delete_order_ajax'),
     
+    # AJAX endpointy pro editaci ingrediencí
+    path('vyrobni-prikazy/<int:order_pk>/ingredience/', views.get_meal_ingredients, name='get_meal_ingredients'),
+    path('vyrobni-prikazy/<int:order_pk>/ingredience/ulozit/', views.save_meal_ingredients, name='save_meal_ingredients'),
+    path('vyrobni-prikazy/<int:order_pk>/ingredience/kopirovat/', views.copy_meal_overrides, name='copy_meal_overrides'),
+    path('ingredience/hledat/', views.search_ingredients, name='search_ingredients'),
+    path('jidelnicky/<int:menu_pk>/hromadny-reset/', views.bulk_reset_overrides, name='bulk_reset_overrides'),
+    
     # Denní výdejky
     path('vydejka-dne/', views.daily_picking_list, name='daily_picking_list'),
     
