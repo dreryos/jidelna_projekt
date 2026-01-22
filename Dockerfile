@@ -8,7 +8,7 @@ ENV PYTHONUNBUFFERED=1
 WORKDIR /app
 
 # Install system dependencies
-# WeasyPrint needs: pango, gdk-pixbuf, cairo
+# WeasyPrint needs: pango, gdk-pixbuf, cairo, fontconfig, fonts
 # Pillow needs: zlib, jpeg, freetype
 RUN apk add --no-cache \
     build-base \
@@ -25,7 +25,11 @@ RUN apk add --no-cache \
     openjpeg-dev \
     tiff-dev \
     tk-dev \
-    tcl-dev
+    tcl-dev \
+    fontconfig \
+    ttf-dejavu \
+    ttf-liberation \
+    font-noto
 
 # Install python dependencies
 COPY requirements.txt /app/

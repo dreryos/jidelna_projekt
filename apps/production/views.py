@@ -712,8 +712,20 @@ def picking_list_generator(request):
             
             for order in orders:
                 # Vygenerujeme picking list položky pokud neexistují
+                # NEBO pokud všechny existující položky mají quantity_planned == 0
+                # (což může nastat u starých záznamů vytvořených před opravou)
                 if not order.picking_list_items.exists():
                     order.generate_picking_list()
+                else:
+                    # Zkontrolujeme, zda některá položka má nulové množství
+                    has_zero_quantities = order.picking_list_items.filter(
+                        quantity_planned=Decimal('0')
+                    ).exists()
+                    
+                    if has_zero_quantities:
+                        # Smažeme všechny položky a vygenerujeme nové
+                        order.picking_list_items.all().delete()
+                        order.generate_picking_list()
                 
                 # Zpracujeme picking list položky
                 for item in order.picking_list_items.all():

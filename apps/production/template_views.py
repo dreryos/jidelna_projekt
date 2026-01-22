@@ -513,6 +513,9 @@ def menu_import_step3_confirm(request):
                             order=0
                         )
                     
+                    # Vygenerovat picking list pro tento order
+                    order.generate_picking_list()
+                    
                     orders_created += 1
             
             # Vymažeme session data
@@ -1108,18 +1111,25 @@ def template_create_ajax(request):
                         Recipe.objects.bulk_create(recipes_to_create)
                         created_recipes_count = len(recipes_to_create)
                     
-                    # Bulk vytvoření ingrediencí
-                    if ingredients_to_create:
-                        Ingredient.objects.bulk_create(ingredients_to_create)
+                    # Vytvoření ingrediencí pomocí get_or_create (ne bulk_create)
+                    # abychom předešli UNIQUE constraint chybám
+                    for ingredient in ingredients_to_create:
+                        Ingredient.objects.get_or_create(
+                            name=ingredient.name,
+                            defaults={
+                                'unit': ingredient.unit if hasattr(ingredient, 'unit') else 'kg',
+                                'base_unit': ingredient.base_unit if hasattr(ingredient, 'base_unit') else 'kg',
+                            }
+                        )
+                        created_ingredients_count += 1
                     
                     # Vytvoření RecipeIngredient vazeb
                     for ri_data in recipe_ingredients_to_create:
                         recipe = Recipe.objects.get(code=ri_data['recipe_code'])
-                        ingredient = ri_data['ingredient']
+                        ingredient_name = ri_data['ingredient'].name
                         
-                        # Pokud byla ingredience nově vytvořena, musíme ji znovu načíst
-                        if not ingredient.pk:
-                            ingredient = Ingredient.objects.get(name=ingredient.name)
+                        # Získáme ingredienci z databáze (buď právě vytvořenou nebo existující)
+                        ingredient = Ingredient.objects.get(name=ingredient_name)
                         
                         RecipeIngredient.objects.create(
                             recipe=recipe,

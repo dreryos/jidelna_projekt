@@ -286,10 +286,10 @@ class ProductionOrder(models.Model):
         if self.menu_plan and not self.canteen:
             self.canteen = self.menu_plan.canteen
         
-        is_new = self._state.adding
         super().save(*args, **kwargs)
-        if is_new:
-            self.generate_picking_list()
+        # POZNÁMKA: generate_picking_list() se NEVOLÁ automaticky při save(),
+        # protože v tento moment ještě nemusí existovat portion_variants.
+        # Volá se manuálně po vytvoření portion_variants (viz views.py).
 
     def get_portion_variants(self):
         """Vrátí všechny varianty porcí pro tento výrobní příkaz"""
@@ -312,6 +312,31 @@ class ProductionOrder(models.Model):
         """
         if not self.recipe:
             return
+        
+        # KRITICKÁ KONTROLA: Pokud neexistují žádné portion_variants,
+        # vytvoříme výchozí variantu z portions_adult a portions_child (legacy)
+        # nebo použijeme base_portions receptu
+        if not self.portion_variants.exists():
+            # Zkusíme použít staré fields pokud existují a nejsou 0
+            portions = 0
+            if hasattr(self, 'portions_adult') and self.portions_adult:
+                portions = self.portions_adult
+            if hasattr(self, 'portions_child') and self.portions_child:
+                portions += self.portions_child
+            
+            # Pokud stále nemáme počet porcí, použijeme base_portions z receptu
+            if portions == 0:
+                portions = self.recipe.base_portions if self.recipe.base_portions else 10
+            
+            # Vytvoříme výchozí variantu
+            from .models import ProductionOrderPortionVariant
+            ProductionOrderPortionVariant.objects.create(
+                production_order=self,
+                name='Výchozí',
+                coefficient=Decimal('1.0'),
+                portions=portions,
+                order=0
+            )
 
         # Zjistíme, zda existují overrides
         has_overrides = self.ingredient_overrides.exists()

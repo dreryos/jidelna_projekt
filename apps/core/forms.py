@@ -1,6 +1,7 @@
 from django import forms
 from apps.core.models import Recipe, RecipeIngredient, Ingredient
 from apps.core.widgets import DecimalFormField
+from apps.core.constants import VAT_RATE_CHOICES
 
 class RecipeIngredientForm(forms.ModelForm):
     """
@@ -31,14 +32,19 @@ class RecipeForm(forms.ModelForm):
     """
     class Meta:
         model = Recipe
-        fields = ['category', 'name', 'description']
+        fields = ['category', 'name', 'description', 'selling_vat_rate']
         widgets = {
             'category': forms.Select(attrs={'class': 'form-control', 'required': True}),
             'name': forms.TextInput(attrs={'class': 'form-control'}),
             'description': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+            'selling_vat_rate': forms.Select(
+                choices=VAT_RATE_CHOICES,
+                attrs={'class': 'form-control'}
+            ),
         }
         help_texts = {
             'category': 'Vyberte kategorii - kód receptu se vygeneruje automaticky (např. PL-001, HJ-042)',
+            'selling_vat_rate': 'Výchozí DPH sazba pro tento recept při prodeji (lze změnit při výrobě)',
         }
 
 

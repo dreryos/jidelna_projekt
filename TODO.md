@@ -7,8 +7,9 @@ Tento soubor sleduje hlavní úkoly, bugy a nápady pro projekt. Pro detailněj�
 ## 🚀 Priorita / Urgentní
 *Věci, které je třeba vyřešit co nejdříve (např. blokující chyby).*
 
-- [ ] Připravit pro zelináře tabulku pro import (ať se nemusí vše zadávat ručně) - přidat dodavatele k surovinám.
-
+- [x] Připravit pro zelináře tabulku pro import (ať se nemusí vše zadávat ručně) - přidat dodavatele k surovinám.
+- [x] Dát možnost upravit sklad a DPH v příjmu zboží pro všechny položky naráz
+- [x] DPH receptů s jakým to prodáváme
 
 ---
 

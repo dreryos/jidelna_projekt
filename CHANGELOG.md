@@ -5,6 +5,36 @@ Všechny významné změny v tomto projektu budou zdokumentovány v tomto soubor
 Formát je založen na [Keep a Changelog](https://keepachangelog.com/cs/1.0.0/),
 a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
 
+## [Unreleased]
+
+### Changed
+- **PDF formát výdejek a reportů objednávek**: Změna z A4 landscape na A5 portrait
+  - Původní změna na A4 landscape s CSS columns způsobovala timeout a problémy v Docker prostředí
+  - WeasyPrint má problémy se složitým column layoutem (break-inside, column-fill)
+  - Nyní generuje A5 portrait stránky, které lze vytisknout 2 na list (nastavení tiskárny)
+  - Optimalizované velikosti fontů (7pt body, 6-7pt tabulky) pro A5 formát
+  - Zmenšené marginy (8mm) pro maximální využití plochy
+  - Jednodušší CSS bez columns = rychlejší generování a menší paměťová náročnost
+
+### Fixed
+- **XML import šablon jídelníčku**: Opravena chyba "UNIQUE constraint failed: core_ingredient.name"
+  - Nahrazeno `bulk_create` za `get_or_create` při vytváření ingrediencí během XML importu
+  - Import nyní správně používá existující suroviny místo pokusu o vytvoření duplicit
+  - Umožňuje bezproblémový import XML šablon obsahujících běžné suroviny
+- **Generování výdejek s 0 jednotkami**: Opravena chyba, kdy se v PDF výdejce objevovaly suroviny s 0 kg
+  - Odstraněno předčasné volání `generate_picking_list()` v metodě `save()` ProductionOrder
+  - Metoda `generate_picking_list()` se nyní volá až po vytvoření `portion_variants`
+  - Přidáno chybějící volání `generate_picking_list()` při importu jídelníčku z XML šablony
+  - Přidána automatická kontrola a regenerace picking list položek s nulovými množstvími
+  - Přidána automatická tvorba výchozí varianty porcí pro staré záznamy bez variant
+  - Zajištěno, že množství surovin se počítá správně na základě všech variant porcí
+- **Docker PDF generování timeout**: Opraveny problémy s generováním PDF v Docker prostředí
+  - Přidány chybějící fonty do Docker image (fontconfig, ttf-dejavu, ttf-liberation, font-noto)
+  - Zvýšen gunicorn timeout z 30s na 120s pro náročnější operace
+  - Přidáno graceful shutdown timeout (30s)
+  - Zvýšen počet workers na 2 pro lepší paralelizaci
+  - Opraveno varování "No fonts configured in FontConfig" z WeasyPrint
+
 ## [0.10.0] - 2026-01-21
 
 ### Added
@@ -34,6 +64,24 @@ a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
   - Automatický focus na další pole (datum příjmu) po vygenerování
   - Loading states s spinner během generování pro lepší UX
   - Tooltip nápověda a responsive design pro touch zařízení
+- **Bulk úprava DPH**: Hromadná změna DPH sazby všech položek příjmu zboží
+  - Přehledný interface nad tabulkou položek s dropdown výběrem DPH sazby (0%, 12%, 21%)
+  - Tlačítko "Aplikovat na všechny" s smart enable/disable podle výběru sazby
+  - Automatické přepočítání cen s DPH u všech ovlivněných řádků
+  - Vizuální feedback s krátkodobým zvýrazněním aktualizovaných řádků
+  - Inteligentní přeskakování smazaných řádků a chybné handling
+  - Success/warning alerts s počítadlem aktualizovaných položek a auto-dismiss
+  - Responsive design s mobile optimalizací a tooltip nápovědou
+  - Integrace s template loading system (automatické vyčištění alertů)
+  - Loading states během aplikace pro lepší UX
+- **DPH pole v úpravě receptů**: Možnost nastavení výchozí DPH sazby u receptů
+  - Přidáno pole "DPH %" do formuláře pro vytváření a úpravu receptů
+  - Dropdown s výběrem standardních českých sazeb DPH (0%, 12%, 21%)
+  - Integrace s existujícím `selling_vat_rate` polem v Recipe modelu
+  - Umístěno vedle názvu receptu v přehledném 3-sloupcovém layoutu (Kategorie | Název | DPH)
+  - Tooltip nápověda s vysvětlením použití pro výchozí sazbu při prodeji
+  - Bootstrap form styling konzistentní s ostatními poli
+  - Dostupné jak při vytváření nového receptu, tak při úpravě existujícího
 
 ## [0.9.1] - 2026-01-15
 
