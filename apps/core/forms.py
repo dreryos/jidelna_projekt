@@ -67,3 +67,15 @@ class IngredientForm(forms.ModelForm):
             'base_unit': forms.TextInput(attrs={'class': 'form-control'}),
             'recipe_unit': forms.TextInput(attrs={'class': 'form-control'}),
         }
+
+    def clean(self):
+        data = super().clean()
+
+        # Pokud uživatel změní pouze "unit" a nechá base_unit prázdnou,
+        # synchronizujeme base_unit s unit pro lepší UX a zpětnou kompatibilitu.
+        unit = data.get('unit')
+        base_unit = data.get('base_unit')
+        if unit and (not base_unit):
+            data['base_unit'] = unit
+
+        return data

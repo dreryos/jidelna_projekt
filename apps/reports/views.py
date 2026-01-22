@@ -11,6 +11,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.contrib.auth.decorators import login_required
 from django.db.models import Q
+from django.core.exceptions import ObjectDoesNotExist
 from decimal import Decimal
 
 from apps.canteens.models import Canteen
@@ -34,10 +35,28 @@ class ReportForm(forms.Form):
 
 @login_required
 def order_report(request):
+    user = request.user
+    
+    # Filtruj canteens na managed_canteens
+    if user.is_superuser:
+        canteen_queryset = Canteen.objects.all()
+    else:
+        try:
+            user_canteens = user.profile.canteens.all()
+            canteen_queryset = user_canteens
+        except ObjectDoesNotExist:
+            canteen_queryset = Canteen.objects.none()
+    
     if request.method == 'POST':
         form = ReportForm(request.POST)
+        form.fields['canteen'].queryset = canteen_queryset
         if form.is_valid():
             canteen = form.cleaned_data['canteen']
+            
+            # Kontrola přístupu
+            if not user.is_superuser and canteen not in user_canteens:
+                return HttpResponse('Access denied', status=403)
+            
             date_from = form.cleaned_data['date_from']
             date_to = form.cleaned_data['date_to']
             report = generate_order_report(canteen, date_from, date_to)
@@ -47,6 +66,8 @@ def order_report(request):
             return render(request, 'reports/report_result.html', {'report': report})
     else:
         form = ReportForm()
+        form.fields['canteen'].queryset = canteen_queryset
+    
     return render(request, 'reports/report_form.html', {'form': form})
 
 

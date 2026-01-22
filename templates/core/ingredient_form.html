@@ -35,11 +35,41 @@
           
           <div class="mb-3">
             <label for="id_unit" class="form-label">
-              <i class="fas fa-balance-scale me-1"></i>Měrná jednotka
+              <i class="fas fa-balance-scale me-1"></i>Měrná jednotka (zobrazovaná)
             </label>
             {% bootstrap_field form.unit layout='floating' %}
             <div class="form-text">
-              Jednotka pro měření množství (kg, l, ks, g, ml, atd.)
+              Původní pole pro kompatibilitu. Zobrazuje se ve výpisech; doporučeno mít stejné jako skladová jednotka.
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label for="id_base_unit" class="form-label">
+              <i class="fas fa-warehouse me-1"></i>Skladová jednotka
+            </label>
+            {% bootstrap_field form.base_unit layout='floating' %}
+            <div class="form-text">
+              Jednotka používaná na skladě (např. kg, l, ks). Tato hodnota se používá při výdejkách a skladových pohybech.
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label for="id_recipe_unit" class="form-label">
+              <i class="fas fa-utensils me-1"></i>Receptová jednotka
+            </label>
+            {% bootstrap_field form.recipe_unit layout='floating' %}
+            <div class="form-text">
+              Jednotka v receptech (např. g, ml, ks). Přepočet na skladovou jednotku určuje koeficient níže.
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label for="id_conversion_factor" class="form-label">
+              <i class="fas fa-exchange-alt me-1"></i>Převodní koeficient
+            </label>
+            {% bootstrap_field form.conversion_factor layout='floating' %}
+            <div class="form-text">
+              Převod z receptové na skladovou jednotku (např. 1000 pro g → kg, 1 pro ks → ks).
             </div>
           </div>
           

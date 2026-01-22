@@ -1,19 +1,70 @@
 from django.shortcuts import render
+from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.http import HttpResponse, JsonResponse
 from django.contrib.auth import logout
-from django.shortcuts import redirect
+from django.shortcuts import redirect, get_object_or_404
 from django.views.generic import ListView, CreateView, UpdateView, DeleteView
 from django.urls import reverse_lazy
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.forms import inlineformset_factory
+from django.core.exceptions import ObjectDoesNotExist
+from django.db.models import Model
+from typing import Type, Any
+from functools import wraps
 
 from apps.core.models import Recipe, RecipeIngredient, Ingredient
 from apps.core.forms import RecipeIngredientForm, RecipeForm, IngredientForm
+from apps.core.backup import export_backup_xml, import_backup_xml
 
 """
 Tento modul je místo pro view funkce související s jádrem aplikace (recepty, suroviny).
 V současné době používáme hlavně Django admin pro CRUD operace, proto zde nejsou implementovány konkrétní view.
 """
+
+# --- Authorization Mixins ---
+
+class CanteenAccessMixin(LoginRequiredMixin):
+	"""
+	Mixin pro filtrování objektů na základě přiřazených jídelen uživatele.
+	- Superuser vidí všechno
+	- Ostatní vidí jen objekty spojené s jejich managed_canteens (přes warehouse__canteen)
+	"""
+	def get_queryset(self):
+		queryset = super().get_queryset()
+		user = self.request.user
+		
+		# Superuser vidí všechno
+		if user.is_superuser:
+			return queryset
+		
+		# Ostatní vidí jen objekty z jejich jídelen
+		try:
+			user_canteens = user.profile.canteens.all()
+			if hasattr(self.model, 'warehouse'):
+				# Pro StockItem, GoodsReceipt, atd. s warehouse.canteen
+				queryset = queryset.filter(warehouse__canteen__in=user_canteens)
+			elif hasattr(self.model, 'canteen'):
+				# Pro objekty s direct canteen FK
+				queryset = queryset.filter(canteen__in=user_canteens)
+		except (ObjectDoesNotExist, AttributeError):
+			return queryset.none()
+		
+		return queryset
+
+
+def user_can_access_canteen(user, canteen) -> bool:
+	"""
+	Pomocná funkce pro kontrolu přístupu uživatele k jídelně.
+	- True pokud je superuser nebo má canteen v managed_canteens
+	- False jinak
+	"""
+	if user.is_superuser:
+		return True
+	try:
+		return canteen in user.profile.canteens.all()
+	except (ObjectDoesNotExist, AttributeError):
+		return False
 
 def index(request):
 	return render(request, 'core/index.html', {})
@@ -43,6 +94,64 @@ def logout_view(request):
 	"""Log out a user on POST and redirect to login. GET will return 405."""
 	logout(request)
 	return redirect('login')
+
+
+@login_required
+def backup_export_xml_view(request):
+	if not request.user.is_superuser:
+		return HttpResponse(status=403)
+
+	xml_bytes = export_backup_xml()
+	response = HttpResponse(xml_bytes, content_type='application/xml')
+	response['Content-Disposition'] = 'attachment; filename="recipes_backup.xml"'
+	return response
+
+
+@login_required
+@require_POST
+def backup_import_xml_view(request):
+	if not request.user.is_superuser:
+		return JsonResponse({'success': False, 'error': 'Forbidden'}, status=403)
+
+	dry_run = request.GET.get('dry_run') == '1' or request.POST.get('dry_run') == '1'
+
+	if request.FILES:
+		xml_content = next(iter(request.FILES.values())).read()
+	else:
+		xml_content = request.body
+
+	if not xml_content:
+		return JsonResponse({'success': False, 'error': 'Prázdný XML obsah'}, status=400)
+
+	try:
+		report = import_backup_xml(xml_content, dry_run=dry_run)
+		return JsonResponse({'success': True, 'dry_run': dry_run, 'report': report})
+	except Exception as e:
+		return JsonResponse({'success': False, 'error': str(e)}, status=400)
+
+
+@login_required
+def backup_page(request):
+	if not request.user.is_superuser:
+		return HttpResponse(status=403)
+
+	if request.method == 'POST':
+		dry_run = request.POST.get('dry_run') == '1'
+		file = request.FILES.get('file')
+		if not file:
+			messages.error(request, 'Nahrajte prosím XML soubor.')
+			return redirect('core:backup_page')
+		try:
+			report = import_backup_xml(file.read(), dry_run=dry_run)
+			if dry_run:
+				messages.warning(request, f"Dry-run: žádné změny neuloženy. Report: {report}")
+			else:
+				messages.success(request, f"Import dokončen. Report: {report}")
+		except Exception as e:
+			messages.error(request, f'Chyba při importu: {e}')
+		return redirect('core:backup_page')
+
+	return render(request, 'core/backup.html')
 
 
 class RecipeListView(LoginRequiredMixin, ListView):
@@ -186,7 +295,6 @@ class IngredientDeleteView(LoginRequiredMixin, DeleteView):
 	success_url = reverse_lazy('core:ingredient_list')
 
 
-from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 from decimal import Decimal
 

@@ -8,11 +8,12 @@ from django.db import transaction
 from django.utils import timezone
 from django.http import HttpResponse, JsonResponse
 from django.template.loader import render_to_string
-from django.core.exceptions import ValidationError
+from django.core.exceptions import ValidationError, ObjectDoesNotExist
 from django.views.decorators.http import require_POST
 from django.views.decorators.cache import cache_page
 from django.core.cache import cache
 from django.db.models import Count, Q
+from apps.core.views import CanteenAccessMixin, user_can_access_canteen
 from decimal import Decimal, InvalidOperation
 import logging
 import json
@@ -34,16 +35,27 @@ from apps.core.models import Ingredient
 logger = logging.getLogger(__name__)
 
 
-class StockListView(LoginRequiredMixin, ListView):
+class StockListView(CanteenAccessMixin, ListView):
     model = StockItem
     template_name = 'inventory/stock_list.html'
     context_object_name = 'stock_items'
     
     def get_queryset(self):
-        queryset = StockItem.objects.select_related('ingredient', 'warehouse', 'warehouse__canteen').all()
+        queryset = super().get_queryset().select_related('ingredient', 'warehouse', 'warehouse__canteen')
         
         # Filtrování podle skladu/skladů
         warehouse_ids = self.request.GET.getlist('warehouse')
+        
+        # Pokud nejsou vybrány sklady a uživatel není superuser, defaultně vyber user's managed warehouses
+        if not warehouse_ids and not self.request.user.is_superuser:
+            try:
+                user_canteens = self.request.user.profile.canteens.all()
+                warehouse_ids = list(
+                    Warehouse.objects.filter(canteen__in=user_canteens).values_list('id', flat=True)
+                )
+            except ObjectDoesNotExist:
+                warehouse_ids = []
+        
         if warehouse_ids:
             queryset = queryset.filter(warehouse_id__in=warehouse_ids)
         else:
@@ -58,8 +70,27 @@ class StockListView(LoginRequiredMixin, ListView):
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['warehouses'] = Warehouse.objects.select_related('canteen').all()
-        context['selected_warehouses'] = self.request.GET.getlist('warehouse')
+        user = self.request.user
+        
+        # Filtruj sklady na managed canteens
+        if user.is_superuser:
+            context['warehouses'] = Warehouse.objects.select_related('canteen').all()
+            default_warehouse_ids = []
+        else:
+            try:
+                user_canteens = user.profile.canteens.all()
+                context['warehouses'] = Warehouse.objects.filter(canteen__in=user_canteens).select_related('canteen')
+                # Defaultně vyber managed warehouses
+                default_warehouse_ids = list(
+                    Warehouse.objects.filter(canteen__in=user_canteens).values_list('id', flat=True)
+                )
+            except ObjectDoesNotExist:
+                context['warehouses'] = Warehouse.objects.none()
+                default_warehouse_ids = []
+        
+        # Pokud nejsou vybrány sklady, použij defaultní
+        selected = self.request.GET.getlist('warehouse')
+        context['selected_warehouses'] = selected if selected else [str(wid) for wid in default_warehouse_ids]
         context['show_transit'] = self.request.GET.get('show_transit', False)
         
         # Přidáme statistiky
@@ -117,12 +148,13 @@ class StockDeleteView(LoginRequiredMixin, DeleteView):
 
 # CRUD pro sklady (Warehouse)
 
-class WarehouseListView(LoginRequiredMixin, ListView):
+class WarehouseListView(CanteenAccessMixin, ListView):
     model = Warehouse
     template_name = 'inventory/warehouse_list.html'
     context_object_name = 'warehouses'
     
     def get_queryset(self):
+        queryset = super().get_queryset()
         from django.db.models import Prefetch
         
         # Prefetch pouze COMPLETED inventur seřazených sestupně
@@ -455,14 +487,14 @@ def warehouse_ajax_delete(request, pk):
 
 # CRUD pro příjem zboží (GoodsReceipt)
 
-class GoodsReceiptListView(LoginRequiredMixin, ListView):
+class GoodsReceiptListView(CanteenAccessMixin, ListView):
     model = GoodsReceipt
     template_name = 'inventory/goods_receipt_list.html'
     context_object_name = 'goods_receipts'
     paginate_by = 20
     
     def get_queryset(self):
-        queryset = GoodsReceipt.objects.select_related('warehouse', 'warehouse__canteen', 'created_by').all()
+        queryset = super().get_queryset().select_related('warehouse', 'warehouse__canteen', 'created_by')
         
         # Filtrování podle skladu
         warehouse_id = self.request.GET.get('warehouse')
@@ -478,7 +510,18 @@ class GoodsReceiptListView(LoginRequiredMixin, ListView):
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['warehouses'] = Warehouse.objects.select_related('canteen').all()
+        user = self.request.user
+        
+        # Filtruj sklady na managed canteens
+        if user.is_superuser:
+            context['warehouses'] = Warehouse.objects.select_related('canteen').all()
+        else:
+            try:
+                user_canteens = user.profile.canteens.all()
+                context['warehouses'] = Warehouse.objects.filter(canteen__in=user_canteens).select_related('canteen')
+            except ObjectDoesNotExist:
+                context['warehouses'] = Warehouse.objects.none()
+        
         context['selected_warehouse'] = self.request.GET.get('warehouse', '')
         context['selected_status'] = self.request.GET.get('status', '')
         context['statuses'] = GoodsReceipt.Status.choices
@@ -840,16 +883,16 @@ class IsStaffMixin(UserPassesTestMixin):
         return self.request.user.is_staff
 
 
-class InventoryVerificationListView(LoginRequiredMixin, ListView):
+class InventoryVerificationListView(CanteenAccessMixin, ListView):
     """Seznam všech inventur."""
     model = InventoryVerification
     template_name = 'inventory/inventory_verification_list.html'
     context_object_name = 'verifications'
     
     def get_queryset(self):
-        queryset = InventoryVerification.objects.select_related(
+        queryset = super().get_queryset().select_related(
             'warehouse', 'warehouse__canteen', 'started_by', 'completed_by', 'created_by'
-        ).all()
+        )
         
         # Filtrování podle skladu
         warehouse_id = self.request.GET.get('warehouse')
@@ -865,7 +908,18 @@ class InventoryVerificationListView(LoginRequiredMixin, ListView):
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['warehouses'] = Warehouse.objects.select_related('canteen').all()
+        user = self.request.user
+        
+        # Filtruj sklady na managed canteens
+        if user.is_superuser:
+            context['warehouses'] = Warehouse.objects.select_related('canteen').all()
+        else:
+            try:
+                user_canteens = user.profile.canteens.all()
+                context['warehouses'] = Warehouse.objects.filter(canteen__in=user_canteens).select_related('canteen')
+            except ObjectDoesNotExist:
+                context['warehouses'] = Warehouse.objects.none()
+        
         context['statuses'] = InventoryVerification.Status.choices
         return context
 
@@ -1108,7 +1162,7 @@ class IsStaffMixin(UserPassesTestMixin):
         return self.request.user.is_staff
 
 
-class StockTransferListView(LoginRequiredMixin, ListView):
+class StockTransferListView(CanteenAccessMixin, ListView):
     """Seznam převodek s filtrováním."""
     model = StockTransfer
     template_name = 'inventory/stock_transfer_list.html'
@@ -1116,11 +1170,25 @@ class StockTransferListView(LoginRequiredMixin, ListView):
     paginate_by = 20
     
     def get_queryset(self):
+        # Nemůžeme direktně filtrovat StockTransfer přes warehouse__canteen
+        # protože má warehouse_from a warehouse_to, ne warehouse
+        # Takže zde je custom filtrování
         queryset = StockTransfer.objects.select_related(
             'warehouse_from', 'warehouse_to',
             'warehouse_from__canteen', 'warehouse_to__canteen',
             'created_by'
         ).prefetch_related('items__ingredient')
+        
+        user = self.request.user
+        if not user.is_superuser:
+            try:
+                user_canteens = user.profile.canteens.all()
+                # Filtruj na transfery kde oba sklady patří managed canteens
+                queryset = queryset.filter(
+                    Q(warehouse_from__canteen__in=user_canteens) | Q(warehouse_to__canteen__in=user_canteens)
+                )
+            except ObjectDoesNotExist:
+                queryset = queryset.none()
         
         # Filtrování podle skladu (from nebo to)
         warehouse_id = self.request.GET.get('warehouse')
@@ -1138,9 +1206,21 @@ class StockTransferListView(LoginRequiredMixin, ListView):
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['warehouses'] = Warehouse.objects.filter(
-            is_transit_warehouse=False
-        ).select_related('canteen')
+        user = self.request.user
+        
+        # Filtruj warehouses na managed canteens
+        if user.is_superuser:
+            context['warehouses'] = Warehouse.objects.filter(is_transit_warehouse=False).select_related('canteen')
+        else:
+            try:
+                user_canteens = user.profile.canteens.all()
+                context['warehouses'] = Warehouse.objects.filter(
+                    canteen__in=user_canteens,
+                    is_transit_warehouse=False
+                ).select_related('canteen')
+            except ObjectDoesNotExist:
+                context['warehouses'] = Warehouse.objects.none()
+        
         context['selected_warehouse'] = self.request.GET.get('warehouse', '')
         context['selected_status'] = self.request.GET.get('status', '')
         context['status_choices'] = StockTransfer.STATUS_CHOICES

@@ -35,6 +35,13 @@ a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
   - Zvýšen počet workers na 2 pro lepší paralelizaci
   - Opraveno varování "No fonts configured in FontConfig" z WeasyPrint
 
+### Added
+- **XML záloha a obnova receptů a surovin (superuser)**
+  - Export do XML: GET /core/backup/xml/ (superuser only), k dispozici i management command `export_backup_xml`
+  - Import s merge: POST /core/backup/xml/import/ (superuser only) + command `import_backup_xml`, možnost `--dry-run`
+  - Merge chování: kategorie/ingredience/recepty doplňují chybějící hodnoty, nepřepisují existující; RecipeIngredient se aktualizují
+  - XML schema: Ingredients, Categories, Recipes s navázanými ingrediencemi a normami
+
 ## [0.10.0] - 2026-01-21
 
 ### Added

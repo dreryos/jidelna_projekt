@@ -170,13 +170,25 @@
       <div class="card-body">
         <p class="card-text">Správa jídelen, skladů, uživatelů a výrobních příkazů.</p>
         <div class="d-grid gap-2">
+          {% if user.is_staff or user.is_superuser %}
           <a href="/admin/" class="btn btn-primary">
             <i class="fas fa-tools me-2"></i>Django Admin
           </a>
+          {% if user.is_superuser %}
+          <a href="{% url 'core:backup_page' %}" class="btn btn-outline-light">
+            <i class="fas fa-archive me-2"></i>Zálohy (recepty a suroviny)
+          </a>
+          {% endif %}
           <small class="text-muted">
             <i class="fas fa-info-circle me-1"></i>
             Zde můžete spravovat jídelny, sklady, výrobní příkazy a výdejky.
           </small>
+          {% else %}
+          <small class="text-muted">
+            <i class="fas fa-lock me-1"></i>
+            Přístup pouze pro administrátory a manažery jídelen.
+          </small>
+          {% endif %}
         </div>
       </div>
     </div>

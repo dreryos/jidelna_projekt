@@ -10,6 +10,7 @@ Tento modul poskytuje:
 from django.shortcuts import render, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.db.models import Avg, Count, Q
+from django.core.exceptions import ObjectDoesNotExist
 from decimal import Decimal
 
 from apps.production.models import MenuPlan, ProductionOrder
@@ -22,9 +23,19 @@ from apps.inventory.models import StockItem
 def menu_analytics_list(request):
     """
     Zobrazí seznam všech jídelníčků s průměrnými náklady na jedno jídlo.
+    Filtruje na managed_canteens uživatele.
     """
-    # Získáme všechny jídelníčky seřazené od nejnovějších
-    menu_plans = MenuPlan.objects.all().select_related('canteen').order_by('-created_at')
+    user = request.user
+    
+    # Superuser vidí všechno, ostatní vidí jen jejich jídelny
+    if user.is_superuser:
+        menu_plans = MenuPlan.objects.all().select_related('canteen').order_by('-created_at')
+    else:
+        try:
+            user_canteens = user.profile.canteens.all()
+            menu_plans = MenuPlan.objects.filter(canteen__in=user_canteens).select_related('canteen').order_by('-created_at')
+        except ObjectDoesNotExist:
+            menu_plans = MenuPlan.objects.none()
     
     # Pro každý jídelníček vypočítáme analytické údaje
     analytics_data = []
