@@ -7,21 +7,20 @@ Tento soubor sleduje hlavní úkoly, bugy a nápady pro projekt. Pro detailněj�
 ## 🚀 Priorita / Urgentní
 *Věci, které je třeba vyřešit co nejdříve (např. blokující chyby).*
 
-- [x] Připravit pro zelináře tabulku pro import (ať se nemusí vše zadávat ručně) - přidat dodavatele k surovinám.
-- [x] Dát možnost upravit sklad a DPH v příjmu zboží pro všechny položky naráz
-- [x] DPH receptů s jakým to prodáváme
+
 
 ---
 
 ## 🐛 Bugy (Chyby)
 *Nalezené chyby, které neblokují hlavní funkčnost, ale je třeba je opravit.*
 
+- [ ] Šablony k manuálnímu příjmu zboží - nereflektují nastavení v adminu, jací jsou dostupní dodavatelé a co dodávají.
+
 ---
 
 ## ✨ Nové Funkce (Features)
 *Nové části aplikace, které se mají implementovat.*
 
-- [x] Převodky, přesun surovin mezi sklady jídelen, přes mezisklad.
 - [ ] "Předpověď ceny" jídelníčku na základě historických dat o cenách surovin.
 
 
@@ -76,3 +75,8 @@ Tento soubor sleduje hlavní úkoly, bugy a nápady pro projekt. Pro detailněj�
 - [x] Tmavý režim někde blbne (některé prvky zůstávají světlé).
 - [x] Modul Inventura - možnost provádět inventury skladů, generovat inventurní soupisy, porovnávat s evidencí skladu, upozornění dlouho neinventurovaných skladů.
 - [x] Předpřipravené jídelníčky na nejčastější akce (ŠVP, tábor - týden nebo 14 dní).
+- [x] Připravit pro zelináře tabulku pro import (ať se nemusí vše zadávat ručně) - přidat dodavatele k surovinám.
+- [x] Dát možnost upravit sklad a DPH v příjmu zboží pro všechny položky naráz
+- [x] DPH receptů s jakým to prodáváme
+- [x] Pokud odstraním všechny řádky v manuálním příjmu zboží nelze přidat žádný řádek zpět (chyba v JS).
+- [x] Převodky, přesun surovin mezi sklady jídelen, přes mezisklad.

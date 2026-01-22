@@ -544,6 +544,35 @@ def goods_receipt_create(request):
         form = GoodsReceiptForm(request.POST)
         formset = GoodsReceiptItemFormSet(request.POST)
         
+        # Očistit zcela prázdné řádky (přidané přes JavaScript ale nevyplněné)
+        # Django by to měl udělat automaticky, ale formset má min_num=1
+        formset_data = []
+        total_forms = int(request.POST.get('items-TOTAL_FORMS', 0))
+        for i in range(total_forms):
+            prefix = f'items-{i}'
+            # Zkontrolovat zda je alespoň jedno pole vyplněné
+            ingredient = request.POST.get(f'{prefix}-ingredient', '').strip()
+            warehouse = request.POST.get(f'{prefix}-warehouse', '').strip()
+            quantity = request.POST.get(f'{prefix}-quantity', '').strip()
+            price_without_vat = request.POST.get(f'{prefix}-price_without_vat', '').strip()
+            price_with_vat = request.POST.get(f'{prefix}-price', '').strip()
+            vat_rate = request.POST.get(f'{prefix}-vat_rate', '').strip()
+            delete_flag = request.POST.get(f'{prefix}-DELETE', '').strip()
+            
+            # Uchovej řádek pokud:
+            # - není označen ke smazání (DELETE=on)
+            # - a má nějaká vyplněná data
+            if delete_flag != 'on' and (ingredient or warehouse or quantity or price_without_vat or price_with_vat or vat_rate):
+                formset_data.append(i)
+        
+        # Pokud jsou všechny řádky prázdné, snízíme TOTAL_FORMS
+        if not formset_data:
+            request.POST._mutable = True if hasattr(request.POST, '_mutable') else None
+            request.POST['items-TOTAL_FORMS'] = '1'
+            request.POST._mutable = False if hasattr(request.POST, '_mutable') else None
+            # Znovu vytvořit formset s aktualizovanými daty
+            formset = GoodsReceiptItemFormSet(request.POST)
+        
         if form.is_valid() and formset.is_valid():
             try:
                 with transaction.atomic():
@@ -556,7 +585,7 @@ def goods_receipt_create(request):
                     goods_receipt.created_by = request.user
                     goods_receipt.save()
                     
-                    # Uložit položky
+                    # Uložit pouze vyplněné položky
                     formset.instance = goods_receipt
                     items = formset.save(commit=False)
                     

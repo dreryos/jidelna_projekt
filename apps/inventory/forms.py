@@ -71,7 +71,7 @@ class GoodsReceiptItemForm(forms.ModelForm):
     
     class Meta:
         model = GoodsReceiptItem
-        fields = ['ingredient', 'warehouse', 'quantity', 'price_without_vat', 'vat_rate', 'notes']
+        fields = ['ingredient', 'warehouse', 'quantity', 'price_without_vat', 'price', 'vat_rate', 'notes']
         widgets = {
             'ingredient': forms.Select(attrs={'class': 'form-select', 'required': True}),
             'warehouse': forms.Select(attrs={'class': 'form-select warehouse-select', 'required': True}),
@@ -80,7 +80,12 @@ class GoodsReceiptItemForm(forms.ModelForm):
                 'class': 'form-control price-without-vat', 
                 'step': '0.01', 
                 'min': '0', 
-                'required': True,
+                'onchange': 'calculateVAT(this)'
+            }),
+            'price': forms.NumberInput(attrs={
+                'class': 'form-control price-with-vat',
+                'step': '0.01',
+                'min': '0',
                 'onchange': 'calculateVAT(this)'
             }),
             'vat_rate': forms.Select(attrs={
@@ -95,6 +100,7 @@ class GoodsReceiptItemForm(forms.ModelForm):
             'warehouse': 'Sklad',
             'quantity': 'Množství',
             'price_without_vat': 'Cena bez DPH',
+            'price': 'Cena s DPH',
             'vat_rate': 'DPH %',
             'notes': 'Poznámka',
         }
@@ -114,9 +120,38 @@ class GoodsReceiptItemForm(forms.ModelForm):
             })
         )
         # Označení povinných polí
-        for field_name in ['ingredient', 'warehouse', 'quantity', 'price_without_vat', 'vat_rate']:
+        for field_name in ['ingredient', 'warehouse', 'quantity', 'vat_rate']:
             if field_name in self.fields:
                 self.fields[field_name].required = True
+        # Cenu je možné vyplnit s DPH nebo bez DPH, proto je necháváme nepovinné
+        for field_name in ['price_without_vat', 'price']:
+            if field_name in self.fields:
+                self.fields[field_name].required = False
+
+    def clean(self):
+        cleaned_data = super().clean()
+        price_without_vat = cleaned_data.get('price_without_vat')
+        price_with_vat = cleaned_data.get('price')
+        vat_rate = cleaned_data.get('vat_rate')
+
+        if vat_rate in (None, ''):
+            return cleaned_data
+
+        vat_rate = Decimal(vat_rate)
+
+        if price_without_vat is None and price_with_vat is None:
+            raise ValidationError("Zadejte cenu bez DPH nebo cenu s DPH.")
+
+        vat_multiplier = Decimal('1') + (vat_rate / Decimal('100'))
+
+        if price_without_vat is not None:
+            computed_price_with_vat = (price_without_vat * vat_multiplier).quantize(Decimal('0.01'))
+            cleaned_data['price'] = computed_price_with_vat
+        elif price_with_vat is not None:
+            computed_price_without_vat = (price_with_vat / vat_multiplier).quantize(Decimal('0.01'))
+            cleaned_data['price_without_vat'] = computed_price_without_vat
+
+        return cleaned_data
 
 
 # Formset pro položky příjmu

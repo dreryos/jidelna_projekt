@@ -361,13 +361,13 @@ label.required::after {
         <table class="formset-table">
           <thead class="bg-light">
             <tr>
-              <th style="width: 25%;">Surovina <span class="text-danger">*</span></th>
-              <th style="width: 15%;">Sklad <span class="text-danger">*</span></th>
+              <th style="width: 24%;">Surovina <span class="text-danger">*</span></th>
+              <th style="width: 14%;">Sklad <span class="text-danger">*</span></th>
               <th style="width: 10%;">Množství <span class="text-danger">*</span></th>
-              <th style="width: 12%;">Cena bez DPH <span class="text-danger">*</span></th>
+              <th style="width: 12%;">Cena bez DPH</th>
               <th style="width: 8%;">DPH % <span class="text-danger">*</span></th>
               <th style="width: 12%;">Cena s DPH</th>
-              <th style="width: 13%;">Poznámka</th>
+              <th style="width: 15%;">Poznámka</th>
               <th style="width: 5%; text-align: center;">Akce</th>
             </tr>
           </thead>
@@ -405,7 +405,10 @@ label.required::after {
                   {% endif %}
                 </td>
                 <td>
-                  <span class="vat-preview bg-success bg-opacity-25 text-success border border-success" id="preview-{{ forloop.counter0 }}">-</span>
+                  {{ form.price }}
+                  {% if form.price.errors %}
+                    <div class="text-danger small">{{ form.price.errors }}</div>
+                  {% endif %}
                 </td>
                 <td>
                   {{ form.notes }}
@@ -448,7 +451,7 @@ label.required::after {
 
 {% block extra_js %}
 <script>
-// Vypočítat cenu s DPH pro daný řádek
+// Vypočítat cenu s DPH nebo bez DPH na základě poslední upravovaného pole
 function calculateVAT(element) {
   // Najít parent row
   const row = element.closest('tr');
@@ -456,24 +459,46 @@ function calculateVAT(element) {
   
   // Získat input fieldy
   const priceWithoutVatInput = row.querySelector('input[name$="-price_without_vat"]');
+  const priceWithVatInput = row.querySelector('input[name$="-price"]');
   const vatRateSelect = row.querySelector('select[name$="-vat_rate"]');
-  const previewSpan = document.getElementById(`preview-${index}`);
   
-  if (!priceWithoutVatInput || !vatRateSelect || !previewSpan) {
+  if (!vatRateSelect) {
     return;
   }
   
-  const priceWithoutVat = parseFloat(priceWithoutVatInput.value);
+  const priceWithoutVat = priceWithoutVatInput ? parseFloat(priceWithoutVatInput.value) : NaN;
+  const priceWithVat = priceWithVatInput ? parseFloat(priceWithVatInput.value) : NaN;
   const vatRate = parseFloat(vatRateSelect.value);
   
-  // Validace a výpočet
-  if (isNaN(priceWithoutVat) || isNaN(vatRate) || priceWithoutVat < 0) {
-    previewSpan.textContent = '-';
+  if (isNaN(vatRate)) {
     return;
   }
   
-  const priceWithVat = priceWithoutVat * (1 + vatRate / 100);
-  previewSpan.textContent = priceWithVat.toFixed(2) + ' Kč';
+  // Zjistit které pole bylo upraveno (posledně upravované)
+  const lastEdited = element.name ? element.name : '';
+  const vatMultiplier = 1 + vatRate / 100;
+  
+  // Pokud bylo upraveno pole bez DPH nebo je vyplněno a druhé je prázdné
+  if (lastEdited.includes('price_without_vat') || (!isNaN(priceWithoutVat) && priceWithoutVat >= 0 && isNaN(priceWithVat))) {
+    if (!isNaN(priceWithoutVat) && priceWithoutVat >= 0) {
+      const computedWithVat = (priceWithoutVat * vatMultiplier).toFixed(2);
+      if (priceWithVatInput) {
+        priceWithVatInput.value = computedWithVat;
+      }
+    }
+    return;
+  }
+  
+  // Pokud bylo upraveno pole s DPH nebo je vyplněno a druhé je prázdné
+  if (lastEdited.includes('price') || (!isNaN(priceWithVat) && priceWithVat >= 0 && isNaN(priceWithoutVat))) {
+    if (!isNaN(priceWithVat) && priceWithVat >= 0) {
+      const computedWithoutVat = (priceWithVat / vatMultiplier).toFixed(2);
+      if (priceWithoutVatInput) {
+        priceWithoutVatInput.value = computedWithoutVat;
+      }
+    }
+    return;
+  }
 }
 
 // Označit/odznačit řádek ke smazání
@@ -508,7 +533,7 @@ function toggleDeleteRow(button) {
       input.disabled = false;
       // Obnovit required atribut pro povinná pole
       const fieldName = input.name.split('-').pop();
-      if (['ingredient', 'warehouse', 'quantity', 'price_without_vat', 'vat_rate'].includes(fieldName)) {
+      if (['ingredient', 'warehouse', 'quantity', 'vat_rate'].includes(fieldName)) {
         input.setAttribute('required', 'required');
       }
     });
@@ -598,6 +623,16 @@ function addFormsetRow() {
   }
   newRow.classList.remove('row-to-delete');
   
+  // Přidat event listeners pro nové pole
+  newRow.querySelectorAll('input[name$="-price_without_vat"], input[name$="-price"], select[name$="-vat_rate"]').forEach(field => {
+    field.addEventListener('change', function() {
+      calculateVAT(this);
+    });
+    field.addEventListener('input', function() {
+      calculateVAT(this);
+    });
+  });
+  
   // Předvyplnit sklad z výchozího skladu
   const defaultWarehouseSelect = document.getElementById('default-warehouse');
   const newWarehouseSelect = newRow.querySelector('.warehouse-select');
@@ -619,10 +654,22 @@ function addFormsetRow() {
 document.addEventListener('DOMContentLoaded', function() {
   // Výpočet DPH při načtení stránky pro existující hodnoty
   document.querySelectorAll('.formset-row').forEach(row => {
-    const priceInput = row.querySelector('input[name$="-price_without_vat"]');
-    if (priceInput && priceInput.value) {
-      calculateVAT(priceInput);
+    const priceWithoutInput = row.querySelector('input[name$="-price_without_vat"]');
+    const priceWithInput = row.querySelector('input[name$="-price"]');
+    const sourceInput = (priceWithInput && priceWithInput.value) ? priceWithInput : priceWithoutInput;
+    if (sourceInput && sourceInput.value) {
+      calculateVAT(sourceInput);
     }
+  });
+  
+  // Event listeners pro sledování změn v cenovych polích
+  document.querySelectorAll('input[name$="-price_without_vat"], input[name$="-price"], select[name$="-vat_rate"]').forEach(field => {
+    field.addEventListener('change', function() {
+      calculateVAT(this);
+    });
+    field.addEventListener('input', function() {
+      calculateVAT(this);
+    });
   });
   
   // Automatická synchronizace skladu při změně výchozího skladu
@@ -785,6 +832,7 @@ function saveFormsetState() {
     const warehouseSelect = row.querySelector(`select[name$="-warehouse"]`);
     const quantityInput = row.querySelector(`input[name$="-quantity"]`);
     const priceInput = row.querySelector(`input[name$="-price_without_vat"]`);
+    const priceWithVatInput = row.querySelector(`input[name$="-price"]`);
     const vatRateSelect = row.querySelector(`select[name$="-vat_rate"]`);
     const notesInput = row.querySelector(`input[name$="-notes"], textarea[name$="-notes"]`);
     
@@ -793,6 +841,7 @@ function saveFormsetState() {
       warehouse: warehouseSelect ? warehouseSelect.value : '',
       quantity: quantityInput ? quantityInput.value : '',
       price_without_vat: priceInput ? priceInput.value : '',
+      price: priceWithVatInput ? priceWithVatInput.value : '',
       vat_rate: vatRateSelect ? vatRateSelect.value : '',
       notes: notesInput ? notesInput.value : ''
     });
@@ -835,7 +884,7 @@ function restoreFormsetState(state) {
 }
 
 function restoreRowData(row, data) {
-  const fields = ['ingredient', 'warehouse', 'quantity', 'price_without_vat', 'vat_rate', 'notes'];
+  const fields = ['ingredient', 'warehouse', 'quantity', 'price_without_vat', 'price', 'vat_rate', 'notes'];
   
   fields.forEach(field => {
     const element = row.querySelector(`select[name$="-${field}"], input[name$="-${field}"], textarea[name$="-${field}"]`);
@@ -845,9 +894,11 @@ function restoreRowData(row, data) {
   });
   
   // Recalculate VAT
-  const priceInput = row.querySelector(`input[name$="-price_without_vat"]`);
-  if (priceInput) {
-    calculateVAT(priceInput);
+  const priceWithoutInput = row.querySelector(`input[name$="-price_without_vat"]`);
+  const priceWithInput = row.querySelector(`input[name$="-price"]`);
+  const sourceInput = (priceWithInput && priceWithInput.value) ? priceWithInput : priceWithoutInput;
+  if (sourceInput) {
+    calculateVAT(sourceInput);
   }
 }
 
