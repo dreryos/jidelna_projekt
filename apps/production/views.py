@@ -26,7 +26,7 @@ from django.db import transaction
 
 from .models import ProductionOrder, PickingList, MenuPlan
 from .forms import MenuPlanForm, MenuPlanCoefficientFormSet
-from apps.core.models import Recipe
+from apps.core.models import Recipe, UserProfile
 from apps.canteens.models import Canteen
 
 if TYPE_CHECKING:
@@ -647,24 +647,21 @@ def picking_list_generator(request):
     """
     from .models import PickingListDocument
     
-    canteens = Canteen.objects.all()
-    
-    # Získání user profile pro filtraci jídelen
-    if not request.user.is_superuser:
-        try:
-            user_profile = request.user.userprofile
-            canteens = user_profile.canteens.all()
-        except:
-            canteens = Canteen.objects.none()
+    # Získání jídelen podle profilu uživatele
+    profile = None
+    if request.user.is_superuser:
+        canteens = Canteen.objects.all()
+    else:
+        profile, _ = UserProfile.objects.get_or_create(user=request.user)
+        canteens = profile.canteens.all()
     
     # Načtení existujících dokumentů výdejek
     documents = PickingListDocument.objects.all()
-    if not request.user.is_superuser:
-        try:
-            user_profile = request.user.userprofile
-            documents = documents.filter(canteen__in=user_profile.canteens.all())
-        except:
-            documents = PickingListDocument.objects.none()
+    if request.user.is_superuser:
+        documents = documents
+    else:
+        # profile je již načten výše
+        documents = documents.filter(canteen__in=profile.canteens.all()) if profile else PickingListDocument.objects.none()
     
     if request.method == 'POST':
         canteen_id = request.POST.get('canteen')
@@ -682,12 +679,10 @@ def picking_list_generator(request):
             
             # Kontrola oprávnění
             if not request.user.is_superuser:
-                try:
-                    user_profile = request.user.userprofile
-                    if canteen not in user_profile.canteens.all():
-                        raise PermissionDenied("Nemáte oprávnění k této jídelně")
-                except:
-                    raise PermissionDenied("Nemáte přiřazený profil")
+                # profile je načten výše; fallback pro jistotu
+                profile = profile or UserProfile.objects.get_or_create(user=request.user)[0]
+                if canteen not in profile.canteens.all():
+                    raise PermissionDenied("Nemáte oprávnění k této jídelně")
             
             # Najdeme všechny ProductionOrders v daném rozsahu pro tuto jídelnu
             # Exclude orders that are already part of a picking list document (active or archived)
@@ -937,12 +932,9 @@ def picking_list_edit(request, document_id):
         
         # Kontrola oprávnění
         if not request.user.is_superuser:
-            try:
-                user_profile = request.user.userprofile
-                if document.canteen not in user_profile.canteens.all():
-                    raise PermissionDenied("Nemáte oprávnění k této jídelně")
-            except:
-                raise PermissionDenied("Nemáte přiřazený profil")
+            profile, _ = UserProfile.objects.get_or_create(user=request.user)
+            if document.canteen not in profile.canteens.all():
+                raise PermissionDenied("Nemáte oprávnění k této jídelně")
         
         # Načteme všechny picking list items tohoto dokumentu
         picking_items = PickingList.objects.filter(document=document).select_related(
@@ -1145,12 +1137,9 @@ def picking_list_pdf(request, document_id):
         
         # Kontrola oprávnění
         if not request.user.is_superuser:
-            try:
-                user_profile = request.user.userprofile
-                if document.canteen not in user_profile.canteens.all():
-                    raise PermissionDenied("Nemáte oprávnění k této jídelně")
-            except:
-                raise PermissionDenied("Nemáte přiřazený profil")
+            profile, _ = UserProfile.objects.get_or_create(user=request.user)
+            if document.canteen not in profile.canteens.all():
+                raise PermissionDenied("Nemáte oprávnění k této jídelně")
         
         # Načteme všechny ProductionOrders souvisící s tímto dokumentem
         orders = ProductionOrder.objects.filter(

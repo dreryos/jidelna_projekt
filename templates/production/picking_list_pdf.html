@@ -5,407 +5,172 @@
     <title>Výdejka - {{ canteen.name }}</title>
     <style>
         @page {
-            size: A5 portrait;
-            margin: 8mm;
+            size: A5 landscape;
+            margin: 10mm;
+            @bottom-center {
+                content: "Strana " counter(page) " / " counter(pages);
+                font-size: 8pt;
+            }
+            @top-center {
+                content: element(pageHeader);
+                font-size: 8pt;
+            }
         }
         
         body {
             font-family: Arial, sans-serif;
-            font-size: 7pt;
-            line-height: 1.2;
+            font-size: 8pt;
+            line-height: 1.3;
             color: #000;
         }
         
-        .header {
-            text-align: center;
-            margin-bottom: 15px;
+        .day-section {
+            page-break-after: always;
+            margin-bottom: 20px;
+        }
+
+        .page-header {
+            position: running(pageHeader);
+            font-size: 9pt;
+            font-weight: bold;
+            margin-bottom: 6px;
+        }
+        
+        .day-header {
+            font-size: 11pt;
+            font-weight: bold;
             border-bottom: 2px solid #000;
-            padding-bottom: 8px;
+            padding-bottom: 3px;
+            margin-bottom: 10px;
+            margin-top: 15px;
+            column-span: all;
         }
         
-        .header h1 {
-            margin: 0;
-            font-size: 12pt;
-            color: #000;
-            font-weight: bold;
+        .meals-container {
+            columns: 2;
+            column-gap: 15px;
         }
         
-        .header-info {
-            margin-top: 4px;
-            font-size: 8pt;
-            color: #000;
-        }
-        
-        h2, h3 {
-            break-after: avoid;
-        }
-        
-        .info-box {
-            background-color: #fff;
-            border: 2px solid #000;
-            padding: 6px;
-            margin-bottom: 12px;
+        .meal-item {
             break-inside: avoid;
+            margin-bottom: 15px;
         }
         
-        .info-box table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        
-        .info-box td {
-            padding: 3px;
-            font-size: 8pt;
-        }
-        
-        .info-box td:first-child {
+        .meal-header {
+            background-color: #d3d3d3;
+            padding: 4px 6px;
+            font-size: 9pt;
             font-weight: bold;
-            width: 35%;
-        }
-        
-        table.ingredients {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 20px;
-        }
-        
-        table.ingredients th {
-            background-color: #000;
-            color: #fff;
-            padding: 5px 3px;
-            text-align: left;
-            font-weight: bold;
-            font-size: 7pt;
-            border: 2px solid #000;
-        }
-        
-        table.ingredients td {
-            padding: 4px 3px;
-            font-size: 7pt;
+            margin-bottom: 3px;
+            margin-top: 10px;
             border: 1px solid #000;
         }
         
-        table.ingredients tbody tr:nth-child(even) {
-            background-color: #f5f5f5;
+        table.picking-list {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 15px;
         }
         
-        /* Styly pro chybějící suroviny - silný rámeček */
-        table.ingredients tr.missing {
-            border: 3px solid #000;
-        }
-        
-        table.ingredients tr.missing td {
-            border: 2px solid #000;
-            font-weight: bold;
-        }
-        
-        /* Styly pro nedostatečné suroviny - dvojitý rámeček */
-        table.ingredients tr.insufficient td {
-            border: 1.5px solid #000;
-            font-style: italic;
-        }
-        
-        .ingredient-name {
-            font-weight: bold;
-        }
-        
-        .orders-detail {
-            font-size: 6pt;
-            color: #000;
-            margin-top: 2px;
-        }
-        
-        .orders-detail div {
-            margin: 1px 0;
-        }
-        
-        /* Sloupec pro ruční zápis - světle šedé pozadí */
-        .actual-column {
-            background-color: #f5f5f5;
-            min-height: 30px;
-        }
-        
-        .warehouse-details {
-            font-size: 6pt;
-            margin-top: 2px;
-            font-weight: bold;
-        }
-        
-        .summary {
-            margin-top: 15px;
-            border-top: 2px solid #000;
-            padding-top: 8px;
-            break-inside: avoid;
-        }
-        
-        .summary strong {
-            font-size: 9pt;
-        }
-        
-        .footer {
-            margin-top: 15px;
-            border-top: 2px solid #000;
-            padding-top: 8px;
-            break-inside: avoid;
-        }
-        
-        .signature-line {
-            margin-top: 25px;
-            border-top: 2px solid #000;
-            width: 180px;
+        table.picking-list th {
+            background-color: #000;
+            color: #fff;
+            padding: 4px 3px;
             text-align: center;
-            padding-top: 4px;
-            font-size: 7pt;
-        }
-        
-        .page-break {
-            page-break-after: always;
-        }
-        
-        .warning-box {
-            background-color: #f5f5f5;
-            border: 2px solid #000;
-            padding: 8px;
-            margin: 10px 0;
-            font-size: 7pt;
-        }
-        
-        .warning-box strong {
-            color: #000;
-            text-decoration: underline;
-            font-size: 8pt;
-        }
-        
-        .info-notice {
-            background-color: #f0f0f0;
-            border: 2px solid #000;
-            padding: 8px;
-            margin: 10px 0;
-            font-size: 7pt;
-        }
-        
-        .info-notice strong {
-            color: #000;
             font-weight: bold;
             font-size: 8pt;
+            border: 1px solid #000;
+        }
+        
+        table.picking-list td {
+            padding: 3px 3px;
+            font-size: 8pt;
+            border: 1px solid #000;
+        }
+        
+        table.picking-list tbody tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        
+        .col-num {
+            width: 5%;
+            text-align: center;
+            font-weight: bold;
+        }
+        
+        .col-ingredient {
+            width: 55%;
+        }
+        
+        .col-planned {
+            width: 12%;
+            text-align: center;
+        }
+        
+        .col-unit {
+            width: 8%;
+            text-align: center;
+        }
+        
+        .col-actual {
+            width: 20%;
+            background-color: #f0f0f0;
+            text-align: center;
+        }
+        
+        .warehouse-info {
+            font-size: 7pt;
+            color: #555;
+            margin-top: 1px;
         }
     </style>
 </head>
 <body>
-    <div class="header">
-        <h1>🍽️ VÝDEJKA SUROVIN</h1>
-        <div class="header-info">
-            {{ canteen.name }}
-        </div>
-    </div>
-    
-    <div class="info-box">
-        <table>
-            <tr>
-                <td>Jídelna:</td>
-                <td><strong>{{ canteen.name }}</strong></td>
-            </tr>
-            <tr>
-                <td>Období:</td>
-                <td><strong>{{ date_from|date:"d.m.Y" }} - {{ date_to|date:"d.m.Y" }}</strong></td>
-            </tr>
-            <tr>
-                <td>Vygenerováno:</td>
-                <td>{{ generated_at|date:"d.m.Y H:i" }}</td>
-            </tr>
-            <tr>
-                <td>Počet výrobních příkazů:</td>
-                <td>{{ total_orders }}</td>
-            </tr>
-        </table>
-    </div>
-    
-    <div class="warning-box">
-        <strong>⚠ DŮLEŽITÉ:</strong> Po použití surovin vyplňte sloupec "Skutečně vydáno" a předejte kuchařům k potvrzení.
-        Data je nutné zadat zpět do systému pro správné odečtení zásob ze skladu.
-    </div>
-    
-    <div class="info-notice">
-        <strong>ℹ INFO O ZÁSOBÁCH:</strong>
-        <div style="margin-top: 5px; font-size: 9pt;">
-            Dostupnost surovin je kontrolována ve <strong>VŠECH skladech</strong> přidružených k jídelně <strong>{{ canteen.name }}</strong>.
-            U každé suroviny jsou uvedeny sklady a jejich aktuální zásoby.
-        </div>
-    </div>
-    
-    {% if missing_count > 0 or insufficient_count > 0 %}
-    <div class="warning-box" style="border-width: 4px;">
-        <strong>⚠ VAROVÁNÍ O ZÁSOBÁCH:</strong>
-        {% if missing_count > 0 %}
-        <div style="margin-top: 10px;">
-            <strong>✖ Chybí na skladě ({{ missing_count }} položek):</strong>
-            <div style="margin-left: 20px; margin-top: 5px; font-size: 9pt;">
-                Tyto suroviny nejsou dostupné na <strong>žádném skladě</strong> této jídelny!
-                Je nutné je objednat nebo použít náhradní recept.
-                (Označeno symbolem <strong>✖</strong> a silným rámečkem v tabulce)
-            </div>
-        </div>
-        {% endif %}
-        {% if insufficient_count > 0 %}
-        <div style="margin-top: 10px;">
-            <strong>⚠ Nedostatečné množství ({{ insufficient_count }} položek):</strong>
-            <div style="margin-left: 20px; margin-top: 5px; font-size: 9pt;">
-                Celkové dostupné zásoby ze <strong>všech skladů</strong> nepostačují pro plánované množství.
-                Je potřeba dokoupit nebo upravit počet porcí.
-                (Označeno symbolem <strong>⚠</strong> a kurzívou v tabulce)
-            </div>
-        </div>
-        {% endif %}
-    </div>
-    {% endif %}
-    
     {% for date, meals in daily_picking_data %}
-    <div class="page-break"></div>
-    <h2 style="border-bottom: 2px solid #000; padding-bottom: 5px; margin-top: 20px;">
-        📅 {{ date|date:"l d.m.Y" }}
-    </h2>
-    
-    {% for meal in meals %}
-    <div style="margin-top: 20px; margin-bottom: 10px;">
-        <h3 style="margin: 0; background-color: #eee; padding: 5px 10px; border: 1px solid #ccc;">
-            {{ meal.recipe_name }} <span style="font-weight: normal; font-size: 10pt;">({{ meal.portions }} porcí)</span>
-            {% if meal.is_customized %}
-            <span style="background-color: #ff9800; color: #000; padding: 2px 6px; font-size: 9pt; border: 1px solid #000; margin-left: 10px;">✏️ UPRAVENÉ INGREDIENCE</span>
-            {% endif %}
-        </h3>
+    <div class="day-section">
+        <div class="page-header">Jídelna: {{ canteen.name }} — Den: {{ date|date:"l d.m.Y" }}</div>
+        <div class="day-header">📅 {{ date|date:"l d.m.Y" }}</div>
         
-        <table class="ingredients">
-            <thead>
-                <tr>
-                    <th style="width: 5%;">№</th>
-                    <th style="width: 50%;">Surovina</th>
-                    <th style="width: 15%; text-align: center;">Plánováno</th>
-                    <th style="width: 10%; text-align: center;">Jednotka</th>
-                    <th style="width: 20%; text-align: center; background-color: #e8e8e8; color: #000;">Skutečně<br>vydáno</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for item in meal.ingredients %}
-                <tr class="{% if not item.has_stock %}missing{% elif not item.is_sufficient %}insufficient{% endif %}">
-                    <td style="text-align: center; font-weight: bold;">
-                        {% if not item.has_stock %}
-                            ✖ {{ forloop.counter }}
-                        {% elif not item.is_sufficient %}
-                            ⚠ {{ forloop.counter }}
-                        {% else %}
-                            {{ forloop.counter }}
-                        {% endif %}
-                    </td>
-                    <td>
-                        <strong>{{ item.name }}</strong>
-                        {% if item.warehouses_info %}
-                        <div class="warehouse-details">
-                            <small>Skladem: 
-                            {% for wh_name, qty, blocked, available in item.warehouses_info %}
-                                {{ wh_name }} ({{ qty|floatformat:1 }} kg, bloková {{ blocked|floatformat:1 }} kg, dostupné {{ available|floatformat:1 }} kg){% if not forloop.last %}, {% endif %}
-                            {% endfor %}
-                            </small>
-                        </div>
-                        {% endif %}
-                    </td>
-                    <td style="text-align: center; font-weight: bold; font-size: 12pt;">
-                        {{ item.quantity|floatformat:2 }}
-                    </td>
-                    <td style="text-align: center;">
-                        {{ item.unit }}
-                    </td>
-                    <td class="actual-column" style="text-align: center;">
-                        <!-- Prostor pro ruční zápis -->
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-    {% endfor %}
-    {% endfor %}
-    
-    <div class="page-break"></div>
-    <h2 style="border-bottom: 2px solid #000; padding-bottom: 5px; margin-top: 20px;">
-        ∑ Celkový souhrn surovin
-    </h2>
-    
-    <table class="ingredients">
-        <thead>
-            <tr>
-                <th style="width: 5%;">№</th>
-                <th style="width: 50%;">Surovina</th>
-                <th style="width: 15%; text-align: center;">Plánováno</th>
-                <th style="width: 10%; text-align: center;">Jednotka</th>
-                <th style="width: 20%; text-align: center; background-color: #e8e8e8; color: #000;">Skutečně<br>vydáno</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for item in ingredient_totals %}
-            <tr class="{% if not item.has_stock %}missing{% elif not item.is_sufficient %}insufficient{% endif %}">
-                <td style="text-align: center; font-weight: bold;">
-                    {% if not item.has_stock %}
-                        ✖ {{ forloop.counter }}
-                    {% elif not item.is_sufficient %}
-                        ⚠ {{ forloop.counter }}
-                    {% else %}
-                        {{ forloop.counter }}
-                    {% endif %}
-                </td>
-                <td>
-                    <strong>{{ item.ingredient.name }}</strong>
-                    {% if item.warehouses_info %}
-                    <div class="warehouse-details">
-                        <small>Skladem: 
-                        {% for wh_name, qty, blocked, available in item.warehouses_info %}
-                            {{ wh_name }} ({{ qty|floatformat:1 }} kg, bloková {{ blocked|floatformat:1 }} kg, dostupné {{ available|floatformat:1 }} kg){% if not forloop.last %}, {% endif %}
-                        {% endfor %}
-                        </small>
-                    </div>
-                    {% endif %}
-                </td>
-                <td style="text-align: center; font-weight: bold; font-size: 12pt;">
-                    {{ item.planned|floatformat:2 }}
-                </td>
-                <td style="text-align: center;">
-                    {{ item.unit }}
-                </td>
-                <td class="actual-column" style="text-align: center;">
-                    <!-- Prostor pro ruční zápis -->
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-    
-    <div class="summary">
-        <strong>Celkem položek:</strong> {{ ingredient_totals|length }}
-    </div>
-    
-    <div class="footer">
-        <p><strong>Instrukce:</strong></p>
-        <ol>
-            <li>Zkontrolujte dostupnost surovin na skladě</li>
-            <li>Vydat suroviny podle plánovaného množství</li>
-            <li>Do sloupce "Skutečně vydáno" zapište reálné vydané množství</li>
-            <li>Vrátit vyplněný formulář k evidenci do systému</li>
-        </ol>
-        
-        <div style="display: flex; justify-content: space-between; margin-top: 50px;">
-            <div class="signature-line">
-                Vydal (skladník)
+        <div class="meals-container">
+        {% for meal in meals %}
+        <div class="meal-item">
+            <div class="meal-header">
+                {{ meal.recipe_name }} ({{ meal.portions }} porcí)
             </div>
-            <div class="signature-line">
-                Převzal (kuchař)
-            </div>
-            <div class="signature-line">
-                Datum a podpis
-            </div>
+            
+            <table class="picking-list">
+                <thead>
+                    <tr>
+                        <th class="col-num">№</th>
+                        <th class="col-ingredient">Surovina</th>
+                        <th class="col-planned">Plánováno</th>
+                        <th class="col-unit">Jednotka</th>
+                        <th class="col-actual">Skutečně<br>vydáno</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in meal.ingredients %}
+                    <tr>
+                        <td class="col-num">{{ forloop.counter }}</td>
+                        <td class="col-ingredient">
+                            <strong>{{ item.name }}</strong>
+                            {% if item.warehouses_info %}
+                            <div class="warehouse-info">
+                                Skladem: {% for wh_name, qty, blocked, available in item.warehouses_info %}{{ wh_name }} ({{ qty|floatformat:1 }} kg, blok. {{ blocked|floatformat:1 }} kg, dostupné {{ available|floatformat:1 }} kg){% if not forloop.last %}, {% endif %}{% endfor %}
+                            </div>
+                            {% endif %}
+                        </td>
+                        <td class="col-planned">{{ item.quantity|floatformat:2 }}</td>
+                        <td class="col-unit">{{ item.unit }}</td>
+                        <td class="col-actual"></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endfor %}
         </div>
     </div>
-    
-    <div style="margin-top: 30px; font-size: 9pt; color: #666; text-align: center;">
-        Dokument vygenerován systémem správy jídelny | {{ generated_at|date:"d.m.Y H:i:s" }}
-    </div>
+    {% endfor %}
 </body>
 </html>
