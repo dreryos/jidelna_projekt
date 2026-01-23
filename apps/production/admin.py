@@ -81,7 +81,9 @@ class ProductionOrderAdmin(admin.ModelAdmin):
 
     def get_queryset(self, request):
         # Optimalizace pro načítání souvisejících objektů
-        return super().get_queryset(request).select_related('recipe', 'canteen', 'menu_plan').prefetch_related('ingredient_overrides')
+        return (super().get_queryset(request)
+            .select_related('recipe', 'canteen', 'menu_plan')
+            .prefetch_related('ingredient_overrides', 'portion_variants'))
     
     def customization_indicator(self, obj):
         """Zobrazí ikonu pokud má jídlo upravené ingredience"""
