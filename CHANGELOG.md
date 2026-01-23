@@ -7,6 +7,17 @@ a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+### Added
+- **Soft delete pro suroviny** (23.1.2025)
+  - Přidána podpora pro deaktivaci surovin místo trvalého smazání
+  - Nová pole v modelu `Ingredient`: `is_active`, `deactivated_at`, `deactivated_by`
+  - Metoda `can_be_deactivated()` kontroluje, zda lze surovinu bezpečně deaktivovat (kontrola skladů, výdejek, příjmů, inventur, převodek)
+  - Metody `deactivate(user)` a `activate()` pro správu stavu suroviny
+  - Admin akce pro hromadnou deaktivaci/aktivaci surovin
+  - Deaktivované suroviny se nezobrazují v běžných seznamech a autocomplete polích, ale zůstávají v historických záznamech
+  - Ochrana historických dat: archivované výdejky, dokončené inventury a potvrzené příjmy zachovávají odkazy na deaktivované suroviny
+  - Přidáno 9 testů pokrývajících všechny aspekty soft delete
+
 ### Changed
 - **PDF formát výdejek a reportů objednávek**: Změna z A4 landscape na A5 portrait
   - Původní změna na A4 landscape s CSS columns způsobovala timeout a problémy v Docker prostředí
@@ -17,6 +28,12 @@ a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
   - Jednodušší CSS bez columns = rychlejší generování a menší paměťová náročnost
 
 ### Fixed
+- **Chyba 500 při mazání surovin** (23.1.2025)
+  - Přidáno ošetření `ProtectedError` v `IngredientAdmin`
+  - Uživatelsky přívětivé chybové hlášky místo chyby serveru
+  - Metody `delete_model` a `delete_queryset` ošetřují případy, kdy surovina nemůže být smazána kvůli existujícím vztahům
+  - Při pokusu o smazání se nyní zobrazí detailní informace o tom, které záznamy brání smazání (výdejky, příjmy zboží, inventury atd.)
+  - Přidány testy pro ověření správného chování
 - **XML import šablon jídelníčku**: Opravena chyba "UNIQUE constraint failed: core_ingredient.name"
   - Nahrazeno `bulk_create` za `get_or_create` při vytváření ingrediencí během XML importu
   - Import nyní správně používá existující suroviny místo pokusu o vytvoření duplicit
@@ -28,6 +45,7 @@ a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
   - Přidána automatická kontrola a regenerace picking list položek s nulovými množstvími
   - Přidána automatická tvorba výchozí varianty porcí pro staré záznamy bez variant
   - Zajištěno, že množství surovin se počítá správně na základě všech variant porcí
+
 - **Docker PDF generování timeout**: Opraveny problémy s generováním PDF v Docker prostředí
   - Přidány chybějící fonty do Docker image (fontconfig, ttf-dejavu, ttf-liberation, font-noto)
   - Zvýšen gunicorn timeout z 30s na 120s pro náročnější operace

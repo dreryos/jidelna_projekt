@@ -7,7 +7,7 @@ Tento soubor sleduje hlavní úkoly, bugy a nápady pro projekt. Pro detailněj�
 ## 🚀 Priorita / Urgentní
 *Věci, které je třeba vyřešit co nejdříve (např. blokující chyby).*
 
-
+- [ ] Modul bufet a odpisy zbylých nejídel
 
 ---
 
@@ -15,6 +15,9 @@ Tento soubor sleduje hlavní úkoly, bugy a nápady pro projekt. Pro detailněj�
 *Nalezené chyby, které neblokují hlavní funkčnost, ale je třeba je opravit.*
 
 - [ ] Šablony k manuálnímu příjmu zboží - nereflektují nastavení v adminu, jací jsou dostupní dodavatelé a co dodávají.
+- [ ] V manuálním příjmu zboží dát DPH dříve než než ceny - upozornění že po změně DPH znovu zadat ceny.
+- [ ] Při vytvoření nové suroviny se nezobrazuje v autocomplete dokud neobnovím stránku
+- [ ] Po uložení jídelníčku se nezobrazí v tabulce - až po refresh
 
 ---
 
@@ -49,6 +52,12 @@ Tento soubor sleduje hlavní úkoly, bugy a nápady pro projekt. Pro detailněj�
 ---
 
 ## ✅ Hotovo
+
+- [x] Mazání surovin - opraveno ošetření chyby 500 (23.1.2025)
+  - Přidáno ošetření `ProtectedError` v `IngredientAdmin`
+  - Uživatelsky přívětivé chybové hlášky v češtině
+  - Testy pro ověření funkcionality
+  - Dokumentace v `docs/fix_ingredient_deletion.md`
 *Sem přesouvejte nedávno dokončené úkoly, abyste měli přehled o postupu.*
 
 - [x] Nastavit základní strukturu projektu.

@@ -9,7 +9,7 @@ from django.urls import reverse_lazy
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.forms import inlineformset_factory
 from django.core.exceptions import ObjectDoesNotExist
-from django.db.models import Model
+from django.db.models import Model, ProtectedError
 from typing import Type, Any
 from functools import wraps
 
@@ -273,6 +273,15 @@ class IngredientListView(LoginRequiredMixin, ListView):
 	template_name = 'core/ingredient_list.html'
 	context_object_name = 'ingredients'
 	ordering = ['name']
+	
+	def get_queryset(self):
+		"""Filtrovat pouze aktivní suroviny pokud není požadováno jinak"""
+		queryset = super().get_queryset()
+		# Zobrazit i neaktivní pouze když je explicitně vyžádáno
+		show_inactive = self.request.GET.get('show_inactive', 'false') == 'true'
+		if not show_inactive:
+			queryset = queryset.filter(is_active=True)
+		return queryset
 
 
 class IngredientCreateView(LoginRequiredMixin, CreateView):
@@ -293,6 +302,51 @@ class IngredientDeleteView(LoginRequiredMixin, DeleteView):
 	model = Ingredient
 	template_name = 'core/ingredient_confirm_delete.html'
 	success_url = reverse_lazy('core:ingredient_list')
+	
+	def post(self, request, *args, **kwargs):
+		"""
+		Přepsaná metoda pro ošetření ProtectedError při mazání.
+		Zobrazí uživatelsky přívětivou chybovou hlášku.
+		"""
+		self.object = self.get_object()
+		
+		try:
+			return super().post(request, *args, **kwargs)
+		except ProtectedError as e:
+			# Zjistíme, které objekty brání smazání
+			protected_objects = e.protected_objects
+			
+			# Vytvoříme seznam typů objektů
+			object_types = {}
+			for protected_obj in protected_objects:
+				obj_type = type(protected_obj).__name__
+				if obj_type in object_types:
+					object_types[obj_type] += 1
+				else:
+					object_types[obj_type] = 1
+			
+			# Vytvoříme čitelnou zprávu
+			items_list = []
+			for obj_type, count in object_types.items():
+				# Přeložíme názvy modelů do češtiny
+				translations = {
+					'PickingList': 'výdejky',
+					'GoodsReceiptItem': 'položky příjmu zboží',
+					'InventoryVerificationItem': 'položky inventury',
+					'StockTransferItem': 'položky převodky',
+					'ProductionOrderIngredientOverride': 'úpravy surovin ve výrobních příkazech'
+				}
+				translated_name = translations.get(obj_type, obj_type)
+				items_list.append(f"{count}× {translated_name}")
+			
+			message = (
+				f'Nelze smazat surovinu "{self.object.name}", protože je použita v následujících záznamech: '
+				f'{", ".join(items_list)}. '
+				f'Nejprve odstraňte nebo upravte tyto záznamy.'
+			)
+			
+			messages.error(request, message)
+			return redirect('core:ingredient_list')
 
 
 from django.views.decorators.http import require_POST

@@ -4,6 +4,8 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db.models.signals import post_save
 from django.dispatch import receiver
+from django.core.exceptions import ValidationError
+from django.utils import timezone
 
 from apps.canteens.models import Canteen
 from apps.core.constants import VAT_RATE_CHOICES
@@ -36,7 +38,7 @@ class Category(models.Model):
 
 
 class Ingredient(models.Model):
-    """Surovina s podporou konverze jednotek"""
+    """Surovina s podporou konverze jednotek a soft delete"""
     name = models.CharField(max_length=100, unique=True, verbose_name="Název suroviny")
     
     # Původní jednotka (nyní používáno jako base_unit)
@@ -50,7 +52,28 @@ class Ingredient(models.Model):
     conversion_factor = models.DecimalField(max_digits=10, decimal_places=3, default=Decimal('1000'), 
                                            verbose_name="Konverzní faktor",
                                            help_text="Koeficient převodu z receptové na skladovou jednotku (např. 1000 pro g→kg)")
-
+    
+    # Soft delete - archivace
+    is_active = models.BooleanField(
+        default=True,
+        verbose_name="Aktivní",
+        help_text="Deaktivované suroviny se nezobrazují v seznamech, ale zůstávají v historických datech",
+        db_index=True
+    )
+    deactivated_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Deaktivováno dne"
+    )
+    deactivated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='deactivated_ingredients',
+        verbose_name="Deaktivoval"
+    )
+    
     def convert_to_base_unit(self, quantity_in_recipe_unit):
         """
         Převede množství z receptové jednotky na skladovou jednotku.
@@ -64,9 +87,96 @@ class Ingredient(models.Model):
         Např: 1.5kg -> 1500g (při conversion_factor=1000)
         """
         return quantity_in_base_unit * self.conversion_factor
+    
+    def can_be_deactivated(self):
+        """
+        Kontroluje, zda surovina může být deaktivována.
+        Vrací (can_deactivate: bool, reason: str)
+        """
+        # Import zde aby se zabránilo circular import
+        from apps.inventory.models import StockItem, GoodsReceipt, InventoryVerification
+        from apps.production.models import PickingList
+        
+        # Kontrola aktivních výdejek (nedokončené/nearchivované)
+        active_picking_lists = PickingList.objects.filter(
+            ingredient=self,
+            document__archived=False
+        )
+        if active_picking_lists.exists():
+            count = active_picking_lists.count()
+            return False, f"Surovina je použita v {count} aktivních výdejkách"
+        
+        # Kontrola otevřených příjmů zboží (DRAFT status)
+        draft_receipts = self.goodsreceiptitem_set.filter(
+            goods_receipt__status='DRAFT'
+        )
+        if draft_receipts.exists():
+            count = draft_receipts.count()
+            return False, f"Surovina je použita v {count} rozpracovaných příjmech zboží"
+        
+        # Kontrola probíhajících inventur
+        active_inventories = self.inventoryverificationitem_set.filter(
+            verification__status__in=[
+                InventoryVerification.Status.DRAFT,
+                InventoryVerification.Status.IN_PROGRESS
+            ]
+        )
+        if active_inventories.exists():
+            count = active_inventories.count()
+            return False, f"Surovina je součástí {count} probíhajících inventur"
+        
+        # Kontrola aktuálních skladových zásob
+        stock_with_quantity = StockItem.objects.filter(
+            ingredient=self,
+            quantity__gt=0
+        )
+        if stock_with_quantity.exists():
+            total_quantity = sum(item.quantity for item in stock_with_quantity)
+            warehouses = ', '.join(item.warehouse.name for item in stock_with_quantity[:3])
+            if stock_with_quantity.count() > 3:
+                warehouses += '...'
+            return False, f"Surovina má na skladě {total_quantity} {self.base_unit} ({warehouses})"
+        
+        # Kontrola probíhajících převodek
+        active_transfers = self.stocktransferitem_set.filter(
+            stock_transfer__status__in=['PENDING', 'IN_TRANSIT']
+        )
+        if active_transfers.exists():
+            count = active_transfers.count()
+            return False, f"Surovina je součástí {count} aktivních převodek"
+        
+        return True, "Surovinu lze deaktivovat"
+    
+    def deactivate(self, user):
+        """
+        Deaktivuje surovinu - skryje ji z běžných seznamů, ale zachová historická data.
+        
+        Args:
+            user: Uživatel, který provádí deaktivaci
+        
+        Raises:
+            ValueError: Pokud surovina nemůže být deaktivována
+        """
+        can_deactivate, reason = self.can_be_deactivated()
+        
+        if not can_deactivate:
+            raise ValueError(f"Surovinu nelze deaktivovat: {reason}")
+        
+        self.is_active = False
+        self.deactivated_at = timezone.now()
+        self.deactivated_by = user
+        self.save(update_fields=['is_active', 'deactivated_at', 'deactivated_by'])
+    
+    def activate(self):
+        """Reaktivuje dříve deaktivovanou surovinu."""
+        self.is_active = True
+        self.deactivated_at = None
+        self.deactivated_by = None
+        self.save(update_fields=['is_active', 'deactivated_at', 'deactivated_by'])
 
     def __str__(self):
-        return f"{self.name} ({self.base_unit})"
+        status = "" if self.is_active else " [NEAKTIVNÍ]"
+        return f"{self.name} ({self.base_unit}){status}"
 
     class Meta:
         verbose_name = "Surovina"

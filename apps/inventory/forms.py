@@ -107,6 +107,9 @@ class GoodsReceiptItemForm(forms.ModelForm):
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        # Filtrovat pouze aktivní suroviny
+        from apps.core.models import Ingredient
+        self.fields['ingredient'].queryset = Ingredient.objects.filter(is_active=True)
         # Nastavení choices pro DPH sazbu
         self.fields['vat_rate'] = forms.ChoiceField(
             choices=VAT_RATE_CHOICES,
@@ -216,6 +219,12 @@ class InventoryVerificationItemForm(forms.ModelForm):
             'counted_quantity': 'Spočítané množství',
             'notes': 'Poznámka',
         }
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Filtrovat pouze aktivní suroviny
+        from apps.core.models import Ingredient
+        self.fields['ingredient'].queryset = Ingredient.objects.filter(is_active=True)
 
 
 # Formset pro položky inventury
@@ -328,6 +337,10 @@ class StockTransferItemForm(forms.ModelForm):
     def __init__(self, *args, warehouse_from=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.warehouse_from = warehouse_from
+        
+        # Filtrovat pouze aktivní suroviny
+        from apps.core.models import Ingredient
+        self.fields['ingredient'].queryset = Ingredient.objects.filter(is_active=True)
         
         # Pokud máme instance a warehouse_from, nastavíme dostupné množství
         if self.instance.pk and self.instance.ingredient and warehouse_from:

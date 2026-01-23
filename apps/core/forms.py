@@ -23,6 +23,11 @@ class RecipeIngredientForm(forms.ModelForm):
         help_texts = {
             'notes': '',  # Help text moved to table header
         }
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Filtrovat pouze aktivní suroviny v autocomplete
+        self.fields['ingredient'].queryset = Ingredient.objects.filter(is_active=True)
 
 
 class RecipeForm(forms.ModelForm):
