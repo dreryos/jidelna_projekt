@@ -67,6 +67,25 @@ class GoodsReceiptForm(forms.ModelForm):
         return cleaned_data
 
 
+class StockItemForm(forms.ModelForm):
+    """Formulář pro skladovou položku (admin).
+    
+    Pole vat_rate a price_without_vat jsou readonly - určují se automaticky
+    z příjmů zboží (GoodsReceipt.confirm()).
+    """
+
+    class Meta:
+        model = StockItem
+        fields = ['ingredient', 'warehouse', 'quantity', 'quantity_blocked', 'price', 'vat_rate', 'price_without_vat']
+        widgets = {
+            'ingredient': forms.Select(attrs={'class': 'form-select'}),
+            'warehouse': forms.Select(attrs={'class': 'form-select'}),
+            'quantity': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.001', 'min': '0'}),
+            'quantity_blocked': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.001', 'min': '0'}),
+            'price': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'min': '0'}),
+        }
+
+
 class GoodsReceiptItemForm(forms.ModelForm):
     """Formulář pro jednu položku příjmu zboží."""
     
@@ -112,19 +131,9 @@ class GoodsReceiptItemForm(forms.ModelForm):
         from apps.core.models import Ingredient
         self.fields['ingredient'].queryset = Ingredient.objects.filter(is_active=True)
         # Nastavení choices pro DPH sazbu
-        # Set VAT field using TypedChoiceField so value is coerced to Decimal
-        initial_vat = Decimal('12')
-        try:
-            if self.instance and getattr(self.instance, 'vat_rate', None) is not None:
-                initial_vat = self.instance.vat_rate
-        except Exception:
-            # Fallback to default
-            initial_vat = Decimal('12')
-
         self.fields['vat_rate'] = forms.TypedChoiceField(
-            choices=[(str(choice[0]), choice[1]) for choice in VAT_RATE_CHOICES],
+            choices=VAT_RATE_CHOICES,
             coerce=Decimal,
-            initial=str(initial_vat),
             required=True,
             label='DPH %',
             widget=forms.Select(attrs={
@@ -133,7 +142,11 @@ class GoodsReceiptItemForm(forms.ModelForm):
                 'onchange': 'calculateVAT(this)'
             })
         )
-        # Note: we store choices as string values for HTML selects and coerce back to Decimal in clean() or via coerce function.
+        # Zachovat DPH z instance při editaci, jinak výchozí 12%
+        if self.instance and getattr(self.instance, 'vat_rate', None) is not None:
+            self.initial['vat_rate'] = self.instance.vat_rate
+        else:
+            self.initial.setdefault('vat_rate', Decimal('12'))
         # Označení povinných polí
         for field_name in ['ingredient', 'warehouse', 'quantity', 'vat_rate']:
             if field_name in self.fields:
@@ -152,8 +165,8 @@ class GoodsReceiptItemForm(forms.ModelForm):
         if vat_rate in (None, ''):
             return cleaned_data
 
-        # vat_rate may already be Decimal if TypedChoiceField coerce is used
-        vat_rate = Decimal(vat_rate)
+        if isinstance(vat_rate, str):
+            vat_rate = Decimal(vat_rate)
         cleaned_data['vat_rate'] = vat_rate
 
         if price_without_vat is None and price_with_vat is None:

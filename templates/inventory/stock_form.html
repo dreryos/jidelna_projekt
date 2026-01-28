@@ -24,6 +24,24 @@
           {% csrf_token %}
           {% bootstrap_form form %}
 
+          {% if form.instance.pk %}
+          <div class="alert alert-info mt-3">
+            <h6 class="mb-2"><i class="fas fa-info-circle me-2"></i>Automaticky vypočítané hodnoty</h6>
+            <div class="row">
+              <div class="col-md-6">
+                <strong>DPH:</strong> {{ form.instance.vat_rate }}%
+              </div>
+              <div class="col-md-6">
+                <strong>Cena bez DPH:</strong> {{ form.instance.price_without_vat }} Kč
+              </div>
+            </div>
+            <small class="text-muted mt-2 d-block">
+              <i class="fas fa-lightbulb me-1"></i>
+              Tyto hodnoty se nastavují automaticky při potvrzení příjmu zboží a nelze je ručně měnit.
+            </small>
+          </div>
+          {% endif %}
+
           <div class="d-flex justify-content-between mt-4">
             <a href="{% url 'inventory:stock_list' %}" class="btn btn-secondary">
               <i class="fas fa-times me-2"></i>Zrušit
@@ -40,55 +58,5 @@
 {% endblock %}
 
 {% block extra_js %}
-<script>
-    document.addEventListener('DOMContentLoaded', function() {
-        const priceInput = document.getElementById('id_price');
-        const priceWithoutVatInput = document.getElementById('id_price_without_vat');
-        const vatRateInput = document.getElementById('id_vat_rate');
-
-        function parseLocaleFloat(value) {
-            if (!value) return 0;
-            return parseFloat(value.replace(',', '.').replace(/\s/g, ''));
-        }
-
-        function formatLocaleFloat(value) {
-             return value.toFixed(2).replace('.', ',');
-        }
-
-        function updateFromPrice() {
-            const price = parseLocaleFloat(priceInput.value);
-            const vatRate = parseLocaleFloat(vatRateInput.value);
-            const vatMultiplier = 1 + (vatRate / 100);
-            
-            if (vatMultiplier > 0) {
-                const priceWithoutVat = price / vatMultiplier;
-                priceWithoutVatInput.value = formatLocaleFloat(priceWithoutVat);
-            }
-        }
-
-        function updateFromPriceWithoutVat() {
-            const priceWithoutVat = parseLocaleFloat(priceWithoutVatInput.value);
-            const vatRate = parseLocaleFloat(vatRateInput.value);
-            const vatMultiplier = 1 + (vatRate / 100);
-            
-            const price = priceWithoutVat * vatMultiplier;
-            priceInput.value = formatLocaleFloat(price);
-        }
-
-        if (priceInput && priceWithoutVatInput && vatRateInput) {
-            // Initial calculation if needed (e.g. if one is missing)
-            if (priceInput.value && !priceWithoutVatInput.value) {
-                updateFromPrice();
-            }
-
-            priceInput.addEventListener('input', updateFromPrice);
-            
-            vatRateInput.addEventListener('change', function() {
-                 updateFromPrice();
-            });
-            
-            priceWithoutVatInput.addEventListener('input', updateFromPriceWithoutVat);
-        }
-    });
-</script>
+<!-- JavaScript pro výpočet DPH není potřeba - pole jsou readonly -->
 {% endblock %}

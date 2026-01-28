@@ -634,6 +634,49 @@ class GoodsReceiptTest(TestCase):
         instances = formset.save()
         item.refresh_from_db()
         self.assertEqual(item.vat_rate, Decimal('0'))
+
+    def test_admin_stockitem_change_persists_vat_rate(self):
+        """Simulate admin change of StockItem and ensure vat_rate persists"""
+        from django.contrib.auth.models import User
+        from django.test import Client
+        from apps.inventory.models import StockItem
+
+        # create superuser
+        admin_user = User.objects.create_superuser('admin', 'admin@example.com', 'password')
+        client = Client()
+        client.login(username='admin', password='password')
+
+        # Create stock item
+        stock_item = StockItem.objects.create(
+            ingredient=self.ingredient1,
+            warehouse=self.warehouse,
+            quantity=Decimal('5.000'),
+            price=Decimal('50.00'),
+            vat_rate=Decimal('12')
+        )
+
+        # GET the admin change form
+        change_url = f"/admin/inventory/stockitem/{stock_item.pk}/change/"
+        resp = client.get(change_url)
+        self.assertEqual(resp.status_code, 200)
+
+        # Prepare POST data: change vat_rate to 0 and clear price_without_vat
+        post_data = {
+            'ingredient': str(stock_item.ingredient.id),
+            'warehouse': str(stock_item.warehouse.id),
+            'quantity': '5.000',
+            'price': '50.00',
+            'vat_rate': '0',
+            'price_without_vat': '',
+        }
+
+        # Include admin save param
+        post_data['_save'] = 'Save'
+        resp = client.post(change_url, post_data, follow=True)
+        self.assertEqual(resp.status_code, 200)
+
+        stock_item.refresh_from_db()
+        self.assertEqual(stock_item.vat_rate, Decimal('0'))
     
     def test_price_change_tracking_through_goods_receipt(self):
         """Test that price changes are tracked through goods receipts"""

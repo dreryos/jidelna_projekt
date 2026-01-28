@@ -482,7 +482,8 @@ class GoodsReceiptItem(models.Model):
     vat_rate = models.DecimalField(
         max_digits=5,
         decimal_places=2,
-        default=Decimal('21.00'),
+        choices=VAT_RATE_CHOICES,
+        default=Decimal('12.00'),
         verbose_name="Sazba DPH (%)"
     )
     vat_amount = models.DecimalField(

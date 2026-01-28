@@ -5,17 +5,19 @@ from .models import (
     InventoryVerification, InventoryVerificationItem, StockTransfer, StockTransferItem,
     Supplier, SupplierIngredientTemplate, StockWriteOff, StockWriteOffItem
 )
-from .forms import VAT_RATE_CHOICES
+from .forms import VAT_RATE_CHOICES, StockItemForm
 
 # Admin pro skladové položky. Zde se nastavuje vyhledávání a filtr podle skladu.
 # `autocomplete_fields` zlepšují UX při výběru surovin nebo skladu.
 
 @admin.register(StockItem)
 class StockItemAdmin(admin.ModelAdmin):
-    list_display = ('ingredient', 'warehouse', 'quantity', 'price')
+    list_display = ('ingredient', 'warehouse', 'quantity', 'price', 'vat_rate')
     list_filter = ('warehouse',)
     search_fields = ('ingredient__name', 'warehouse__name')
     autocomplete_fields = ['ingredient', 'warehouse']
+    readonly_fields = ['vat_rate', 'price_without_vat']
+    form = StockItemForm
 
 
 @admin.register(IngredientPriceHistory)
@@ -37,9 +39,10 @@ class GoodsReceiptItemInline(admin.TabularInline):
     autocomplete_fields = ['ingredient', 'warehouse']
     
     def formfield_for_choice_field(self, db_field, request, **kwargs):
-        """Nastavení voleb pro DPH sazbu (bez pevného initial, aby se neresetovala hodnota při editaci)"""
+        """Nastavení výchozí DPH sazby na 12%"""
         if db_field.name == 'vat_rate':
             kwargs['choices'] = VAT_RATE_CHOICES
+            kwargs['initial'] = Decimal('12')
         return super().formfield_for_choice_field(db_field, request, **kwargs)
 
 

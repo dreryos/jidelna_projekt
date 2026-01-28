@@ -127,7 +127,7 @@ class StockListView(CanteenAccessMixin, ListView):
 
 class StockUpdateView(LoginRequiredMixin, UpdateView):
     model = StockItem
-    fields = ['ingredient', 'warehouse', 'quantity', 'price', 'vat_rate', 'price_without_vat']
+    fields = ['ingredient', 'warehouse', 'quantity', 'price']
     template_name = 'inventory/stock_form.html'
     success_url = reverse_lazy('inventory:stock_list')
     
