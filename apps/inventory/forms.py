@@ -112,9 +112,19 @@ class GoodsReceiptItemForm(forms.ModelForm):
         from apps.core.models import Ingredient
         self.fields['ingredient'].queryset = Ingredient.objects.filter(is_active=True)
         # Nastavení choices pro DPH sazbu
-        self.fields['vat_rate'] = forms.ChoiceField(
-            choices=VAT_RATE_CHOICES,
-            initial=Decimal('12'),  # Výchozí 12%
+        # Set VAT field using TypedChoiceField so value is coerced to Decimal
+        initial_vat = Decimal('12')
+        try:
+            if self.instance and getattr(self.instance, 'vat_rate', None) is not None:
+                initial_vat = self.instance.vat_rate
+        except Exception:
+            # Fallback to default
+            initial_vat = Decimal('12')
+
+        self.fields['vat_rate'] = forms.TypedChoiceField(
+            choices=[(str(choice[0]), choice[1]) for choice in VAT_RATE_CHOICES],
+            coerce=Decimal,
+            initial=str(initial_vat),
             required=True,
             label='DPH %',
             widget=forms.Select(attrs={
@@ -123,6 +133,7 @@ class GoodsReceiptItemForm(forms.ModelForm):
                 'onchange': 'calculateVAT(this)'
             })
         )
+        # Note: we store choices as string values for HTML selects and coerce back to Decimal in clean() or via coerce function.
         # Označení povinných polí
         for field_name in ['ingredient', 'warehouse', 'quantity', 'vat_rate']:
             if field_name in self.fields:
@@ -141,7 +152,9 @@ class GoodsReceiptItemForm(forms.ModelForm):
         if vat_rate in (None, ''):
             return cleaned_data
 
+        # vat_rate may already be Decimal if TypedChoiceField coerce is used
         vat_rate = Decimal(vat_rate)
+        cleaned_data['vat_rate'] = vat_rate
 
         if price_without_vat is None and price_with_vat is None:
             raise ValidationError("Zadejte cenu bez DPH nebo cenu s DPH.")

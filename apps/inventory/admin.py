@@ -37,10 +37,9 @@ class GoodsReceiptItemInline(admin.TabularInline):
     autocomplete_fields = ['ingredient', 'warehouse']
     
     def formfield_for_choice_field(self, db_field, request, **kwargs):
-        """Nastavení výchozí DPH sazby na 12%"""
+        """Nastavení voleb pro DPH sazbu (bez pevného initial, aby se neresetovala hodnota při editaci)"""
         if db_field.name == 'vat_rate':
             kwargs['choices'] = VAT_RATE_CHOICES
-            kwargs['initial'] = Decimal('12')
         return super().formfield_for_choice_field(db_field, request, **kwargs)
 
 

@@ -550,6 +550,90 @@ class GoodsReceiptTest(TestCase):
         # Try to confirm again
         with self.assertRaises(ValueError):
             goods_receipt.confirm()
+
+    def test_goods_receipt_item_vat_rate_form_preserves_and_saves(self):
+        """Test that editing a GoodsReceiptItem via its form preserves and saves vat_rate"""
+        from apps.inventory.models import GoodsReceipt, GoodsReceiptItem
+        from apps.inventory.forms import GoodsReceiptItemForm
+
+        goods_receipt = GoodsReceipt.objects.create(
+            warehouse=self.warehouse,
+            receipt_number='GR-002',
+            receipt_date=timezone.now().date(),
+            created_by=self.user
+        )
+
+        item = GoodsReceiptItem.objects.create(
+            goods_receipt=goods_receipt,
+            ingredient=self.ingredient1,
+            warehouse=self.warehouse,
+            quantity=Decimal('2.000'),
+            price=Decimal('20.00'),
+            vat_rate=Decimal('21')
+        )
+
+        # Initialize form for existing instance
+        form = GoodsReceiptItemForm(instance=item)
+        # The form initial should reflect instance value (as string in select)
+        self.assertTrue(str(Decimal('21')) in str(form.initial.get('vat_rate') or form['vat_rate']))
+
+        # Now submit an edit changing the vat_rate to 12
+        data = {
+            'ingredient': str(item.ingredient.id),
+            'warehouse': str(self.warehouse.id),
+            'quantity': '2.000',
+            'price': '20.00',
+            'vat_rate': '12',
+            'notes': ''
+        }
+        form = GoodsReceiptItemForm(data, instance=item)
+        self.assertTrue(form.is_valid(), msg=form.errors)
+        saved = form.save()
+        saved.refresh_from_db()
+        self.assertEqual(saved.vat_rate, Decimal('12'))
+
+    def test_goods_receipt_item_vat_rate_saved_in_formset(self):
+        """Test that changing vat_rate via formset persists the change"""
+        from apps.inventory.models import GoodsReceipt, GoodsReceiptItem
+        from apps.inventory.forms import GoodsReceiptItemFormSet
+
+        goods_receipt = GoodsReceipt.objects.create(
+            warehouse=self.warehouse,
+            receipt_number='GR-003',
+            receipt_date=timezone.now().date(),
+            created_by=self.user
+        )
+
+        item = GoodsReceiptItem.objects.create(
+            goods_receipt=goods_receipt,
+            ingredient=self.ingredient1,
+            warehouse=self.warehouse,
+            quantity=Decimal('1.000'),
+            price=Decimal('10.00'),
+            vat_rate=Decimal('21')
+        )
+
+        # Build formset POST-like data to change vat_rate to 0
+        data = {
+            'items-TOTAL_FORMS': '1',
+            'items-INITIAL_FORMS': '1',
+            'items-MIN_NUM_FORMS': '1',
+            'items-MAX_NUM_FORMS': '100',
+            'items-0-id': str(item.id),
+            'items-0-ingredient': str(item.ingredient.id),
+            'items-0-warehouse': str(self.warehouse.id),
+            'items-0-quantity': '1.000',
+            'items-0-price_without_vat': '',
+            'items-0-price': '10.00',
+            'items-0-vat_rate': '0',
+            'items-0-notes': ''
+        }
+
+        formset = GoodsReceiptItemFormSet(data, instance=goods_receipt)
+        self.assertTrue(formset.is_valid(), msg=formset.errors)
+        instances = formset.save()
+        item.refresh_from_db()
+        self.assertEqual(item.vat_rate, Decimal('0'))
     
     def test_price_change_tracking_through_goods_receipt(self):
         """Test that price changes are tracked through goods receipts"""
