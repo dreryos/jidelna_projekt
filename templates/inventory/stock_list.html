@@ -62,37 +62,72 @@
       <div class="row align-items-end">
         <div class="col-md-10">
           <label class="form-label"><i class="fas fa-filter me-1"></i>Filtrovat podle skladu:</label>
-          <div class="d-flex flex-wrap gap-2">
-            <div class="form-check">
-              <input class="form-check-input" type="checkbox" id="selectAll" 
-                     {% if not selected_warehouses %}checked{% endif %}>
-              <label class="form-check-label fw-bold" for="selectAll">
-                Všechny sklady
-              </label>
-            </div>
-            {% for warehouse in warehouses %}
-            <div class="form-check">
-              <input class="form-check-input warehouse-checkbox" type="checkbox" 
-                     name="warehouse" value="{{ warehouse.id }}" 
-                     id="warehouse{{ warehouse.id }}"
-                     {% if warehouse.id|stringformat:"s" in selected_warehouses %}checked{% endif %}>
-              <label class="form-check-label" for="warehouse{{ warehouse.id }}">
-                {{ warehouse.name }} <small class="text-muted">({{ warehouse.canteen.name }})</small>
-                {% if warehouse.is_locked %}
-                  <span class="badge bg-warning text-dark ms-1">
-                    <i class="fas fa-lock me-1"></i>Zamčeno
-                  </span>
-                {% endif %}
-                {% if warehouse.is_transit_warehouse %}
-                  <span class="badge bg-info text-dark ms-1">
-                    <i class="fas fa-truck me-1"></i>Mezisklad
-                  </span>
-                {% endif %}
-              </label>
+          
+          <!-- Všechny sklady checkbox -->
+          <div class="form-check mb-2">
+            <input class="form-check-input" type="checkbox" id="selectAll" 
+                   {% if not selected_warehouses %}checked{% endif %}>
+            <label class="form-check-label fw-bold" for="selectAll">
+              <i class="fas fa-check-double me-1"></i>Všechny sklady
+            </label>
+          </div>
+          
+          <!-- Seskupení skladů podle lokace ve sloupcích -->
+          <div class="row">
+            {% for location, location_warehouses in grouped_warehouses.items %}
+            <div class="col-md-4 col-lg-3 col-xl-2 mb-3">
+              <div class="card h-100">
+                <div class="card-header bg-light">
+                  <h6 class="mb-0">
+                    <i class="fas fa-map-marker-alt me-2"></i>
+                    <strong>{{ location }}</strong>
+                    <span class="badge bg-secondary ms-2">{{ location_warehouses|length }}</span>
+                  </h6>
+                </div>
+                <div class="card-body p-2">
+                  <div class="d-flex flex-column gap-1">
+                    {% for warehouse in location_warehouses %}
+                    <div class="form-check">
+                      <input class="form-check-input warehouse-checkbox location-{{ forloop.parentloop.counter }}" 
+                             type="checkbox" 
+                             name="warehouse" value="{{ warehouse.id }}" 
+                             id="warehouse{{ warehouse.id }}"
+                             {% if warehouse.id|stringformat:"s" in selected_warehouses %}checked{% endif %}>
+                      <label class="form-check-label small" for="warehouse{{ warehouse.id }}">
+                        {% with parts=warehouse.name|split:' - ' %}
+                          {{ parts|slice:"1:"|join:" - " }}
+                        {% endwith %}
+                        {% if warehouse.is_locked %}
+                          <span class="badge bg-warning text-dark ms-1">
+                            <i class="fas fa-lock"></i>
+                          </span>
+                        {% endif %}
+                        {% if warehouse.is_transit_warehouse %}
+                          <span class="badge bg-info text-dark ms-1">
+                            <i class="fas fa-truck"></i>
+                          </span>
+                        {% endif %}
+                      </label>
+                    </div>
+                    {% endfor %}
+                  </div>
+                </div>
+                <div class="card-footer bg-transparent p-2">
+                  <div class="d-flex gap-1">
+                    <button type="button" class="btn btn-sm btn-outline-primary flex-fill select-location" data-location="{{ forloop.counter }}">
+                      <i class="fas fa-check-square"></i>
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary flex-fill deselect-location" data-location="{{ forloop.counter }}">
+                      <i class="fas fa-square"></i>
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
             {% endfor %}
           </div>
-          <div class="mt-2">
+          
+          <div class="mt-3">
             <div class="form-check">
               <input class="form-check-input" type="checkbox" name="show_transit" id="show_transit" value="1"
                      {% if show_transit %}checked{% endif %}>
@@ -127,6 +162,30 @@
       document.getElementById('selectAll').checked = allChecked;
     });
   });
+  
+  // Tlačítka "Vybrat vše" pro lokaci
+  document.querySelectorAll('.select-location').forEach(btn => {
+    btn.addEventListener('click', function() {
+      const location = this.dataset.location;
+      document.querySelectorAll(`.location-${location}`).forEach(cb => cb.checked = true);
+      updateSelectAllCheckbox();
+    });
+  });
+  
+  // Tlačítka "Zrušit vše" pro lokaci
+  document.querySelectorAll('.deselect-location').forEach(btn => {
+    btn.addEventListener('click', function() {
+      const location = this.dataset.location;
+      document.querySelectorAll(`.location-${location}`).forEach(cb => cb.checked = false);
+      updateSelectAllCheckbox();
+    });
+  });
+  
+  function updateSelectAllCheckbox() {
+    const allChecked = Array.from(document.querySelectorAll('.warehouse-checkbox'))
+                            .every(checkbox => checkbox.checked);
+    document.getElementById('selectAll').checked = allChecked;
+  }
 </script>
 
 {% if stock_items %}

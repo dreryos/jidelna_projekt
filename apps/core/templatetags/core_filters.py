@@ -109,3 +109,18 @@ def get_item(dictionary, key):
     if not isinstance(dictionary, dict):
         return []
     return dictionary.get(key, [])
+
+
+@register.filter(name='split')
+def split(value, separator=' '):
+    """
+    Rozdělí řetězec podle oddělovače.
+    
+    Použití:
+        {{ value|split:' - ' }}
+        {{ value|split }}  - defaultně mezera
+    """
+    if value is None:
+        return []
+    return str(value).split(separator)
+

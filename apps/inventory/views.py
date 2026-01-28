@@ -76,19 +76,32 @@ class StockListView(CanteenAccessMixin, ListView):
         
         # Filtruj sklady na managed canteens
         if user.is_superuser:
-            context['warehouses'] = Warehouse.objects.select_related('canteen').all()
+            warehouses = Warehouse.objects.select_related('canteen').all()
             default_warehouse_ids = []
         else:
             try:
                 user_canteens = user.profile.canteens.all()
-                context['warehouses'] = Warehouse.objects.filter(canteen__in=user_canteens).select_related('canteen')
+                warehouses = Warehouse.objects.filter(canteen__in=user_canteens).select_related('canteen')
                 # Defaultně vyber managed warehouses
                 default_warehouse_ids = list(
                     Warehouse.objects.filter(canteen__in=user_canteens).values_list('id', flat=True)
                 )
             except ObjectDoesNotExist:
-                context['warehouses'] = Warehouse.objects.none()
+                warehouses = Warehouse.objects.none()
                 default_warehouse_ids = []
+        
+        # Seskupení skladů podle lokace (první část názvu před " - ")
+        from collections import OrderedDict
+        grouped_warehouses = OrderedDict()
+        for warehouse in warehouses.order_by('name'):
+            # Získáme lokaci z názvu skladu (část před " - ")
+            location = warehouse.name.split(' - ')[0] if ' - ' in warehouse.name else 'Ostatní'
+            if location not in grouped_warehouses:
+                grouped_warehouses[location] = []
+            grouped_warehouses[location].append(warehouse)
+        
+        context['warehouses'] = warehouses
+        context['grouped_warehouses'] = grouped_warehouses
         
         # Pokud nejsou vybrány sklady, použij defaultní
         selected = self.request.GET.getlist('warehouse')
@@ -127,7 +140,7 @@ class StockListView(CanteenAccessMixin, ListView):
 
 class StockUpdateView(LoginRequiredMixin, UpdateView):
     model = StockItem
-    fields = ['ingredient', 'warehouse', 'quantity', 'price', 'vat_rate', 'price_without_vat']
+    fields = ['ingredient', 'warehouse', 'quantity', 'price']
     template_name = 'inventory/stock_form.html'
     success_url = reverse_lazy('inventory:stock_list')
     

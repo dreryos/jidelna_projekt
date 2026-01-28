@@ -1612,9 +1612,14 @@ def copy_meal_overrides(request, order_pk, *args, **kwargs):
         # Kontrola canteen ownership přes dekorátor už proběhla pro source_order
         # Pro target_order musíme zkontrolovat také
         user = cast('User', request.user)
-        target_canteen = target_order.get_canteen()
-        if not hasattr(user, 'userprofile') or target_canteen not in user.userprofile.canteens.all():
-            raise PermissionDenied("You don't have access to the target order's canteen.")
+        if not user.is_superuser:
+            try:
+                target_canteen = target_order.get_canteen()
+                user_canteens = user.profile.canteens.all()  # type: ignore
+                if target_canteen not in user_canteens:
+                    raise PermissionDenied("Nemáte přístup k jídelně cílového jídla.")
+            except ObjectDoesNotExist:
+                raise PermissionDenied("Nemáte přístup k jídelně cílového jídla.")
         
         # Kontrola, zda cílové jídlo nemá vydanou výdejku
         if target_order.has_issued_picking_list():
