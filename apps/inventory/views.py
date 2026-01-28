@@ -22,12 +22,14 @@ from .models import (
     StockItem, GoodsReceipt, GoodsReceiptItem, 
     InventoryVerification, InventoryVerificationItem,
     StockTransfer, StockTransferItem,
-    Supplier, SupplierIngredientTemplate
+    Supplier, SupplierIngredientTemplate,
+    StockWriteOff, StockWriteOffItem
 )
 from .forms import (
     GoodsReceiptForm, GoodsReceiptItemFormSet,
     InventoryVerificationForm, InventoryVerificationItemFormSet,
-    StockTransferForm, StockTransferItemFormSet
+    StockTransferForm, StockTransferItemFormSet,
+    StockWriteOffForm, StockWriteOffItemFormSet
 )
 from apps.canteens.models import Warehouse, Canteen
 from apps.core.models import Ingredient
@@ -1616,3 +1618,196 @@ def generate_receipt_number(request):
             'success': False,
             'error': 'Chyba při generování čísla dokladu'
         })
+
+
+# ===== ODEPSÁNÍ MIMO RECEPTY (STOCK WRITE-OFFS) =====
+
+class StockWriteOffListView(CanteenAccessMixin, ListView):
+    """Seznam odepsání mimo recepty"""
+    model = StockWriteOff
+    template_name = 'inventory/stock_write_off_list.html'
+    context_object_name = 'write_offs'
+    paginate_by = 20
+    
+    def get_queryset(self):
+        queryset = super().get_queryset().select_related('warehouse', 'warehouse__canteen', 'created_by').prefetch_related('items')
+        
+        # Filtrování podle skladu
+        warehouse_id = self.request.GET.get('warehouse')
+        if warehouse_id:
+            queryset = queryset.filter(warehouse_id=warehouse_id)
+        
+        # Filtrování podle kategorie
+        category = self.request.GET.get('category')
+        if category:
+            queryset = queryset.filter(category=category)
+        
+        # Filtrování podle data
+        date_from = self.request.GET.get('date_from')
+        if date_from:
+            queryset = queryset.filter(write_off_date__gte=date_from)
+        
+        date_to = self.request.GET.get('date_to')
+        if date_to:
+            queryset = queryset.filter(write_off_date__lte=date_to)
+        
+        return queryset.order_by('-write_off_date', '-created_at')
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        
+        # Získáme seznam skladů pro filtr
+        user = self.request.user
+        if user.is_superuser:
+            warehouses = Warehouse.objects.all()
+        else:
+            try:
+                user_canteens = user.profile.canteens.all()
+                warehouses = Warehouse.objects.filter(canteen__in=user_canteens)
+            except:
+                warehouses = Warehouse.objects.none()
+        
+        context['warehouses'] = warehouses
+        context['categories'] = StockWriteOff.Category.choices
+        
+        # Kumulativní statistiky pro aktuální filtr
+        write_offs = self.get_queryset()
+        total_cost = Decimal('0')
+        
+        for wo in write_offs:
+            total_cost += wo.get_total_cost()
+        
+        context['total_cost'] = total_cost
+        
+        return context
+
+
+@login_required
+def stock_write_off_create(request):
+    """Vytvoření nového odepsání"""
+    if request.method == 'POST':
+        form = StockWriteOffForm(request.POST, user=request.user)
+        formset = StockWriteOffItemFormSet(request.POST)
+        
+        # Debug: Zobrazit počet formulářů
+        form_is_valid = form.is_valid()
+        formset_is_valid = formset.is_valid()
+        
+        if form_is_valid and formset_is_valid:
+            # Kontrola, zda jsou nějaké vyplněné položky
+            has_items = any(
+                form.cleaned_data.get('ingredient') 
+                for form in formset.forms 
+                if form.cleaned_data and not form.cleaned_data.get('DELETE', False)
+            )
+            
+            if not has_items:
+                messages.error(request, 'Prosím vyplňte alespoň jednu položku odepsání!')
+            else:
+                try:
+                    with transaction.atomic():
+                        write_off = form.save(commit=False)
+                        write_off.created_by = request.user
+                        write_off.save()
+                        
+                        # Nastavíme instance pro formset a uložíme
+                        formset.instance = write_off
+                        formset.save()
+                        
+                        messages.success(request, f'Odepsání bylo úspěšně vytvořeno. Celkem: {write_off.get_total_cost()} Kč')
+                        return redirect('inventory:stock_write_off_detail', pk=write_off.pk)
+                        
+                except ValidationError as e:
+                    messages.error(request, f'Chyba při vytváření odepsání: {e}')
+                except Exception as e:
+                    messages.error(request, f'Chyba při vytváření odepsání: {str(e)}')
+        else:
+            # Zobrazit chyby
+            if not form_is_valid:
+                for error in form.non_field_errors():
+                    messages.error(request, f'Chyba v hlavním formuláři: {error}')
+            if not formset_is_valid:
+                for error in formset.non_form_errors():
+                    messages.error(request, f'Chyba v položkách: {error}')
+                # Zobrazit chyby v jednotlivých formulářích
+                for i, form in enumerate(formset.forms):
+                    for error in form.non_field_errors():
+                        messages.error(request, f'Chyba v položce {i+1}: {error}')
+    else:
+        form = StockWriteOffForm(user=request.user)
+        formset = StockWriteOffItemFormSet()
+    
+    # Připravíme data surovin pro autocomplete jako JSON
+    import json
+    ingredients_list = [
+        {
+            'id': ing.id, 
+            'name': ing.name,
+            'unit': ing.recipe_unit,
+            'base_unit': ing.base_unit
+        } 
+        for ing in Ingredient.objects.all().order_by('name')
+    ]
+    
+    return render(request, 'inventory/stock_write_off_form.html', {
+        'form': form,
+        'formset': formset,
+        'all_ingredients': json.dumps(ingredients_list),
+    })
+
+
+class StockWriteOffDetailView(CanteenAccessMixin, DetailView):
+    """Detail odepsání"""
+    model = StockWriteOff
+    template_name = 'inventory/stock_write_off_detail.html'
+    context_object_name = 'write_off'
+    
+    def get_queryset(self):
+        return super().get_queryset().select_related('warehouse', 'warehouse__canteen', 'created_by').prefetch_related('items__ingredient')
+
+
+@login_required
+def stock_write_off_pdf(request, pk):
+    """Export odepsání do PDF"""
+    write_off = get_object_or_404(
+        StockWriteOff.objects.select_related('warehouse', 'warehouse__canteen', 'created_by').prefetch_related('items__ingredient'),
+        pk=pk
+    )
+    
+    # Kontrola oprávnění
+    if not request.user.is_superuser:
+        try:
+            user_canteens = request.user.profile.canteens.all()
+            if write_off.warehouse.canteen not in user_canteens:
+                messages.error(request, 'Nemáte oprávnění k tomuto odepsání')
+                return redirect('inventory:stock_write_off_list')
+        except:
+            messages.error(request, 'Nemáte oprávnění k tomuto odepsání')
+            return redirect('inventory:stock_write_off_list')
+    
+    # Vygenerujeme HTML
+    html_string = render_to_string('inventory/stock_write_off_pdf.html', {
+        'write_off': write_off,
+    })
+    
+    # Vytvoříme PDF (podobně jako u ostatních dokladů)
+    try:
+        from weasyprint import HTML, CSS
+        from io import BytesIO
+        
+        pdf_file = BytesIO()
+        HTML(string=html_string).write_pdf(pdf_file)
+        pdf_file.seek(0)
+        
+        response = HttpResponse(pdf_file.read(), content_type='application/pdf')
+        response['Content-Disposition'] = f'inline; filename="odepsani_{write_off.pk}_{write_off.write_off_date.strftime("%Y%m%d")}.pdf"'
+        
+        return response
+    except ImportError:
+        messages.error(request, 'WeasyPrint není nainstalován. PDF nelze vygenerovat.')
+        return redirect('inventory:stock_write_off_detail', pk=pk)
+    except Exception as e:
+        logger.error(f'Error generating PDF: {e}', exc_info=True)
+        messages.error(request, f'Chyba při generování PDF: {str(e)}')
+        return redirect('inventory:stock_write_off_detail', pk=pk)
+

@@ -75,4 +75,10 @@ urlpatterns = [
     
     # AJAX endpoint pro generování čísla dokladu
     path('api/generate-receipt-number/', views.generate_receipt_number, name='generate_receipt_number'),
+    
+    # Odepsání mimo recepty (StockWriteOff)
+    path('write-offs/', views.StockWriteOffListView.as_view(), name='stock_write_off_list'),
+    path('write-offs/create/', views.stock_write_off_create, name='stock_write_off_create'),
+    path('write-offs/<int:pk>/', views.StockWriteOffDetailView.as_view(), name='stock_write_off_detail'),
+    path('write-offs/<int:pk>/pdf/', views.stock_write_off_pdf, name='stock_write_off_pdf'),
 ]

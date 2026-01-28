@@ -303,6 +303,7 @@
     "pk": {{ object.pk }},
     "name": "{{ object.name|escapejs }}",
     "scheduleDict": {{ schedule_dict_json|safe }},
+    "templateDayCount": {{ template_day_count }},
     "recipeChoices": {{ recipe_choices|safe }},
     "mealTypeChoices": {{ meal_type_choices_json|safe }},
     "csrfToken": "{{ csrf_token }}"

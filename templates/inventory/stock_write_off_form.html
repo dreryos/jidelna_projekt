@@ -1,0 +1,498 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Nové odepsání{% endblock %}
+
+{% block extra_css %}
+<style>
+    .formset-row {
+        border: 1px solid #dee2e6;
+        border-radius: 0.25rem;
+        padding: 1rem;
+        margin-bottom: 1rem;
+        background-color: #f8f9fa;
+    }
+    .delete-checkbox {
+        width: auto;
+    }
+    #total-summary {
+        position: sticky;
+        top: 70px;
+        z-index: 100;
+    }
+    
+    /* Autocomplete styles */
+    .autocomplete-items {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background-color: #fff;
+        border: 1px solid #dee2e6;
+        border-top: none;
+        border-radius: 0 0 0.375rem 0.375rem;
+        max-height: 250px;
+        overflow-y: auto;
+        z-index: 10000;
+    }
+    
+    .autocomplete-items .list-group-item {
+        padding: 0.5rem 0.75rem;
+        border: none;
+        border-bottom: 1px solid #f0f0f0;
+    }
+    
+    .autocomplete-items .list-group-item:last-child {
+        border-bottom: none;
+    }
+    
+    .autocomplete-items .list-group-item.active {
+        background-color: #e7f3ff;
+        color: #0066cc;
+    }
+    
+    .autocomplete-items .list-group-item:hover {
+        background-color: #f8f9fa;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col">
+            <h1><i class="fas fa-plus-circle"></i> Nové odepsání mimo recepty</h1>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'inventory:stock_write_off_list' %}">Odepsání</a></li>
+                    <li class="breadcrumb-item active">Nové odepsání</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <form method="post" id="write-off-form">
+        {% csrf_token %}
+        
+        <div class="row">
+            <div class="col-md-8">
+                <!-- Hlavička odepsání -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="fas fa-file-alt"></i> Základní údaje</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                {{ form.warehouse.label_tag }}
+                                {{ form.warehouse }}
+                                {% if form.warehouse.errors %}
+                                <div class="text-danger">{{ form.warehouse.errors }}</div>
+                                {% endif %}
+                            </div>
+                            <div class="col-md-3">
+                                {{ form.category.label_tag }}
+                                {{ form.category }}
+                                {% if form.category.errors %}
+                                <div class="text-danger">{{ form.category.errors }}</div>
+                                {% endif %}
+                            </div>
+                            <div class="col-md-3">
+                                {{ form.write_off_date.label_tag }}
+                                {{ form.write_off_date }}
+                                {% if form.write_off_date.errors %}
+                                <div class="text-danger">{{ form.write_off_date.errors }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="row mt-3">
+                            <div class="col-12">
+                                {{ form.notes.label_tag }}
+                                {{ form.notes }}
+                                {% if form.notes.errors %}
+                                <div class="text-danger">{{ form.notes.errors }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Položky odepsání -->
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0"><i class="fas fa-list"></i> Položky odepsání</h5>
+                        <button type="button" class="btn btn-sm btn-outline-primary" id="add-item-btn">
+                            <i class="fas fa-plus"></i> Přidat položku
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        {{ formset.management_form }}
+                        
+                        <div id="formset-container">
+                            {% for form in formset %}
+                            <div class="formset-row" data-formset-index="{{ forloop.counter0 }}">
+                                <div class="row">
+                                    <div class="col-md-4">
+                                        <label class="form-label">Surovina *</label>
+                                        <div class="input-group">
+                                            <input type="text" 
+                                                   class="form-control ingredient-autocomplete" 
+                                                   placeholder="Začněte psát..."
+                                                   data-target="{{ form.ingredient.auto_id }}"
+                                                   value="">
+                                        </div>
+                                        <div class="d-none">
+                                            {{ form.ingredient }}
+                                        </div>
+                                        {% if form.ingredient.errors %}
+                                        <div class="text-danger">{{ form.ingredient.errors }}</div>
+                                        {% endif %}
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label">Množství *</label>
+                                        {{ form.quantity }}
+                                        {% if form.quantity.errors %}
+                                        <div class="text-danger">{{ form.quantity.errors }}</div>
+                                        {% endif %}
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">Poznámka</label>
+                                        {{ form.notes }}
+                                        {% if form.notes.errors %}
+                                        <div class="text-danger">{{ form.notes.errors }}</div>
+                                        {% endif %}
+                                    </div>
+                                    <div class="col-md-1 d-flex align-items-end">
+                                        {% if not forloop.first %}
+                                        <button type="button" class="btn btn-sm btn-outline-danger remove-item-btn w-100">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                {{ form.id }}
+                                <div class="d-none">
+                                    {{ form.DELETE }}
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+
+                        <div class="alert alert-info mt-3">
+                            <i class="fas fa-info-circle"></i> 
+                            <strong>Tip:</strong> Položky se automaticky odepisují ze skladu v aktuální nákupní ceně.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-4">
+                    <button type="submit" class="btn btn-primary btn-lg">
+                        <i class="fas fa-save"></i> Vytvořit odepsání
+                    </button>
+                    <a href="{% url 'inventory:stock_write_off_list' %}" class="btn btn-outline-secondary btn-lg">
+                        <i class="fas fa-times"></i> Zrušit
+                    </a>
+                </div>
+            </div>
+
+            <!-- Pravý panel - nápověda -->
+            <div class="col-md-4">
+                <div class="card" id="total-summary">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="fas fa-info-circle"></i> Nápověda</h5>
+                    </div>
+                    <div class="card-body">
+                        <h6>Kategorie odepsání:</h6>
+                        <ul class="small">
+                            <li><strong>Hygiena:</strong> Rukavice, čistící prostředky, utěrky</li>
+                            <li><strong>Ostatní:</strong> Čaje, káva a jiné spotřební materiály</li>
+                        </ul>
+                        
+                        <hr>
+                        
+                        <h6>Automatické odepisování:</h6>
+                        <p class="small">
+                            Po uložení formuláře se položky automaticky odepíší ze skladu. 
+                            Ujistěte se, že máte dostatečné množství na skladě.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Načtení všech surovin pro autocomplete
+let allIngredients = {{ all_ingredients|safe }};
+
+document.addEventListener('DOMContentLoaded', function() {
+    const formsetContainer = document.getElementById('formset-container');
+    const addItemBtn = document.getElementById('add-item-btn');
+    const totalFormsInput = document.querySelector('input[name$="-TOTAL_FORMS"]');
+    const writeOffForm = document.getElementById('write-off-form');
+    
+    let formIndex = parseInt(totalFormsInput.value);
+    
+    // Pokud nejsou žádné řádky, přidej jeden
+    if (formIndex === 0) {
+        addBlankRow();
+    }
+    
+    // Inicializace autocomplete pro existující pole
+    initializeAutocomplete();
+    
+    // Funkce pro inicializaci autocomplete
+    function initializeAutocomplete(forceAll = false) {
+        document.querySelectorAll('.ingredient-autocomplete:not([data-initialized])').forEach(input => {
+            setupAutocomplete(input);
+            input.dataset.initialized = 'true';
+        });
+    }
+    
+    // Nastavení autocomplete pro jedno pole
+    function setupAutocomplete(input) {
+        const targetId = input.dataset.target;
+        const targetSelect = document.getElementById(targetId);
+        
+        if (!targetSelect) return;
+        
+        // Nastavit výchozí hodnotu z hidden selectu
+        const selectedOption = targetSelect.options[targetSelect.selectedIndex];
+        if (selectedOption && selectedOption.value) {
+            const ingredient = allIngredients.find(i => i.id == selectedOption.value);
+            if (ingredient) {
+                input.value = ingredient.name;
+            }
+        }
+        
+        // Autocomplete funkce
+        let currentFocus = -1;
+        
+        input.addEventListener('input', function(e) {
+            const val = this.value.toLowerCase();
+            closeAllLists();
+            
+            if (!val) return;
+            
+            currentFocus = -1;
+            
+            const listDiv = document.createElement('div');
+            listDiv.setAttribute('class', 'autocomplete-items list-group position-absolute w-100');
+            listDiv.style.zIndex = '1000';
+            this.parentNode.appendChild(listDiv);
+            
+            allIngredients
+                .filter(ing => ing.name.toLowerCase().includes(val))
+                .slice(0, 10)
+                .forEach(ingredient => {
+                    const item = document.createElement('a');
+                    item.setAttribute('class', 'list-group-item list-group-item-action');
+                    item.style.cursor = 'pointer';
+                    item.innerHTML = `<strong>${ingredient.name}</strong> <small class="text-muted">(${ingredient.unit})</small>`;
+                    
+                    item.addEventListener('click', function() {
+                        input.value = ingredient.name;
+                        targetSelect.value = ingredient.id;
+                        closeAllLists();
+                    });
+                    
+                    listDiv.appendChild(item);
+                });
+        });
+        
+        input.addEventListener('keydown', function(e) {
+            let list = this.parentNode.querySelector('.autocomplete-items');
+            if (list) list = list.getElementsByTagName('a');
+            
+            if (e.keyCode === 40) { // DOWN
+                currentFocus++;
+                addActive(list);
+                e.preventDefault();
+            } else if (e.keyCode === 38) { // UP
+                currentFocus--;
+                addActive(list);
+                e.preventDefault();
+            } else if (e.keyCode === 13) { // ENTER
+                e.preventDefault();
+                if (currentFocus > -1 && list) {
+                    list[currentFocus].click();
+                }
+            }
+        });
+        
+        function addActive(list) {
+            if (!list) return;
+            removeActive(list);
+            if (currentFocus >= list.length) currentFocus = 0;
+            if (currentFocus < 0) currentFocus = list.length - 1;
+            list[currentFocus].classList.add('active');
+        }
+        
+        function removeActive(list) {
+            for (let i = 0; i < list.length; i++) {
+                list[i].classList.remove('active');
+            }
+        }
+    }
+    
+    function closeAllLists() {
+        document.querySelectorAll('.autocomplete-items').forEach(el => el.remove());
+    }
+    
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('.ingredient-autocomplete')) {
+            closeAllLists();
+        }
+    });
+    
+    // Funkce pro přidání prázdného řádku
+    function addBlankRow() {
+        // Vytvoření HTML pro nový řádek
+        const newRow = document.createElement('div');
+        newRow.className = 'formset-row';
+        newRow.dataset.formsetIndex = formIndex;
+        
+        const ingredientId = `id_items-${formIndex}-ingredient`;
+        const quantityId = `id_items-${formIndex}-quantity`;
+        const notesId = `id_items-${formIndex}-notes`;
+        const deleteId = `id_items-${formIndex}-DELETE`;
+        
+        newRow.innerHTML = `
+            <div class="row">
+                <div class="col-md-4">
+                    <label class="form-label">Surovina *</label>
+                    <div class="input-group">
+                        <input type="text" 
+                               class="form-control ingredient-autocomplete" 
+                               placeholder="Začněte psát..."
+                               data-target="${ingredientId}"
+                               value="">
+                    </div>
+                    <div class="d-none">
+                        <select name="items-${formIndex}-ingredient" id="${ingredientId}" class="form-select" required=""></select>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Množství *</label>
+                    <input type="number" name="items-${formIndex}-quantity" id="${quantityId}" class="form-control" step="0.001" min="0.001" required="">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Poznámka</label>
+                    <input type="text" name="items-${formIndex}-notes" id="${notesId}" class="form-control" maxlength="200">
+                </div>
+                <div class="col-md-1 d-flex align-items-end">
+                    <button type="button" class="btn btn-sm btn-outline-danger remove-item-btn w-100">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+            <input type="hidden" name="items-${formIndex}-id" id="id_items-${formIndex}-id">
+            <input type="hidden" name="items-${formIndex}-write_off" id="id_items-${formIndex}-write_off">
+            <div class="d-none">
+                <input type="checkbox" name="items-${formIndex}-DELETE" id="${deleteId}">
+            </div>
+        `;
+        
+        formsetContainer.appendChild(newRow);
+        
+        // Inicializace autocomplete v novém řádku
+        const newAutocompleteInput = newRow.querySelector('.ingredient-autocomplete');
+        if (newAutocompleteInput) {
+            setupAutocomplete(newAutocompleteInput);
+            newAutocompleteInput.dataset.initialized = 'true';
+        }
+        
+        // Naplnit select s ingrediencemi
+        const ingredientSelect = newRow.querySelector(`select#${ingredientId}`);
+        if (ingredientSelect) {
+            allIngredients.forEach(ing => {
+                const option = document.createElement('option');
+                option.value = ing.id;
+                option.textContent = ing.name;
+                ingredientSelect.appendChild(option);
+            });
+        }
+        
+        formIndex++;
+        totalFormsInput.value = formIndex;
+    }
+    
+    // Přidání nové položky
+    addItemBtn.addEventListener('click', function(e) {
+        e.preventDefault();
+        addBlankRow();
+    });
+    
+    // Odstranění položky
+    formsetContainer.addEventListener('click', function(e) {
+        if (e.target.closest('.remove-item-btn')) {
+            e.preventDefault();
+            const row = e.target.closest('.formset-row');
+            const formCount = formsetContainer.querySelectorAll('.formset-row:not([style*="display: none"])').length;
+            
+            if (formCount > 1) {
+                row.style.display = 'none';
+                const deleteInput = row.querySelector('input[name$="-DELETE"]');
+                if (deleteInput) {
+                    deleteInput.checked = true;
+                }
+            } else {
+                alert('Musíte mít alespoň jednu položku v odepsání!');
+            }
+        }
+    });
+    
+    // Při opuštění autocomplete vstupu se pokusíme synchronizovat hidden select
+    document.addEventListener('blur', function(e) {
+        if (e.target && e.target.classList && e.target.classList.contains('ingredient-autocomplete')) {
+            const input = e.target;
+            const targetId = input.dataset.target;
+            const targetSelect = document.getElementById(targetId);
+            if (targetSelect && !targetSelect.value && input.value) {
+                const match = allIngredients.find(i => i.name.toLowerCase() === input.value.toLowerCase());
+                if (match) {
+                    targetSelect.value = match.id;
+                }
+            }
+        }
+    }, true);
+
+    // Validace formu před odesláním
+    writeOffForm.addEventListener('submit', function(e) {
+        // Nejprve synchronizujeme všechny autocomplete inputs s hidden selecty (fallback)
+        const visibleRows = formsetContainer.querySelectorAll('.formset-row:not([style*="display: none"])');
+        visibleRows.forEach(row => {
+            const input = row.querySelector('.ingredient-autocomplete');
+            const ingredientSelect = row.querySelector('select[name$="-ingredient"]');
+            if (input && ingredientSelect && !ingredientSelect.value && input.value) {
+                const match = allIngredients.find(i => i.name.toLowerCase() === input.value.toLowerCase());
+                if (match) {
+                    ingredientSelect.value = match.id;
+                }
+            }
+        });
+
+        // Kontrola, zda je vyplněno alespoň jedno pole v položkách
+        let hasValidItems = false;
+        
+        visibleRows.forEach(row => {
+            const ingredientSelect = row.querySelector('select[name$="-ingredient"]');
+            const quantityInput = row.querySelector('input[name$="-quantity"]');
+            
+            if ((ingredientSelect && ingredientSelect.value) && (quantityInput && quantityInput.value)) {
+                hasValidItems = true;
+            }
+        });
+        
+        if (!hasValidItems) {
+            e.preventDefault();
+            alert('Prosím vyplňte alespoň jednu položku s surovinou a množstvím!');
+            return false;
+        }
+    });
+});
+</script>
+{% endblock %}

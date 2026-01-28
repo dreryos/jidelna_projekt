@@ -9,14 +9,16 @@ Tento modul poskytuje:
 
 from django.shortcuts import render, get_object_or_404
 from django.contrib.auth.decorators import login_required
-from django.db.models import Avg, Count, Q
+from django.db.models import Avg, Count, Q, Sum
 from django.core.exceptions import ObjectDoesNotExist
 from decimal import Decimal
+from datetime import timedelta
+from django.utils import timezone
 
 from apps.production.models import MenuPlan, ProductionOrder
 from apps.core.models import Recipe, Category
 from apps.canteens.models import Canteen
-from apps.inventory.models import StockItem
+from apps.inventory.models import StockItem, StockWriteOff, StockWriteOffItem
 
 
 @login_required
@@ -415,3 +417,111 @@ def recipe_cost_detail(request, recipe_id):
     }
     
     return render(request, 'analytics/recipe_cost_detail.html', context)
+
+
+@login_required
+def write_off_analytics(request):
+    """
+    Zobrazí analytiku odepisovaného zboží mimo recepty.
+    Zahrnuje:
+    - Spotřebu podle kategorií (HYGIENE, BUFFET, OTHER)
+    - Náklady a výnosy podle kategorií
+    - Top 10 nejčastěji odepsaného zboží
+    - Trend nákladů v čase
+    """
+    user = request.user
+    
+    # Superuser vidí všechno, ostatní vidí jen sklady jejich jídelen
+    if user.is_superuser:
+        write_offs = StockWriteOff.objects.all().select_related('warehouse', 'created_by')
+    else:
+        try:
+            user_canteens = user.profile.canteens.all()
+            warehouse_ids = Canteen.objects.filter(id__in=user_canteens).values_list('warehouse_id', flat=True)
+            write_offs = StockWriteOff.objects.filter(warehouse_id__in=warehouse_ids).select_related('warehouse', 'created_by')
+        except ObjectDoesNotExist:
+            write_offs = StockWriteOff.objects.none()
+    
+    # Filtry z formuláře
+    warehouse_id = request.GET.get('warehouse')
+    category = request.GET.get('category')
+    date_from = request.GET.get('date_from')
+    date_to = request.GET.get('date_to')
+    
+    if warehouse_id:
+        write_offs = write_offs.filter(warehouse_id=warehouse_id)
+    if category:
+        write_offs = write_offs.filter(category=category)
+    if date_from:
+        write_offs = write_offs.filter(write_off_date__gte=date_from)
+    if date_to:
+        write_offs = write_offs.filter(write_off_date__lte=date_to)
+    
+    # Agregovaná data podle kategorií
+    category_stats = {}
+    for category_choice in StockWriteOff.Category.choices:
+        cat_code = category_choice[0]
+        cat_label = category_choice[1]
+        cat_items = write_offs.filter(category=cat_code)
+        
+        total_cost = cat_items.aggregate(total=Sum('stockwriteoffitem__unit_cost'))['total'] or Decimal('0')
+        total_quantity = cat_items.aggregate(total=Sum('stockwriteoffitem__quantity'))['total'] or 0
+        
+        if total_quantity > 0 or total_cost > 0:
+            category_stats[cat_code] = {
+                'label': cat_label,
+                'count': cat_items.count(),
+                'quantity': total_quantity,
+                'total_cost': round(total_cost, 2),
+            }
+    
+    # Top 10 nejčastěji odepsaného zboží
+    top_items = StockWriteOffItem.objects.filter(
+        write_off__in=write_offs
+    ).values('ingredient__name').annotate(
+        total_quantity=Sum('quantity'),
+        total_cost=Sum('unit_cost'),
+        count=Count('id')
+    ).order_by('-count')[:10]
+    
+    # Trend nákladů podle dne (poslední 30 dní)
+    thirty_days_ago = timezone.now().date() - timedelta(days=30)
+    daily_costs = write_offs.filter(
+        write_off_date__gte=thirty_days_ago
+    ).values('write_off_date').annotate(
+        daily_cost=Sum('stockwriteoffitem__unit_cost'),
+        item_count=Count('stockwriteoffitem')
+    ).order_by('write_off_date')
+    
+    # Celkové statistiky
+    total_stats = {
+        'total_write_offs': write_offs.count(),
+        'total_cost': round(write_offs.aggregate(total=Sum('stockwriteoffitem__unit_cost'))['total'] or Decimal('0'), 2),
+        'avg_cost_per_write_off': Decimal('0'),
+    }
+    
+    total_stats['total_margin'] = round(total_stats['total_revenue'] - total_stats['total_cost'], 2)
+    if write_offs.count() > 0:
+        total_stats['avg_cost_per_write_off'] = round(total_stats['total_cost'] / write_offs.count(), 2)
+    
+    # Dostupné sklady pro filtr
+    if user.is_superuser:
+        available_warehouses = Canteen.objects.values_list('warehouse_id', 'warehouse__name').distinct()
+    else:
+        available_warehouses = Canteen.objects.filter(id__in=user.profile.canteens.all()).values_list('warehouse_id', 'warehouse__name').distinct()
+    
+    context = {
+        'write_offs': write_offs,
+        'category_stats': category_stats,
+        'top_items': top_items,
+        'daily_costs': daily_costs,
+        'total_stats': total_stats,
+        'available_warehouses': available_warehouses,
+        'category_choices': StockWriteOff.Category.choices,
+        'selected_warehouse': warehouse_id,
+        'selected_category': category,
+        'selected_date_from': date_from,
+        'selected_date_to': date_to,
+    }
+    
+    return render(request, 'analytics/write_off_analytics.html', context)

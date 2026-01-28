@@ -89,6 +89,12 @@
                     <i class="fas fa-clipboard-check me-2"></i>Inventury
                   </a>
                 </li>
+                <li><hr class="dropdown-divider"></li>
+                <li>
+                  <a class="dropdown-item text-warning" href="{% url 'inventory:stock_write_off_list' %}">
+                    <i class="fas fa-trash-alt me-2"></i>Odepisování zboží
+                  </a>
+                </li>
               </ul>
             </li>
             
@@ -159,6 +165,12 @@
                 <li>
                   <a class="dropdown-item text-secondary" href="{% url 'analytics:recipe_cost_analysis' %}">
                     <i class="fas fa-chart-area me-2"></i>Vývoj cen receptů
+                  </a>
+                </li>
+                <li><hr class="dropdown-divider"></li>
+                <li>
+                  <a class="dropdown-item text-secondary" href="{% url 'analytics:write_off_analytics' %}">
+                    <i class="fas fa-trash-alt me-2"></i>Odepisování zboží
                   </a>
                 </li>
               </ul>

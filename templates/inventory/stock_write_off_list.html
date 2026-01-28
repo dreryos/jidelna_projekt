@@ -1,0 +1,161 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Odepsání mimo recepty{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col">
+            <h1><i class="fas fa-file-invoice"></i> Odepsání mimo recepty</h1>
+            <p class="text-muted">Evidence spotřeby hygienických potřeb a ostatních položek</p>
+        </div>
+        <div class="col-auto">
+            <a href="{% url 'inventory:stock_write_off_create' %}" class="btn btn-primary">
+                <i class="fas fa-plus"></i> Nové odepsání
+            </a>
+        </div>
+    </div>
+
+    <!-- Filtry -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-filter"></i> Filtry</h5>
+        </div>
+        <div class="card-body">
+            <form method="get" class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label">Sklad</label>
+                    <select name="warehouse" class="form-select">
+                        <option value="">-- Všechny sklady --</option>
+                        {% for warehouse in warehouses %}
+                        <option value="{{ warehouse.id }}" {% if request.GET.warehouse == warehouse.id|stringformat:"s" %}selected{% endif %}>
+                            {{ warehouse.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Kategorie</label>
+                    <select name="category" class="form-select">
+                        <option value="">-- Všechny kategorie --</option>
+                        {% for value, label in categories %}
+                        <option value="{{ value }}" {% if request.GET.category == value %}selected{% endif %}>
+                            {{ label }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Datum od</label>
+                    <input type="date" name="date_from" class="form-control" value="{{ request.GET.date_from }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Datum do</label>
+                    <input type="date" name="date_to" class="form-control" value="{{ request.GET.date_to }}">
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="fas fa-search"></i> Filtrovat
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Souhrnné statistiky -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card bg-light">
+                <div class="card-body">
+                    <h6 class="text-muted mb-1">Celkové náklady</h6>
+                    <h3 class="mb-0">{{ total_cost|floatformat:2 }} Kč</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Seznam odepsání -->
+    <div class="card">
+        <div class="card-body">
+            {% if write_offs %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Datum</th>
+                            <th>Sklad</th>
+                            <th>Kategorie</th>
+                            <th>Poznámky</th>
+                            <th class="text-end">Náklady</th>
+                            <th>Vytvořil</th>
+                            <th class="text-end">Akce</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for write_off in write_offs %}
+                        <tr>
+                            <td>{{ write_off.write_off_date|date:"d.m.Y" }}</td>
+                            <td>{{ write_off.warehouse.name }}</td>
+                            <td>
+                                <span class="badge {% if write_off.category == 'HYGIENE' %}bg-info{% elif write_off.category == 'BUFFET' %}bg-success{% else %}bg-secondary{% endif %}">
+                                    {{ write_off.get_category_display }}
+                                </span>
+                            </td>
+                            <td>{{ write_off.notes|truncatewords:10 }}</td>
+                            <td class="text-end">{{ write_off.get_total_cost|floatformat:2 }} Kč</td>
+                            <td>{{ write_off.created_by.get_full_name|default:write_off.created_by.username }}</td>
+                            <td class="text-end">
+                                <div class="btn-group btn-group-sm">
+                                    <a href="{% url 'inventory:stock_write_off_detail' write_off.pk %}" class="btn btn-outline-primary" title="Detail">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
+                                    <a href="{% url 'inventory:stock_write_off_pdf' write_off.pk %}" class="btn btn-outline-secondary" title="PDF" target="_blank">
+                                        <i class="fas fa-file-pdf"></i>
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Stránkování -->
+            {% if is_paginated %}
+            <nav>
+                <ul class="pagination justify-content-center">
+                    {% if page_obj.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page=1{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">První</a>
+                    </li>
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">Předchozí</a>
+                    </li>
+                    {% endif %}
+
+                    <li class="page-item active">
+                        <span class="page-link">Strana {{ page_obj.number }} z {{ page_obj.paginator.num_pages }}</span>
+                    </li>
+
+                    {% if page_obj.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.next_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">Další</a>
+                    </li>
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">Poslední</a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+            {% endif %}
+
+            {% else %}
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle"></i> Zatím nebylo vytvořeno žádné odepsání.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

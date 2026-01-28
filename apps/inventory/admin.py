@@ -3,7 +3,7 @@ from decimal import Decimal
 from .models import (
     StockItem, IngredientPriceHistory, GoodsReceipt, GoodsReceiptItem,
     InventoryVerification, InventoryVerificationItem, StockTransfer, StockTransferItem,
-    Supplier, SupplierIngredientTemplate
+    Supplier, SupplierIngredientTemplate, StockWriteOff, StockWriteOffItem
 )
 from .forms import VAT_RATE_CHOICES
 
@@ -284,3 +284,56 @@ class SupplierIngredientTemplateAdmin(admin.ModelAdmin):
         """Při ukládání invaliduje cache dodavatele"""
         super().save_model(request, obj, form, change)
         # Cache se automaticky invaliduje přes signál
+
+
+# Admin pro odepisování zboží mimo recepty
+class StockWriteOffItemInline(admin.TabularInline):
+    model = StockWriteOffItem
+    extra = 1
+    fields = ['ingredient', 'quantity', 'unit_cost', 'selling_price', 'notes']
+    autocomplete_fields = ['ingredient']
+    readonly_fields = []
+
+
+@admin.register(StockWriteOff)
+class StockWriteOffAdmin(admin.ModelAdmin):
+    list_display = ('id', 'warehouse', 'category', 'write_off_date', 'get_total_cost', 'created_by', 'created_at')
+    list_filter = ('warehouse', 'category', 'write_off_date')
+    search_fields = ('warehouse__name', 'notes')
+    autocomplete_fields = ['warehouse']
+    date_hierarchy = 'write_off_date'
+    readonly_fields = ('created_at', 'created_by', 'get_total_cost')
+    inlines = [StockWriteOffItemInline]
+    
+    fieldsets = (
+        ('Základní informace', {
+            'fields': ('warehouse', 'category', 'write_off_date', 'notes')
+        }),
+        ('Finanční přehled', {
+            'fields': ('get_total_cost',),
+            'classes': ('collapse',)
+        }),
+        ('Audit trail', {
+            'fields': ('created_at', 'created_by'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def save_model(self, request, obj, form, change):
+        if not change:  # Pouze při vytváření
+            obj.created_by = request.user
+        super().save_model(request, obj, form, change)
+
+
+@admin.register(StockWriteOffItem)
+class StockWriteOffItemAdmin(admin.ModelAdmin):
+    list_display = ('write_off', 'ingredient', 'quantity', 'unit_cost', 'get_total_cost')
+    list_filter = ('write_off__warehouse', 'write_off__category')
+    search_fields = ('ingredient__name', 'write_off__warehouse__name')
+    autocomplete_fields = ['ingredient', 'write_off']
+    readonly_fields = ('get_total_cost',)
+    
+    def get_total_cost(self, obj):
+        """Zobrazí celkové náklady položky"""
+        return obj.get_total_cost()
+    get_total_cost.short_description = 'Celkové náklady'

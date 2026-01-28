@@ -8,7 +8,7 @@
 
     // Globální proměnné - inicializují se po načtení DOM
     let templateData = null;
-    let pk, name, scheduleDict, recipeChoices, mealTypeChoices, csrfToken;
+    let pk, name, scheduleDict, recipeChoices, mealTypeChoices, csrfToken, templateDayCount;
 
     // State management
     let currentSchedule = {};
@@ -26,12 +26,17 @@
         }
 
         templateData = JSON.parse(templateDataEl.textContent);
-        ({pk, name, scheduleDict, recipeChoices, mealTypeChoices, csrfToken} = templateData);
+        ({pk, name, scheduleDict, recipeChoices, mealTypeChoices, csrfToken, templateDayCount} = templateData);
         
         // Převedeme string klíče zpět na numbery
         Object.keys(scheduleDict).forEach(key => {
             currentSchedule[parseInt(key)] = scheduleDict[key];
         });
+        
+        if (!Number.isInteger(templateDayCount) || templateDayCount < 0) {
+            const scheduleKeys = Object.keys(currentSchedule).map(key => parseInt(key)).filter(Number.isFinite);
+            templateDayCount = scheduleKeys.length ? (Math.max(...scheduleKeys) + 1) : 0;
+        }
         
         hideEmptyDays(); // Skryjeme prázdné dny před renderováním
         initializeSelect2();
@@ -49,9 +54,12 @@
         allDayCards.forEach(card => {
             const dayIndex = parseInt(card.dataset.dayIndex);
             const hasData = currentSchedule[dayIndex] && currentSchedule[dayIndex].length > 0;
+            const isWithinTemplate = Number.isInteger(templateDayCount) && dayIndex < templateDayCount;
             
-            if (!hasData) {
+            if (!hasData && !isWithinTemplate) {
                 card.style.display = 'none';
+            } else {
+                card.style.display = 'block';
             }
         });
     }
@@ -240,6 +248,15 @@
         const addDayBtn = document.getElementById('btn-add-day');
         if (addDayBtn) {
             addDayBtn.addEventListener('click', addNewDay);
+        }
+
+        // Uložení změn (informace o autosave)
+        const saveChangesBtn = document.getElementById('btn-save-changes');
+        if (saveChangesBtn) {
+            saveChangesBtn.addEventListener('click', function() {
+                updateStats();
+                showNotification('Info', 'Změny se ukládají automaticky', 'info');
+            });
         }
 
         // Potvrzení kopírování
@@ -712,16 +729,26 @@
      * Přidání nového dne
      */
     function addNewDay() {
-        // Najdeme první nevyužitý den
-        let newDayIndex = 0;
-        while (currentSchedule[newDayIndex] !== undefined) {
-            newDayIndex++;
+        // Najdeme první skrytý den
+        let newDayIndex = null;
+        const dayCards = document.querySelectorAll('.day-card-wrapper');
+        dayCards.forEach(card => {
+            if (newDayIndex !== null) return;
+            const isHidden = card.style.display === 'none';
+            if (isHidden) {
+                newDayIndex = parseInt(card.dataset.dayIndex);
+            }
+        });
+        
+        if (newDayIndex === null) {
+            newDayIndex = dayCards.length;
         }
         
         // Zobrazíme kartu pro tento den
         const dayCard = document.querySelector(`[data-day-index="${newDayIndex}"]`);
         if (dayCard) {
             dayCard.style.display = 'block';
+            templateDayCount = Math.max(templateDayCount || 0, newDayIndex + 1);
             
             // Scrollneme k němu
             dayCard.scrollIntoView({ behavior: 'smooth', block: 'center' });

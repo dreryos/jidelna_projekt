@@ -172,11 +172,15 @@ class MenuTemplateVisualEditView(LoginRequiredMixin, IsStaffMixin, UpdateView):
         
         # Načteme schedule jako slovník
         schedule_dict = self.object.parse_schedule_to_dict()
+        template_day_count = 0
+        if schedule_dict:
+            template_day_count = max(schedule_dict.keys()) + 1
         
         # Převedeme klíče na stringy pro JSON
         import json
         context['schedule_dict'] = schedule_dict
         context['schedule_dict_json'] = json.dumps({str(k): v for k, v in schedule_dict.items()})
+        context['template_day_count'] = template_day_count
         
         # Připravíme seznam všech receptů pro Select2
         recipes = Recipe.objects.all().order_by('name')

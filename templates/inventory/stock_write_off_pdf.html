@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Odepsání mimo recepty #{{ write_off.pk }}</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 2cm;
+        }
+        body {
+            font-family: Arial, sans-serif;
+            font-size: 10pt;
+            line-height: 1.4;
+        }
+        h1 {
+            font-size: 16pt;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #333;
+            padding-bottom: 10px;
+        }
+        h2 {
+            font-size: 12pt;
+            margin-top: 20px;
+            margin-bottom: 10px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        table th, table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        table th {
+            background-color: #f2f2f2;
+            font-weight: bold;
+        }
+        .text-right {
+            text-align: right;
+        }
+        .header-info {
+            margin-bottom: 20px;
+        }
+        .header-info table {
+            border: none;
+        }
+        .header-info td {
+            border: none;
+            padding: 4px 8px;
+        }
+        .summary {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #f9f9f9;
+            border: 1px solid #ddd;
+        }
+        .footer {
+            margin-top: 40px;
+            font-size: 9pt;
+            color: #666;
+            text-align: center;
+        }
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            background-color: #6c757d;
+            color: white;
+            border-radius: 3px;
+            font-size: 9pt;
+        }
+        .badge-hygiene { background-color: #17a2b8; }
+        .badge-buffet { background-color: #28a745; }
+        .text-success { color: #28a745; }
+        .text-danger { color: #dc3545; }
+    </style>
+</head>
+<body>
+    <h1>Odepsání mimo recepty #{{ write_off.pk }}</h1>
+
+    <div class="header-info">
+        <table>
+            <tr>
+                <td style="width: 30%;"><strong>Sklad:</strong></td>
+                <td>{{ write_off.warehouse.name }}</td>
+                <td style="width: 30%;"><strong>Datum odepsání:</strong></td>
+                <td>{{ write_off.write_off_date|date:"d.m.Y" }}</td>
+            </tr>
+            <tr>
+                <td><strong>Jídelna:</strong></td>
+                <td>{{ write_off.warehouse.canteen.name }}</td>
+                <td><strong>Vytvořeno:</strong></td>
+                <td>{{ write_off.created_at|date:"d.m.Y H:i" }}</td>
+            </tr>
+            <tr>
+                <td><strong>Kategorie:</strong></td>
+                <td>
+                    <span class="badge {% if write_off.category == 'HYGIENE' %}badge-hygiene{% elif write_off.category == 'BUFFET' %}badge-buffet{% endif %}">
+                        {{ write_off.get_category_display }}
+                    </span>
+                </td>
+                <td><strong>Vytvořil:</strong></td>
+                <td>{{ write_off.created_by.get_full_name|default:write_off.created_by.username }}</td>
+            </tr>
+        </table>
+    </div>
+
+    {% if write_off.notes %}
+    <h2>Poznámky</h2>
+    <p>{{ write_off.notes }}</p>
+    {% endif %}
+
+    <h2>Položky odepsání</h2>
+    <table>
+        <thead>
+            <tr>
+                <th style="width: 25%;">Surovina</th>
+                <th class="text-right" style="width: 10%;">Množství</th>
+                <th style="width: 8%;">Jedn.</th>
+                <th class="text-right" style="width: 17%;">Nák. cena</th>
+                <th class="text-right" style="width: 17%;">Celkem nákl.</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in write_off.items.all %}
+            <tr>
+                <td>{{ item.ingredient.name }}</td>
+                <td class="text-right">{{ item.quantity|floatformat:3 }}</td>
+                <td>{{ item.ingredient.base_unit }}</td>
+                <td class="text-right">{{ item.unit_cost|floatformat:2 }} Kč</td>
+                <td class="text-right"><strong>{{ item.get_total_cost|floatformat:2 }} Kč</strong></td>
+            </tr>
+            {% if item.notes %}
+            <tr>
+                <td colspan="5" style="border-top: none; padding-top: 0; font-size: 9pt; color: #666;">
+                    <em>Poznámka: {{ item.notes }}</em>
+                </td>
+            </tr>
+            {% endif %}
+            {% endfor %}
+        </tbody>
+        <tfoot>
+            <tr style="background-color: #e9ecef;">
+                <th colspan="4" class="text-right">Celkem:</th>
+                <th class="text-right">{{ write_off.get_total_cost|floatformat:2 }} Kč</th>
+            </tr>
+        </tfoot>
+    </table>
+
+    <div class="summary">
+        <table style="border: none; margin: 0;">
+            <tr>
+                <td style="width: 50%;"><strong>Celkové náklady:</strong></td>
+                <td class="text-right"><strong>{{ write_off.get_total_cost|floatformat:2 }} Kč</strong></td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="footer">
+        <p>SPÍŽ - Systém pro inventuru žvance</p>
+    </div>
+</body>
+</html>

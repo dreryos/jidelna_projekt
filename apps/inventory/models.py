@@ -1276,3 +1276,149 @@ class StockTransferItem(models.Model):
     def get_total_price(self):
         """Vrátí celkovou cenu položky (množství × jednotková cena)"""
         return self.quantity * self.unit_price_with_vat
+
+
+class StockWriteOff(models.Model):
+    """
+    Odepsání zboží mimo recepty (hygiena, bufet, ostatní).
+    Položky se okamžitě odepisují ze skladu bez schvalovacího workflow.
+    """
+    class Category(models.TextChoices):
+        HYGIENE = 'HYGIENE', 'Hygiena'
+        OTHER = 'OTHER', 'Ostatní'
+    
+    warehouse = models.ForeignKey(
+        Warehouse,
+        on_delete=models.PROTECT,
+        related_name='write_offs',
+        verbose_name="Sklad"
+    )
+    category = models.CharField(
+        max_length=20,
+        choices=Category.choices,
+        default=Category.OTHER,
+        verbose_name="Kategorie"
+    )
+    write_off_date = models.DateField(
+        default=timezone.now,
+        verbose_name="Datum odepisování"
+    )
+    notes = models.TextField(
+        blank=True,
+        verbose_name="Poznámky"
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Vytvořeno"
+    )
+    created_by = models.ForeignKey(
+        'auth.User',
+        on_delete=models.PROTECT,
+        verbose_name="Vytvořil"
+    )
+    cash_register_import_id = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        unique=True,
+        verbose_name="ID importu z kasy",
+        help_text="Unikátní ID záznamu z pokladního systému"
+    )
+    imported_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Importováno dne"
+    )
+    
+    def __str__(self):
+        return f"Odepsání {self.get_category_display()} - {self.warehouse.name} ({self.write_off_date.strftime('%d.%m.%Y')})"
+    
+    def get_total_cost(self):
+        """Vrátí celkovou nákupní cenu všech položek"""
+        total = Decimal('0')
+        for item in self.items.all():
+            total += item.get_total_cost()
+        return total
+    
+    class Meta:
+        verbose_name = "Odepsání mimo recepty"
+        verbose_name_plural = "Odepsání mimo recepty"
+        ordering = ['-write_off_date', '-created_at']
+
+
+class StockWriteOffItem(models.Model):
+    """Položka odepsání - konkrétní surovina a množství"""
+    write_off = models.ForeignKey(
+        StockWriteOff,
+        on_delete=models.CASCADE,
+        related_name='items',
+        verbose_name="Odepsání"
+    )
+    ingredient = models.ForeignKey(
+        Ingredient,
+        on_delete=models.PROTECT,
+        verbose_name="Surovina"
+    )
+    quantity = models.DecimalField(
+        max_digits=10,
+        decimal_places=3,
+        verbose_name="Množství"
+    )
+    unit_cost = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        verbose_name="Jednotková nákupní cena s DPH",
+        help_text="Automaticky převzato ze skladu v okamžiku odepisování"
+    )
+    notes = models.CharField(
+        max_length=200,
+        blank=True,
+        verbose_name="Poznámka k položce"
+    )
+    
+    def __str__(self):
+        return f"{self.ingredient.name}: {self.quantity} {self.ingredient.base_unit}"
+    
+    def get_total_cost(self):
+        """Vrátí celkovou nákupní cenu (množství × jednotková cena)"""
+        return self.quantity * self.unit_cost
+    
+    def save(self, *args, **kwargs):
+        """
+        Při vytvoření automaticky odepisuje ze skladu a zapisuje jednotkovou cenu.
+        Při úpravě povoluje pouze změnu poznámky a prodejní ceny.
+        """
+        is_new = self._state.adding
+        
+        if is_new:
+            try:
+                stock_item = StockItem.objects.get(
+                    ingredient=self.ingredient,
+                    warehouse=self.write_off.warehouse
+                )
+                
+                if stock_item.quantity < self.quantity:
+                    raise ValidationError(
+                        f"Nedostatek {self.ingredient.name} na skladě. "
+                        f"Dostupné: {stock_item.quantity} {self.ingredient.base_unit}, "
+                        f"Požadováno: {self.quantity} {self.ingredient.base_unit}"
+                    )
+                
+                self.unit_cost = stock_item.price
+                super().save(*args, **kwargs)
+                
+                stock_item.quantity -= self.quantity
+                stock_item.save(update_fields=['quantity'])
+                
+            except StockItem.DoesNotExist:
+                raise ValidationError(
+                    f"Surovina {self.ingredient.name} není dostupná ve skladu {self.write_off.warehouse.name}"
+                )
+        else:
+            super().save(*args, **kwargs)
+    
+    class Meta:
+        verbose_name = "Položka odepsání"
+        verbose_name_plural = "Položky odepsání"
+        ordering = ['ingredient__name']
+        unique_together = ('write_off', 'ingredient')

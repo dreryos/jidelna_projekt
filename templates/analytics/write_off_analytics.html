@@ -1,0 +1,240 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Analytika odepisování zboží{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1><i class="fas fa-trash-alt me-2"></i>Analytika odepisování zboží</h1>
+        <a href="{% url 'inventory:stock_write_off_list' %}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left me-2"></i>Zpět na seznam odepisů
+        </a>
+    </div>
+
+    <!-- Filtry -->
+    <div class="card mb-4 shadow-sm">
+        <div class="card-body">
+            <form method="get" class="row g-3">
+                <div class="col-md-3">
+                    <label for="warehouse" class="form-label">Sklad:</label>
+                    <select name="warehouse" id="warehouse" class="form-select">
+                        <option value="">-- Všechny sklady --</option>
+                        {% for wh_id, wh_name in available_warehouses %}
+                            <option value="{{ wh_id }}" {% if selected_warehouse == wh_id|stringformat:"s" %}selected{% endif %}>
+                                {{ wh_name }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-md-3">
+                    <label for="category" class="form-label">Kategorie:</label>
+                    <select name="category" id="category" class="form-select">
+                        <option value="">-- Všechny kategorie --</option>
+                        {% for cat_code, cat_label in category_choices %}
+                            <option value="{{ cat_code }}" {% if selected_category == cat_code %}selected{% endif %}>
+                                {{ cat_label }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-md-3">
+                    <label for="date_from" class="form-label">Od:</label>
+                    <input type="date" name="date_from" id="date_from" class="form-control" value="{{ selected_date_from }}">
+                </div>
+
+                <div class="col-md-3">
+                    <label for="date_to" class="form-label">Do:</label>
+                    <input type="date" name="date_to" id="date_to" class="form-control" value="{{ selected_date_to }}">
+                </div>
+
+                <div class="col-12">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-filter me-2"></i>Filtrovat
+                    </button>
+                    <a href="{% url 'analytics:write_off_analytics' %}" class="btn btn-secondary">
+                        <i class="fas fa-redo me-2"></i>Vymazat
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Celkové statistiky -->
+    <div class="row g-4 mb-4">
+        <div class="col-md-3">
+            <div class="card bg-light shadow-sm">
+                <div class="card-body">
+                    <h6 class="card-title text-muted mb-2">Celkem odepisů</h6>
+                    <h3 class="mb-0">{{ total_stats.total_write_offs }}</h3>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card bg-danger text-white shadow-sm">
+                <div class="card-body">
+                    <h6 class="card-title mb-2">Celkové náklady</h6>
+                    <h3 class="mb-0">{{ total_stats.total_cost|floatformat:2 }} Kč</h3>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card bg-success text-white shadow-sm">
+                <div class="card-body">
+                    <h6 class="card-title mb-2">Celkový výnos</h6>
+                    <h3 class="mb-0">{{ total_stats.total_revenue|floatformat:2 }} Kč</h3>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card bg-warning text-dark shadow-sm">
+                <div class="card-body">
+                    <h6 class="card-title mb-2">Marže</h6>
+                    <h3 class="mb-0">{{ total_stats.total_margin|floatformat:2 }} Kč</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Statistiky podle kategorií -->
+    <div class="card mb-4 shadow-sm">
+        <div class="card-header bg-secondary text-white">
+            <h5 class="mb-0"><i class="fas fa-chart-pie me-2"></i>Přehled podle kategorií</h5>
+        </div>
+        <div class="card-body">
+            {% if category_stats %}
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Kategorie</th>
+                                <th class="text-end">Počet odepisů</th>
+                                <th class="text-end">Množství</th>
+                                <th class="text-end">Náklady</th>
+                                <th class="text-end">Výnos</th>
+                                <th class="text-end">Marže</th>
+                                <th class="text-end">Marže %</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for cat_code, stats in category_stats.items %}
+                                <tr>
+                                    <td>
+                                        <span class="badge bg-secondary">{{ stats.label }}</span>
+                                    </td>
+                                    <td class="text-end">{{ stats.count }}</td>
+                                    <td class="text-end">{{ stats.quantity }}</td>
+                                    <td class="text-end text-danger">{{ stats.total_cost|floatformat:2 }} Kč</td>
+                                    <td class="text-end text-success">{{ stats.total_revenue|floatformat:2 }} Kč</td>
+                                    <td class="text-end fw-bold">{{ stats.total_margin|floatformat:2 }} Kč</td>
+                                    <td class="text-end">{{ stats.margin_percent }}%</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="alert alert-info mb-0">
+                    <i class="fas fa-info-circle me-2"></i>Nejsou k dispozici žádné údaje pro vybrané filtry.
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Top 10 nejčastěji odepsaného zboží -->
+    <div class="card mb-4 shadow-sm">
+        <div class="card-header bg-secondary text-white">
+            <h5 class="mb-0"><i class="fas fa-star me-2"></i>Top 10 nejčastěji odepsaného zboží</h5>
+        </div>
+        <div class="card-body">
+            {% if top_items %}
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Zboží</th>
+                                <th class="text-end">Počet odepisů</th>
+                                <th class="text-end">Celkové množství</th>
+                                <th class="text-end">Celkové náklady</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in top_items %}
+                                <tr>
+                                    <td>{{ item.ingredient__name }}</td>
+                                    <td class="text-end">{{ item.count }}</td>
+                                    <td class="text-end">{{ item.total_quantity }}</td>
+                                    <td class="text-end text-danger">{{ item.total_cost|floatformat:2 }} Kč</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="alert alert-info mb-0">
+                    <i class="fas fa-info-circle me-2"></i>Nejsou k dispozici žádná data.
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Trend nákladů v čase -->
+    <div class="card shadow-sm">
+        <div class="card-header bg-secondary text-white">
+            <h5 class="mb-0"><i class="fas fa-chart-line me-2"></i>Trend nákladů (posledních 30 dní)</h5>
+        </div>
+        <div class="card-body">
+            {% if daily_costs %}
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Datum</th>
+                                <th class="text-end">Náklady</th>
+                                <th class="text-end">Výnos</th>
+                                <th class="text-end">Počet položek</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for day in daily_costs %}
+                                <tr>
+                                    <td>{{ day.write_off_date|date:"d.m.Y" }}</td>
+                                    <td class="text-end text-danger">{{ day.daily_cost|floatformat:2 }} Kč</td>
+                                    <td class="text-end text-success">{{ day.daily_revenue|floatformat:2 }} Kč</td>
+                                    <td class="text-end">{{ day.item_count }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="alert alert-info mb-0">
+                    <i class="fas fa-info-circle me-2"></i>Nejsou k dispozici žádné údaje z posledních 30 dní.
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<style>
+    .card {
+        border: none;
+        margin-bottom: 1rem;
+    }
+    
+    .card-header {
+        border-top-left-radius: 0.375rem;
+        border-top-right-radius: 0.375rem;
+    }
+    
+    .table-hover tbody tr:hover {
+        background-color: rgba(0, 0, 0, 0.02);
+    }
+</style>
+{% endblock %}

@@ -5,7 +5,8 @@ from django.core.exceptions import ValidationError
 from .models import (
     GoodsReceipt, GoodsReceiptItem, Warehouse, Ingredient, 
     InventoryVerification, InventoryVerificationItem,
-    StockTransfer, StockTransferItem, StockItem
+    StockTransfer, StockTransferItem, StockItem,
+    StockWriteOff, StockWriteOffItem
 )
 
 # České DPH sazby platné v roce 2026
@@ -395,4 +396,75 @@ StockTransferItemFormSet = inlineformset_factory(
     extra=1,  # 1 prázdný formulář
     max_num=100,  # Maximum 100 položek
     can_delete=True,  # Možnost smazání položky
+)
+
+
+class StockWriteOffForm(forms.ModelForm):
+    """Formulář pro vytvoření odepsání mimo recepty."""
+    
+    class Meta:
+        model = StockWriteOff
+        fields = ['warehouse', 'category', 'write_off_date', 'notes']
+        widgets = {
+            'warehouse': forms.Select(attrs={'class': 'form-select'}),
+            'category': forms.Select(attrs={'class': 'form-select'}),
+            'write_off_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+            'notes': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+        }
+        labels = {
+            'warehouse': 'Sklad',
+            'category': 'Kategorie',
+            'write_off_date': 'Datum odepisování',
+            'notes': 'Poznámky',
+        }
+    
+    def __init__(self, *args, user=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        
+        if user and not user.is_superuser:
+            try:
+                user_canteens = user.profile.canteens.all()
+                self.fields['warehouse'].queryset = Warehouse.objects.filter(canteen__in=user_canteens)
+            except:
+                self.fields['warehouse'].queryset = Warehouse.objects.none()
+
+
+class StockWriteOffItemForm(forms.ModelForm):
+    """Formulář pro jednu položku odepsání."""
+    
+    class Meta:
+        model = StockWriteOffItem
+        fields = ['ingredient', 'quantity', 'notes']
+        widgets = {
+            'ingredient': forms.Select(attrs={'class': 'form-select'}),
+            'quantity': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.001', 'min': '0.001', 'required': True}),
+            'notes': forms.TextInput(attrs={'class': 'form-control'}),
+        }
+        labels = {
+            'ingredient': 'Surovina',
+            'quantity': 'Množství',
+            'notes': 'Poznámka',
+        }
+    
+    def __init__(self, *args, warehouse=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        
+        if warehouse:
+            available_ingredients = StockItem.objects.filter(
+                warehouse=warehouse,
+                quantity__gt=0
+            ).values_list('ingredient_id', flat=True)
+            self.fields['ingredient'].queryset = Ingredient.objects.filter(
+                id__in=available_ingredients
+            ).order_by('name')
+
+
+StockWriteOffItemFormSet = inlineformset_factory(
+    StockWriteOff,
+    StockWriteOffItem,
+    form=StockWriteOffItemForm,
+    extra=0,
+    can_delete=True,
+    min_num=1,
+    validate_min=True,
 )

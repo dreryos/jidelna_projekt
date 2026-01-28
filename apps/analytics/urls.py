@@ -13,4 +13,7 @@ urlpatterns = [
     # Analýza nákladů receptů napříč časem
     path('recipe-costs/', views.recipe_cost_analysis, name='recipe_cost_analysis'),
     path('recipe-costs/<int:recipe_id>/', views.recipe_cost_detail, name='recipe_cost_detail'),
+    
+    # Analytika odepisování zboží
+    path('write-offs/', views.write_off_analytics, name='write_off_analytics'),
 ]

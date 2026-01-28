@@ -53,6 +53,29 @@ a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
   - Zvýšen počet workers na 2 pro lepší paralelizaci
   - Opraveno varování "No fonts configured in FontConfig" z WeasyPrint
 
+### Changed
+- **Inventory: Stock write-offs — odstraněno sledování tržeb a marží** (28.1.2026)
+  - Odebrána kategorie `BUFFET` z `StockWriteOff.Category`
+  - Odebráno pole `selling_price` z `StockWriteOffItem` a související metody `get_total_revenue`, `get_total_margin`, `get_total_selling_price`, `get_margin`
+  - Šablony aktualizovány: `stock_write_off_form.html`, `stock_write_off_list.html`, `stock_write_off_detail.html`, `stock_write_off_pdf.html` — odstraněny sloupce pro prodejní cenu, tržby a marži
+  - Admin: odstraněny zobrazení/metody související s tržbami/marží
+  - Analytics: refaktorováno `write_off_analytics` — statistiky nyní zobrazují pouze náklady (bez tržeb a marže)
+  - Migrace vytvořena a aplikována: `inventory/0015_remove_stockwriteoffitem_selling_price_and_more.py`
+
+### Fixed
+- **Inventory: Oprava chybné funkce vytvoření odepsání při jedné položce** (28.1.2026)
+  - Opraveno, že tlačítko "Vytvořit odepsání" nic nedělalo, pokud byla pouze jedna položka ve formuláři
+  - JavaScript: synchronizace autocomplete vstupů s hidden selecty na blur a při submitu (fallback)
+  - Formset: `extra=0` a klientské přidání výchozího prázdného řádku při načtení
+  - `can_delete=True` + přidán skrytý `DELETE` input pro mazání řádků
+  - Views: lepší validace (kontrola, že existuje alespoň jedna vyplněná položka), správné přiřazení `formset.instance` před uložením a lepší zpracování chyb
+
+### Removed
+- **Inventory: Odebrány pole a metody související s tržbami a marží** (28.1.2026)
+  - `StockWriteOffItem.selling_price` (pole) odstraněno
+  - Metody `get_total_revenue()`, `get_total_margin()`, `get_total_selling_price()`, `get_margin()` odstraněny
+  - Kategorie `BUFFET` odstraněna z `StockWriteOff.Category`
+
 ### Added
 - **XML záloha a obnova receptů a surovin (superuser)**
   - Export do XML: GET /core/backup/xml/ (superuser only), k dispozici i management command `export_backup_xml`

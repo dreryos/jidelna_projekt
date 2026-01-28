@@ -1,0 +1,150 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Detail odepsání #{{ write_off.pk }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col">
+            <h1><i class="fas fa-file-invoice"></i> Detail odepsání #{{ write_off.pk }}</h1>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'inventory:stock_write_off_list' %}">Odepsání</a></li>
+                    <li class="breadcrumb-item active">Detail #{{ write_off.pk }}</li>
+                </ol>
+            </nav>
+        </div>
+        <div class="col-auto">
+            <a href="{% url 'inventory:stock_write_off_pdf' write_off.pk %}" class="btn btn-outline-secondary" target="_blank">
+                <i class="fas fa-file-pdf"></i> Export do PDF
+            </a>
+            <a href="{% url 'inventory:stock_write_off_list' %}" class="btn btn-outline-primary">
+                <i class="fas fa-arrow-left"></i> Zpět na seznam
+            </a>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8">
+            <!-- Základní informace -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-info-circle"></i> Základní informace</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <dl class="row">
+                                <dt class="col-sm-5">Sklad:</dt>
+                                <dd class="col-sm-7">{{ write_off.warehouse.name }}</dd>
+                                
+                                <dt class="col-sm-5">Jídelna:</dt>
+                                <dd class="col-sm-7">{{ write_off.warehouse.canteen.name }}</dd>
+                                
+                                <dt class="col-sm-5">Kategorie:</dt>
+                                <dd class="col-sm-7">
+                                    <span class="badge {% if write_off.category == 'HYGIENE' %}bg-info{% elif write_off.category == 'BUFFET' %}bg-success{% else %}bg-secondary{% endif %}">
+                                        {{ write_off.get_category_display }}
+                                    </span>
+                                </dd>
+                                
+                                <dt class="col-sm-5">Datum:</dt>
+                                <dd class="col-sm-7">{{ write_off.write_off_date|date:"d.m.Y" }}</dd>
+                            </dl>
+                        </div>
+                        <div class="col-md-6">
+                            <dl class="row">
+                                <dt class="col-sm-5">Vytvořil:</dt>
+                                <dd class="col-sm-7">{{ write_off.created_by.get_full_name|default:write_off.created_by.username }}</dd>
+                                
+                                <dt class="col-sm-5">Vytvořeno:</dt>
+                                <dd class="col-sm-7">{{ write_off.created_at|date:"d.m.Y H:i" }}</dd>
+                                
+                                {% if write_off.cash_register_import_id %}
+                                <dt class="col-sm-5">Import z kasy:</dt>
+                                <dd class="col-sm-7">
+                                    <span class="badge bg-primary">{{ write_off.cash_register_import_id }}</span>
+                                </dd>
+                                {% endif %}
+                            </dl>
+                        </div>
+                    </div>
+                    
+                    {% if write_off.notes %}
+                    <hr>
+                    <h6>Poznámky:</h6>
+                    <p class="mb-0">{{ write_off.notes }}</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Položky odepsání -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-list"></i> Položky odepsání</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Surovina</th>
+                                    <th class="text-end">Množství</th>
+                                    <th class="text-end">Jednotka</th>
+                                    <th class="text-end">Nákupní cena</th>
+                                    <th class="text-end">Celkem náklady</th>
+                                    <th>Poznámka</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in write_off.items.all %}
+                                <tr>
+                                    <td>{{ item.ingredient.name }}</td>
+                                    <td class="text-end">{{ item.quantity|floatformat:3 }}</td>
+                                    <td class="text-end">{{ item.ingredient.base_unit }}</td>
+                                    <td class="text-end">{{ item.unit_cost|floatformat:2 }} Kč</td>
+                                    <td class="text-end"><strong>{{ item.get_total_cost|floatformat:2 }} Kč</strong></td>
+                                    <td>{{ item.notes|default:"—" }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                            <tfoot>
+                                <tr class="table-light">
+                                    <th colspan="4" class="text-end">Celkem:</th>
+                                    <th class="text-end">{{ write_off.get_total_cost|floatformat:2 }} Kč</th>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pravý panel - souhrn -->
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-chart-pie"></i> Souhrn</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <h6 class="text-muted mb-1">Celkové náklady</h6>
+                        <h3 class="mb-0">{{ write_off.get_total_cost|floatformat:2 }} Kč</h3>
+                        <small class="text-muted">Nákupní cena odepsaných položek</small>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h6 class="mb-0"><i class="fas fa-box"></i> Položky</h6>
+                </div>
+                <div class="card-body">
+                    <p class="mb-0">Celkem položek: <strong>{{ write_off.items.count }}</strong></p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
