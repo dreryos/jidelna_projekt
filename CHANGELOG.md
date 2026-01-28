@@ -27,6 +27,17 @@ a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
   - Zmenšené marginy (8mm) pro maximální využití plochy
   - Jednodušší CSS bez columns = rychlejší generování a menší paměťová náročnost
 
+- **DPH a cena bez DPH u StockItem změněny na readonly pole** (28.1.2026)
+  - Pole `vat_rate` a `price_without_vat` v adminu jsou nyní pouze pro čtení
+  - Ve view `/inventory/edit/<id>/` jsou tato pole odstraněna z editace
+  - Hodnoty se zobrazují jako informační zpráva s vysvětlením
+  - Tyto hodnoty se nastavují automaticky při potvrzení příjmu zboží (`GoodsReceipt.confirm()`)
+  - Řeší problém, kdy uživatel změnil DPH v adminu, ale hodnota se přepsala po dalším příjmu zboží
+  - Konzistentní chování: DPH vždy odpovídá poslednímu dodacímu listu
+  - Formulář explicitně nastavuje pole jako `disabled=True` pro vynucení readonly stavu
+  - Admin `save_model()` používá SQL UPDATE pro vynucení readonly hodnot i po přepočtech v `save()`
+  - Přidány testy: `test_admin_stockitem_readonly_fields_cannot_be_changed`, `test_stockitem_form_has_disabled_fields`
+
 ### Fixed
 - **Chyba 500 při mazání surovin** (23.1.2025)
   - Přidáno ošetření `ProtectedError` v `IngredientAdmin`

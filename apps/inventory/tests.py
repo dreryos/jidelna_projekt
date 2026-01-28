@@ -604,3 +604,106 @@ class GoodsReceiptTest(TestCase):
         stock = StockItem.objects.get(ingredient=self.ingredient1, warehouse=self.warehouse)
         self.assertEqual(stock.quantity, Decimal('15.000'))  # 10 + 5
         self.assertEqual(stock.price, Decimal('25.00'))  # Latest price
+
+
+class StockItemAdminTestCase(TestCase):
+    """Testy pro admin interface StockItem - ověření readonly chování."""
+    
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        
+        # Vytvoření superusera
+        self.admin_user = User.objects.create_superuser(
+            username='admin',
+            email='admin@test.com',
+            password='adminpass123'
+        )
+        
+        # Vytvoření testovacích dat
+        self.canteen = Canteen.objects.create(name='Testovací jídelna')
+        self.warehouse = Warehouse.objects.create(
+            name='Testovací sklad',
+            canteen=self.canteen
+        )
+        self.ingredient = Ingredient.objects.create(
+            name='Testovací surovina',
+            base_unit='kg'
+        )
+        
+        # Vytvoření StockItem
+        self.stock_item = StockItem.objects.create(
+            ingredient=self.ingredient,
+            warehouse=self.warehouse,
+            quantity=Decimal('10.000'),
+            price=Decimal('30.00'),
+            vat_rate=Decimal('12'),
+            price_without_vat=Decimal('26.79')
+        )
+    
+    def test_admin_stockitem_readonly_fields_cannot_be_changed(self):
+        """Test že readonly pole vat_rate a price_without_vat nelze změnit přes admin POST."""
+        from django.urls import reverse
+        from django.test import Client
+        
+        client = Client()
+        client.force_login(self.admin_user)
+        
+        # Původní hodnoty
+        original_vat = self.stock_item.vat_rate
+        original_price_without_vat = self.stock_item.price_without_vat
+        
+        # URL pro změnu v adminu
+        change_url = reverse('admin:inventory_stockitem_change', args=[self.stock_item.pk])
+        
+        # POST request se snahou změnit readonly pole
+        response = client.post(change_url, {
+            'ingredient': self.ingredient.pk,
+            'warehouse': self.warehouse.pk,
+            'quantity': '15.000',  # Toto se změní
+            'quantity_blocked': '0.000',
+            'price': '35.00',  # Toto se změní
+            'vat_rate': '0',  # Pokus změnit readonly pole (ignoruje se)
+            'price_without_vat': '35.00',  # Pokus změnit readonly pole (ignoruje se)
+            '_save': 'Uložit',
+        })
+        
+        # Debug: zkontrolovat response
+        if response.status_code == 200:
+            # Formulář má chyby
+            print(f"\n=== FORM ERRORS ===")
+            print(response.context['adminform'].form.errors if 'adminform' in response.context else "No context")
+        
+        # Admin by měl přesměrovat po úspěšném uložení
+        self.assertIn(response.status_code, [200, 302], 
+                     f"Unexpected status code: {response.status_code}")
+        
+        # Refresh z databáze
+        self.stock_item.refresh_from_db()
+        
+        # Ověření že editovatelná pole se změnila
+        self.assertEqual(self.stock_item.quantity, Decimal('15.000'))
+        self.assertEqual(self.stock_item.price, Decimal('35.00'))
+        
+        # Ověření že readonly pole zůstala NEZMĚNĚNÁ
+        self.assertEqual(self.stock_item.vat_rate, original_vat)
+        self.assertEqual(self.stock_item.price_without_vat, original_price_without_vat)
+    
+    def test_stockitem_form_has_disabled_fields(self):
+        """Test že StockItemForm nastavuje vat_rate a price_without_vat jako disabled."""
+        from apps.inventory.forms import StockItemForm
+        
+        form = StockItemForm(instance=self.stock_item)
+        
+        # Ověření že pole existují
+        self.assertIn('vat_rate', form.fields)
+        self.assertIn('price_without_vat', form.fields)
+        
+        # Ověření že jsou disabled
+        self.assertTrue(form.fields['vat_rate'].disabled)
+        self.assertTrue(form.fields['price_without_vat'].disabled)
+        
+        # Ověření že nejsou required
+        self.assertFalse(form.fields['vat_rate'].required)
+        self.assertFalse(form.fields['price_without_vat'].required)
+

@@ -67,6 +67,66 @@ class GoodsReceiptForm(forms.ModelForm):
         return cleaned_data
 
 
+class StockItemForm(forms.ModelForm):
+    """Formulář pro skladovou položku (admin).
+    
+    Pole vat_rate a price_without_vat jsou readonly - určují se automaticky
+    z příjmů zboží (GoodsReceipt.confirm()).
+    """
+
+    class Meta:
+        model = StockItem
+        fields = ['ingredient', 'warehouse', 'quantity', 'quantity_blocked', 'price', 'vat_rate', 'price_without_vat']
+        widgets = {
+            'ingredient': forms.Select(attrs={'class': 'form-select'}),
+            'warehouse': forms.Select(attrs={'class': 'form-select'}),
+            'quantity': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.001', 'min': '0'}),
+            'quantity_blocked': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.001', 'min': '0'}),
+            'price': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'min': '0'}),
+        }
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Pole vat_rate a price_without_vat nastavit jako disabled - nelze editovat
+        for name in ["vat_rate", "price_without_vat"]:
+            if name in self.fields:
+                self.fields[name].disabled = True
+                self.fields[name].required = False
+        
+        # Uložit originální hodnoty readonly polí
+        if self.instance and self.instance.pk:
+            self._original_vat_rate = self.instance.vat_rate
+            self._original_price_without_vat = self.instance.price_without_vat
+    
+    def save(self, commit=True):
+        """Ochrana proti přepsání readonly polí - vždy obnovit originální hodnoty."""
+        instance = super().save(commit=False)
+        
+        # Pro existující záznamy obnovit readonly pole a explicitně nastavit, která pole se mají uložit
+        if self.instance.pk and hasattr(self, '_original_vat_rate'):
+            # Obnovit původní hodnoty PŘED save()
+            instance.vat_rate = self._original_vat_rate
+            instance.price_without_vat = self._original_price_without_vat
+            
+            if commit:
+                # Použít update_fields pro částečnou aktualizaci - vynechat readonly pole
+                # Získat seznam změněných polí kromě readonly
+                update_fields = []
+                for field_name in self.changed_data:
+                    if field_name not in ['vat_rate', 'price_without_vat']:
+                        update_fields.append(field_name)
+                
+                if update_fields:
+                    instance.save(update_fields=update_fields)
+                # Pokud nejsou změněna žádná pole (pouze readonly), neuložíme nic
+        else:
+            # Pro nové záznamy normální save
+            if commit:
+                instance.save()
+        
+        return instance
+
+
 class GoodsReceiptItemForm(forms.ModelForm):
     """Formulář pro jednu položku příjmu zboží."""
     
@@ -112,9 +172,9 @@ class GoodsReceiptItemForm(forms.ModelForm):
         from apps.core.models import Ingredient
         self.fields['ingredient'].queryset = Ingredient.objects.filter(is_active=True)
         # Nastavení choices pro DPH sazbu
-        self.fields['vat_rate'] = forms.ChoiceField(
+        self.fields['vat_rate'] = forms.TypedChoiceField(
             choices=VAT_RATE_CHOICES,
-            initial=Decimal('12'),  # Výchozí 12%
+            coerce=Decimal,
             required=True,
             label='DPH %',
             widget=forms.Select(attrs={
@@ -123,6 +183,11 @@ class GoodsReceiptItemForm(forms.ModelForm):
                 'onchange': 'calculateVAT(this)'
             })
         )
+        # Zachovat DPH z instance při editaci, jinak výchozí 12%
+        if self.instance and self.instance.pk:
+            self.initial['vat_rate'] = self.instance.vat_rate
+        else:
+            self.initial.setdefault('vat_rate', Decimal('12'))
         # Označení povinných polí
         for field_name in ['ingredient', 'warehouse', 'quantity', 'vat_rate']:
             if field_name in self.fields:
@@ -141,7 +206,9 @@ class GoodsReceiptItemForm(forms.ModelForm):
         if vat_rate in (None, ''):
             return cleaned_data
 
-        vat_rate = Decimal(vat_rate)
+        if isinstance(vat_rate, str):
+            vat_rate = Decimal(vat_rate)
+        cleaned_data['vat_rate'] = vat_rate
 
         if price_without_vat is None and price_with_vat is None:
             raise ValidationError("Zadejte cenu bez DPH nebo cenu s DPH.")

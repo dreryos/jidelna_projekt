@@ -5,17 +5,37 @@ from .models import (
     InventoryVerification, InventoryVerificationItem, StockTransfer, StockTransferItem,
     Supplier, SupplierIngredientTemplate, StockWriteOff, StockWriteOffItem
 )
-from .forms import VAT_RATE_CHOICES
+from .forms import VAT_RATE_CHOICES, StockItemForm
 
 # Admin pro skladové položky. Zde se nastavuje vyhledávání a filtr podle skladu.
 # `autocomplete_fields` zlepšují UX při výběru surovin nebo skladu.
 
 @admin.register(StockItem)
 class StockItemAdmin(admin.ModelAdmin):
-    list_display = ('ingredient', 'warehouse', 'quantity', 'price')
+    list_display = ('ingredient', 'warehouse', 'quantity', 'price', 'vat_rate')
     list_filter = ('warehouse',)
     search_fields = ('ingredient__name', 'warehouse__name')
     autocomplete_fields = ['ingredient', 'warehouse']
+    readonly_fields = ['vat_rate', 'price_without_vat']
+    form = StockItemForm
+    
+    def save_model(self, request, obj, form, change):
+        """Ochrana readonly polí - obnovit originální hodnoty před uložením."""
+        if change and obj.pk:
+            # Pro update obnovit readonly pole z databáze
+            original = StockItem.objects.get(pk=obj.pk)
+            obj.vat_rate = original.vat_rate
+            obj.price_without_vat = original.price_without_vat
+        
+        super().save_model(request, obj, form, change)
+        
+        # Po save() obnovit readonly pole znovu (save() je může přepočítat)
+        if change and obj.pk:
+            # Použít SQL UPDATE pro vynucení readonly hodnot
+            StockItem.objects.filter(pk=obj.pk).update(
+                vat_rate=original.vat_rate,
+                price_without_vat=original.price_without_vat
+            )
 
 
 @admin.register(IngredientPriceHistory)

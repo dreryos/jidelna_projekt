@@ -7,7 +7,7 @@ Tento soubor sleduje hlavní úkoly, bugy a nápady pro projekt. Pro detailněj�
 ## 🚀 Priorita / Urgentní
 *Věci, které je třeba vyřešit co nejdříve (např. blokující chyby).*
 
-- [ ] Modul bufet a odpisy zbylých nejídel
+- [x] Modul bufet a odpisy zbylých jídel
 
 ---
 
@@ -18,6 +18,7 @@ Tento soubor sleduje hlavní úkoly, bugy a nápady pro projekt. Pro detailněj�
 - [ ] V manuálním příjmu zboží dát DPH dříve než než ceny - upozornění že po změně DPH znovu zadat ceny.
 - [ ] Při vytvoření nové suroviny se nezobrazuje v autocomplete dokud neobnovím stránku
 - [ ] Po uložení jídelníčku se nezobrazí v tabulce - až po refresh
+- [x] Skladové položky si nepamatují svoji sazbu DPH (resetují se na 21 %)
 
 ---
 
