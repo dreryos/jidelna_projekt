@@ -149,15 +149,25 @@ def generate_order_report(canteen, date_from, date_to):
 @login_required
 def order_report_export(request):
     """Endpoint, který exportuje report jako Excel nebo PDF podle query parametru `download`."""
-    download = request.GET.get('download')
-    canteen_id = request.GET.get('canteen')
-    date_from = request.GET.get('from')
-    date_to = request.GET.get('to')
+    user = request.user
+    if user.is_superuser:
+        canteen_queryset = Canteen.objects.all()
+    else:
+        try:
+            canteen_queryset = user.profile.canteens.all()
+        except ObjectDoesNotExist:
+            return HttpResponse('Access denied', status=403)
 
-    try:
-        canteen = Canteen.objects.get(pk=canteen_id)
-    except Exception:
-        return HttpResponse('Invalid canteen', status=400)
+    form = ReportForm(request.GET)
+    form.fields['canteen'].queryset = canteen_queryset
+    if not form.is_valid():
+        return HttpResponse('Invalid parameters', status=400)
+
+    canteen = form.cleaned_data['canteen']
+    date_from = form.cleaned_data['date_from']
+    date_to = form.cleaned_data['date_to']
+
+    download = request.GET.get('download')
 
     report = generate_order_report(canteen, date_from, date_to)
     
