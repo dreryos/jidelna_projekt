@@ -17,7 +17,7 @@ from django.utils import timezone
 
 from apps.production.models import MenuPlan, ProductionOrder
 from apps.core.models import Recipe, Category
-from apps.canteens.models import Canteen
+from apps.canteens.models import Canteen, Warehouse
 from apps.inventory.models import StockItem, StockWriteOff, StockWriteOffItem
 
 
@@ -464,8 +464,8 @@ def write_off_analytics(request):
         cat_label = category_choice[1]
         cat_items = write_offs.filter(category=cat_code)
         
-        total_cost = cat_items.aggregate(total=Sum('stockwriteoffitem__unit_cost'))['total'] or Decimal('0')
-        total_quantity = cat_items.aggregate(total=Sum('stockwriteoffitem__quantity'))['total'] or 0
+        total_cost = cat_items.aggregate(total=Sum('items__unit_cost'))['total'] or Decimal('0')
+        total_quantity = cat_items.aggregate(total=Sum('items__quantity'))['total'] or 0
         
         if total_quantity > 0 or total_cost > 0:
             category_stats[cat_code] = {
@@ -489,26 +489,25 @@ def write_off_analytics(request):
     daily_costs = write_offs.filter(
         write_off_date__gte=thirty_days_ago
     ).values('write_off_date').annotate(
-        daily_cost=Sum('stockwriteoffitem__unit_cost'),
-        item_count=Count('stockwriteoffitem')
+        daily_cost=Sum('items__unit_cost'),
+        item_count=Count('items')
     ).order_by('write_off_date')
     
     # Celkové statistiky
     total_stats = {
         'total_write_offs': write_offs.count(),
-        'total_cost': round(write_offs.aggregate(total=Sum('stockwriteoffitem__unit_cost'))['total'] or Decimal('0'), 2),
+        'total_cost': round(write_offs.aggregate(total=Sum('items__unit_cost'))['total'] or Decimal('0'), 2),
         'avg_cost_per_write_off': Decimal('0'),
     }
     
-    total_stats['total_margin'] = round(total_stats['total_revenue'] - total_stats['total_cost'], 2)
     if write_offs.count() > 0:
         total_stats['avg_cost_per_write_off'] = round(total_stats['total_cost'] / write_offs.count(), 2)
     
     # Dostupné sklady pro filtr
     if user.is_superuser:
-        available_warehouses = Canteen.objects.values_list('warehouse_id', 'warehouse__name').distinct()
+        available_warehouses = Warehouse.objects.values_list('id', 'name').distinct()
     else:
-        available_warehouses = Canteen.objects.filter(id__in=user.profile.canteens.all()).values_list('warehouse_id', 'warehouse__name').distinct()
+        available_warehouses = Warehouse.objects.filter(canteen__in=user.profile.canteens.all()).values_list('id', 'name').distinct()
     
     context = {
         'write_offs': write_offs,
