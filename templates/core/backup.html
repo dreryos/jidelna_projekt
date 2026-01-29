@@ -237,18 +237,9 @@
 </div>
 
 <script>
-// Mapa závislostí: entita -> závislé entity
-const dependencies = {
-  'recipes': ['ingredients', 'categories'],
-  'stock_items': ['ingredients', 'warehouses'],
-  'warehouses': ['canteens'],
-  'menu_plans': ['canteens'],
-  'production_orders': ['recipes', 'menu_plans', 'canteens'],
-  'goods_receipts': ['warehouses', 'suppliers'],
-  'stock_transfers': ['warehouses'],
-  'inventory_verifications': ['warehouses'],
-  'stock_write_offs': ['warehouses']
-};
+// Závislosti a labely předané z backendu
+const dependencies = {{ entity_dependencies|safe }};
+const entityLabels = {{ entity_labels|safe }};
 
 // Výchozí entity
 const defaultEntities = ['ingredients', 'categories', 'recipes'];
@@ -283,15 +274,7 @@ function updateDependencyWarning() {
   const text = document.getElementById('dependencyText');
   
   if (missing.length > 0) {
-    const labels = {
-      'ingredients': 'suroviny',
-      'categories': 'kategorie',
-      'recipes': 'recepty',
-      'canteens': 'jídelny',
-      'warehouses': 'sklady',
-      'suppliers': 'dodavatelé'
-    };
-    const missingLabels = missing.map(e => labels[e] || e).join(', ');
+    const missingLabels = missing.map(e => entityLabels[e] || e).join(', ');
     text.textContent = `Pro správnou funkci bude automaticky přidáno: ${missingLabels}`;
     warning.classList.remove('d-none');
   } else {

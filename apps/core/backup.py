@@ -608,7 +608,6 @@ def _import_warehouses(root: ET.Element, canteen_map: Dict[str, Canteen], report
     """Importuje sklady a vrátí mapu název -> objekt."""
     warehouse_map = {}
     report['warehouses_created'] = 0
-    report['warehouses_updated'] = 0
     
     warehouses_el = root.find("Warehouses")
     if warehouses_el is None:
@@ -635,8 +634,7 @@ def _import_warehouses(root: ET.Element, canteen_map: Dict[str, Canteen], report
         
         if created:
             report['warehouses_created'] += 1
-        else:
-            report['warehouses_updated'] += 0  # U skladů nic neměníme
+        # Sklady se pouze vytvářejí, neaktualizují
         
         warehouse_map[f"{canteen_name}:{name}"] = warehouse
     
@@ -1001,7 +999,6 @@ def import_backup_xml(xml_content: bytes, dry_run: bool = False) -> Dict[str, An
         "canteens_created": 0,
         "canteens_updated": 0,
         "warehouses_created": 0,
-        "warehouses_updated": 0,
         "suppliers_created": 0,
         "suppliers_updated": 0,
         "supplier_templates_created": 0,
@@ -1179,24 +1176,37 @@ def import_backup_xml(xml_content: bytes, dry_run: bool = False) -> Dict[str, An
         # Tyto entity jsou komplexní a obvykle se neimportují (jsou pro exportní účely)
         # Pokud by byly v XML, pouze je započítáme ale neimportujeme detaily
         
+        # Záznamy o entitách, které jsou v XML ale neimportujeme
+        skipped_entities = []
+        
         goods_receipts_el = root.find("GoodsReceipts")
         if goods_receipts_el is not None:
-            report["goods_receipts_created"] = 0  # Nepodporujeme import
+            report["goods_receipts_created"] = 0
+            skipped_entities.append("příjmy zboží")
         
         stock_transfers_el = root.find("StockTransfers")
         if stock_transfers_el is not None:
-            report["stock_transfers_created"] = 0  # Nepodporujeme import
+            report["stock_transfers_created"] = 0
+            skipped_entities.append("převodky")
         
         inventory_el = root.find("InventoryVerifications")
         if inventory_el is not None:
-            report["inventory_verifications_created"] = 0  # Nepodporujeme import
+            report["inventory_verifications_created"] = 0
+            skipped_entities.append("inventury")
         
         writeoffs_el = root.find("StockWriteOffs")
         if writeoffs_el is not None:
-            report["stock_write_offs_created"] = 0  # Nepodporujeme import
+            report["stock_write_offs_created"] = 0
+            skipped_entities.append("odpisy")
+        
+        if skipped_entities:
+            report["skipped_entities_warning"] = (
+                f"Následující entity byly v záloze nalezeny, ale nebyly importovány: "
+                f"{', '.join(skipped_entities)}. Tyto entity slouží pouze pro exportní účely."
+            )
         
         if dry_run:
-            raise Exception("Dry-run: changes rolled back")
+            transaction.set_rollback(True)
     
     return report
 

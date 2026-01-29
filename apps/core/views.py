@@ -12,10 +12,11 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.db.models import Model, ProtectedError
 from typing import Type, Any
 from functools import wraps
+import json
 
 from apps.core.models import Recipe, RecipeIngredient, Ingredient
 from apps.core.forms import RecipeIngredientForm, RecipeForm, IngredientForm
-from apps.core.backup import export_backup_xml, import_backup_xml
+from apps.core.backup import export_backup_xml, import_backup_xml, ENTITY_DEPENDENCIES, ENTITY_LABELS
 
 """
 Tento modul je místo pro view funkce související s jádrem aplikace (recepty, suroviny).
@@ -167,7 +168,12 @@ def backup_page(request):
 			messages.error(request, f'Chyba při importu: {e}')
 		return redirect('core:backup_page')
 
-	return render(request, 'core/backup.html')
+	# Předáme závislosti do šablony jako JSON pro použití v JavaScriptu
+	context = {
+		'entity_dependencies': json.dumps(ENTITY_DEPENDENCIES),
+		'entity_labels': json.dumps(ENTITY_LABELS),
+	}
+	return render(request, 'core/backup.html', context)
 
 
 class RecipeListView(LoginRequiredMixin, ListView):

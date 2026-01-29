@@ -75,7 +75,7 @@ class Command(BaseCommand):
                 if entity in selected_entities:
                     self.stdout.write(self.style.SUCCESS(f"  ✓ {label}"))
                 else:
-                    self.stdout.write(self.style.NOTICE(f"  → {label} (závislost)"))
+                    self.stdout.write(self.style.WARNING(f"  → {label} (závislost)"))
         
         # Provedeme export
         try:
