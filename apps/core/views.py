@@ -101,9 +101,25 @@ def backup_export_xml_view(request):
 	if not request.user.is_superuser:
 		return HttpResponse(status=403)
 
-	xml_bytes = export_backup_xml()
+	# Získáme vybrané entity z GET parametrů
+	selected_entities = request.GET.getlist('entities')
+	
+	# Pokud nejsou vybrány žádné entity, použijeme výchozí
+	if not selected_entities:
+		selected_entities = None
+
+	xml_bytes = export_backup_xml(selected_entities)
+	
+	# Generujeme název souboru podle obsahu
+	if selected_entities:
+		filename = f"backup_{'_'.join(selected_entities[:3])}.xml"
+		if len(selected_entities) > 3:
+			filename = f"backup_partial_{len(selected_entities)}_entities.xml"
+	else:
+		filename = "backup_default.xml"
+	
 	response = HttpResponse(xml_bytes, content_type='application/xml')
-	response['Content-Disposition'] = 'attachment; filename="recipes_backup.xml"'
+	response['Content-Disposition'] = f'attachment; filename="{filename}"'
 	return response
 
 
