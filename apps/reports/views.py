@@ -35,6 +35,14 @@ class ReportForm(forms.Form):
 
 @login_required
 def order_report(request):
+    """
+    Render the order report form or display a generated order report based on submitted criteria.
+    
+    If the request is GET, renders a form whose canteen choices are limited to canteens the user may access. If the request is POST and the form is valid, verifies the user has access to the selected canteen, generates the report for the given date range, adds Excel and PDF export URLs, and renders the report result. If the user lacks access to the chosen canteen, returns a 403 response.
+    
+    Returns:
+        HttpResponse: A response rendering the report form, the generated report result, or an HTTP 403 response when access is denied.
+    """
     user = request.user
     
     # Filtruj canteens na managed_canteens
@@ -60,9 +68,9 @@ def order_report(request):
             date_from = form.cleaned_data['date_from']
             date_to = form.cleaned_data['date_to']
             report = generate_order_report(canteen, date_from, date_to)
-            # links for exports (point to download endpoint)
-            report['excel_url'] = reverse('reports:order_report_download') + f"?download=excel&canteen={canteen.pk}&from={date_from}&to={date_to}"
-            report['pdf_url'] = reverse('reports:order_report_download') + f"?download=pdf&canteen={canteen.pk}&from={date_from}&to={date_to}"
+            # links for exports (point to export endpoint)
+            report['excel_url'] = reverse('reports:order_report_export') + f"?download=excel&canteen={canteen.pk}&from={date_from}&to={date_to}"
+            report['pdf_url'] = reverse('reports:order_report_export') + f"?download=pdf&canteen={canteen.pk}&from={date_from}&to={date_to}"
             return render(request, 'reports/report_result.html', {'report': report})
     else:
         form = ReportForm()
@@ -147,17 +155,27 @@ def generate_order_report(canteen, date_from, date_to):
 
 
 @login_required
-def order_report_download(request):
-    """Endpoint, který stáhne report jako Excel nebo PDF podle query parametru `download`."""
-    download = request.GET.get('download')
-    canteen_id = request.GET.get('canteen')
-    date_from = request.GET.get('from')
-    date_to = request.GET.get('to')
+def order_report_export(request):
+    """Endpoint, který exportuje report jako Excel nebo PDF podle query parametru `download`."""
+    user = request.user
+    if user.is_superuser:
+        canteen_queryset = Canteen.objects.all()
+    else:
+        try:
+            canteen_queryset = user.profile.canteens.all()
+        except ObjectDoesNotExist:
+            return HttpResponse('Access denied', status=403)
 
-    try:
-        canteen = Canteen.objects.get(pk=canteen_id)
-    except Exception:
-        return HttpResponse('Invalid canteen', status=400)
+    form = ReportForm(request.GET)
+    form.fields['canteen'].queryset = canteen_queryset
+    if not form.is_valid():
+        return HttpResponse('Invalid parameters', status=400)
+
+    canteen = form.cleaned_data['canteen']
+    date_from = form.cleaned_data['date_from']
+    date_to = form.cleaned_data['date_to']
+
+    download = request.GET.get('download')
 
     report = generate_order_report(canteen, date_from, date_to)
     
