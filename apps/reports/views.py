@@ -35,6 +35,14 @@ class ReportForm(forms.Form):
 
 @login_required
 def order_report(request):
+    """
+    Render the order report form or display a generated order report based on submitted criteria.
+    
+    If the request is GET, renders a form whose canteen choices are limited to canteens the user may access. If the request is POST and the form is valid, verifies the user has access to the selected canteen, generates the report for the given date range, adds Excel and PDF export URLs, and renders the report result. If the user lacks access to the chosen canteen, returns a 403 response.
+    
+    Returns:
+        HttpResponse: A response rendering the report form, the generated report result, or an HTTP 403 response when access is denied.
+    """
     user = request.user
     
     # Filtruj canteens na managed_canteens
