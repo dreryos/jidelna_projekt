@@ -1,4 +1,5 @@
 import xml.etree.ElementTree as ET
+from defusedxml import ElementTree as DefusedET
 from decimal import Decimal
 from typing import Dict, Any, List, Optional, Set
 from datetime import datetime
@@ -752,15 +753,16 @@ def _import_stock_items(root: ET.Element, ingredient_map: Dict[str, Ingredient],
         if created:
             report['stock_items_created'] += 1
         else:
-            # Aktualizujeme hodnoty
-            stock_item.quantity = quantity
-            stock_item.quantity_blocked = quantity_blocked
-            stock_item.price = price
-            stock_item.vat_rate = vat_rate
-            if price_without_vat is not None:
-                stock_item.price_without_vat = price_without_vat
-            stock_item.save()
-            report['stock_items_updated'] += 1
+            # Merge chování: aktualizujeme pouze pokud je hodnota přítomna v XML
+            changed = False
+            changed |= _update_if_missing(stock_item, 'quantity', quantity)
+            changed |= _update_if_missing(stock_item, 'quantity_blocked', quantity_blocked)
+            changed |= _update_if_missing(stock_item, 'price', price)
+            changed |= _update_if_missing(stock_item, 'vat_rate', vat_rate)
+            changed |= _update_if_missing(stock_item, 'price_without_vat', price_without_vat)
+            if changed:
+                stock_item.save()
+                report['stock_items_updated'] += 1
 
 
 def _import_menu_templates(root: ET.Element, report: Dict[str, Any]) -> None:
@@ -1019,7 +1021,7 @@ def import_backup_xml(xml_content: bytes, dry_run: bool = False) -> Dict[str, An
         "stock_write_offs_created": 0,
     }
     
-    root = ET.fromstring(xml_content)
+    root = DefusedET.fromstring(xml_content)
     
     with transaction.atomic():
         # Základní entity (vždy importujeme pokud jsou v XML)
