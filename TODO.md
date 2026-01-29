@@ -8,6 +8,7 @@ Tento soubor sleduje hlavní úkoly, bugy a nápady pro projekt. Pro detailněj�
 *Věci, které je třeba vyřešit co nejdříve (např. blokující chyby).*
 
 - [x] Modul bufet a odpisy zbylých jídel
+- [ ] Kategorie při ručním odpisu přidat kategorie (Provozní - zaměstnanci, Výchovní zaměstnanci, Učitelky)
 
 ---
 
