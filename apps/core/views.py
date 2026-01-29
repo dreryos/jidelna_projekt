@@ -12,10 +12,11 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.db.models import Model, ProtectedError
 from typing import Type, Any
 from functools import wraps
+import json
 
 from apps.core.models import Recipe, RecipeIngredient, Ingredient
 from apps.core.forms import RecipeIngredientForm, RecipeForm, IngredientForm
-from apps.core.backup import export_backup_xml, import_backup_xml
+from apps.core.backup import export_backup_xml, import_backup_xml, ENTITY_DEPENDENCIES, ENTITY_LABELS
 
 """
 Tento modul je místo pro view funkce související s jádrem aplikace (recepty, suroviny).
@@ -101,9 +102,25 @@ def backup_export_xml_view(request):
 	if not request.user.is_superuser:
 		return HttpResponse(status=403)
 
-	xml_bytes = export_backup_xml()
+	# Získáme vybrané entity z GET parametrů
+	selected_entities = request.GET.getlist('entities')
+	
+	# Pokud nejsou vybrány žádné entity, použijeme výchozí
+	if not selected_entities:
+		selected_entities = None
+
+	xml_bytes = export_backup_xml(selected_entities)
+	
+	# Generujeme název souboru podle obsahu
+	if selected_entities:
+		filename = f"backup_{'_'.join(selected_entities[:3])}.xml"
+		if len(selected_entities) > 3:
+			filename = f"backup_partial_{len(selected_entities)}_entities.xml"
+	else:
+		filename = "backup_default.xml"
+	
 	response = HttpResponse(xml_bytes, content_type='application/xml')
-	response['Content-Disposition'] = 'attachment; filename="recipes_backup.xml"'
+	response['Content-Disposition'] = f'attachment; filename="{filename}"'
 	return response
 
 
@@ -151,7 +168,12 @@ def backup_page(request):
 			messages.error(request, f'Chyba při importu: {e}')
 		return redirect('core:backup_page')
 
-	return render(request, 'core/backup.html')
+	# Předáme závislosti do šablony jako JSON pro použití v JavaScriptu
+	context = {
+		'entity_dependencies': json.dumps(ENTITY_DEPENDENCIES),
+		'entity_labels': json.dumps(ENTITY_LABELS),
+	}
+	return render(request, 'core/backup.html', context)
 
 
 class RecipeListView(LoginRequiredMixin, ListView):

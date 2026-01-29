@@ -1,25 +1,202 @@
 {% extends 'base.html' %}
 {% load django_bootstrap5 %}
 
-{% block title %}Záloha receptů a surovin{% endblock %}
+{% block title %}Záloha a obnova dat{% endblock %}
 
 {% block content %}
 <div class="row justify-content-center">
-  <div class="col-lg-8">
+  <div class="col-lg-10">
     <div class="card shadow-sm mb-4">
-      <div class="card-header bg-primary text-white d-flex align-items-center justify-content-between">
-        <h5 class="mb-0"><i class="fas fa-archive me-2"></i>Záloha</h5>
-        <a href="{% url 'core:backup_export_xml' %}" class="btn btn-light btn-sm">
-          <i class="fas fa-download me-2"></i>Stáhnout XML
-        </a>
+      <div class="card-header bg-primary text-white">
+        <h5 class="mb-0"><i class="fas fa-archive me-2"></i>Export zálohy</h5>
       </div>
       <div class="card-body">
-        <p class="text-muted mb-3">
-          Stáhne kompletní seznam surovin, kategorií a receptů v XML formátu pro zálohu nebo přesun dat.
-        </p>
-        <div class="alert alert-info mb-0">
+        <form id="backupForm" method="get" action="{% url 'core:backup_export_xml' %}">
+          <p class="text-muted mb-3">
+            Vyberte, které entity chcete zahrnout do zálohy. Závislé entity budou automaticky přidány.
+          </p>
+          
+          <!-- Základní data -->
+          <div class="mb-3">
+            <h6 class="text-primary border-bottom pb-2">
+              <i class="fas fa-database me-2"></i>Základní data
+            </h6>
+            <div class="row">
+              <div class="col-md-4">
+                <div class="form-check">
+                  <input class="form-check-input entity-checkbox" type="checkbox" name="entities" value="ingredients" id="chk_ingredients" checked>
+                  <label class="form-check-label" for="chk_ingredients">
+                    <i class="fas fa-carrot me-1 text-success"></i>Seznam surovin
+                  </label>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <div class="form-check">
+                  <input class="form-check-input entity-checkbox" type="checkbox" name="entities" value="categories" id="chk_categories" checked>
+                  <label class="form-check-label" for="chk_categories">
+                    <i class="fas fa-tags me-1 text-info"></i>Kategorie jídel
+                  </label>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <div class="form-check">
+                  <input class="form-check-input entity-checkbox" type="checkbox" name="entities" value="recipes" id="chk_recipes" checked>
+                  <label class="form-check-label" for="chk_recipes">
+                    <i class="fas fa-book-open me-1 text-warning"></i>Recepty
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Referenční data -->
+          <div class="mb-3">
+            <h6 class="text-secondary border-bottom pb-2">
+              <i class="fas fa-building me-2"></i>Referenční data
+            </h6>
+            <div class="row">
+              <div class="col-md-4">
+                <div class="form-check">
+                  <input class="form-check-input entity-checkbox" type="checkbox" name="entities" value="canteens" id="chk_canteens">
+                  <label class="form-check-label" for="chk_canteens">
+                    <i class="fas fa-utensils me-1"></i>Jídelny
+                  </label>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <div class="form-check">
+                  <input class="form-check-input entity-checkbox" type="checkbox" name="entities" value="warehouses" id="chk_warehouses">
+                  <label class="form-check-label" for="chk_warehouses">
+                    <i class="fas fa-warehouse me-1"></i>Sklady
+                  </label>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <div class="form-check">
+                  <input class="form-check-input entity-checkbox" type="checkbox" name="entities" value="suppliers" id="chk_suppliers">
+                  <label class="form-check-label" for="chk_suppliers">
+                    <i class="fas fa-truck me-1"></i>Dodavatelé
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Skladové operace -->
+          <div class="mb-3">
+            <h6 class="text-success border-bottom pb-2">
+              <i class="fas fa-boxes me-2"></i>Skladové operace
+            </h6>
+            <div class="row">
+              <div class="col-md-4">
+                <div class="form-check">
+                  <input class="form-check-input entity-checkbox" type="checkbox" name="entities" value="stock_items" id="chk_stock_items">
+                  <label class="form-check-label" for="chk_stock_items">
+                    <i class="fas fa-box me-1"></i>Stav skladů
+                  </label>
+                  <small class="text-muted d-block">Aktuální zásoby a ceny</small>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <div class="form-check">
+                  <input class="form-check-input entity-checkbox" type="checkbox" name="entities" value="goods_receipts" id="chk_goods_receipts">
+                  <label class="form-check-label" for="chk_goods_receipts">
+                    <i class="fas fa-sign-in-alt me-1"></i>Příjmy zboží
+                  </label>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <div class="form-check">
+                  <input class="form-check-input entity-checkbox" type="checkbox" name="entities" value="stock_transfers" id="chk_stock_transfers">
+                  <label class="form-check-label" for="chk_stock_transfers">
+                    <i class="fas fa-exchange-alt me-1"></i>Převodky
+                  </label>
+                </div>
+              </div>
+            </div>
+            <div class="row mt-2">
+              <div class="col-md-4">
+                <div class="form-check">
+                  <input class="form-check-input entity-checkbox" type="checkbox" name="entities" value="inventory_verifications" id="chk_inventory_verifications">
+                  <label class="form-check-label" for="chk_inventory_verifications">
+                    <i class="fas fa-clipboard-check me-1"></i>Inventury
+                  </label>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <div class="form-check">
+                  <input class="form-check-input entity-checkbox" type="checkbox" name="entities" value="stock_write_offs" id="chk_stock_write_offs">
+                  <label class="form-check-label" for="chk_stock_write_offs">
+                    <i class="fas fa-minus-circle me-1"></i>Odpisy
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Výroba -->
+          <div class="mb-3">
+            <h6 class="text-info border-bottom pb-2">
+              <i class="fas fa-industry me-2"></i>Výroba
+            </h6>
+            <div class="row">
+              <div class="col-md-4">
+                <div class="form-check">
+                  <input class="form-check-input entity-checkbox" type="checkbox" name="entities" value="menu_templates" id="chk_menu_templates">
+                  <label class="form-check-label" for="chk_menu_templates">
+                    <i class="fas fa-file-code me-1"></i>Šablony jídelníčků
+                  </label>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <div class="form-check">
+                  <input class="form-check-input entity-checkbox" type="checkbox" name="entities" value="menu_plans" id="chk_menu_plans">
+                  <label class="form-check-label" for="chk_menu_plans">
+                    <i class="fas fa-calendar-alt me-1"></i>Jídelníčky
+                  </label>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <div class="form-check">
+                  <input class="form-check-input entity-checkbox" type="checkbox" name="entities" value="production_orders" id="chk_production_orders">
+                  <label class="form-check-label" for="chk_production_orders">
+                    <i class="fas fa-fire me-1"></i>Výrobní příkazy
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Výběr všech / žádných -->
+          <div class="d-flex gap-2 mb-3">
+            <button type="button" class="btn btn-sm btn-outline-primary" onclick="selectAllEntities(true)">
+              <i class="fas fa-check-square me-1"></i>Vybrat vše
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selectAllEntities(false)">
+              <i class="fas fa-square me-1"></i>Zrušit výběr
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-success" onclick="selectDefaultEntities()">
+              <i class="fas fa-undo me-1"></i>Výchozí (základní)
+            </button>
+          </div>
+
+          <!-- Varování o závislostech -->
+          <div id="dependencyWarning" class="alert alert-info d-none">
+            <i class="fas fa-info-circle me-2"></i>
+            <span id="dependencyText"></span>
+          </div>
+
+          <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+            <button type="submit" class="btn btn-primary">
+              <i class="fas fa-download me-2"></i>Stáhnout XML zálohu
+            </button>
+          </div>
+        </form>
+
+        <div class="alert alert-info mt-3 mb-0">
           <i class="fas fa-info-circle me-2"></i>
-          Přístup jen pro superuser. Export obsahuje všechny suroviny, kategorie a recepty s normami.
+          <strong>Tip:</strong> Pro běžnou zálohu stačí vybrat <em>Základní data</em> (suroviny, kategorie, recepty).
+          Pro kompletní zálohu všech dat použijte tlačítko <em>Vybrat vše</em>.
         </div>
       </div>
     </div>
@@ -32,18 +209,18 @@
         <form method="post" enctype="multipart/form-data">
           {% csrf_token %}
           <div class="mb-3">
-            <label class="form-label" for="id_file">XML soubor</label>
+            <label class="form-label" for="id_file">XML soubor zálohy</label>
             <input class="form-control" type="file" name="file" id="id_file" accept=".xml" required>
-            <div class="form-text">Nahrajte dříve exportovanou zálohu.</div>
+            <div class="form-text">
+              Nahrajte dříve exportovanou zálohu. Import podporuje XML verze 1.0 i 2.0.
+              Importované entity se slučují s existujícími daty (doplňují se chybějící hodnoty).
+            </div>
           </div>
           <div class="form-check form-switch mb-3">
             <input class="form-check-input" type="checkbox" role="switch" id="id_dry_run" name="dry_run" value="1">
             <label class="form-check-label" for="id_dry_run">Dry-run (pouze validace, bez zápisu)</label>
           </div>
           <div class="d-grid gap-2 d-md-flex justify-content-md-end">
-            <a href="{% url 'core:backup_export_xml' %}" class="btn btn-outline-secondary">
-              <i class="fas fa-download me-2"></i>Stáhnout XML
-            </a>
             <button type="submit" class="btn btn-success">
               <i class="fas fa-cloud-upload-alt me-2"></i>Spustit import
             </button>
@@ -51,10 +228,79 @@
         </form>
         <div class="alert alert-warning mt-3 mb-0">
           <i class="fas fa-exclamation-triangle me-2"></i>
-          Import doplňuje chybějící data (kategorie, suroviny, recepty). Existující hodnoty se nepřepisují, normy se aktualizují.
+          <strong>Upozornění:</strong> Import doplňuje chybějící data, existující hodnoty se nepřepisují.
+          Import velkého množství dat může chvíli trvat.
         </div>
       </div>
     </div>
   </div>
 </div>
+
+<script>
+// Závislosti a labely předané z backendu
+const dependencies = {{ entity_dependencies|safe }};
+const entityLabels = {{ entity_labels|safe }};
+
+// Výchozí entity
+const defaultEntities = ['ingredients', 'categories', 'recipes'];
+
+function getRequiredEntities(selected) {
+  const result = new Set(selected);
+  let changed = true;
+  
+  while (changed) {
+    changed = false;
+    for (const entity of result) {
+      const deps = dependencies[entity] || [];
+      for (const dep of deps) {
+        if (!result.has(dep)) {
+          result.add(dep);
+          changed = true;
+        }
+      }
+    }
+  }
+  
+  return result;
+}
+
+function updateDependencyWarning() {
+  const checkboxes = document.querySelectorAll('.entity-checkbox:checked');
+  const selected = Array.from(checkboxes).map(cb => cb.value);
+  const required = getRequiredEntities(selected);
+  const missing = Array.from(required).filter(e => !selected.includes(e));
+  
+  const warning = document.getElementById('dependencyWarning');
+  const text = document.getElementById('dependencyText');
+  
+  if (missing.length > 0) {
+    const missingLabels = missing.map(e => entityLabels[e] || e).join(', ');
+    text.textContent = `Pro správnou funkci bude automaticky přidáno: ${missingLabels}`;
+    warning.classList.remove('d-none');
+  } else {
+    warning.classList.add('d-none');
+  }
+}
+
+function selectAllEntities(checked) {
+  document.querySelectorAll('.entity-checkbox').forEach(cb => {
+    cb.checked = checked;
+  });
+  updateDependencyWarning();
+}
+
+function selectDefaultEntities() {
+  document.querySelectorAll('.entity-checkbox').forEach(cb => {
+    cb.checked = defaultEntities.includes(cb.value);
+  });
+  updateDependencyWarning();
+}
+
+// Inicializace
+document.querySelectorAll('.entity-checkbox').forEach(cb => {
+  cb.addEventListener('change', updateDependencyWarning);
+});
+
+updateDependencyWarning();
+</script>
 {% endblock %}

@@ -8,6 +8,26 @@ a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
 ## [Unreleased]
 
 ### Added
+- **Rozšířené zálohování s výběrem entit** (29.1.2026)
+  - Export zálohy nyní podporuje výběr, které entity zálohovat
+  - Nové entity dostupné pro zálohu:
+    - Seznam surovin, kategorie jídel, recepty (existující)
+    - Jídelny, sklady, dodavatelé
+    - Stav skladů (StockItem)
+    - Šablony jídelníčků (MenuTemplate)
+    - Jídelníčky (MenuPlan) včetně koeficientů
+    - Výrobní příkazy (ProductionOrder) včetně variant porcí a override ingrediencí
+    - Příjmy zboží (GoodsReceipt) včetně položek
+    - Převodky (StockTransfer) včetně položek
+    - Inventury (InventoryVerification) včetně položek
+    - Odpisy (StockWriteOff) včetně položek
+  - XML formát verze 2.0 s atributem `exportDate`
+  - Automatické řešení závislostí mezi entitami (např. pro recepty se automaticky přidají suroviny a kategorie)
+  - Rozšířené UI v `/backup/` s checkboxy pro výběr entit a JavaScript validací závislostí
+  - Management command `export_backup_xml` s parametry `--<entity>` pro každou entitu a `--all` pro všechny
+  - Příkaz `export_backup_xml --list-entities` pro výpis dostupných entit
+  - Zachování zpětné kompatibility: XML verze 1.0 lze stále importovat
+
 - **Soft delete pro suroviny** (23.1.2025)
   - Přidána podpora pro deaktivaci surovin místo trvalého smazání
   - Nová pole v modelu `Ingredient`: `is_active`, `deactivated_at`, `deactivated_by`
