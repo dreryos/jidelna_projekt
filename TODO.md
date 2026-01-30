@@ -8,14 +8,14 @@ Tento soubor sleduje hlavní úkoly, bugy a nápady pro projekt. Pro detailněj�
 *Věci, které je třeba vyřešit co nejdříve (např. blokující chyby).*
 
 - [x] Modul bufet a odpisy zbylých jídel
-- [ ] Kategorie při ručním odpisu přidat kategorie (Provozní - zaměstnanci, Výchovní zaměstnanci, Učitelky)
+- [x] Kategorie při ručním odpisu přidat kategorie (Provozní - zaměstnanci, Výchovní zaměstnanci, Učitelky)
 
 ---
 
 ## 🐛 Bugy (Chyby)
 *Nalezené chyby, které neblokují hlavní funkčnost, ale je třeba je opravit.*
 
-- [ ] Šablony k manuálnímu příjmu zboží - nereflektují nastavení v adminu, jací jsou dostupní dodavatelé a co dodávají.
+- [x] Šablony k manuálnímu příjmu zboží - nereflektují nastavení v adminu, jací jsou dostupní dodavatelé a co dodávají.
 - [ ] V manuálním příjmu zboží dát DPH dříve než než ceny - upozornění že po změně DPH znovu zadat ceny.
 - [ ] Při vytvoření nové suroviny se nezobrazuje v autocomplete dokud neobnovím stránku
 - [ ] Po uložení jídelníčku se nezobrazí v tabulce - až po refresh

@@ -260,29 +260,27 @@ label.required::after {
         </h5>
         <div class="template-selector-section">
           <div class="d-flex flex-wrap gap-3 mb-3">
-            <button type="button" 
-                    class="btn btn-outline-success btn-lg template-btn" 
-                    data-supplier="zelinar"
-                    data-bs-toggle="tooltip" 
-                    title="Načíst šablonu pro ovoce a zeleninu">
-              <i class="fas fa-carrot me-2"></i>
-              <span class="d-none d-sm-inline">Zelinář</span>
-              <span class="d-inline d-sm-none">🥕</span>
+            {% for supplier in active_suppliers %}
+            <button type="button"
+                    class="btn btn-{{ supplier.button_color }} btn-lg template-btn"
+                    data-supplier="{{ supplier.slug }}"
+                    data-bs-toggle="tooltip"
+                    title="Načíst šablonu: {{ supplier.name }}">
+              <i class="fas {{ supplier.icon_class }} me-2"></i>
+              <span class="d-none d-sm-inline">{{ supplier.name }}</span>
+              <span class="d-inline d-sm-none">📦</span>
             </button>
-            <button type="button" 
-                    class="btn btn-outline-warning btn-lg template-btn" 
-                    data-supplier="pekarna"
-                    data-bs-toggle="tooltip" 
-                    title="Načíst šablonu pro pečivo">
-              <i class="fas fa-bread-slice me-2"></i>
-              <span class="d-none d-sm-inline">Pekárna</span>
-              <span class="d-inline d-sm-none">🍞</span>
-            </button>
-            <button type="button" 
-                    class="btn btn-outline-secondary undo-btn" 
-                    id="undoTemplateBtn" 
+            {% empty %}
+            <div class="alert alert-info mb-0">
+              <i class="fas fa-info-circle me-2"></i>
+              Žádní aktivní dodavatelé nejsou nastaveni. Přidejte dodavatele v <a href="{% url 'admin:inventory_supplier_changelist' %}">administraci</a>.
+            </div>
+            {% endfor %}
+            <button type="button"
+                    class="btn btn-outline-secondary undo-btn"
+                    id="undoTemplateBtn"
                     style="display: none;"
-                    data-bs-toggle="tooltip" 
+                    data-bs-toggle="tooltip"
                     title="Vrátit předchozí stav">
               <i class="fas fa-undo me-2"></i>
               <span class="d-none d-sm-inline">Zpět</span>
@@ -364,9 +362,9 @@ label.required::after {
               <th style="width: 24%;">Surovina <span class="text-danger">*</span></th>
               <th style="width: 14%;">Sklad <span class="text-danger">*</span></th>
               <th style="width: 10%;">Množství <span class="text-danger">*</span></th>
+              <th style="width: 10%;">DPH % <span class="text-danger">*</span></th>
               <th style="width: 12%;">Cena bez DPH</th>
-              <th style="width: 8%;">DPH % <span class="text-danger">*</span></th>
-              <th style="width: 12%;">Cena s DPH</th>
+              <th style="width: 10%;">Cena s DPH</th>
               <th style="width: 15%;">Poznámka</th>
               <th style="width: 5%; text-align: center;">Akce</th>
             </tr>
@@ -393,15 +391,15 @@ label.required::after {
                   {% endif %}
                 </td>
                 <td>
-                  {{ form.price_without_vat }}
-                  {% if form.price_without_vat.errors %}
-                    <div class="text-danger small">{{ form.price_without_vat.errors }}</div>
-                  {% endif %}
-                </td>
-                <td>
                   {{ form.vat_rate }}
                   {% if form.vat_rate.errors %}
                     <div class="text-danger small">{{ form.vat_rate.errors }}</div>
+                  {% endif %}
+                </td>
+                <td>
+                  {{ form.price_without_vat }}
+                  {% if form.price_without_vat.errors %}
+                    <div class="text-danger small">{{ form.price_without_vat.errors }}</div>
                   {% endif %}
                 </td>
                 <td>
