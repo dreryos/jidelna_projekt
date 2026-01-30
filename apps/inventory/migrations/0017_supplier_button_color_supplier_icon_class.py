@@ -24,9 +24,6 @@ def set_supplier_defaults(apps, schema_editor):
         Supplier.objects.filter(slug=slug).update(**defaults)
 
 
-
-
-
 class Migration(migrations.Migration):
 
     dependencies = [
