@@ -247,28 +247,39 @@ class SupplierIngredientTemplateInline(admin.TabularInline):
 
 @admin.register(Supplier)
 class SupplierAdmin(admin.ModelAdmin):
-    list_display = ('name', 'slug', 'is_active', 'template_count', 'template_cache_key')
-    list_filter = ('is_active',)
+    list_display = ('name', 'slug', 'is_active', 'display_icon', 'button_color', 'template_count', 'template_cache_key')
+    list_filter = ('is_active', 'button_color')
     search_fields = ('name', 'slug')
     prepopulated_fields = {'slug': ('name',)}
     readonly_fields = ('template_cache_key',)
     inlines = [SupplierIngredientTemplateInline]
-    
+
     fieldsets = (
         ('Základní údaje', {
             'fields': ('name', 'slug', 'is_active')
+        }),
+        ('Vzhled tlačítka v šablonách', {
+            'fields': ('icon_class', 'button_color'),
+            'description': 'Nastavení ikony a barvy tlačítka pro rychlé šablony v příjmu zboží. '
+                          'Ikony: https://fontawesome.com/icons (např. fa-carrot, fa-bread-slice)'
         }),
         ('Technické údaje', {
             'fields': ('template_cache_key',),
             'classes': ('collapse',)
         }),
     )
-    
+
     def template_count(self, obj):
         """Počet surovin v šabloně"""
         return obj.template_ingredients.count()
     template_count.short_description = 'Počet surovin'
-    
+
+    def display_icon(self, obj):
+        """Zobrazení ikony v seznamu"""
+        return f'<i class="fas {obj.icon_class}"></i> {obj.icon_class}'
+    display_icon.short_description = 'Ikona'
+    display_icon.allow_tags = True
+
     def save_model(self, request, obj, form, change):
         """Při ukládání invaliduje cache"""
         super().save_model(request, obj, form, change)

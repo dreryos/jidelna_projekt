@@ -16,6 +16,22 @@ logger = logging.getLogger(__name__)
 
 class Supplier(models.Model):
     """Dodavatel s možností šablon surovin"""
+    
+    BUTTON_COLOR_CHOICES = [
+        ('primary', 'Modrá (primary)'),
+        ('secondary', 'Šedá (secondary)'),
+        ('success', 'Zelená (success)'),
+        ('danger', 'Červená (danger)'),
+        ('warning', 'Oranžová (warning)'),
+        ('info', 'Tyrkysová (info)'),
+        ('light', 'Světlá (light)'),
+        ('dark', 'Tmavá (dark)'),
+        ('outline-primary', 'Obrys modrá'),
+        ('outline-success', 'Obrys zelená'),
+        ('outline-warning', 'Obrys oranžová'),
+        ('outline-info', 'Obrys tyrkysová'),
+    ]
+    
     name = models.CharField(
         max_length=200,
         unique=True,
@@ -31,6 +47,19 @@ class Supplier(models.Model):
         default=True,
         verbose_name="Aktivní",
         help_text="Deaktivování skryje dodavatele ze šablon"
+    )
+    icon_class = models.CharField(
+        max_length=100,
+        default='fa-box',
+        verbose_name="Ikona",
+        help_text="Font Awesome ikona (např. 'fa-carrot', 'fa-bread-slice', 'fa-box'). Seznam ikon: https://fontawesome.com/icons"
+    )
+    button_color = models.CharField(
+        max_length=30,
+        choices=BUTTON_COLOR_CHOICES,
+        default='outline-primary',
+        verbose_name="Barva tlačítka",
+        help_text="Barva tlačítka v rychlých šablonách"
     )
     template_cache_key = models.CharField(
         max_length=100,
@@ -1285,6 +1314,9 @@ class StockWriteOff(models.Model):
     """
     class Category(models.TextChoices):
         HYGIENE = 'HYGIENE', 'Hygiena'
+        OPERATIONAL_EMPLOYEES = 'OPERATIONAL_EMPLOYEES', 'Provozní - zaměstnanci'
+        EDUCATIONAL_EMPLOYEES = 'EDUCATIONAL_EMPLOYEES', 'Výchovní zaměstnanci'
+        TEACHERS = 'TEACHERS', 'Učitelky'
         OTHER = 'OTHER', 'Ostatní'
     
     warehouse = models.ForeignKey(
@@ -1294,7 +1326,7 @@ class StockWriteOff(models.Model):
         verbose_name="Sklad"
     )
     category = models.CharField(
-        max_length=20,
+        max_length=25,
         choices=Category.choices,
         default=Category.OTHER,
         verbose_name="Kategorie"
