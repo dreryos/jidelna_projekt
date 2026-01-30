@@ -24,15 +24,7 @@ def set_supplier_defaults(apps, schema_editor):
         Supplier.objects.filter(slug=slug).update(**defaults)
 
 
-def reverse_supplier_defaults(apps, schema_editor):
-    """Vrácení na obecné defaulty"""
-    Supplier = apps.get_model('inventory', 'Supplier')
-    
-    # Vrácení na výchozí hodnoty
-    Supplier.objects.filter(slug__in=['zelinar', 'pekarna']).update(
-        icon_class='fa-box',
-        button_color='outline-primary'
-    )
+
 
 
 class Migration(migrations.Migration):
@@ -54,6 +46,6 @@ class Migration(migrations.Migration):
         ),
         migrations.RunPython(
             set_supplier_defaults,
-            reverse_supplier_defaults
+            migrations.RunPython.noop
         ),
     ]
