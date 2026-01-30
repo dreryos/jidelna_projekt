@@ -3,6 +3,38 @@
 from django.db import migrations, models
 
 
+def set_supplier_defaults(apps, schema_editor):
+    """Nastavení výchozích ikon a barev pro existující dodavatele"""
+    Supplier = apps.get_model('inventory', 'Supplier')
+    
+    # Definice výchozích hodnot pro dodavatele podle slugu
+    supplier_defaults = {
+        'zelinar': {
+            'icon_class': 'fa-carrot',
+            'button_color': 'outline-success'
+        },
+        'pekarna': {
+            'icon_class': 'fa-bread-slice',
+            'button_color': 'outline-warning'
+        }
+    }
+    
+    # Aktualizace existujících dodavatelů
+    for slug, defaults in supplier_defaults.items():
+        Supplier.objects.filter(slug=slug).update(**defaults)
+
+
+def reverse_supplier_defaults(apps, schema_editor):
+    """Vrácení na obecné defaulty"""
+    Supplier = apps.get_model('inventory', 'Supplier')
+    
+    # Vrácení na výchozí hodnoty
+    Supplier.objects.filter(slug__in=['zelinar', 'pekarna']).update(
+        icon_class='fa-box',
+        button_color='outline-primary'
+    )
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -19,5 +51,9 @@ class Migration(migrations.Migration):
             model_name='supplier',
             name='icon_class',
             field=models.CharField(default='fa-box', help_text="Font Awesome ikona (např. 'fa-carrot', 'fa-bread-slice', 'fa-box'). Seznam ikon: https://fontawesome.com/icons", max_length=100, verbose_name='Ikona'),
+        ),
+        migrations.RunPython(
+            set_supplier_defaults,
+            reverse_supplier_defaults
         ),
     ]
