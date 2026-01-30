@@ -1,4 +1,5 @@
 from django.contrib import admin
+from django.utils.html import format_html
 from decimal import Decimal
 from .models import (
     StockItem, IngredientPriceHistory, GoodsReceipt, GoodsReceiptItem,
@@ -274,11 +275,10 @@ class SupplierAdmin(admin.ModelAdmin):
         return obj.template_ingredients.count()
     template_count.short_description = 'Počet surovin'
 
+    @admin.display(description='Ikona')
     def display_icon(self, obj):
         """Zobrazení ikony v seznamu"""
-        return f'<i class="fas {obj.icon_class}"></i> {obj.icon_class}'
-    display_icon.short_description = 'Ikona'
-    display_icon.allow_tags = True
+        return format_html('<i class="fas {}"></i> {}', obj.icon_class, obj.icon_class)
 
     def save_model(self, request, obj, form, change):
         """Při ukládání invaliduje cache"""
