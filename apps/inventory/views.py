@@ -639,7 +639,6 @@ def goods_receipt_create(request):
         formset = GoodsReceiptItemFormSet()
     
     # Načtení aktivních dodavatelů pro rychlé šablony
-    from .models import Supplier
     active_suppliers = Supplier.objects.filter(is_active=True).order_by('name')
     
     context = {
