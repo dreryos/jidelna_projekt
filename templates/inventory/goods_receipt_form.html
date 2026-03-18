@@ -4,6 +4,8 @@
 {% block title %}Nový příjem zboží - Spíž{% endblock %}
 
 {% block extra_css %}
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet" />
 <style>
 .formset-table {
     width: 100%;
@@ -116,6 +118,23 @@ label.required::after {
         min-width: 70px;
         font-size: 0.9rem;
     }
+}
+
+/* Select2 v tabulce */
+.formset-table .select2-container {
+    min-width: 180px;
+    width: 100% !important;
+}
+.formset-table .select2-selection--single {
+    height: calc(1.5em + 0.5rem + 2px) !important;
+    font-size: 0.9rem;
+}
+.formset-table .select2-selection__rendered {
+    line-height: calc(1.5em + 0.5rem) !important;
+    font-size: 0.9rem;
+}
+.formset-table .select2-selection__arrow {
+    height: calc(1.5em + 0.5rem + 2px) !important;
 }
 
 /* Auto-generate receipt number styly */
@@ -448,6 +467,8 @@ label.required::after {
 {% endblock %}
 
 {% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script>
 // Vypočítat cenu s DPH nebo bez DPH na základě poslední upravovaného pole
 function calculateVAT(element) {
@@ -553,6 +574,39 @@ function syncDefaultWarehouse() {
   });
 }
 
+// Inicializace Select2 na řádku formsetu
+function initRowSelect2(row) {
+  const ingredientSelect = row.querySelector('select[name$="-ingredient"]');
+  if (!ingredientSelect) return;
+
+  // Odstranit VŠECHNY Select2 kontejnery z buňky <td> (artefakty z klonování)
+  const td = ingredientSelect.closest('td');
+  if (td) {
+    td.querySelectorAll('.select2').forEach(function(el) { el.remove(); });
+  }
+
+  // Vyčistit Select2 atributy ze samotného <select>
+  ingredientSelect.classList.remove('select2-hidden-accessible');
+  ingredientSelect.removeAttribute('data-select2-id');
+  ingredientSelect.removeAttribute('tabindex');
+  ingredientSelect.removeAttribute('aria-hidden');
+  ingredientSelect.removeAttribute('aria-labelledby');
+  ingredientSelect.style.display = '';
+
+  // Vyčistit data-select2-id z jednotlivých <option> (klíčové pro nezávislost instancí)
+  ingredientSelect.querySelectorAll('option').forEach(function(opt) {
+    opt.removeAttribute('data-select2-id');
+  });
+
+  $(ingredientSelect).select2({
+    theme: 'bootstrap-5',
+    placeholder: 'Vyberte surovinu...',
+    allowClear: true,
+    width: '100%',
+    language: { noResults: function() { return 'Žádné výsledky'; } }
+  });
+}
+
 // Přidat nový řádek do formsetu
 function addFormsetRow() {
   const formsetBody = document.getElementById('formset-body');
@@ -577,8 +631,18 @@ function addFormsetRow() {
     console.error('No template row found');
     return;
   }
+
+  // Před klonováním zničit Select2 na zdrojovém řádku, aby se klonoval čistý <select>
+  const firstIngredientSelect = firstRow.querySelector('select[name$="-ingredient"]');
+  if (firstIngredientSelect && $(firstIngredientSelect).data('select2')) {
+    $(firstIngredientSelect).select2('destroy');
+  }
   
   const newRow = firstRow.cloneNode(true);
+
+  // Ihned znovu inicializovat Select2 na zdrojovém (prvním) řádku
+  initRowSelect2(firstRow);
+
   newRow.dataset.formIndex = currentTotal;
   
   // Aktualizovat všechny ID a name atributy
@@ -646,6 +710,9 @@ function addFormsetRow() {
   
   formsetBody.appendChild(newRow);
   totalFormsInput.value = currentTotal + 1;
+
+  // Inicializovat Select2 na novém řádku
+  initRowSelect2(newRow);
 }
 
 // Event listeners
@@ -678,7 +745,12 @@ document.addEventListener('DOMContentLoaded', function() {
   
   // Předvyplnit sklady pokud je výchozí sklad již nastaven
   syncDefaultWarehouse();
-  
+
+  // Inicializovat Select2 na všech řádcích v tabulce
+  document.querySelectorAll('.formset-row').forEach(row => {
+    initRowSelect2(row);
+  });
+
   // Template loading funkcionalita
   initializeTemplateSelector();
   
@@ -797,7 +869,7 @@ function fillRowWithIngredient(row, ingredient, index) {
   // Vyplnit surovinu
   const ingredientSelect = row.querySelector(`select[name$="-ingredient"]`);
   if (ingredientSelect) {
-    ingredientSelect.value = ingredient.ingredient_id;
+    $(ingredientSelect).val(ingredient.ingredient_id).trigger('change');
   }
   
   // Vyplnit cenu bez DPH
@@ -887,7 +959,11 @@ function restoreRowData(row, data) {
   fields.forEach(field => {
     const element = row.querySelector(`select[name$="-${field}"], input[name$="-${field}"], textarea[name$="-${field}"]`);
     if (element && data[field] !== undefined) {
-      element.value = data[field];
+      if (element.tagName === 'SELECT' && $(element).hasClass('select2-hidden-accessible')) {
+        $(element).val(data[field]).trigger('change');
+      } else {
+        element.value = data[field];
+      }
     }
   });
   
