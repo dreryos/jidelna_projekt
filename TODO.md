@@ -16,10 +16,11 @@ Tento soubor sleduje hlavní úkoly, bugy a nápady pro projekt. Pro detailněj�
 *Nalezené chyby, které neblokují hlavní funkčnost, ale je třeba je opravit.*
 
 - [x] Šablony k manuálnímu příjmu zboží - nereflektují nastavení v adminu, jací jsou dostupní dodavatelé a co dodávají.
-- [ ] V manuálním příjmu zboží dát DPH dříve než než ceny - upozornění že po změně DPH znovu zadat ceny.
+- [x] V manuálním příjmu zboží dát DPH dříve než než ceny - upozornění že po změně DPH znovu zadat ceny.
 - [ ] Při vytvoření nové suroviny se nezobrazuje v autocomplete dokud neobnovím stránku
 - [ ] Po uložení jídelníčku se nezobrazí v tabulce - až po refresh
 - [x] Skladové položky si nepamatují svoji sazbu DPH (resetují se na 21 %)
+- [ ] Při ručním importu aby se suroviny řadili podle abecedy, ne podle ID
 
 ---
 
