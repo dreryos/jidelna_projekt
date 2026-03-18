@@ -121,7 +121,7 @@ def _parse_item(item):
     total_price = _parse_decimal(item, 'price/amount', '0')
     
     # Výpočet ceny s DPH za jednotku
-    vat_multiplier = 1 + (vat_rate / Decimal('100'))
+    vat_multiplier = Decimal('1') + (vat_rate / Decimal('100'))
     price_gross = (price_net * vat_multiplier).quantize(Decimal('0.01'))
     
     # Částka DPH za jednotku

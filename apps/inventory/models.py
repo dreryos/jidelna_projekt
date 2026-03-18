@@ -227,15 +227,15 @@ class StockItem(models.Model):
     def save(self, *args, **kwargs):
         # Výpočet ceny bez DPH (price je cena s DPH)
         if self.price is not None and self.vat_rate is not None:
-             vat_multiplier = 1 + (self.vat_rate / Decimal('100'))
+             vat_multiplier = Decimal('1') + (self.vat_rate / Decimal('100'))
              self.price_without_vat = (self.price / vat_multiplier).quantize(Decimal('0.01'))
 
         # Automatická oprava nepřesností pro kusové položky
         if self.ingredient.base_unit in ['ks', 'kus', 'kusy']:
              # Pokud je množství velmi blízko celému číslu (chyba < 0.005), zaokrouhlíme ho
-             if abs(self.quantity - round(self.quantity)) < 0.005:
+             if abs(self.quantity - round(self.quantity)) < Decimal('0.005'):
                  self.quantity = round(self.quantity)
-             if abs(self.quantity_blocked - round(self.quantity_blocked)) < 0.005:
+             if abs(self.quantity_blocked - round(self.quantity_blocked)) < Decimal('0.005'):
                  self.quantity_blocked = round(self.quantity_blocked)
         
         # Sledujeme změny ceny a zaznamenáváme do historie
@@ -559,12 +559,12 @@ class GoodsReceiptItem(models.Model):
         """Vypočítá všechny DPH pole"""
         if self.price_without_vat and self.vat_rate is not None:
             # Výpočet z ceny bez DPH
-            vat_multiplier = 1 + (self.vat_rate / Decimal('100'))
+            vat_multiplier = Decimal('1') + (self.vat_rate / Decimal('100'))
             self.vat_amount = (self.price_without_vat * self.vat_rate / Decimal('100')).quantize(Decimal('0.01'))
             self.price = (self.price_without_vat + self.vat_amount).quantize(Decimal('0.01'))
         elif self.price and self.vat_rate is not None:
             # Výpočet z ceny s DPH (zpětný výpočet)
-            vat_multiplier = 1 + (self.vat_rate / Decimal('100'))
+            vat_multiplier = Decimal('1') + (self.vat_rate / Decimal('100'))
             self.price_without_vat = (self.price / vat_multiplier).quantize(Decimal('0.01'))
             self.vat_amount = (self.price - self.price_without_vat).quantize(Decimal('0.01'))
     

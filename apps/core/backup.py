@@ -4,6 +4,7 @@ from decimal import Decimal
 from typing import Dict, Any, List, Optional, Set
 from datetime import datetime
 
+from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.utils import timezone
 
@@ -971,17 +972,385 @@ def _import_production_orders(root: ET.Element, recipe_map: Dict[str, Recipe],
                 report['ingredient_overrides_created'] += 1
 
 
+def _import_goods_receipts(
+    root: ET.Element,
+    warehouse_map: Dict[str, Warehouse],
+    supplier_map: Dict,
+    ingredient_map: Dict,
+    user,
+    report: Dict[str, Any],
+) -> None:
+    """Importuje příjmy zboží včetně položek (bez spuštění confirm workflow)."""
+    receipts_el = root.find("GoodsReceipts")
+    if receipts_el is None:
+        return
+
+    for rec_el in receipts_el:
+        receipt_number = rec_el.get("receiptNumber", "").strip()
+        warehouse_name = rec_el.get("warehouseName", "").strip()
+        canteen_name = rec_el.get("canteenName", "").strip()
+        receipt_date = _date_or_none(rec_el.get("receiptDate", ""))
+        status = rec_el.get("status", "DRAFT").strip()
+        supplier = rec_el.get("supplier", "")
+        supplier_slug = rec_el.get("supplierSlug", "")
+        notes = rec_el.get("notes", "")
+        confirmed_at = _datetime_or_none(rec_el.get("confirmedAt", ""))
+
+        if not receipt_number:
+            continue
+
+        wh_key = f"{canteen_name}:{warehouse_name}"
+        if wh_key not in warehouse_map:
+            # Zkusíme hledat jen podle jména skladu (bez jídelny)
+            wh_key_fallback = next(
+                (k for k in warehouse_map if k.endswith(f":{warehouse_name}")), None
+            )
+            if wh_key_fallback:
+                wh_key = wh_key_fallback
+            else:
+                report["missing_references"].append(
+                    f"Warehouse '{warehouse_name}' (canteen '{canteen_name}') for GoodsReceipt {receipt_number}"
+                )
+                continue
+
+        warehouse = warehouse_map[wh_key]
+        supplier_obj = supplier_map.get(supplier_slug) if supplier_slug else None
+
+        receipt, created = GoodsReceipt.objects.get_or_create(
+            receipt_number=receipt_number,
+            warehouse=warehouse,
+            defaults={
+                "receipt_date": receipt_date or timezone.now().date(),
+                "status": status,
+                "supplier": supplier,
+                "supplier_obj": supplier_obj,
+                "notes": notes,
+                "created_by": user,
+                "confirmed_at": confirmed_at,
+            },
+        )
+        if created:
+            report["goods_receipts_created"] += 1
+        else:
+            # Příjem již existuje – přeskočíme i položky
+            continue
+
+        # Položky příjmu – vytvoříme přímo bez triger confirm workflow
+        items_el = rec_el.find("Items")
+        if items_el is None:
+            continue
+
+        items_to_create = []
+        for item_el in items_el:
+            ing_name = item_el.get("ingredientName", "").strip()
+            item_wh_name = item_el.get("warehouseName", "").strip()
+            quantity = _decimal_or_none(item_el.get("quantity", ""))
+            price = _decimal_or_none(item_el.get("price", ""))
+            price_without_vat = _decimal_or_none(item_el.get("priceWithoutVat", ""))
+            vat_rate = _decimal_or_none(item_el.get("vatRate", "")) or Decimal("21.00")
+            item_notes = item_el.get("notes", "")
+
+            if ing_name not in ingredient_map or quantity is None or price is None:
+                report["missing_references"].append(
+                    f"Ingredient '{ing_name}' for GoodsReceiptItem in receipt {receipt_number}"
+                )
+                continue
+
+            item_wh_key = f"{canteen_name}:{item_wh_name}"
+            item_warehouse = warehouse_map.get(item_wh_key, warehouse)
+
+            items_to_create.append(
+                GoodsReceiptItem(
+                    goods_receipt=receipt,
+                    ingredient=ingredient_map[ing_name],
+                    warehouse=item_warehouse,
+                    quantity=quantity,
+                    price=price,
+                    price_without_vat=price_without_vat,
+                    vat_rate=vat_rate,
+                    notes=item_notes,
+                )
+            )
+
+        GoodsReceiptItem.objects.bulk_create(items_to_create, ignore_conflicts=False)
+
+
+def _import_stock_transfers(
+    root: ET.Element,
+    warehouse_map: Dict[str, Warehouse],
+    ingredient_map: Dict,
+    report: Dict[str, Any],
+) -> None:
+    """Importuje převodky včetně položek (bez spuštění workflow)."""
+    transfers_el = root.find("StockTransfers")
+    if transfers_el is None:
+        return
+
+    for trans_el in transfers_el:
+        transfer_number = trans_el.get("transferNumber", "").strip()
+        wh_from_name = trans_el.get("warehouseFromName", "").strip()
+        wh_to_name = trans_el.get("warehouseToName", "").strip()
+        transfer_date = _date_or_none(trans_el.get("transferDate", ""))
+        status = trans_el.get("status", "DRAFT").strip()
+        notes = trans_el.get("notes", "")
+        started_at = _datetime_or_none(trans_el.get("startedAt", ""))
+        completed_at = _datetime_or_none(trans_el.get("completedAt", ""))
+
+        if not transfer_number:
+            continue
+
+        # Najdeme sklady (libovolná jídelna)
+        wh_from = next(
+            (v for k, v in warehouse_map.items() if k.endswith(f":{wh_from_name}")), None
+        )
+        wh_to = next(
+            (v for k, v in warehouse_map.items() if k.endswith(f":{wh_to_name}")), None
+        )
+
+        if wh_from is None or wh_to is None:
+            report["missing_references"].append(
+                f"Warehouses '{wh_from_name}'/'{wh_to_name}' for StockTransfer {transfer_number}"
+            )
+            continue
+
+        # Deduplication podle transfer_number (único pole)
+        if StockTransfer.objects.filter(transfer_number=transfer_number).exists():
+            continue
+
+        # Obejdeme auto-generaci čísla v save() – nastavíme ručně a použijeme update_or_create
+        transfer = StockTransfer(
+            transfer_number=transfer_number,
+            warehouse_from=wh_from,
+            warehouse_to=wh_to,
+            transfer_date=transfer_date or timezone.now().date(),
+            status=status,
+            notes=notes,
+            started_at=started_at,
+            completed_at=completed_at,
+        )
+        # Přímý save přes parent, aby se nespustilo auto-generování čísla
+        StockTransfer.objects.bulk_create([transfer])
+        report["stock_transfers_created"] += 1
+
+        # Znovu načteme pro FK reference
+        transfer = StockTransfer.objects.get(transfer_number=transfer_number)
+
+        items_el = trans_el.find("Items")
+        if items_el is None:
+            continue
+
+        items_to_create = []
+        for item_el in items_el:
+            ing_name = item_el.get("ingredientName", "").strip()
+            quantity = _decimal_or_none(item_el.get("quantity", ""))
+            unit_price = _decimal_or_none(item_el.get("unitPriceWithVat", "")) or Decimal("0")
+
+            if ing_name not in ingredient_map or quantity is None:
+                report["missing_references"].append(
+                    f"Ingredient '{ing_name}' for StockTransferItem in transfer {transfer_number}"
+                )
+                continue
+
+            items_to_create.append(
+                StockTransferItem(
+                    stock_transfer=transfer,
+                    ingredient=ingredient_map[ing_name],
+                    quantity=quantity,
+                    unit_price_with_vat=unit_price,
+                )
+            )
+
+        StockTransferItem.objects.bulk_create(items_to_create, ignore_conflicts=True)
+
+
+def _import_inventory_verifications(
+    root: ET.Element,
+    warehouse_map: Dict[str, Warehouse],
+    ingredient_map: Dict,
+    user,
+    report: Dict[str, Any],
+) -> None:
+    """Importuje inventury včetně položek (bez spuštění workflow)."""
+    inventories_el = root.find("InventoryVerifications")
+    if inventories_el is None:
+        return
+
+    for inv_el in inventories_el:
+        warehouse_name = inv_el.get("warehouseName", "").strip()
+        canteen_name = inv_el.get("canteenName", "").strip()
+        status = inv_el.get("status", "DRAFT").strip()
+        notes = inv_el.get("notes", "")
+        started_at = _datetime_or_none(inv_el.get("startedAt", ""))
+        completed_at = _datetime_or_none(inv_el.get("completedAt", ""))
+        cancelled_at = _datetime_or_none(inv_el.get("cancelledAt", ""))
+
+        wh_key = f"{canteen_name}:{warehouse_name}"
+        if wh_key not in warehouse_map:
+            wh_key = next(
+                (k for k in warehouse_map if k.endswith(f":{warehouse_name}")), None
+            )
+            if not wh_key:
+                report["missing_references"].append(
+                    f"Warehouse '{warehouse_name}' for InventoryVerification"
+                )
+                continue
+
+        warehouse = warehouse_map[wh_key]
+
+        # Deduplication: warehouse + started_at (pokud je k dispozici)
+        if started_at is not None:
+            if InventoryVerification.objects.filter(
+                warehouse=warehouse, started_at=started_at
+            ).exists():
+                continue
+        elif completed_at is not None:
+            if InventoryVerification.objects.filter(
+                warehouse=warehouse, completed_at=completed_at, status=status
+            ).exists():
+                continue
+
+        inv = InventoryVerification(
+            warehouse=warehouse,
+            status=status,
+            notes=notes,
+            started_at=started_at,
+            completed_at=completed_at,
+            cancelled_at=cancelled_at,
+            created_by=user,
+        )
+        inv.save()
+        report["inventory_verifications_created"] += 1
+
+        items_el = inv_el.find("Items")
+        if items_el is None:
+            continue
+
+        items_to_create = []
+        for item_el in items_el:
+            ing_name = item_el.get("ingredientName", "").strip()
+            system_quantity = _decimal_or_none(item_el.get("systemQuantity", "")) or Decimal("0")
+            counted_quantity = _decimal_or_none(item_el.get("countedQuantity", ""))
+            difference = _decimal_or_none(item_el.get("difference", "")) or Decimal("0")
+            is_newly_found = item_el.get("isNewlyFound", "false").lower() == "true"
+            item_notes = item_el.get("notes", "")
+
+            if ing_name not in ingredient_map:
+                report["missing_references"].append(
+                    f"Ingredient '{ing_name}' for InventoryVerificationItem"
+                )
+                continue
+
+            items_to_create.append(
+                InventoryVerificationItem(
+                    verification=inv,
+                    ingredient=ingredient_map[ing_name],
+                    system_quantity=system_quantity,
+                    counted_quantity=counted_quantity,
+                    difference=difference,
+                    is_newly_found=is_newly_found,
+                    notes=item_notes,
+                )
+            )
+
+        InventoryVerificationItem.objects.bulk_create(items_to_create, ignore_conflicts=True)
+
+
+def _import_stock_write_offs(
+    root: ET.Element,
+    warehouse_map: Dict[str, Warehouse],
+    ingredient_map: Dict,
+    user,
+    report: Dict[str, Any],
+) -> None:
+    """Importuje odpisy mimo recepty včetně položek (bez spuštění write-off logiky)."""
+    writeoffs_el = root.find("StockWriteOffs")
+    if writeoffs_el is None:
+        return
+
+    for wo_el in writeoffs_el:
+        warehouse_name = wo_el.get("warehouseName", "").strip()
+        canteen_name = wo_el.get("canteenName", "").strip()
+        category = wo_el.get("category", "OTHER").strip()
+        write_off_date = _date_or_none(wo_el.get("writeOffDate", ""))
+        notes = wo_el.get("notes", "")
+        cash_register_import_id = wo_el.get("cashRegisterImportId", "") or None
+
+        wh_key = f"{canteen_name}:{warehouse_name}"
+        if wh_key not in warehouse_map:
+            wh_key = next(
+                (k for k in warehouse_map if k.endswith(f":{warehouse_name}")), None
+            )
+            if not wh_key:
+                report["missing_references"].append(
+                    f"Warehouse '{warehouse_name}' for StockWriteOff"
+                )
+                continue
+
+        warehouse = warehouse_map[wh_key]
+
+        # Deduplication: cash_register_import_id (pokud je k dispozici)
+        if cash_register_import_id:
+            if StockWriteOff.objects.filter(
+                cash_register_import_id=cash_register_import_id
+            ).exists():
+                continue
+
+        wo = StockWriteOff(
+            warehouse=warehouse,
+            category=category,
+            write_off_date=write_off_date or timezone.now().date(),
+            notes=notes,
+            created_by=user,
+            cash_register_import_id=cash_register_import_id,
+        )
+        wo.save()
+        report["stock_write_offs_created"] += 1
+
+        items_el = wo_el.find("Items")
+        if items_el is None:
+            continue
+
+        items_to_create = []
+        for item_el in items_el:
+            ing_name = item_el.get("ingredientName", "").strip()
+            quantity = _decimal_or_none(item_el.get("quantity", ""))
+            unit_cost = _decimal_or_none(item_el.get("unitCost", "")) or Decimal("0")
+            item_notes = item_el.get("notes", "")
+
+            if ing_name not in ingredient_map or quantity is None:
+                report["missing_references"].append(
+                    f"Ingredient '{ing_name}' for StockWriteOffItem"
+                )
+                continue
+
+            items_to_create.append(
+                StockWriteOffItem(
+                    write_off=wo,
+                    ingredient=ingredient_map[ing_name],
+                    quantity=quantity,
+                    unit_cost=unit_cost,
+                    notes=item_notes,
+                )
+            )
+
+        # bulk_create obejde vlastní save() metodu, která odečítá ze skladu –
+        # to je žádoucí při importu (sklady jsou importovány se správným stavem)
+        StockWriteOffItem.objects.bulk_create(items_to_create, ignore_conflicts=True)
+
+
 # ============================================================================
 # HLAVNÍ IMPORT FUNKCE
 # ============================================================================
 
-def import_backup_xml(xml_content: bytes, dry_run: bool = False) -> Dict[str, Any]:
+def import_backup_xml(xml_content: bytes, dry_run: bool = False, user=None) -> Dict[str, Any]:
     """
     Importuje zálohu z XML. Importuje pouze entity přítomné v XML.
     
     Args:
         xml_content: XML obsah jako bytes.
         dry_run: Pokud True, změny nejsou uloženy do databáze.
+        user: Uživatel, pod jehož jménem se vytváří záznamy (GoodsReceipt apod.).
+              Pokud None, použije se první superuživatel.
     
     Returns:
         Report o importu jako slovník.
@@ -1022,7 +1391,12 @@ def import_backup_xml(xml_content: bytes, dry_run: bool = False) -> Dict[str, An
     }
     
     root = DefusedET.fromstring(xml_content)
-    
+
+    # Zajistíme uživatele pro záznamy vyžadující created_by
+    if user is None:
+        User = get_user_model()
+        user = User.objects.filter(is_superuser=True).first()
+
     with transaction.atomic():
         # Základní entity (vždy importujeme pokud jsou v XML)
         # Categories
@@ -1048,17 +1422,36 @@ def import_backup_xml(xml_content: bytes, dry_run: bool = False) -> Dict[str, An
             name = ing_el.get("name", "").strip()
             if not name:
                 continue
-            ing, created = Ingredient.objects.get_or_create(name=name)
+
+            base_unit_xml = ing_el.get("baseUnit", "").strip()
+            recipe_unit_xml = ing_el.get("recipeUnit", "").strip()
+            unit_xml = ing_el.get("unit", "").strip()
+            conv_xml = _decimal_or_none(ing_el.get("conversionFactor"))
+
+            # Při vytváření nové ingredience předáme hodnoty z XML jako defaults,
+            # aby model defaulty ('kg', 'g', 1000) nebyly použity místo skutečných hodnot.
+            create_defaults = {}
+            if base_unit_xml:
+                create_defaults['base_unit'] = base_unit_xml
+            if recipe_unit_xml:
+                create_defaults['recipe_unit'] = recipe_unit_xml
+            if unit_xml:
+                create_defaults['unit'] = unit_xml
+            if conv_xml is not None:
+                create_defaults['conversion_factor'] = conv_xml
+
+            ing, created = Ingredient.objects.get_or_create(name=name, defaults=create_defaults)
             if created:
                 report["ingredients_created"] += 1
             changed = False
-            changed |= _update_if_missing(ing, "base_unit", ing_el.get("baseUnit"))
-            changed |= _update_if_missing(ing, "recipe_unit", ing_el.get("recipeUnit"))
-            changed |= _update_if_missing(ing, "unit", ing_el.get("unit"))
-            conv = _decimal_or_none(ing_el.get("conversionFactor"))
-            if conv is not None and (ing.conversion_factor is None):
-                ing.conversion_factor = conv
-                changed = True
+            if not created:
+                # Pro existující ingredience doplníme pouze skutečně prázdná pole
+                changed |= _update_if_missing(ing, "base_unit", base_unit_xml)
+                changed |= _update_if_missing(ing, "recipe_unit", recipe_unit_xml)
+                changed |= _update_if_missing(ing, "unit", unit_xml)
+                if conv_xml is not None and ing.conversion_factor is None:
+                    ing.conversion_factor = conv_xml
+                    changed = True
             # Obnovení deaktivované suroviny
             is_active = ing_el.get("isActive", "true").lower() != "false"
             if not ing.is_active and is_active:
@@ -1066,10 +1459,9 @@ def import_backup_xml(xml_content: bytes, dry_run: bool = False) -> Dict[str, An
                 ing.deactivated_at = None
                 ing.deactivated_by = None
                 changed = True
-            if changed or created:
+            if changed:
                 ing.save()
-                if changed and not created:
-                    report["ingredients_updated"] += 1
+                report["ingredients_updated"] += 1
         
         # Build ingredient map
         ingredient_map: Dict[str, Ingredient] = {i.name: i for i in Ingredient.objects.all()}
@@ -1128,27 +1520,33 @@ def import_backup_xml(xml_content: bytes, dry_run: bool = False) -> Dict[str, An
                 ingredient = ingredient_map[ing_name]
                 qpp = ri_el.get("quantityPerPortion", "").strip()
                 notes = ri_el.get("notes", "")
-                
+
+                qpp_val = _decimal_or_none(qpp) if qpp else None
+
+                # quantity_per_portion je NOT NULL – při vytváření musí mít hodnotu
+                defaults = {'quantity_per_portion': qpp_val if qpp_val is not None else Decimal('0')}
+                if notes:
+                    defaults['notes'] = notes
+
                 ri, ri_created = RecipeIngredient.objects.get_or_create(
-                    recipe=recipe, ingredient=ingredient
+                    recipe=recipe, ingredient=ingredient,
+                    defaults=defaults
                 )
                 if ri_created:
                     report["recipe_ingredients_created"] += 1
-                
+
                 ri_changed = False
-                if qpp:
-                    qpp_val = _decimal_or_none(qpp)
-                    if qpp_val is not None:
+                if not ri_created:
+                    if qpp_val is not None and ri.quantity_per_portion != qpp_val:
                         ri.quantity_per_portion = qpp_val
                         ri_changed = True
-                if notes:
-                    ri.notes = notes
-                    ri_changed = True
-                
+                    if notes and ri.notes != notes:
+                        ri.notes = notes
+                        ri_changed = True
+
                 if ri_changed:
                     ri.save()
-                    if not ri_created:
-                        report["recipe_ingredients_updated"] += 1
+                    report["recipe_ingredients_updated"] += 1
         
         # Build recipe map
         recipe_map: Dict[str, Recipe] = {r.code: r for r in Recipe.objects.all()}
@@ -1173,43 +1571,16 @@ def import_backup_xml(xml_content: bytes, dry_run: bool = False) -> Dict[str, An
         
         # Production orders (volitelné, závisí na recipes, menu_plans, canteens)
         _import_production_orders(root, recipe_map, menu_map, canteen_map, ingredient_map, report)
-        
-        # Goods receipts, stock transfers, inventory verifications, write-offs
-        # Tyto entity jsou komplexní a obvykle se neimportují (jsou pro exportní účely)
-        # Pokud by byly v XML, pouze je započítáme ale neimportujeme detaily
-        
-        # Záznamy o entitách, které jsou v XML ale neimportujeme
-        skipped_entities = []
-        
-        goods_receipts_el = root.find("GoodsReceipts")
-        if goods_receipts_el is not None:
-            report["goods_receipts_created"] = 0
-            skipped_entities.append("příjmy zboží")
-        
-        stock_transfers_el = root.find("StockTransfers")
-        if stock_transfers_el is not None:
-            report["stock_transfers_created"] = 0
-            skipped_entities.append("převodky")
-        
-        inventory_el = root.find("InventoryVerifications")
-        if inventory_el is not None:
-            report["inventory_verifications_created"] = 0
-            skipped_entities.append("inventury")
-        
-        writeoffs_el = root.find("StockWriteOffs")
-        if writeoffs_el is not None:
-            report["stock_write_offs_created"] = 0
-            skipped_entities.append("odpisy")
-        
-        if skipped_entities:
-            report["skipped_entities_warning"] = (
-                f"Následující entity byly v záloze nalezeny, ale nebyly importovány: "
-                f"{', '.join(skipped_entities)}. Tyto entity slouží pouze pro exportní účely."
-            )
-        
+
+        # Skladové operace (volitelné, závisí na warehouses, suppliers, ingredients)
+        _import_goods_receipts(root, warehouse_map, supplier_map, ingredient_map, user, report)
+        _import_stock_transfers(root, warehouse_map, ingredient_map, report)
+        _import_inventory_verifications(root, warehouse_map, ingredient_map, user, report)
+        _import_stock_write_offs(root, warehouse_map, ingredient_map, user, report)
+
         if dry_run:
             transaction.set_rollback(True)
-    
+
     return report
 
 

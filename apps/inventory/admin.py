@@ -28,15 +28,15 @@ class StockItemAdmin(admin.ModelAdmin):
             obj.vat_rate = original.vat_rate
             obj.price_without_vat = original.price_without_vat
         
-        super().save_model(request, obj, form, change)
+            super().save_model(request, obj, form, change)
         
-        # Po save() obnovit readonly pole znovu (save() je může přepočítat)
-        if change and obj.pk:
-            # Použít SQL UPDATE pro vynucení readonly hodnot
+            # Po save() obnovit readonly pole znovu (save() je může přepočítat)
             StockItem.objects.filter(pk=obj.pk).update(
                 vat_rate=original.vat_rate,
                 price_without_vat=original.price_without_vat
             )
+        else:
+            super().save_model(request, obj, form, change)
 
 
 @admin.register(IngredientPriceHistory)
@@ -321,7 +321,7 @@ class SupplierIngredientTemplateAdmin(admin.ModelAdmin):
 class StockWriteOffItemInline(admin.TabularInline):
     model = StockWriteOffItem
     extra = 1
-    fields = ['ingredient', 'quantity', 'unit_cost', 'selling_price', 'notes']
+    fields = ['ingredient', 'quantity', 'unit_cost', 'notes']
     autocomplete_fields = ['ingredient']
     readonly_fields = []
 
