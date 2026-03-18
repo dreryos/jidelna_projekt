@@ -141,7 +141,7 @@ def backup_import_xml_view(request):
 		return JsonResponse({'success': False, 'error': 'Prázdný XML obsah'}, status=400)
 
 	try:
-		report = import_backup_xml(xml_content, dry_run=dry_run)
+		report = import_backup_xml(xml_content, dry_run=dry_run, user=request.user)
 		return JsonResponse({'success': True, 'dry_run': dry_run, 'report': report})
 	except Exception as e:
 		return JsonResponse({'success': False, 'error': str(e)}, status=400)
@@ -159,7 +159,7 @@ def backup_page(request):
 			messages.error(request, 'Nahrajte prosím XML soubor.')
 			return redirect('core:backup_page')
 		try:
-			report = import_backup_xml(file.read(), dry_run=dry_run)
+			report = import_backup_xml(file.read(), dry_run=dry_run, user=request.user)
 			if dry_run:
 				messages.warning(request, f"Dry-run: žádné změny neuloženy. Report: {report}")
 			else:

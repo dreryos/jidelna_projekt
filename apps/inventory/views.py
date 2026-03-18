@@ -1290,17 +1290,18 @@ class StockTransferCreateView(IsStaffMixin, CreateView):
         return context
     
     def form_valid(self, form):
-        context = self.get_context_data()
-        formset = context['formset']
-        
         with transaction.atomic():
             # Nastavíme created_by
             form.instance.created_by = self.request.user
             self.object = form.save()
             
+            formset = StockTransferItemFormSet(
+                self.request.POST,
+                instance=self.object,
+                form_kwargs={'warehouse_from': self.object.warehouse_from}
+            )
+            
             if formset.is_valid():
-                formset.instance = self.object
-                
                 # Pro každou položku nastavíme cenu ze zdrojového skladu
                 for item_form in formset:
                     if item_form.cleaned_data and not item_form.cleaned_data.get('DELETE', False):
@@ -1704,10 +1705,12 @@ def stock_write_off_create(request):
     """Vytvoření nového odepsání"""
     if request.method == 'POST':
         form = StockWriteOffForm(request.POST, user=request.user)
-        formset = StockWriteOffItemFormSet(request.POST)
         
         # Debug: Zobrazit počet formulářů
         form_is_valid = form.is_valid()
+        
+        warehouse = form.cleaned_data.get('warehouse') if form_is_valid else None
+        formset = StockWriteOffItemFormSet(request.POST, form_kwargs={'warehouse': warehouse})
         formset_is_valid = formset.is_valid()
         
         if form_is_valid and formset_is_valid:
