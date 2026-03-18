@@ -515,15 +515,46 @@ class StockWriteOffItemForm(forms.ModelForm):
     
     def __init__(self, *args, warehouse=None, **kwargs):
         super().__init__(*args, **kwargs)
-        
-        if warehouse:
-            available_ingredients = StockItem.objects.filter(
-                warehouse=warehouse,
-                quantity__gt=0
-            ).values_list('ingredient_id', flat=True)
-            self.fields['ingredient'].queryset = Ingredient.objects.filter(
-                id__in=available_ingredients
-            ).order_by('name')
+        self.warehouse = warehouse
+        # Queryset musí obsahovat všechny aktivní ingredience – omezení jen na
+        # sklad by způsobilo chybu "Vyberte platnou možnost" pro ID, která
+        # nejsou v querysetu. Validace dostupnosti probíhá v clean().
+        self.fields['ingredient'].queryset = Ingredient.objects.filter(
+            is_active=True
+        ).order_by('name')
+
+    def clean(self):
+        cleaned_data = super().clean()
+
+        if cleaned_data.get('DELETE'):
+            return cleaned_data
+
+        ingredient = cleaned_data.get('ingredient')
+        quantity = cleaned_data.get('quantity')
+
+        if self.warehouse and ingredient and quantity:
+            try:
+                stock_item = StockItem.objects.get(
+                    ingredient=ingredient,
+                    warehouse=self.warehouse
+                )
+                if stock_item.quantity < quantity:
+                    raise ValidationError({
+                        'quantity': (
+                            f"Nedostatek {ingredient.name} na skladě. "
+                            f"Dostupné: {stock_item.quantity} {ingredient.base_unit}, "
+                            f"Požadováno: {quantity} {ingredient.base_unit}"
+                        )
+                    })
+            except StockItem.DoesNotExist:
+                raise ValidationError({
+                    'ingredient': (
+                        f"Surovina '{ingredient.name}' není dostupná "
+                        f"ve skladu {self.warehouse}."
+                    )
+                })
+
+        return cleaned_data
 
 
 StockWriteOffItemFormSet = inlineformset_factory(
