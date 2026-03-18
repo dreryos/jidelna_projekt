@@ -119,11 +119,8 @@
 
                 <!-- Položky odepsání -->
                 <div class="card">
-                    <div class="card-header d-flex justify-content-between align-items-center">
+                    <div class="card-header">
                         <h5 class="mb-0"><i class="fas fa-list"></i> Položky odepsání</h5>
-                        <button type="button" class="btn btn-sm btn-outline-primary" id="add-item-btn">
-                            <i class="fas fa-plus"></i> Přidat položku
-                        </button>
                     </div>
                     <div class="card-body">
                         {{ formset.management_form }}
@@ -176,6 +173,12 @@
                                 </div>
                             </div>
                             {% endfor %}
+                        </div>
+
+                        <div class="mt-3">
+                            <button type="button" class="btn btn-sm btn-outline-primary" id="add-item-btn">
+                                <i class="fas fa-plus"></i> Přidat položku
+                            </button>
                         </div>
 
                         <div class="alert alert-info mt-3">
@@ -372,7 +375,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                value="">
                     </div>
                     <div class="d-none">
-                        <select name="items-${formIndex}-ingredient" id="${ingredientId}" class="form-select" required=""></select>
+                        <select name="items-${formIndex}-ingredient" id="${ingredientId}" class="form-select"></select>
                     </div>
                 </div>
                 <div class="col-md-2">
@@ -408,6 +411,13 @@ document.addEventListener('DOMContentLoaded', function() {
         // Naplnit select s ingrediencemi
         const ingredientSelect = newRow.querySelector(`select#${ingredientId}`);
         if (ingredientSelect) {
+            // Přidáme prázdnou volbu jako první – bez ní by Django viděl první ingredienci
+            // jako „vybranou" a formulář by se pokusil validovat nepotřebné řádky
+            const blankOption = document.createElement('option');
+            blankOption.value = '';
+            blankOption.textContent = '---------';
+            ingredientSelect.appendChild(blankOption);
+
             allIngredients.forEach(ing => {
                 const option = document.createElement('option');
                 option.value = ing.id;
