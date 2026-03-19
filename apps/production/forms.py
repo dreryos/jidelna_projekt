@@ -15,18 +15,6 @@ from apps.core.widgets import DecimalFormField
 class MenuPlanForm(forms.ModelForm):
     """Formulář pro vytvoření/úpravu jídelníčku - pouze základní údaje"""
     
-    default_total_portions = forms.IntegerField(
-        label="Výchozí počet porcí",
-        min_value=1,
-        initial=50,
-        required=True,
-        widget=forms.NumberInput(attrs={
-            'class': 'form-control',
-            'placeholder': 'Zadejte výchozí počet porcí'
-        }),
-        help_text="Tento počet bude automaticky předvyplněn při přidávání jídel"
-    )
-    
     class Meta:
         model = MenuPlan
         fields = ['name', 'canteen', 'date_from', 'date_to']
@@ -72,19 +60,9 @@ class MenuPlanForm(forms.ModelForm):
         if not self.instance.pk:
             self.fields['date_from'].initial = date.today() + timedelta(days=1)
             self.fields['date_to'].initial = date.today() + timedelta(days=7)
-        else:
-            # Při editaci načteme výchozí počet porcí
-            self.fields['default_total_portions'].initial = (
-                self.instance.default_portions_adult + self.instance.default_portions_child
-            )
     
     def save(self, commit=True):
         instance = super().save(commit=False)
-        
-        # Uložíme výchozí počet porcí do polí pro zpětnou kompatibilitu
-        total = self.cleaned_data['default_total_portions']
-        instance.default_portions_adult = total
-        instance.default_portions_child = 0
         
         if commit:
             instance.save()
@@ -122,7 +100,7 @@ class MenuPlanCoefficientForm(forms.ModelForm):
     
     class Meta:
         model = MenuPlanCoefficient
-        fields = ['name', 'coefficient', 'order']
+        fields = ['name', 'coefficient', 'order', 'default_portions']
         widgets = {
             'name': forms.TextInput(attrs={
                 'class': 'form-control',
@@ -132,7 +110,13 @@ class MenuPlanCoefficientForm(forms.ModelForm):
                 'class': 'form-control',
                 'min': '0',
                 'placeholder': '0'
-            })
+            }),
+            'default_portions': forms.NumberInput(attrs={
+                'class': 'form-control form-control-sm',
+                'min': '1',
+                'placeholder': '50',
+                'style': 'width: 80px;',
+            }),
         }
 
 
@@ -146,6 +130,18 @@ MenuPlanCoefficientFormSet = inlineformset_factory(
     min_num=1,  # Minimálně jeden koeficient musí být
     validate_min=True,
     max_num=10  # Maximum 10 koeficientů pro rozumnost
+)
+
+# Formset bez extra prázdného formuláře - pro inline editaci v detailu jídelníčku
+MenuPlanCoefficientFormSetNoExtra = inlineformset_factory(
+    MenuPlan,
+    MenuPlanCoefficient,
+    form=MenuPlanCoefficientForm,
+    extra=0,
+    can_delete=True,
+    min_num=1,
+    validate_min=True,
+    max_num=10
 )
 
 

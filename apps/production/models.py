@@ -220,6 +220,11 @@ class MenuPlanCoefficient(models.Model):
         help_text="Např. 1.0 = normální, 0.5 = poloviční, 1.5 = větší"
     )
     order = models.PositiveIntegerField(default=0, verbose_name="Pořadí", help_text="Pořadí zobrazení (nižší číslo = dříve)")
+    default_portions = models.PositiveIntegerField(
+        default=50,
+        verbose_name="Výchozí počet porcí",
+        help_text="Výchozí počet porcí pro tuto variantu při přidávání jídel"
+    )
     
     def __str__(self):
         return f"{self.name} ({self.coefficient})"

@@ -287,6 +287,9 @@ def menu_import_step2_preview(request):
     start_date = date.fromisoformat(import_data['start_date'])
     
     # Zpracování POST - uložení koeficientů do session a přesměrování na krok 3
+    # Načteme uložené koeficienty ze session pro případ zobrazení chyb formuláře
+    saved_coefficients = import_data.get('coefficients', [])
+
     if request.method == 'POST':
         # Vytvoříme dočasný MenuPlan objekt pro validaci formset
         temp_menu_plan = MenuPlan(
@@ -303,10 +306,8 @@ def menu_import_step2_preview(request):
             coefficients_data = []
             for idx, form in enumerate(formset):
                 if form.cleaned_data and not form.cleaned_data.get('DELETE', False):
-                    # Načteme počet porcí z POST dat
-                    portions_key = f'portions_{idx}'
-                    portions = int(request.POST.get(portions_key, 0))
-                    
+                    portions = form.cleaned_data.get('default_portions', 50)
+
                     coefficients_data.append({
                         'name': form.cleaned_data['name'],
                         'coefficient': float(form.cleaned_data['coefficient']),
@@ -335,8 +336,6 @@ def menu_import_step2_preview(request):
             date_to=start_date
         )
         
-        # Zkontrolujeme, jestli už máme koeficienty v session
-        saved_coefficients = import_data.get('coefficients', [])
         if saved_coefficients:
             # Načteme koeficienty ze session
             initial_data = []
@@ -344,7 +343,8 @@ def menu_import_step2_preview(request):
                 initial_data.append({
                     'name': coef['name'],
                     'coefficient': Decimal(str(coef['coefficient'])),
-                    'order': coef['order']
+                    'order': coef['order'],
+                    'default_portions': coef.get('portions', 50),
                 })
             formset = MenuPlanCoefficientFormSet(instance=temp_menu_plan, initial=initial_data)
         else:
@@ -388,7 +388,6 @@ def menu_import_step2_preview(request):
         'start_date': start_date,
         'menu_name': import_data['menu_name'],
         'coefficient_formset': formset,
-        'saved_portions': {idx: coef.get('portions', 0) for idx, coef in enumerate(saved_coefficients)},
         'num_days': unique_days,
     })
 

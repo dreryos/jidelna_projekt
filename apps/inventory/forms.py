@@ -170,7 +170,7 @@ class GoodsReceiptItemForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         # Filtrovat pouze aktivní suroviny
         from apps.core.models import Ingredient
-        self.fields['ingredient'].queryset = Ingredient.objects.filter(is_active=True)
+        self.fields['ingredient'].queryset = Ingredient.objects.filter(is_active=True).order_by('name')
         # Nastavení choices pro DPH sazbu
         self.fields['vat_rate'] = forms.TypedChoiceField(
             choices=VAT_RATE_CHOICES,

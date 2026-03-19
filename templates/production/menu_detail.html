@@ -22,6 +22,15 @@
     max-height: 200px;
     overflow-y: auto;
 }
+/* Kompaktní widgety ve formuláři koeficientů v hlavičce */
+#coefficients-header-container .form-control {
+    font-size: 0.875rem;
+    padding: 0.25rem 0.5rem;
+    height: auto;
+}
+#coefficients-header-container input[name$="-name"] { width: 130px; }
+#coefficients-header-container input[name$="-coefficient"] { width: 80px; }
+#coefficients-header-container input[name$="-default_portions"] { width: 80px; }
 </style>
 {% endblock %}
 
@@ -66,18 +75,63 @@
             </div>
         </div>
         <div class="card-body">
-            <div class="row">
-                <div class="col-md-4">
-                    <strong><i class="fas fa-users me-2 text-muted"></i>Výchozí počet porcí:</strong>
-                    {{ menu_plan.default_portions_adult|add:menu_plan.default_portions_child }}
+            <div class="row align-items-start">
+                <div class="col-lg-9">
+                    <strong><i class="fas fa-users me-2 text-muted"></i>Výchozí hodnoty porcí:</strong>
+                    <form method="post" class="mt-2" id="coefficientsHeaderForm">
+                        {% csrf_token %}
+                        <input type="hidden" name="form_action" value="update_coefficients">
+                        {{ coefficient_formset.management_form }}
+                        {% if coefficient_formset %}
+                            <div id="coefficients-header-container">
+                            {% for coef_form in coefficient_formset %}
+                                <div class="coefficient-header-row d-flex align-items-end flex-wrap gap-2 mb-2" data-form-index="{{ forloop.counter0 }}">
+                                    {{ coef_form.id }}
+                                    <div style="display:none;">{{ coef_form.DELETE }}</div>
+                                    <div style="display:none;">{{ coef_form.order }}</div>
+                                    <div>
+                                        <label class="form-label small mb-1">Název</label>
+                                        {{ coef_form.name }}
+                                        {% if coef_form.name.errors %}<div class="text-danger small">{{ coef_form.name.errors.0 }}</div>{% endif %}
+                                    </div>
+                                    <div>
+                                        <label class="form-label small mb-1">Koeficient</label>
+                                        {{ coef_form.coefficient }}
+                                        {% if coef_form.coefficient.errors %}<div class="text-danger small">{{ coef_form.coefficient.errors.0 }}</div>{% endif %}
+                                    </div>
+                                    <div>
+                                        <label class="form-label small mb-1">Výchozí porcí</label>
+                                        {{ coef_form.default_portions }}
+                                        {% if coef_form.default_portions.errors %}<div class="text-danger small">{{ coef_form.default_portions.errors.0 }}</div>{% endif %}
+                                    </div>
+                                    <div>
+                                        <button type="button" class="btn btn-sm btn-outline-danger remove-coef-header-btn" title="Odebrat variantu">
+                                            <i class="fas fa-times"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                            </div>
+                            <div class="d-flex gap-2 mt-1">
+                                <button type="button" class="btn btn-sm btn-outline-success" id="add-coef-header-btn">
+                                    <i class="fas fa-plus me-1"></i>Přidat variantu
+                                </button>
+                                <button type="submit" class="btn btn-sm btn-outline-primary">
+                                    <i class="fas fa-save me-1"></i>Uložit výchozí hodnoty
+                                </button>
+                            </div>
+                        {% else %}
+                            <span class="text-muted small">Nejsou definovány žádné koeficienty.</span>
+                        {% endif %}
+                    </form>
                 </div>
-                <div class="col-md-4">
+                <div class="col-lg-2">
                     <strong><i class="fas fa-clock me-2 text-muted"></i>Vytvořeno:</strong>
                     {{ menu_plan.created_at|date:"d.m.Y H:i" }}
                 </div>
-                <div class="col-md-4 text-end">
+                <div class="col-lg-1 text-end">
                     <button type="button" class="btn btn-warning btn-sm" id="bulkResetBtn" title="Hromadně resetovat úpravy ingrediencí">
-                        <i class="fas fa-undo me-1"></i>Hromadný reset úprav
+                        <i class="fas fa-undo"></i>
                     </button>
                 </div>
             </div>
@@ -529,7 +583,8 @@ const csrfToken = '{{ csrf_token }}';
 const defaultCoefficients = ({{ default_coefficients|safe|default:"[]" }}).map(coef => ({
     name: coef.name,
     value: parseFloat(coef.coefficient).toFixed(2),
-    order: coef.order
+    order: coef.order,
+    default_portions: coef.default_portions || 50
 }));
 
 console.log('Default coefficients loaded:', defaultCoefficients);
@@ -604,14 +659,13 @@ document.addEventListener('DOMContentLoaded', function() {
                     container.insertAdjacentHTML('beforeend', createAddMealVariantRow(
                         index, 
                         coef.value, 
-                        '', 
+                        coef.default_portions, 
                         coef.name
                     ));
                 });
             } else {
                 // Pokud nejsou koeficienty, vytvoříme jeden výchozí řádek
-                const defaultPortions = {{ menu_plan.default_portions_adult|add:menu_plan.default_portions_child }};
-                container.insertAdjacentHTML('beforeend', createAddMealVariantRow(0, '1.0', defaultPortions, ''));
+                container.insertAdjacentHTML('beforeend', createAddMealVariantRow(0, '1.0', 50, ''));
             }
             
             attachAddMealVariantHandlers();
@@ -900,14 +954,13 @@ document.addEventListener('DOMContentLoaded', function() {
                         container.insertAdjacentHTML('beforeend', createVariantRow(
                             index, 
                             coef.value, 
-                            '', 
+                            coef.default_portions, 
                             coef.name
                         ));
                     });
                 } else {
                     // Pokud nejsou žádné výchozí koeficienty, vytvoříme jeden prázdný řádek
-                    const defaultTotal = {{ menu_plan.default_portions_adult|add:menu_plan.default_portions_child }};
-                    container.insertAdjacentHTML('beforeend', createVariantRow(0, '1.0', defaultTotal, ''));
+                    container.insertAdjacentHTML('beforeend', createVariantRow(0, '1.0', 50, ''));
                 }
             }
             
@@ -920,7 +973,7 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('add-variant-btn').addEventListener('click', function() {
         const container = document.getElementById('portion-variants-container');
         const currentCount = container.querySelectorAll('.variant-row').length;
-        const defaultTotal = {{ menu_plan.default_portions_adult|add:menu_plan.default_portions_child }};
+        const defaultTotal = defaultCoefficients.length > 0 ? defaultCoefficients[0].default_portions : 50;
         container.insertAdjacentHTML('beforeend', createVariantRow(currentCount, '1.0', defaultTotal));
         attachVariantHandlers();
     });
@@ -975,7 +1028,7 @@ document.addEventListener('DOMContentLoaded', function() {
         btn.addEventListener('click', function() {
             currentDate = this.dataset.date;
             document.getElementById('bulkDate').textContent = new Date(currentDate).toLocaleDateString('cs-CZ');
-            const defaultTotal = {{ menu_plan.default_portions_adult|add:menu_plan.default_portions_child }};
+            const defaultTotal = defaultCoefficients.length > 0 ? defaultCoefficients[0].default_portions : 50;
             document.getElementById('bulkTotalPortions').value = defaultTotal;
             document.getElementById('bulkPortionCoefficient').value = '1,0';
             new bootstrap.Modal(document.getElementById('bulkPortionsModal')).show();
@@ -1457,10 +1510,88 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     // Select all checkboxes
-    document.getElementById('selectAllMeals').addEventListener('change', function() {
-        const checkboxes = document.querySelectorAll('.meal-checkbox:not(:disabled)');
-        checkboxes.forEach(cb => cb.checked = this.checked);
-    });
+    const selectAllEl = document.getElementById('selectAllMeals');
+    if (selectAllEl) {
+        selectAllEl.addEventListener('change', function() {
+            const checkboxes = document.querySelectorAll('.meal-checkbox:not(:disabled)');
+            checkboxes.forEach(cb => cb.checked = this.checked);
+        });
+    }
+
+    // ===== SOUPRAVA KOEFICIENTŮ V HLAVIČCE =====
+    (function initCoefficientsHeader() {
+        const PREFIX = 'coefficient_formset';
+        const container = document.getElementById('coefficients-header-container');
+        const addBtn = document.getElementById('add-coef-header-btn');
+        if (!container || !addBtn) return;
+
+        const totalFormsInput = document.querySelector(`input[name="${PREFIX}-TOTAL_FORMS"]`);
+
+        function getCurrentIndex() {
+            return container.querySelectorAll('.coefficient-header-row').length;
+        }
+
+        function createNewRow(index) {
+            const row = document.createElement('div');
+            row.className = 'coefficient-header-row d-flex align-items-end flex-wrap gap-2 mb-2';
+            row.dataset.formIndex = index;
+            row.innerHTML = `
+                <input type="hidden" name="${PREFIX}-${index}-id" value="">
+                <input type="hidden" name="${PREFIX}-${index}-DELETE">
+                <input type="hidden" name="${PREFIX}-${index}-order" value="${index}">
+                <div>
+                    <label class="form-label small mb-1">Název</label>
+                    <input type="text" name="${PREFIX}-${index}-name" class="form-control" placeholder='Např. "Normální porce"'>
+                </div>
+                <div>
+                    <label class="form-label small mb-1">Koeficient</label>
+                    <input type="number" name="${PREFIX}-${index}-coefficient" class="form-control" step="0.01" min="0.1" max="5.0" value="1.0" placeholder="1,0">
+                </div>
+                <div>
+                    <label class="form-label small mb-1">Výchozí porcí</label>
+                    <input type="number" name="${PREFIX}-${index}-default_portions" class="form-control" min="1" value="50" placeholder="50">
+                </div>
+                <div>
+                    <button type="button" class="btn btn-sm btn-outline-danger remove-coef-header-btn" title="Odebrat variantu">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            `;
+            return row;
+        }
+
+        function attachRemoveHandlers() {
+            container.querySelectorAll('.remove-coef-header-btn').forEach(btn => {
+                btn.replaceWith(btn.cloneNode(true));
+            });
+            container.querySelectorAll('.remove-coef-header-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const row = this.closest('.coefficient-header-row');
+                    const idInput = row.querySelector('input[name$="-id"]');
+                    const deleteInput = row.querySelector('input[name$="-DELETE"]');
+                    if (idInput && idInput.value) {
+                        // Existující objekt - označ k mazání a skryj
+                        if (deleteInput) deleteInput.value = 'on';
+                        row.style.display = 'none';
+                    } else {
+                        // Nový řádek - odstraň z DOM a sniž TOTAL_FORMS
+                        row.remove();
+                        if (totalFormsInput) totalFormsInput.value = parseInt(totalFormsInput.value) - 1;
+                    }
+                });
+            });
+        }
+
+        addBtn.addEventListener('click', function() {
+            const newIndex = parseInt(totalFormsInput ? totalFormsInput.value : getCurrentIndex());
+            const newRow = createNewRow(newIndex);
+            container.appendChild(newRow);
+            if (totalFormsInput) totalFormsInput.value = newIndex + 1;
+            attachRemoveHandlers();
+        });
+
+        attachRemoveHandlers();
+    })();
 });
 </script>
 {% endblock %}

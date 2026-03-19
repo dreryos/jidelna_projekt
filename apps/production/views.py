@@ -25,7 +25,7 @@ from django.http import JsonResponse, Http404
 from django.db import transaction
 
 from .models import ProductionOrder, PickingList, MenuPlan
-from .forms import MenuPlanForm, MenuPlanCoefficientFormSet
+from .forms import MenuPlanForm, MenuPlanCoefficientFormSet, MenuPlanCoefficientFormSetNoExtra
 from apps.core.models import Recipe, UserProfile
 from apps.canteens.models import Canteen
 
@@ -277,10 +277,24 @@ class MenuPlanDetailView(CanteenOwnerMixin, UpdateView):
             {
                 'name': coef.name,
                 'coefficient': float(coef.coefficient),
-                'order': coef.order
+                'order': coef.order,
+                'default_portions': coef.default_portions,
             }
             for coef in self.object.default_coefficients.all().order_by('order')
         ]
+
+        # Formset pro editaci výchozích koeficientů v hlavičce (bez extra prázdného řádku)
+        if self.request.POST and 'coefficient_formset-TOTAL_FORMS' in self.request.POST:
+            context['coefficient_formset'] = MenuPlanCoefficientFormSetNoExtra(
+                self.request.POST,
+                instance=self.object,
+                prefix='coefficient_formset',
+            )
+        else:
+            context['coefficient_formset'] = MenuPlanCoefficientFormSetNoExtra(
+                instance=self.object,
+                prefix='coefficient_formset',
+            )
         
         return context
     
@@ -292,7 +306,51 @@ class MenuPlanDetailView(CanteenOwnerMixin, UpdateView):
             dates.append(current_date)
             current_date += timedelta(days=1)
         return dates
-    
+
+    def post(self, request, *args, **kwargs):
+        self.object = self.get_object()
+        if request.POST.get('form_action') == 'update_coefficients':
+            return self._handle_coefficient_update(request)
+        return super().post(request, *args, **kwargs)
+
+    @transaction.atomic
+    def _handle_coefficient_update(self, request):
+        from .models import ProductionOrderPortionVariant
+        coefficient_formset = MenuPlanCoefficientFormSetNoExtra(
+            request.POST,
+            instance=self.object,
+            prefix='coefficient_formset',
+        )
+        if coefficient_formset.is_valid():
+            coefficient_formset.save()
+
+            # Přepsat varianty porcí u nezamčených jídel v tomto jídelníčku
+            updated_coefficients = list(
+                self.object.default_coefficients.all().order_by('order')
+            )
+            updated_count = 0
+            for order in self.object.production_orders.prefetch_related('portion_variants', 'picking_list_items__document'):
+                if order.has_issued_picking_list():
+                    continue
+                order.portion_variants.all().delete()
+                for coef in updated_coefficients:
+                    ProductionOrderPortionVariant.objects.create(
+                        production_order=order,
+                        name=coef.name,
+                        coefficient=coef.coefficient,
+                        portions=coef.default_portions,
+                        order=coef.order,
+                    )
+                updated_count += 1
+
+            if updated_count > 0:
+                messages.success(request, f'Výchozí hodnoty uloženy a aplikovány na {updated_count} jídel.')
+            else:
+                messages.success(request, 'Výchozí počty porcí byly úspěšně uloženy.')
+        else:
+            messages.error(request, 'Chyba při ukládání výchozích počtů porcí.')
+        return redirect('production:menu_detail', pk=self.object.pk)
+
     @transaction.atomic
     def form_valid(self, form):
         self.object = form.save()

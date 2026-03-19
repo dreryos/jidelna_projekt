@@ -82,12 +82,16 @@
                                 {% endif %}
                             </td>
                             <td>
-                                <input type="number" 
-                                       name="portions_{{ forloop.counter0 }}" 
-                                       class="form-control form-control-sm portions-input" 
-                                       value="{{ saved_portions|get_item:forloop.counter0|default:0 }}" 
-                                       min="0" 
-                                       placeholder="0">
+                                <input type="number"
+                                       name="{{ form.default_portions.html_name }}"
+                                       id="{{ form.default_portions.id_for_label }}"
+                                       class="form-control form-control-sm portions-input"
+                                       value="{{ form.default_portions.value|default:50 }}"
+                                       min="1"
+                                       placeholder="50">
+                                {% if form.default_portions.errors %}
+                                    <div class="text-danger small">{{ form.default_portions.errors }}</div>
+                                {% endif %}
                             </td>
                             <td>
                                 {{ form.order }}
@@ -304,11 +308,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 </td>
                 <td>
                     <input type="number" 
-                           name="portions_${currentTotal}" 
+                           name="${formsetPrefix}-${currentTotal}-default_portions" 
+                           id="id_${formsetPrefix}-${currentTotal}-default_portions"
                            class="form-control form-control-sm portions-input" 
-                           value="0" 
-                           min="0" 
-                           placeholder="0">
+                           value="50" 
+                           min="1" 
+                           placeholder="50">
                 </td>
                 <td>
                     <input type="number" 

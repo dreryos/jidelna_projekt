@@ -20,7 +20,7 @@ Tento soubor sleduje hlavní úkoly, bugy a nápady pro projekt. Pro detailněj�
 - [ ] Při vytvoření nové suroviny se nezobrazuje v autocomplete dokud neobnovím stránku
 - [ ] Po uložení jídelníčku se nezobrazí v tabulce - až po refresh
 - [x] Skladové položky si nepamatují svoji sazbu DPH (resetují se na 21 %)
-- [ ] Při ručním importu aby se suroviny řadili podle abecedy, ne podle ID
+- [x] Při ručním importu aby se suroviny řadili podle abecedy, ne podle ID
 
 ---
 
