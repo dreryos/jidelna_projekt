@@ -131,6 +131,10 @@
                     <i class="fas fa-eye"></i>
                   </a>
                   {% if receipt.status == 'DRAFT' %}
+                    <a href="{% url 'inventory:goods_receipt_edit' receipt.pk %}"
+                       class="btn btn-sm btn-primary" title="Upravit">
+                      <i class="fas fa-edit"></i>
+                    </a>
                     <a href="{% url 'inventory:goods_receipt_delete' receipt.pk %}" 
                        class="btn btn-sm btn-danger" title="Smazat">
                       <i class="fas fa-trash"></i>

@@ -44,6 +44,7 @@ urlpatterns = [
     path('goods-receipts/', views.GoodsReceiptListView.as_view(), name='goods_receipt_list'),
     path('goods-receipts/create/', views.goods_receipt_create, name='goods_receipt_create'),
     path('goods-receipts/<int:pk>/', views.GoodsReceiptDetailView.as_view(), name='goods_receipt_detail'),
+    path('goods-receipts/<int:pk>/edit/', views.goods_receipt_edit, name='goods_receipt_edit'),
     path('goods-receipts/<int:pk>/confirm/', views.goods_receipt_confirm, name='goods_receipt_confirm'),
     path('goods-receipts/<int:pk>/delete/', views.goods_receipt_delete, name='goods_receipt_delete'),
     

@@ -651,6 +651,97 @@ def goods_receipt_create(request):
 
 
 @login_required
+def goods_receipt_edit(request, pk):
+    """Editace příjmu zboží ve stavu Koncept"""
+    goods_receipt = get_object_or_404(GoodsReceipt, pk=pk)
+
+    if goods_receipt.status != GoodsReceipt.Status.DRAFT:
+        messages.warning(request, 'Nelze upravit příjem, který již byl potvrzen.')
+        return redirect('inventory:goods_receipt_detail', pk=pk)
+
+    if request.method == 'POST':
+        form = GoodsReceiptForm(request.POST, instance=goods_receipt)
+        formset = GoodsReceiptItemFormSet(request.POST, instance=goods_receipt)
+
+        # Očistit zcela prázdné řádky
+        total_forms = int(request.POST.get('items-TOTAL_FORMS', 0))
+        formset_data = []
+        for i in range(total_forms):
+            prefix = f'items-{i}'
+            ingredient = request.POST.get(f'{prefix}-ingredient', '').strip()
+            warehouse = request.POST.get(f'{prefix}-warehouse', '').strip()
+            quantity = request.POST.get(f'{prefix}-quantity', '').strip()
+            price_without_vat = request.POST.get(f'{prefix}-price_without_vat', '').strip()
+            price_with_vat = request.POST.get(f'{prefix}-price', '').strip()
+            vat_rate = request.POST.get(f'{prefix}-vat_rate', '').strip()
+            delete_flag = request.POST.get(f'{prefix}-DELETE', '').strip()
+
+            if delete_flag != 'on' and (ingredient or warehouse or quantity or price_without_vat or price_with_vat or vat_rate):
+                formset_data.append(i)
+
+        if not formset_data:
+            request.POST._mutable = True if hasattr(request.POST, '_mutable') else None
+            request.POST['items-TOTAL_FORMS'] = '1'
+            request.POST._mutable = False if hasattr(request.POST, '_mutable') else None
+            formset = GoodsReceiptItemFormSet(request.POST, instance=goods_receipt)
+
+        if form.is_valid() and formset.is_valid():
+            try:
+                with transaction.atomic():
+                    updated_receipt = form.save(commit=False)
+                    default_warehouse = form.cleaned_data.get('default_warehouse')
+                    if default_warehouse:
+                        updated_receipt.warehouse = default_warehouse
+                    updated_receipt.save()
+
+                    formset.instance = updated_receipt
+                    items = formset.save(commit=False)
+
+                    for item in items:
+                        item.save()
+
+                    for obj in formset.deleted_objects:
+                        obj.delete()
+
+                    messages.success(
+                        request,
+                        f'Příjem zboží "{updated_receipt.receipt_number}" byl úspěšně upraven.'
+                    )
+                    return redirect('inventory:goods_receipt_detail', pk=updated_receipt.pk)
+
+            except Exception as e:
+                messages.error(request, f'Chyba při ukládání příjmu: {str(e)}')
+        else:
+            if not form.is_valid():
+                for field, errors in form.errors.items():
+                    for error in errors:
+                        messages.error(request, f'{field}: {error}')
+            if not formset.is_valid():
+                for i, form_errors in enumerate(formset.errors):
+                    if form_errors:
+                        messages.error(request, f'Položka {i+1}: {form_errors}')
+                if formset.non_form_errors():
+                    for error in formset.non_form_errors():
+                        messages.error(request, f'Formset chyba: {error}')
+    else:
+        # GET - předvyplnit formulář existujícími daty
+        form = GoodsReceiptForm(instance=goods_receipt, initial={'default_warehouse': goods_receipt.warehouse})
+        formset = GoodsReceiptItemFormSet(instance=goods_receipt)
+
+    active_suppliers = Supplier.objects.filter(is_active=True).order_by('name')
+
+    context = {
+        'form': form,
+        'formset': formset,
+        'active_suppliers': active_suppliers,
+        'editing': True,
+        'goods_receipt': goods_receipt,
+    }
+
+    return render(request, 'inventory/goods_receipt_form.html', context)
+
+
+@login_required
 def goods_receipt_confirm(request, pk):
     """Potvrzení příjmu zboží - aktualizuje sklady a ceny"""
     goods_receipt = get_object_or_404(GoodsReceipt, pk=pk)

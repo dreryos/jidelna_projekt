@@ -29,6 +29,9 @@
       <i class="fas fa-arrow-left me-2"></i>Zpět na seznam
     </a>
     {% if goods_receipt.status == 'DRAFT' %}
+      <a href="{% url 'inventory:goods_receipt_edit' goods_receipt.pk %}" class="btn btn-primary">
+        <i class="fas fa-edit me-2"></i>Upravit
+      </a>
       <a href="{% url 'inventory:goods_receipt_confirm' goods_receipt.pk %}" class="btn btn-success">
         <i class="fas fa-check me-2"></i>Potvrdit příjem
       </a>

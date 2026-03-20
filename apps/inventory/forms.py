@@ -32,7 +32,7 @@ class GoodsReceiptForm(forms.ModelForm):
         fields = ['receipt_number', 'receipt_date', 'supplier', 'notes', 'warehouse']
         widgets = {
             'receipt_number': forms.TextInput(attrs={'class': 'form-control'}),
-            'receipt_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+            'receipt_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}, format='%Y-%m-%d'),
             'supplier': forms.TextInput(attrs={'class': 'form-control'}),
             'notes': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
             'warehouse': forms.Select(attrs={'class': 'form-select'}),
