@@ -1,5 +1,5 @@
 from django.urls import reverse_lazy, reverse
-from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.views.generic import ListView, CreateView, UpdateView, DeleteView, DetailView
 from django.contrib import messages
 from django.shortcuts import render, redirect, get_object_or_404
@@ -556,8 +556,8 @@ class GoodsReceiptDetailView(LoginRequiredMixin, DetailView):
 def goods_receipt_create(request):
     """Vytvoření nového příjmu zboží pomocí Django formsets"""
     if request.method == 'POST':
-        form = GoodsReceiptForm(request.POST)
-        formset = GoodsReceiptItemFormSet(request.POST)
+        form = GoodsReceiptForm(request.POST, user=request.user)
+        formset = GoodsReceiptItemFormSet(request.POST, form_kwargs={'user': request.user})
         
         # Očistit zcela prázdné řádky (přidané přes JavaScript ale nevyplněné)
         # Django by to měl udělat automaticky, ale formset má min_num=1
@@ -596,6 +596,10 @@ def goods_receipt_create(request):
                     # Nastavit warehouse z default_warehouse
                     default_warehouse = form.cleaned_data.get('default_warehouse')
                     if default_warehouse:
+                        # Kontrola oprávnění - přístup k jídelně skladu
+                        if not user_can_access_canteen(request.user, default_warehouse.canteen):
+                            messages.error(request, 'Nemáte oprávnění zapisovat do tohoto skladu.')
+                            return redirect('inventory:goods_receipt_create')
                         goods_receipt.warehouse = default_warehouse
                     goods_receipt.created_by = request.user
                     goods_receipt.save()
@@ -635,8 +639,8 @@ def goods_receipt_create(request):
                         messages.error(request, f'Formset chyba: {error}')
     else:
         # GET - prázdný formulář
-        form = GoodsReceiptForm()
-        formset = GoodsReceiptItemFormSet()
+        form = GoodsReceiptForm(user=request.user)
+        formset = GoodsReceiptItemFormSet(form_kwargs={'user': request.user})
     
     # Načtení aktivních dodavatelů pro rychlé šablony
     active_suppliers = Supplier.objects.filter(is_active=True).order_by('name')
@@ -655,13 +659,18 @@ def goods_receipt_edit(request, pk):
     """Editace příjmu zboží ve stavu Koncept"""
     goods_receipt = get_object_or_404(GoodsReceipt, pk=pk)
 
+    # Kontrola oprávnění - přístup k jídelně skladu
+    if not user_can_access_canteen(request.user, goods_receipt.warehouse.canteen):
+        messages.error(request, 'Nemáte oprávnění k této akci.')
+        return redirect('inventory:goods_receipt_list')
+
     if goods_receipt.status != GoodsReceipt.Status.DRAFT:
         messages.warning(request, 'Nelze upravit příjem, který již byl potvrzen.')
         return redirect('inventory:goods_receipt_detail', pk=pk)
 
     if request.method == 'POST':
-        form = GoodsReceiptForm(request.POST, instance=goods_receipt)
-        formset = GoodsReceiptItemFormSet(request.POST, instance=goods_receipt)
+        form = GoodsReceiptForm(request.POST, instance=goods_receipt, user=request.user)
+        formset = GoodsReceiptItemFormSet(request.POST, instance=goods_receipt, form_kwargs={'user': request.user})
 
         # Očistit zcela prázdné řádky
         total_forms = int(request.POST.get('items-TOTAL_FORMS', 0))
@@ -683,7 +692,7 @@ def goods_receipt_edit(request, pk):
             request.POST._mutable = True if hasattr(request.POST, '_mutable') else None
             request.POST['items-TOTAL_FORMS'] = '1'
             request.POST._mutable = False if hasattr(request.POST, '_mutable') else None
-            formset = GoodsReceiptItemFormSet(request.POST, instance=goods_receipt)
+            formset = GoodsReceiptItemFormSet(request.POST, instance=goods_receipt, form_kwargs={'user': request.user})
 
         if form.is_valid() and formset.is_valid():
             try:
@@ -691,6 +700,10 @@ def goods_receipt_edit(request, pk):
                     updated_receipt = form.save(commit=False)
                     default_warehouse = form.cleaned_data.get('default_warehouse')
                     if default_warehouse:
+                        # Kontrola oprávnění - přístup k jídelně skladu
+                        if not user_can_access_canteen(request.user, default_warehouse.canteen):
+                            messages.error(request, 'Nemáte oprávnění zapisovat do tohoto skladu.')
+                            return redirect('inventory:goods_receipt_edit', pk=pk)
                         updated_receipt.warehouse = default_warehouse
                     updated_receipt.save()
 
@@ -725,8 +738,8 @@ def goods_receipt_edit(request, pk):
                         messages.error(request, f'Formset chyba: {error}')
     else:
         # GET - předvyplnit formulář existujícími daty
-        form = GoodsReceiptForm(instance=goods_receipt, initial={'default_warehouse': goods_receipt.warehouse})
-        formset = GoodsReceiptItemFormSet(instance=goods_receipt)
+        form = GoodsReceiptForm(instance=goods_receipt, initial={'default_warehouse': goods_receipt.warehouse}, user=request.user)
+        formset = GoodsReceiptItemFormSet(instance=goods_receipt, form_kwargs={'user': request.user})
 
     active_suppliers = Supplier.objects.filter(is_active=True).order_by('name')
 
@@ -745,6 +758,11 @@ def goods_receipt_edit(request, pk):
 def goods_receipt_confirm(request, pk):
     """Potvrzení příjmu zboží - aktualizuje sklady a ceny"""
     goods_receipt = get_object_or_404(GoodsReceipt, pk=pk)
+    
+    # Kontrola oprávnění - přístup k jídelně skladu
+    if not user_can_access_canteen(request.user, goods_receipt.warehouse.canteen):
+        messages.error(request, 'Nemáte oprávnění k této akci.')
+        return redirect('inventory:goods_receipt_list')
     
     if goods_receipt.status != GoodsReceipt.Status.DRAFT:
         messages.warning(request, 'Tento příjem již byl potvrzen.')
@@ -774,6 +792,11 @@ def goods_receipt_confirm(request, pk):
 def goods_receipt_delete(request, pk):
     """Smazání příjmu zboží - pouze pokud není potvrzen"""
     goods_receipt = get_object_or_404(GoodsReceipt, pk=pk)
+    
+    # Kontrola oprávnění - přístup k jídelně skladu
+    if not user_can_access_canteen(request.user, goods_receipt.warehouse.canteen):
+        messages.error(request, 'Nemáte oprávnění k této akci.')
+        return redirect('inventory:goods_receipt_list')
     
     if goods_receipt.status == GoodsReceipt.Status.CONFIRMED:
         messages.error(request, 'Nelze smazat potvrzený příjem zboží.')
@@ -842,6 +865,12 @@ def bidfood_xml_import_step1(request):
             messages.error(request, f'Chyba při načítání XML: {e}')
     
     warehouses = Warehouse.objects.select_related('canteen').all()
+    if not request.user.is_superuser:
+        try:
+            user_canteens = request.user.profile.canteens.all()
+            warehouses = warehouses.filter(canteen__in=user_canteens)
+        except ObjectDoesNotExist:
+            warehouses = Warehouse.objects.none()
     return render(request, 'inventory/bidfood_import_step1.html', {
         'warehouses': warehouses
     })
@@ -857,6 +886,12 @@ def bidfood_xml_import_step2(request):
     
     default_warehouse_id = int(request.session.get('bidfood_default_warehouse'))
     warehouses = Warehouse.objects.all()
+    if not request.user.is_superuser:
+        try:
+            user_canteens = request.user.profile.canteens.all()
+            warehouses = warehouses.filter(canteen__in=user_canteens)
+        except ObjectDoesNotExist:
+            warehouses = Warehouse.objects.none()
     all_ingredients = list(Ingredient.objects.all())
     
     # Automatické mapování surovin pomocí fuzzy matching
@@ -912,6 +947,11 @@ def bidfood_xml_import_step3(request):
     
     default_warehouse_id = request.session.get('bidfood_default_warehouse')
     default_warehouse = Warehouse.objects.get(id=default_warehouse_id)
+    
+    # Kontrola oprávnění - přístup k jídelně skladu
+    if not user_can_access_canteen(request.user, default_warehouse.canteen):
+        messages.error(request, 'Nemáte oprávnění zapisovat do tohoto skladu.')
+        return redirect('inventory:bidfood_import_step1')
     
     # Vytvoření GoodsReceipt
     goods_receipt = GoodsReceipt.objects.create(
@@ -1016,11 +1056,6 @@ def bidfood_xml_import_step3(request):
 
 # CRUD a akce pro inventuru (InventoryVerification)
 
-class IsStaffMixin(UserPassesTestMixin):
-    """Mixin pro kontrolu, zda je uživatel staff."""
-    def test_func(self):
-        return self.request.user.is_staff
-
 
 class InventoryVerificationListView(CanteenAccessMixin, ListView):
     """Seznam všech inventur."""
@@ -1063,11 +1098,16 @@ class InventoryVerificationListView(CanteenAccessMixin, ListView):
         return context
 
 
-class InventoryVerificationCreateView(IsStaffMixin, CreateView):
+class InventoryVerificationCreateView(LoginRequiredMixin, CreateView):
     """Vytvoření nové inventury."""
     model = InventoryVerification
     form_class = InventoryVerificationForm
     template_name = 'inventory/inventory_verification_form.html'
+    
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['user'] = self.request.user
+        return kwargs
     
     def get_initial(self):
         """Předvyplnění skladu z URL parametru."""
@@ -1119,8 +1159,8 @@ def inventory_verification_count(request, pk):
     """Formulář pro zadání spočítaných množství."""
     verification = get_object_or_404(InventoryVerification, pk=pk)
     
-    # Kontrola oprávnění
-    if not request.user.is_staff:
+    # Kontrola oprávnění - přístup k jídelně
+    if not user_can_access_canteen(request.user, verification.warehouse.canteen):
         messages.error(request, 'Nemáte oprávnění k této akci.')
         return redirect('inventory:inventory_verification_detail', pk=pk)
     
@@ -1151,8 +1191,8 @@ def inventory_verification_start(request, pk):
     """Zahájení inventury - zamkne sklad."""
     verification = get_object_or_404(InventoryVerification, pk=pk)
     
-    # Kontrola oprávnění
-    if not request.user.is_staff:
+    # Kontrola oprávnění - přístup k jídelně
+    if not user_can_access_canteen(request.user, verification.warehouse.canteen):
         messages.error(request, 'Nemáte oprávnění k této akci.')
         return redirect('inventory:inventory_verification_detail', pk=pk)
     
@@ -1181,8 +1221,8 @@ def inventory_verification_complete(request, pk):
     """Dokončení inventury - aktualizuje stavy a odemkne sklad."""
     verification = get_object_or_404(InventoryVerification, pk=pk)
     
-    # Kontrola oprávnění
-    if not request.user.is_staff:
+    # Kontrola oprávnění - přístup k jídelně
+    if not user_can_access_canteen(request.user, verification.warehouse.canteen):
         messages.error(request, 'Nemáte oprávnění k této akci.')
         return redirect('inventory:inventory_verification_detail', pk=pk)
     
@@ -1213,6 +1253,11 @@ def inventory_verification_complete(request, pk):
 def inventory_verification_cancel(request, pk):
     """Zrušení probíhající inventury - odemkne sklad bez aktualizace."""
     verification = get_object_or_404(InventoryVerification, pk=pk)
+    
+    # Kontrola oprávnění - přístup k jídelně
+    if not user_can_access_canteen(request.user, verification.warehouse.canteen):
+        messages.error(request, 'Nemáte oprávnění k této akci.')
+        return redirect('inventory:inventory_verification_detail', pk=pk)
     
     # Kontrola oprávnění - pouze ten kdo zahájil
     if verification.started_by != request.user:
@@ -1251,8 +1296,8 @@ def inventory_verification_pdf(request, pk):
         pk=pk
     )
     
-    # Kontrola oprávnění
-    if not request.user.is_staff:
+    # Kontrola oprávnění - přístup k jídelně
+    if not user_can_access_canteen(request.user, verification.warehouse.canteen):
         messages.error(request, 'Nemáte oprávnění k této akci.')
         return redirect('inventory:inventory_verification_detail', pk=pk)
     
@@ -1294,11 +1339,6 @@ def inventory_verification_pdf(request, pk):
 # ==============================
 # Stock Transfer Views (Převodky)
 # ==============================
-
-class IsStaffMixin(UserPassesTestMixin):
-    """Mixin pro kontrolu, zda je uživatel staff."""
-    def test_func(self):
-        return self.request.user.is_staff
 
 
 class StockTransferListView(CanteenAccessMixin, ListView):
@@ -1366,11 +1406,16 @@ class StockTransferListView(CanteenAccessMixin, ListView):
         return context
 
 
-class StockTransferCreateView(IsStaffMixin, CreateView):
+class StockTransferCreateView(LoginRequiredMixin, CreateView):
     """Vytvoření nové převodky."""
     model = StockTransfer
     form_class = StockTransferForm
     template_name = 'inventory/stock_transfer_form.html'
+    
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['user'] = self.request.user
+        return kwargs
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -1439,7 +1484,7 @@ def stock_transfer_start(request, pk):
     """Zahájit převod - přesun do meziskladu."""
     transfer = get_object_or_404(StockTransfer, pk=pk)
     
-    if not request.user.is_staff:
+    if not user_can_access_canteen(request.user, transfer.warehouse_from.canteen):
         messages.error(request, 'Nemáte oprávnění k této akci.')
         return redirect('inventory:stock_transfer_detail', pk=pk)
     
@@ -1462,7 +1507,7 @@ def stock_transfer_complete(request, pk):
     """Dokončit převod - přesun z meziskladu do cílového skladu."""
     transfer = get_object_or_404(StockTransfer, pk=pk)
     
-    if not request.user.is_staff:
+    if not user_can_access_canteen(request.user, transfer.warehouse_from.canteen):
         messages.error(request, 'Nemáte oprávnění k této akci.')
         return redirect('inventory:stock_transfer_detail', pk=pk)
     
@@ -1485,7 +1530,7 @@ def stock_transfer_start_and_complete(request, pk):
     """Zahájit a okamžitě dokončit převod (bez meziskladu)."""
     transfer = get_object_or_404(StockTransfer, pk=pk)
     
-    if not request.user.is_staff:
+    if not user_can_access_canteen(request.user, transfer.warehouse_from.canteen):
         messages.error(request, 'Nemáte oprávnění k této akci.')
         return redirect('inventory:stock_transfer_detail', pk=pk)
     
@@ -1508,7 +1553,7 @@ def stock_transfer_cancel(request, pk):
     """Zrušit převod."""
     transfer = get_object_or_404(StockTransfer, pk=pk)
     
-    if not request.user.is_staff:
+    if not user_can_access_canteen(request.user, transfer.warehouse_from.canteen):
         messages.error(request, 'Nemáte oprávnění k této akci.')
         return redirect('inventory:stock_transfer_detail', pk=pk)
     
@@ -1537,8 +1582,8 @@ def stock_transfer_pdf(request, pk):
         pk=pk
     )
     
-    # Kontrola oprávnění
-    if not request.user.is_staff:
+    # Kontrola oprávnění - přístup k jídelně
+    if not user_can_access_canteen(request.user, transfer.warehouse_from.canteen):
         messages.error(request, 'Nemáte oprávnění k této akci.')
         return redirect('inventory:stock_transfer_detail', pk=pk)
     

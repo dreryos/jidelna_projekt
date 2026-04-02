@@ -328,9 +328,9 @@ class StockWriteOffItemInline(admin.TabularInline):
 
 @admin.register(StockWriteOff)
 class StockWriteOffAdmin(admin.ModelAdmin):
-    list_display = ('id', 'warehouse', 'category', 'write_off_date', 'get_total_cost', 'created_by', 'created_at')
+    list_display = ('id', 'document_number', 'warehouse', 'category', 'write_off_date', 'get_total_cost', 'created_by', 'created_at')
     list_filter = ('warehouse', 'category', 'write_off_date')
-    search_fields = ('warehouse__name', 'notes')
+    search_fields = ('warehouse__name', 'notes', 'document_number')
     autocomplete_fields = ['warehouse']
     date_hierarchy = 'write_off_date'
     readonly_fields = ('created_at', 'created_by', 'get_total_cost')
@@ -338,7 +338,7 @@ class StockWriteOffAdmin(admin.ModelAdmin):
     
     fieldsets = (
         ('Základní informace', {
-            'fields': ('warehouse', 'category', 'write_off_date', 'notes')
+            'fields': ('warehouse', 'category', 'write_off_date', 'document_number', 'notes')
         }),
         ('Finanční přehled', {
             'fields': ('get_total_cost',),

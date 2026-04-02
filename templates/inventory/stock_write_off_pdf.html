@@ -104,6 +104,14 @@
                 <td><strong>Vytvořil:</strong></td>
                 <td>{{ write_off.created_by.get_full_name|default:write_off.created_by.username }}</td>
             </tr>
+            {% if write_off.document_number %}
+            <tr>
+                <td><strong>Číslo dokladu:</strong></td>
+                <td>{{ write_off.document_number }}</td>
+                <td></td>
+                <td></td>
+            </tr>
+            {% endif %}
         </table>
     </div>
 

@@ -15,7 +15,6 @@
 
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h1>Šablony jídelníčků</h1>
-        {% if user.is_staff %}
         <div class="btn-group">
             <a href="{% url 'production:template_create' %}" class="btn btn-primary">
                 <i class="fas fa-magic"></i> Nová šablona
@@ -32,7 +31,6 @@
                 </li>
             </ul>
         </div>
-        {% endif %}
     </div>
 
     {% if templates %}
@@ -60,7 +58,6 @@
                                class="btn btn-success" title="Použít šablonu">
                                 <i class="fas fa-play"></i> Použít
                             </a>
-                            {% if user.is_staff %}
                             <a href="{% url 'production:template_visual_edit' template.pk %}" 
                                class="btn btn-primary" title="Vizuální editor">
                                 <i class="fas fa-edit"></i>
@@ -80,7 +77,6 @@
                                class="btn btn-danger" title="Smazat">
                                 <i class="fas fa-trash"></i>
                             </a>
-                            {% endif %}
                         </div>
                     </td>
                 </tr>
@@ -123,9 +119,7 @@
     <div class="alert alert-info">
         <h4>Zatím nemáte žádné šablony</h4>
         <p>Šablony jídelníčků umožňují rychlé vytváření opakujících se jídelníčků.</p>
-        {% if user.is_staff %}
         <a href="{% url 'production:template_create' %}" class="btn btn-primary">Vytvořit první šablonu</a>
-        {% endif %}
     </div>
     {% endif %}
 </div>

@@ -45,8 +45,16 @@ class GoodsReceiptForm(forms.ModelForm):
             'warehouse': 'Sklad',
         }
     
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, user=None, **kwargs):
         super().__init__(*args, **kwargs)
+        # Filtrovat sklady podle přiřazených jídelen uživatele
+        if user and not user.is_superuser:
+            try:
+                user_canteens = user.profile.canteens.all()
+                warehouse_qs = Warehouse.objects.filter(canteen__in=user_canteens)
+            except Exception:
+                warehouse_qs = Warehouse.objects.none()
+            self.fields['default_warehouse'].queryset = warehouse_qs
         # Warehouse je hlavní pole, default_warehouse je pomocné
         if 'warehouse' in self.fields:
             self.fields['warehouse'].widget = forms.HiddenInput()
@@ -166,8 +174,15 @@ class GoodsReceiptItemForm(forms.ModelForm):
             'notes': 'Poznámka',
         }
     
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, user=None, **kwargs):
         super().__init__(*args, **kwargs)
+        # Filtrovat sklady podle přiřazených jídelen uživatele
+        if user and not user.is_superuser:
+            try:
+                user_canteens = user.profile.canteens.all()
+                self.fields['warehouse'].queryset = Warehouse.objects.filter(canteen__in=user_canteens)
+            except Exception:
+                self.fields['warehouse'].queryset = Warehouse.objects.none()
         # Filtrovat pouze aktivní suroviny
         from apps.core.models import Ingredient
         self.fields['ingredient'].queryset = Ingredient.objects.filter(is_active=True).order_by('name')
@@ -253,6 +268,16 @@ class InventoryVerificationForm(forms.ModelForm):
             'notes': 'Poznámky',
         }
     
+    def __init__(self, *args, user=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Filtrovat sklady podle přiřazených jídelen uživatele
+        if user and not user.is_superuser:
+            try:
+                user_canteens = user.profile.canteens.all()
+                self.fields['warehouse'].queryset = Warehouse.objects.filter(canteen__in=user_canteens)
+            except Exception:
+                self.fields['warehouse'].queryset = Warehouse.objects.none()
+    
     def clean_warehouse(self):
         warehouse = self.cleaned_data.get('warehouse')
         
@@ -326,11 +351,19 @@ class StockTransferForm(forms.ModelForm):
             'notes': 'Poznámky',
         }
     
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, user=None, **kwargs):
         super().__init__(*args, **kwargs)
         # Odfiltrovat mezisklady - nelze je vybrat jako source nebo target
-        self.fields['warehouse_from'].queryset = Warehouse.objects.filter(is_transit_warehouse=False)
-        self.fields['warehouse_to'].queryset = Warehouse.objects.filter(is_transit_warehouse=False)
+        base_qs = Warehouse.objects.filter(is_transit_warehouse=False)
+        # Filtrovat sklady podle přiřazených jídelen uživatele
+        if user and not user.is_superuser:
+            try:
+                user_canteens = user.profile.canteens.all()
+                base_qs = base_qs.filter(canteen__in=user_canteens)
+            except Exception:
+                base_qs = Warehouse.objects.none()
+        self.fields['warehouse_from'].queryset = base_qs
+        self.fields['warehouse_to'].queryset = base_qs
     
     def clean(self):
         cleaned_data = super().clean()
@@ -471,17 +504,19 @@ class StockWriteOffForm(forms.ModelForm):
     
     class Meta:
         model = StockWriteOff
-        fields = ['warehouse', 'category', 'write_off_date', 'notes']
+        fields = ['warehouse', 'category', 'write_off_date', 'document_number', 'notes']
         widgets = {
             'warehouse': forms.Select(attrs={'class': 'form-select'}),
             'category': forms.Select(attrs={'class': 'form-select'}),
             'write_off_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+            'document_number': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Číslo dokladu'}),
             'notes': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
         }
         labels = {
             'warehouse': 'Sklad',
             'category': 'Kategorie',
             'write_off_date': 'Datum odepisování',
+            'document_number': 'Číslo dokladu',
             'notes': 'Poznámky',
         }
     

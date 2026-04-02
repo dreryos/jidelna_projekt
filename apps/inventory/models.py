@@ -1319,6 +1319,12 @@ class StockWriteOff(models.Model):
         TEACHERS = 'TEACHERS', 'Učitelky'
         OTHER = 'OTHER', 'Ostatní'
     
+    document_number = models.CharField(
+        max_length=50,
+        blank=True,
+        verbose_name="Číslo dokladu",
+        help_text="Číslo dokladu pro evidenci"
+    )
     warehouse = models.ForeignKey(
         Warehouse,
         on_delete=models.PROTECT,

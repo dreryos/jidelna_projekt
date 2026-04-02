@@ -84,6 +84,7 @@
                     <thead>
                         <tr>
                             <th>Datum</th>
+                            <th>Číslo dokladu</th>
                             <th>Sklad</th>
                             <th>Kategorie</th>
                             <th>Poznámky</th>
@@ -96,6 +97,7 @@
                         {% for write_off in write_offs %}
                         <tr>
                             <td>{{ write_off.write_off_date|date:"d.m.Y" }}</td>
+                            <td>{{ write_off.document_number|default:"-" }}</td>
                             <td>{{ write_off.warehouse.name }}</td>
                             <td>
                                 <span class="badge {% if write_off.category == 'HYGIENE' %}bg-info{% elif write_off.category == 'BUFFET' %}bg-success{% else %}bg-secondary{% endif %}">

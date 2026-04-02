@@ -106,7 +106,19 @@
                             </div>
                         </div>
                         <div class="row mt-3">
-                            <div class="col-12">
+                            <div class="col-md-4">
+                                {{ form.document_number.label_tag }}
+                                <div class="input-group">
+                                    {{ form.document_number }}
+                                    <button type="button" class="btn btn-outline-secondary" id="generate-doc-number" title="Vygenerovat číslo dokladu">
+                                        <i class="fas fa-magic"></i>
+                                    </button>
+                                </div>
+                                {% if form.document_number.errors %}
+                                <div class="text-danger">{{ form.document_number.errors }}</div>
+                                {% endif %}
+                            </div>
+                            <div class="col-md-8">
                                 {{ form.notes.label_tag }}
                                 {{ form.notes }}
                                 {% if form.notes.errors %}
@@ -232,6 +244,17 @@
 let allIngredients = {{ all_ingredients|safe }};
 
 document.addEventListener('DOMContentLoaded', function() {
+    // Generování čísla dokladu
+    document.getElementById('generate-doc-number').addEventListener('click', function() {
+        const now = new Date();
+        const yy = String(now.getFullYear()).slice(-2);
+        const mm = String(now.getMonth() + 1).padStart(2, '0');
+        const dd = String(now.getDate()).padStart(2, '0');
+        const hh = String(now.getHours()).padStart(2, '0');
+        const mi = String(now.getMinutes()).padStart(2, '0');
+        document.getElementById('{{ form.document_number.auto_id }}').value = yy + mm + dd + hh + mi;
+    });
+
     const formsetContainer = document.getElementById('formset-container');
     const addItemBtn = document.getElementById('add-item-btn');
     const totalFormsInput = document.querySelector('input[name$="-TOTAL_FORMS"]');

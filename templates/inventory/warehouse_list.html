@@ -67,7 +67,7 @@
               </td>
               <td>
                 <div class="btn-group btn-group-sm" role="group">
-                  {% if user.is_staff and not warehouse.is_locked %}
+                  {% if not warehouse.is_locked %}
                   <a href="{% url 'inventory:inventory_verification_create' %}?warehouse={{ warehouse.pk }}" 
                      class="btn btn-outline-warning" title="Nová inventura">
                     <i class="fas fa-clipboard-check"></i>

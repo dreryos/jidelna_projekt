@@ -4,7 +4,7 @@ Views pro správu XML šablon jídelníčků a import flow.
 
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
-from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib import messages
 from django.urls import reverse_lazy, reverse
 from django.views.generic import ListView, CreateView, UpdateView, DeleteView
@@ -53,13 +53,7 @@ class MenuTemplateListView(LoginRequiredMixin, ListView):
         return MenuTemplate.objects.all().order_by('-created_at')
 
 
-class IsStaffMixin(UserPassesTestMixin):
-    """Mixin pro kontrolu, zda je uživatel staff"""
-    def test_func(self):
-        return self.request.user.is_staff
-
-
-class MenuTemplateCreateView(LoginRequiredMixin, IsStaffMixin, CreateView):
+class MenuTemplateCreateView(LoginRequiredMixin, CreateView):
     """Vytvoření nové XML šablony jídelníčku"""
     model = MenuTemplate
     form_class = MenuTemplateForm
@@ -74,7 +68,7 @@ class MenuTemplateCreateView(LoginRequiredMixin, IsStaffMixin, CreateView):
         return super().form_valid(form)
 
 
-class MenuTemplateUpdateView(LoginRequiredMixin, IsStaffMixin, UpdateView):
+class MenuTemplateUpdateView(LoginRequiredMixin, UpdateView):
     """Úprava existující XML šablony"""
     model = MenuTemplate
     form_class = MenuTemplateForm
@@ -86,7 +80,7 @@ class MenuTemplateUpdateView(LoginRequiredMixin, IsStaffMixin, UpdateView):
         return super().form_valid(form)
 
 
-class MenuTemplateDeleteView(LoginRequiredMixin, IsStaffMixin, DeleteView):
+class MenuTemplateDeleteView(LoginRequiredMixin, DeleteView):
     """Smazání XML šablony"""
     model = MenuTemplate
     template_name = 'production/menu_template_confirm_delete.html'
@@ -98,7 +92,7 @@ class MenuTemplateDeleteView(LoginRequiredMixin, IsStaffMixin, DeleteView):
         return super().form_valid(form)
 
 
-class MenuTemplateCreateVisualView(LoginRequiredMixin, IsStaffMixin, CreateView):
+class MenuTemplateCreateVisualView(LoginRequiredMixin, CreateView):
     """Vizuální vytvoření nové šablony s možností importu XML"""
     model = MenuTemplate
     template_name = 'production/menu_template_create_visual.html'
@@ -158,7 +152,7 @@ class MenuTemplateCreateVisualView(LoginRequiredMixin, IsStaffMixin, CreateView)
         return context
 
 
-class MenuTemplateVisualEditView(LoginRequiredMixin, IsStaffMixin, UpdateView):
+class MenuTemplateVisualEditView(LoginRequiredMixin, UpdateView):
     """Vizuální editor pro úpravu harmonogramu šablony"""
     model = MenuTemplate
     template_name = 'production/menu_template_visual_edit.html'
@@ -209,10 +203,6 @@ class MenuTemplateVisualEditView(LoginRequiredMixin, IsStaffMixin, UpdateView):
 @login_required
 def duplicate_template(request, pk):
     """Duplikace existující šablony"""
-    if not request.user.is_staff:
-        messages.error(request, 'Nemáte oprávnění k této akci.')
-        return redirect('production:template_list')
-    
     if request.method != 'POST':
         messages.error(request, 'Neplatná metoda.')
         return redirect('production:template_list')

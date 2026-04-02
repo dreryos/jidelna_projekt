@@ -51,6 +51,9 @@
                                 
                                 <dt class="col-sm-5">Datum:</dt>
                                 <dd class="col-sm-7">{{ write_off.write_off_date|date:"d.m.Y" }}</dd>
+                                
+                                <dt class="col-sm-5">Číslo dokladu:</dt>
+                                <dd class="col-sm-7">{{ write_off.document_number|default:"-" }}</dd>
                             </dl>
                         </div>
                         <div class="col-md-6">
