@@ -10,7 +10,7 @@ Tento soubor sleduje hlavní úkoly, bugy a nápady pro projekt. Pro detailněj�
 - [x] Modul bufet a odpisy zbylých jídel
 - [x] Kategorie při ručním odpisu přidat kategorie (Provozní - zaměstnanci, Výchovní zaměstnanci, Učitelky)
 - [x] Přidat číslo dokladu k odpisům
-- [ ] v šablonách dodavatelů se výchozí DPH změní na 21 % i když chci 12 % (v adminu Django)
+- [x] v šablonách dodavatelů se výchozí DPH změní na 21 % i když chci 12 % (v adminu Django)
 - [ ] vytvořit účty pro (Zuzku, Bětku a Barču)
 
 ---

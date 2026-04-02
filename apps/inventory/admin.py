@@ -238,12 +238,11 @@ class SupplierIngredientTemplateInline(admin.TabularInline):
     autocomplete_fields = ['ingredient']
     ordering = ['sort_order', 'ingredient__name']
     
-    def formfield_for_choice_field(self, db_field, request, **kwargs):
+    def formfield_for_dbfield(self, db_field, request, **kwargs):
         """Nastavení výchozí DPH sazby na 12%"""
         if db_field.name == 'default_vat_rate':
-            kwargs['choices'] = VAT_RATE_CHOICES
             kwargs['initial'] = Decimal('12')
-        return super().formfield_for_choice_field(db_field, request, **kwargs)
+        return super().formfield_for_dbfield(db_field, request, **kwargs)
 
 
 @admin.register(Supplier)
@@ -304,12 +303,11 @@ class SupplierIngredientTemplateAdmin(admin.ModelAdmin):
         }),
     )
     
-    def formfield_for_choice_field(self, db_field, request, **kwargs):
+    def formfield_for_dbfield(self, db_field, request, **kwargs):
         """Nastavení výchozí DPH sazby na 12%"""
         if db_field.name == 'default_vat_rate':
-            kwargs['choices'] = VAT_RATE_CHOICES
             kwargs['initial'] = Decimal('12')
-        return super().formfield_for_choice_field(db_field, request, **kwargs)
+        return super().formfield_for_dbfield(db_field, request, **kwargs)
     
     def save_model(self, request, obj, form, change):
         """Při ukládání invaliduje cache dodavatele"""
