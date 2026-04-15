@@ -19,6 +19,9 @@
             <a href="{% url 'inventory:stock_write_off_pdf' write_off.pk %}" class="btn btn-outline-secondary" target="_blank">
                 <i class="fas fa-file-pdf"></i> Export do PDF
             </a>
+            <a href="{% url 'inventory:stock_write_off_delete' write_off.pk %}" class="btn btn-outline-danger">
+                <i class="fas fa-trash"></i> Smazat
+            </a>
             <a href="{% url 'inventory:stock_write_off_list' %}" class="btn btn-outline-primary">
                 <i class="fas fa-arrow-left"></i> Zpět na seznam
             </a>

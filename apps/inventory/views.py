@@ -1922,6 +1922,27 @@ class StockWriteOffDetailView(CanteenAccessMixin, DetailView):
         return super().get_queryset().select_related('warehouse', 'warehouse__canteen', 'created_by').prefetch_related('items__ingredient')
 
 
+class StockWriteOffDeleteView(CanteenAccessMixin, DeleteView):
+    """Smazání odepsání s vrácením položek na sklad"""
+    model = StockWriteOff
+    template_name = 'inventory/stock_write_off_confirm_delete.html'
+    success_url = reverse_lazy('inventory:stock_write_off_list')
+    context_object_name = 'write_off'
+
+    def get_queryset(self):
+        return super().get_queryset().select_related('warehouse', 'warehouse__canteen', 'created_by').prefetch_related('items__ingredient')
+
+    def post(self, request, *args, **kwargs):
+        self.object = self.get_object()
+        write_off_id = self.object.pk
+        items_count = self.object.items.count()
+        messages.success(
+            request,
+            f'Odepsání #{write_off_id} bylo smazáno a {items_count} položek bylo vráceno na sklad.'
+        )
+        return super().delete(request, *args, **kwargs)
+
+
 @login_required
 def stock_write_off_pdf(request, pk):
     """Export odepsání do PDF"""

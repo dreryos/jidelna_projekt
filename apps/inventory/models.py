@@ -4,7 +4,7 @@ from decimal import Decimal
 from datetime import datetime
 from django.db import transaction
 from django.core.exceptions import ValidationError
-from django.db.models.signals import post_save
+from django.db.models.signals import post_save, pre_delete
 from django.dispatch import receiver
 from django.core.cache import cache
 from apps.core.models import Ingredient
@@ -1460,3 +1460,25 @@ class StockWriteOffItem(models.Model):
         verbose_name_plural = "Položky odepsání"
         ordering = ['ingredient__name']
         unique_together = ('write_off', 'ingredient')
+
+
+@receiver(pre_delete, sender=StockWriteOffItem)
+def restore_stock_on_write_off_item_delete(sender, instance, **kwargs):
+    """Při smazání položky odepsání vrátí odepsané množství zpět na sklad."""
+    try:
+        stock_item = StockItem.objects.get(
+            ingredient=instance.ingredient,
+            warehouse=instance.write_off.warehouse
+        )
+        stock_item.quantity += instance.quantity
+        stock_item.save(update_fields=['quantity'])
+        logger.info(
+            f"Vráceno {instance.quantity} {instance.ingredient.base_unit} "
+            f"{instance.ingredient.name} na sklad {instance.write_off.warehouse.name}"
+        )
+    except StockItem.DoesNotExist:
+        logger.warning(
+            f"Skladová položka pro {instance.ingredient.name} "
+            f"ve skladu {instance.write_off.warehouse.name} neexistuje - "
+            f"množství {instance.quantity} nebylo vráceno"
+        )

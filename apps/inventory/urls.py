@@ -81,5 +81,6 @@ urlpatterns = [
     path('write-offs/', views.StockWriteOffListView.as_view(), name='stock_write_off_list'),
     path('write-offs/create/', views.stock_write_off_create, name='stock_write_off_create'),
     path('write-offs/<int:pk>/', views.StockWriteOffDetailView.as_view(), name='stock_write_off_detail'),
+    path('write-offs/<int:pk>/delete/', views.StockWriteOffDeleteView.as_view(), name='stock_write_off_delete'),
     path('write-offs/<int:pk>/pdf/', views.stock_write_off_pdf, name='stock_write_off_pdf'),
 ]
