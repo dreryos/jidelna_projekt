@@ -65,7 +65,7 @@
 
     <!-- Celkové statistiky -->
     <div class="row g-4 mb-4">
-        <div class="col-md-3">
+        <div class="col-md-4">
             <div class="card bg-light shadow-sm">
                 <div class="card-body">
                     <h6 class="card-title text-muted mb-2">Celkem odepisů</h6>
@@ -74,7 +74,7 @@
             </div>
         </div>
 
-        <div class="col-md-3">
+        <div class="col-md-4">
             <div class="card bg-danger text-white shadow-sm">
                 <div class="card-body">
                     <h6 class="card-title mb-2">Celkové náklady</h6>
@@ -83,20 +83,11 @@
             </div>
         </div>
 
-        <div class="col-md-3">
-            <div class="card bg-success text-white shadow-sm">
+        <div class="col-md-4">
+            <div class="card bg-info text-white shadow-sm">
                 <div class="card-body">
-                    <h6 class="card-title mb-2">Celkový výnos</h6>
-                    <h3 class="mb-0">{{ total_stats.total_revenue|floatformat:2 }} Kč</h3>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-md-3">
-            <div class="card bg-warning text-dark shadow-sm">
-                <div class="card-body">
-                    <h6 class="card-title mb-2">Marže</h6>
-                    <h3 class="mb-0">{{ total_stats.total_margin|floatformat:2 }} Kč</h3>
+                    <h6 class="card-title mb-2">Průměr na odepis</h6>
+                    <h3 class="mb-0">{{ total_stats.avg_cost_per_write_off|floatformat:2 }} Kč</h3>
                 </div>
             </div>
         </div>
@@ -117,9 +108,6 @@
                                 <th class="text-end">Počet odepisů</th>
                                 <th class="text-end">Množství</th>
                                 <th class="text-end">Náklady</th>
-                                <th class="text-end">Výnos</th>
-                                <th class="text-end">Marže</th>
-                                <th class="text-end">Marže %</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -131,9 +119,6 @@
                                     <td class="text-end">{{ stats.count }}</td>
                                     <td class="text-end">{{ stats.quantity }}</td>
                                     <td class="text-end text-danger">{{ stats.total_cost|floatformat:2 }} Kč</td>
-                                    <td class="text-end text-success">{{ stats.total_revenue|floatformat:2 }} Kč</td>
-                                    <td class="text-end fw-bold">{{ stats.total_margin|floatformat:2 }} Kč</td>
-                                    <td class="text-end">{{ stats.margin_percent }}%</td>
                                 </tr>
                             {% endfor %}
                         </tbody>
@@ -197,7 +182,6 @@
                             <tr>
                                 <th>Datum</th>
                                 <th class="text-end">Náklady</th>
-                                <th class="text-end">Výnos</th>
                                 <th class="text-end">Počet položek</th>
                             </tr>
                         </thead>
@@ -206,7 +190,6 @@
                                 <tr>
                                     <td>{{ day.write_off_date|date:"d.m.Y" }}</td>
                                     <td class="text-end text-danger">{{ day.daily_cost|floatformat:2 }} Kč</td>
-                                    <td class="text-end text-success">{{ day.daily_revenue|floatformat:2 }} Kč</td>
                                     <td class="text-end">{{ day.item_count }}</td>
                                 </tr>
                             {% endfor %}

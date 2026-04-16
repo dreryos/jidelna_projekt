@@ -147,15 +147,17 @@ def menu_detail_analytics(request, menu_id):
             
             avg_price = sum(prices) / len(prices) if prices else Decimal('0')
             
-            # Vypočítáme množství a cenu pro tento počet porcí
-            quantity_needed = recipe_ingredient.get_quantity_in_base_unit(int(portions), 1.0)
-            ingredient_total_cost = quantity_needed * avg_price
+            # Vypočítáme množství v receptových jednotkách a cenu
+            quantity_base = recipe_ingredient.get_quantity_in_base_unit(int(portions), 1.0)
+            ingredient_total_cost = quantity_base * avg_price
+            quantity_recipe = recipe_ingredient.quantity_per_portion * int(portions)
             
             ingredients_breakdown.append({
                 'ingredient': recipe_ingredient.ingredient,
-                'quantity': round(quantity_needed, 3),
-                'unit': recipe_ingredient.ingredient.base_unit,
+                'quantity': round(quantity_recipe, 3),
+                'unit': recipe_ingredient.ingredient.recipe_unit,
                 'price_per_unit': round(avg_price, 2),
+                'price_per_unit_label': recipe_ingredient.ingredient.base_unit,
                 'total_cost': round(ingredient_total_cost, 2),
             })
         
@@ -376,32 +378,39 @@ def recipe_cost_detail(request, recipe_id):
         max_cost_with_vat = Decimal('0')
     
     # Získáme aktuální rozklad surovin
-    # Používáme první jídelnu pro výpočet aktuálních cen
-    # (ceny se mohou lišit mezi jídelnami, proto zobrazujeme konkrétní hodnoty)
-    canteen = Canteen.objects.first()
+    # Hledáme nejnovější ceny ze všech skladů (IngredientPriceHistory + StockItem fallback)
     ingredients_breakdown = []
     
-    if canteen:
-        for recipe_ingredient in recipe.recipeingredient_set.all():
-            # Najdeme průměrnou aktuální cenu suroviny (bez historických cen)
+    for recipe_ingredient in recipe.recipeingredient_set.all():
+        from apps.inventory.models import IngredientPriceHistory
+        
+        # Najdeme nejnovější nenulovou cenu přes všechny sklady
+        latest_price_record = IngredientPriceHistory.objects.filter(
+            ingredient=recipe_ingredient.ingredient,
+            price__gt=0,
+        ).order_by('-valid_from').first()
+        
+        if latest_price_record:
+            best_price = latest_price_record.price
+        else:
+            # Fallback: průměrná nenulová cena ze všech StockItem
             avg_price_data = StockItem.objects.filter(
                 ingredient=recipe_ingredient.ingredient,
-                warehouse__canteen=canteen
-            ).aggregate(avg_price=Avg('price'))
-            
-            avg_price = avg_price_data.get('avg_price') or Decimal('0')
-            
-            # Vypočítáme množství a cenu pro 1 porci
-            quantity_needed = recipe_ingredient.get_quantity_in_base_unit(1, 1.0)
-            ingredient_cost = quantity_needed * avg_price
-            
-            ingredients_breakdown.append({
-                'ingredient': recipe_ingredient.ingredient,
-                'quantity': round(quantity_needed, 3),
-                'unit': recipe_ingredient.ingredient.base_unit,
-                'price_per_unit': round(avg_price, 2),
-                'cost_per_portion': round(ingredient_cost, 2),
-            })
+            ).exclude(price=0).aggregate(avg_price=Avg('price'))
+            best_price = avg_price_data.get('avg_price') or Decimal('0')
+        
+        # Vypočítáme množství v receptových jednotkách a cenu pro 1 porci
+        quantity_base = recipe_ingredient.get_quantity_in_base_unit(1, 1.0)
+        ingredient_cost = quantity_base * best_price
+        
+        ingredients_breakdown.append({
+            'ingredient': recipe_ingredient.ingredient,
+            'quantity': round(recipe_ingredient.quantity_per_portion, 3),
+            'unit': recipe_ingredient.ingredient.recipe_unit,
+            'price_per_unit': round(best_price, 2),
+            'price_per_unit_label': recipe_ingredient.ingredient.base_unit,
+            'cost_per_portion': round(ingredient_cost, 2),
+        })
     
     context = {
         'recipe': recipe,

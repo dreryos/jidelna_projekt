@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% load django_bootstrap5 %}
+{% load analytics_filters %}
 
 {% block title %}Detail receptu - {{ recipe.name }} - Spíž{% endblock %}
 
@@ -115,8 +116,8 @@
           {% for ing in ingredients_breakdown %}
           <tr>
             <td>{{ ing.ingredient.name }}</td>
-            <td class="text-end">{{ ing.quantity }} {{ ing.unit }}</td>
-            <td class="text-end">{{ ing.price_per_unit }} Kč</td>
+            <td class="text-end">{{ ing.quantity|format_quantity:ing.unit }} {{ ing.unit }}</td>
+            <td class="text-end">{{ ing.price_per_unit }} Kč/{{ ing.price_per_unit_label }}</td>
             <td class="text-end">
               <strong>{{ ing.cost_per_portion }} Kč</strong>
             </td>
