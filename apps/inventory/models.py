@@ -1313,10 +1313,13 @@ class StockWriteOff(models.Model):
     Položky se okamžitě odepisují ze skladu bez schvalovacího workflow.
     """
     class Category(models.TextChoices):
-        HYGIENE = 'HYGIENE', 'Hygiena'
-        OPERATIONAL_EMPLOYEES = 'OPERATIONAL_EMPLOYEES', 'Provozní - zaměstnanci'
-        EDUCATIONAL_EMPLOYEES = 'EDUCATIONAL_EMPLOYEES', 'Výchovní zaměstnanci'
-        TEACHERS = 'TEACHERS', 'Učitelky'
+        CLEANING = 'CLEANING', 'Úklid'
+        MAINTENANCE = 'MAINTENANCE', 'Údržba'
+        LAUNDRY = 'LAUNDRY', 'Prádelna'
+        STAFF_RS = 'STAFF_RS', 'Personál RS'
+        EDUCATIONAL_STAFF = 'EDUCATIONAL_STAFF', 'Výchovný personál'
+        TEACHERS = 'TEACHERS', 'Pedagogové'
+        ACCOMMODATION = 'ACCOMMODATION', 'Ubytovací akce'
         OTHER = 'OTHER', 'Ostatní'
     
     document_number = models.CharField(
