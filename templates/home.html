@@ -66,9 +66,11 @@
           <a href="{% url 'core:ingredient_list' %}" class="btn btn-success">
             <i class="fas fa-seedling me-2"></i>Správa surovin
           </a>
+          {% if not request.user.profile.is_readonly %}
           <a href="{% url 'core:recipe_add' %}" class="btn btn-outline-success">
             <i class="fas fa-plus me-2"></i>Přidat nový recept
           </a>
+          {% endif %}
         </div>
       </div>
     </div>
@@ -88,9 +90,11 @@
           <a href="{% url 'inventory:stock_list' %}" class="btn btn-warning">
             <i class="fas fa-boxes me-2"></i>Zobrazit zásoby
           </a>
+          {% if not request.user.profile.is_readonly %}
           <a href="{% url 'inventory:management' %}" class="btn btn-warning">
             <i class="fas fa-cog me-2"></i>Správa jídelen a skladů
           </a>
+          {% endif %}
           <a href="{% url 'inventory:goods_receipt_list' %}" class="btn btn-outline-warning">
             <i class="fas fa-truck-loading me-2"></i>Příjmy zboží
           </a>
@@ -144,15 +148,19 @@
           <a href="{% url 'production:menu_list' %}" class="btn btn-danger">
             <i class="fas fa-calendar-alt me-2"></i>Jídelníčky
           </a>
+          {% if not request.user.profile.is_readonly %}
           <a href="{% url 'production:menu_create' %}" class="btn btn-outline-danger">
             <i class="fas fa-plus me-2"></i>Nový jídelníček
           </a>
+          {% endif %}
           <a href="{% url 'production:template_list' %}" class="btn btn-outline-danger">
             <i class="fas fa-file-alt me-2"></i>Šablony jídelníčků
           </a>
+          {% if not request.user.profile.is_readonly %}
           <a href="{% url 'production:menu_import_step1' %}" class="btn btn-outline-danger">
             <i class="fas fa-file-import me-2"></i>Tvorba ze šablony
           </a>
+          {% endif %}
         </div>
       </div>
     </div>
