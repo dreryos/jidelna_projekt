@@ -11,9 +11,11 @@
             <p class="text-muted">Evidence spotřeby hygienických potřeb a ostatních položek</p>
         </div>
         <div class="col-auto">
+            {% if not request.user.profile.is_readonly %}
             <a href="{% url 'inventory:stock_write_off_create' %}" class="btn btn-primary">
                 <i class="fas fa-plus"></i> Nové odepsání
             </a>
+            {% endif %}
         </div>
     </div>
 

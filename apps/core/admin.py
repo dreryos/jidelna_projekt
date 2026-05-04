@@ -14,7 +14,14 @@ User = get_user_model()
 
 class UserAdmin(BaseUserAdmin):
     """Rozšířený UserAdmin s přehledem přiřazených jídelen"""
-    list_display = ('username', 'email', 'first_name', 'last_name', 'is_staff', 'get_canteens')
+    list_display = ('username', 'email', 'first_name', 'last_name', 'is_staff', 'get_canteens', 'get_is_readonly')
+
+    def get_is_readonly(self, obj):
+        if hasattr(obj, 'profile'):
+            return obj.profile.is_readonly
+        return False
+    get_is_readonly.short_description = 'Pouze čtení'
+    get_is_readonly.boolean = True
     
     def get_canteens(self, obj):
         """Zobrazí přiřazené jídelny v seznamu uživatelů"""
@@ -33,8 +40,8 @@ admin.site.register(User, UserAdmin)
 @admin.register(UserProfile)
 class UserProfileAdmin(admin.ModelAdmin):
     """Správa profilů uživatelů - přiřazování jídelen"""
-    list_display = ('user', 'get_canteens_count', 'get_canteens')
-    list_filter = ('canteens',)
+    list_display = ('user', 'is_readonly', 'get_canteens_count', 'get_canteens')
+    list_filter = ('canteens', 'is_readonly')
     search_fields = ('user__username', 'user__email', 'user__first_name', 'user__last_name')
     filter_horizontal = ('canteens',)
     

@@ -18,9 +18,11 @@
     <a href="{% url 'inventory:stock_list' %}" class="btn btn-outline-secondary me-2">
       <i class="fas fa-arrow-left me-2"></i>Zpět na skladové položky
     </a>
+    {% if not request.user.profile.is_readonly %}
     <a href="{% url 'inventory:warehouse_add' %}" class="btn btn-warning">
       <i class="fas fa-plus me-2"></i>Přidat sklad
     </a>
+    {% endif %}
   </div>
 </div>
 
@@ -68,17 +70,21 @@
               <td>
                 <div class="btn-group btn-group-sm" role="group">
                   {% if not warehouse.is_locked %}
+                  {% if not request.user.profile.is_readonly %}
                   <a href="{% url 'inventory:inventory_verification_create' %}?warehouse={{ warehouse.pk }}" 
                      class="btn btn-outline-warning" title="Nová inventura">
                     <i class="fas fa-clipboard-check"></i>
                   </a>
                   {% endif %}
+                  {% endif %}
+                  {% if not request.user.profile.is_readonly %}
                   <a href="{% url 'inventory:warehouse_edit' warehouse.pk %}" class="btn btn-outline-primary" title="Upravit">
                     <i class="fas fa-edit"></i>
                   </a>
                   <a href="{% url 'inventory:warehouse_delete' warehouse.pk %}" class="btn btn-outline-danger" title="Smazat">
                     <i class="fas fa-trash"></i>
                   </a>
+                  {% endif %}
                 </div>
               </td>
             </tr>
@@ -130,9 +136,11 @@
     <i class="fas fa-building fa-3x text-muted mb-3"></i>
     <h4 class="text-muted">Zatím nemáte žádné sklady</h4>
     <p class="text-muted">Začněte přidáním vašeho prvního skladu.</p>
+    {% if not request.user.profile.is_readonly %}
     <a href="{% url 'inventory:warehouse_add' %}" class="btn btn-warning">
       <i class="fas fa-plus me-2"></i>Přidat první sklad
     </a>
+    {% endif %}
   </div>
 {% endif %}
 {% endblock %}

@@ -10,9 +10,11 @@
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h1><i class="fas fa-cog me-2"></i>Správa jídelen a skladů</h1>
         <div>
+            {% if not request.user.profile.is_readonly %}
             <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#canteenCreateModal">
-                <i class="fas fa-plus me-2"></i>Nová jídelna
+                <i class="fas fa-plus me-2"></i>Nová jídelnâ
             </button>
+            {% endif %}
         </div>
     </div>
 
@@ -102,12 +104,14 @@
                             <i class="fas fa-warehouse me-1"></i>
                             <span id="canteen-warehouse-count-{{ canteen.id }}">{{ canteen.warehouses.count }}</span> skladů
                         </span>
+                        {% if not request.user.profile.is_readonly %}
                         <button class="btn btn-sm btn-light" onclick="openEditCanteenModal({{ canteen.id }}, '{{ canteen.name|escapejs }}', '{{ canteen.address|escapejs }}')" title="Upravit jídelnu">
                             <i class="fas fa-edit"></i>
                         </button>
                         <button class="btn btn-sm btn-danger" onclick="openDeleteCanteenModal({{ canteen.id }}, '{{ canteen.name|escapejs }}', {{ canteen.warehouses.count }})" title="Smazat jídelnu">
                             <i class="fas fa-trash"></i>
                         </button>
+                        {% endif %}
                         <button class="btn btn-sm btn-light" type="button" 
                                 data-bs-toggle="collapse" data-bs-target="#collapse-{{ canteen.id }}">
                             <i class="fas fa-chevron-down"></i>
@@ -120,9 +124,11 @@
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <h6><i class="fas fa-warehouse me-2"></i>Sklady</h6>
+                        {% if not request.user.profile.is_readonly %}
                         <button class="btn btn-sm btn-warning" onclick="openCreateWarehouseModal({{ canteen.id }})">
                             <i class="fas fa-plus me-1"></i>Nový sklad
                         </button>
+                        {% endif %}
                     </div>
                     
                     {% if canteen.warehouses.all %}
@@ -155,6 +161,7 @@
                                         {% endif %}
                                     </td>
                                     <td>
+                                        {% if not request.user.profile.is_readonly %}
                                         <div class="btn-group btn-group-sm">
                                             <button class="btn btn-outline-primary" 
                                                     onclick="openEditWarehouseModal({{ warehouse.id }}, '{{ warehouse.name|escapejs }}')" 
@@ -168,6 +175,7 @@
                                                 <i class="fas fa-trash"></i>
                                             </button>
                                         </div>
+                                        {% endif %}
                                     </td>
                                 </tr>
                                 {% endfor %}

@@ -67,9 +67,11 @@
                         <a href="{% url 'production:menu_list' %}" class="btn btn-light btn-sm">
                             <i class="fas fa-arrow-left me-1"></i>Zpět
                         </a>
+                        {% if not request.user.profile.is_readonly %}
                         <a href="{% url 'production:menu_delete' menu_plan.pk %}" class="btn btn-danger btn-sm">
                             <i class="fas fa-trash me-1"></i>Smazat
                         </a>
+                        {% endif %}
                     </div>
                 </div>
             </div>
@@ -113,12 +115,14 @@
                             {% endfor %}
                             </div>
                             <div class="d-flex gap-2 mt-1">
+                                {% if not request.user.profile.is_readonly %}
                                 <button type="button" class="btn btn-sm btn-outline-success" id="add-coef-header-btn">
                                     <i class="fas fa-plus me-1"></i>Přidat variantu
                                 </button>
                                 <button type="submit" class="btn btn-sm btn-outline-primary">
                                     <i class="fas fa-save me-1"></i>Uložit výchozí hodnoty
                                 </button>
+                                {% endif %}
                             </div>
                         {% else %}
                             <span class="text-muted small">Nejsou definovány žádné koeficienty.</span>
@@ -149,11 +153,13 @@
                     <small class="text-muted ms-2">{{ date|date:"l" }}</small>
                 </h5>
             </div>
+            {% if not request.user.profile.is_readonly %}
             <button type="button" class="btn btn-primary btn-sm add-meal-to-day-btn" 
                     data-date="{{ date|date:'Y-m-d' }}"
                     title="Přidat jídlo">
                 <i class="fas fa-plus me-1"></i>Přidat jídlo
             </button>
+            {% endif %}
         </div>
         <div class="card-body p-0">
             {% with date_meal_types=orders_by_date_and_type|get_item:date %}
@@ -249,6 +255,7 @@
                                     <td class="align-middle text-center">
                                         <div class="btn-group btn-group-sm" role="group">
                                             {% if not order.has_issued_picking_list %}
+                                            {% if not request.user.profile.is_readonly %}
                                             <button type="button" 
                                                     class="btn btn-outline-success edit-ingredients-btn"
                                                     data-order-id="{{ order.id }}"
@@ -267,6 +274,7 @@
                                                     title="Smazat">
                                                 <i class="fas fa-trash"></i>
                                             </button>
+                                            {% endif %}
                                             {% else %}
                                             <button type="button" 
                                                     class="btn btn-outline-secondary"

@@ -21,6 +21,7 @@
       <i class="fas fa-warehouse me-2"></i>Sklady
     </a>
     
+    {% if not request.user.profile.is_readonly %}
     <!-- Dropdown menu pro Příjmy zboží -->
     <div class="btn-group">
       <button type="button" class="btn btn-success dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
@@ -40,6 +41,7 @@
         </li>
       </ul>
     </div>
+    {% endif %}
   </div>
 </div>
 
@@ -131,6 +133,7 @@
                     <i class="fas fa-eye"></i>
                   </a>
                   {% if receipt.status == 'DRAFT' %}
+                    {% if not request.user.profile.is_readonly %}
                     <a href="{% url 'inventory:goods_receipt_edit' receipt.pk %}"
                        class="btn btn-sm btn-primary" title="Upravit">
                       <i class="fas fa-edit"></i>
@@ -139,6 +142,7 @@
                        class="btn btn-sm btn-danger" title="Smazat">
                       <i class="fas fa-trash"></i>
                     </a>
+                    {% endif %}
                   {% endif %}
                 </td>
               </tr>
@@ -179,7 +183,9 @@
       <div class="alert alert-info">
         <i class="fas fa-info-circle me-2"></i>
         Zatím nejsou vytvořeny žádné příjmy zboží.
+        {% if not request.user.profile.is_readonly %}
         <a href="{% url 'inventory:goods_receipt_create' %}" class="alert-link">Vytvořit první příjem zboží</a>
+        {% endif %}
       </div>
     {% endif %}
   </div>

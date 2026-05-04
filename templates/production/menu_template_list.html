@@ -58,6 +58,7 @@
                                class="btn btn-success" title="Použít šablonu">
                                 <i class="fas fa-play"></i> Použít
                             </a>
+                            {% if not request.user.profile.is_readonly %}
                             <a href="{% url 'production:template_visual_edit' template.pk %}" 
                                class="btn btn-primary" title="Vizuální editor">
                                 <i class="fas fa-edit"></i>
@@ -77,6 +78,7 @@
                                class="btn btn-danger" title="Smazat">
                                 <i class="fas fa-trash"></i>
                             </a>
+                            {% endif %}
                         </div>
                     </td>
                 </tr>
@@ -119,7 +121,9 @@
     <div class="alert alert-info">
         <h4>Zatím nemáte žádné šablony</h4>
         <p>Šablony jídelníčků umožňují rychlé vytváření opakujících se jídelníčků.</p>
+        {% if not request.user.profile.is_readonly %}
         <a href="{% url 'production:template_create' %}" class="btn btn-primary">Vytvořit první šablonu</a>
+        {% endif %}
     </div>
     {% endif %}
 </div>

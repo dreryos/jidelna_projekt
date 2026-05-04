@@ -48,12 +48,14 @@
                     <i class="fas fa-seedling me-2"></i>Správa surovin
                   </a>
                 </li>
+                {% if not request.user.profile.is_readonly %}
                 <li><hr class="dropdown-divider"></li>
                 <li>
                   <a class="dropdown-item text-success" href="{% url 'core:recipe_add' %}">
                     <i class="fas fa-plus me-2"></i>Přidat nový recept
                   </a>
                 </li>
+                {% endif %}
               </ul>
             </li>
             
@@ -68,6 +70,7 @@
                     <i class="fas fa-boxes me-2"></i>Zobrazit zásoby
                   </a>
                 </li>
+                {% if not request.user.profile.is_readonly %}
                 <li>
                   <a class="dropdown-item text-warning" href="{% url 'inventory:management' %}">
                     <i class="fas fa-cog me-2"></i>Správa jídelen a skladů
@@ -95,6 +98,7 @@
                     <i class="fas fa-trash-alt me-2"></i>Odepisování zboží
                   </a>
                 </li>
+                {% endif %}
               </ul>
             </li>
             
@@ -109,21 +113,25 @@
                     <i class="fas fa-calendar-alt me-2"></i>Jídelníčky
                   </a>
                 </li>
+                {% if not request.user.profile.is_readonly %}
                 <li>
                   <a class="dropdown-item text-danger" href="{% url 'production:menu_create' %}">
                     <i class="fas fa-plus me-2"></i>Nový jídelníček
                   </a>
                 </li>
+                {% endif %}
                 <li>
                   <a class="dropdown-item text-danger" href="{% url 'production:template_list' %}">
                     <i class="fas fa-file-alt me-2"></i>Šablony jídelníčků
                   </a>
                 </li>
+                {% if not request.user.profile.is_readonly %}
                 <li>
                   <a class="dropdown-item text-danger" href="{% url 'production:menu_import_step1' %}">
                     <i class="fas fa-file-import me-2"></i>Tvorba ze šablony
                   </a>
                 </li>
+                {% endif %}
               </ul>
             </li>
             

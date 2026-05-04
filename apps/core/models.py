@@ -399,6 +399,11 @@ class UserProfile(models.Model):
         verbose_name="Přiřazené jídelny",
         help_text="Jídelny, které může tento uživatel spravovat."
     )
+    is_readonly = models.BooleanField(
+        default=False,
+        verbose_name="Pouze čtení",
+        help_text="Uživatel může data pouze prohlížet, nemůže je vytvářet, upravovat ani mazat."
+    )
 
     def __str__(self):
         return f"Profil pro {self.user.username}"

@@ -24,9 +24,11 @@
     <a href="{% url 'inventory:stock_list' %}" class="btn btn-outline-primary me-2">
       <i class="fas fa-warehouse me-2"></i>Sklady
     </a>
+    {% if not request.user.profile.is_readonly %}
     <a href="{% url 'inventory:stock_transfer_create' %}" class="btn btn-success">
       <i class="fas fa-plus me-2"></i>Nová převodka
     </a>
+    {% endif %}
   </div>
 </div>
 
@@ -186,7 +188,9 @@
       <div class="alert alert-info">
         <i class="fas fa-info-circle me-2"></i>
         Nebyly nalezeny žádné převodky.
+          {% if not request.user.profile.is_readonly %}
           <a href="{% url 'inventory:stock_transfer_create' %}" class="alert-link">Vytvořit novou převodku</a>
+          {% endif %}
       </div>
     {% endif %}
   </div>
