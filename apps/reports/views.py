@@ -69,8 +69,8 @@ def order_report(request):
             date_to = form.cleaned_data['date_to']
             report = generate_order_report(canteen, date_from, date_to)
             # links for exports (point to export endpoint)
-            report['excel_url'] = reverse('reports:order_report_export') + f"?download=excel&canteen={canteen.pk}&from={date_from}&to={date_to}"
-            report['pdf_url'] = reverse('reports:order_report_export') + f"?download=pdf&canteen={canteen.pk}&from={date_from}&to={date_to}"
+            report['excel_url'] = reverse('reports:order_report_export') + f"?download=excel&canteen={canteen.pk}&date_from={date_from}&date_to={date_to}"
+            report['pdf_url'] = reverse('reports:order_report_export') + f"?download=pdf&canteen={canteen.pk}&date_from={date_from}&date_to={date_to}"
             return render(request, 'reports/report_result.html', {'report': report})
     else:
         form = ReportForm()
