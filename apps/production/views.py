@@ -1480,6 +1480,65 @@ def archive_picking_list(request, document_id):
         return JsonResponse({'success': False, 'error': 'Chyba při archivaci výdejky.'}, status=500)
 
 
+@login_required
+def picking_list_delete(request, document_id):
+    """
+    View pro smazání výdejky.
+    Při smazání se odblokují všechny PENDING položky na skladě.
+    Archivované výdejky nelze smazat.
+    COMPLETED položky se nerevertují (skutečná spotřeba ze skladu zůstane odečtena).
+    """
+    from .models import PickingListDocument, PickingList
+    from apps.inventory.models import StockItem
+
+    try:
+        document = PickingListDocument.objects.get(id=document_id)
+    except PickingListDocument.DoesNotExist:
+        messages.error(request, 'Výdejka neexistuje.')
+        return redirect('production:picking_list_generator')
+
+    # Kontrola oprávnění
+    if not request.user.is_superuser:
+        try:
+            user_profile = request.user.profile
+            if document.canteen not in user_profile.canteens.all():
+                messages.error(request, 'Nemáte oprávnění k této výdejce.')
+                return redirect('production:picking_list_generator')
+        except Exception:
+            messages.error(request, 'Nemáte přiřazený profil.')
+            return redirect('production:picking_list_generator')
+
+    # Archivované dokumenty nelze smazat
+    if document.archived:
+        messages.error(request, 'Archivovanou výdejku nelze smazat.')
+        return redirect('production:picking_list_generator')
+
+    pending_items = document.items.filter(status=PickingList.Status.PENDING).select_related('ingredient', 'warehouse')
+    completed_items = document.items.filter(status=PickingList.Status.COMPLETED).select_related('ingredient', 'warehouse')
+
+    if request.method == 'POST':
+        # Odblokovat všechny PENDING položky
+        for item in pending_items:
+            try:
+                stock_item = StockItem.objects.get(warehouse=item.warehouse, ingredient=item.ingredient)
+                stock_item.unblock_quantity(item.quantity_planned)
+            except StockItem.DoesNotExist:
+                pass
+            except Exception as e:
+                logger.error(f"Error unblocking stock item during picking list deletion: {e}", exc_info=True)
+
+        doc_name = document.name
+        document.delete()
+        messages.success(request, f'Výdejka "{doc_name}" byla smazána a blokované suroviny byly odblokování.')
+        return redirect('production:picking_list_generator')
+
+    return render(request, 'production/picking_list_confirm_delete.html', {
+        'document': document,
+        'pending_items': pending_items,
+        'completed_items': completed_items,
+    })
+
+
 # --- Ingredient Override Views ---
 
 @login_required

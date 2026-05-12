@@ -63,6 +63,7 @@ urlpatterns = [
     path('vydejky/<int:document_id>/edit/', views.picking_list_edit, name='picking_list_edit'),
     path('vydejky/<int:document_id>/pdf/', views.picking_list_pdf, name='picking_list_pdf'),
     path('vydejky/<int:document_id>/archive/', views.archive_picking_list, name='archive_picking_list'),
+    path('vydejky/<int:document_id>/smazat/', views.picking_list_delete, name='picking_list_delete'),
     
     # Detail výrobního příkazu (read-only, přístupný z jídelníčku)
     path('jidlo/<int:order_pk>/vydejka/', views.picking_list_print, name='picking_list_print'),

@@ -131,9 +131,9 @@ def generate_order_report(canteen, date_from, date_to):
     # Porovnáme s aktuálním stavem ve skladech jídelny
     for data in needs.values():
         ing = data['ingredient']
-        # Sečteme zásoby ze všech skladů jídelny
+        # Sečteme dostupné zásoby (celkové - blokované výdejkami) ze všech skladů jídelny
         stock_qs = StockItem.objects.filter(ingredient=ing, warehouse__canteen=canteen)
-        total_stock = sum(s.quantity for s in stock_qs)
+        total_stock = sum(s.quantity_available for s in stock_qs)
         data['stock'] = float(total_stock)
         data['needed'] = float(data['needed'])
         data['to_order'] = max(0, round(data['needed'] - data['stock'], 3))

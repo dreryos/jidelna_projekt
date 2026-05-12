@@ -184,6 +184,11 @@
                             title="{% if doc.can_be_archived %}Archivovat výdejku{% else %}Všechny položky musí být vydány{% endif %}">
                       <i class="fas fa-archive"></i>
                     </button>
+                    <a href="{% url 'production:picking_list_delete' doc.id %}"
+                       class="btn btn-sm btn-outline-danger"
+                       title="Smazat výdejku">
+                      <i class="fas fa-trash-alt"></i>
+                    </a>
                   </div>
                 </td>
               </tr>
