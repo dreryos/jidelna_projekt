@@ -15,12 +15,14 @@ from apps.inventory.models import (
     StockTransfer, StockTransferItem,
     InventoryVerification, InventoryVerificationItem,
     StockWriteOff, StockWriteOffItem,
-    Supplier, SupplierIngredientTemplate
+    Supplier, SupplierIngredientTemplate,
+    IngredientPriceHistory
 )
 from apps.production.models import (
     MenuPlan, MenuTemplate, ProductionOrder,
     ProductionOrderPortionVariant, ProductionOrderIngredientOverride,
-    MenuPlanCoefficient
+    MenuPlanCoefficient,
+    PickingListDocument, PickingList
 )
 
 
@@ -39,6 +41,8 @@ ENTITY_GOODS_RECEIPTS = 'goods_receipts'
 ENTITY_STOCK_TRANSFERS = 'stock_transfers'
 ENTITY_INVENTORY_VERIFICATIONS = 'inventory_verifications'
 ENTITY_STOCK_WRITE_OFFS = 'stock_write_offs'
+ENTITY_PICKING_LISTS = 'picking_lists'
+ENTITY_PRICE_HISTORY = 'price_history'
 
 # Všechny dostupné entity
 ALL_ENTITIES = [
@@ -56,6 +60,8 @@ ALL_ENTITIES = [
     ENTITY_STOCK_TRANSFERS,
     ENTITY_INVENTORY_VERIFICATIONS,
     ENTITY_STOCK_WRITE_OFFS,
+    ENTITY_PICKING_LISTS,
+    ENTITY_PRICE_HISTORY,
 ]
 
 # Základní entity (zpětná kompatibilita)
@@ -78,6 +84,8 @@ ENTITY_DEPENDENCIES = {
     ENTITY_STOCK_WRITE_OFFS: [ENTITY_WAREHOUSES],
     ENTITY_MENU_TEMPLATES: [],  # XML obsah, žádné DB závislosti
     ENTITY_SUPPLIERS: [],
+    ENTITY_PICKING_LISTS: [ENTITY_PRODUCTION_ORDERS, ENTITY_WAREHOUSES],
+    ENTITY_PRICE_HISTORY: [ENTITY_INGREDIENTS, ENTITY_WAREHOUSES],
 }
 
 # Lidsky čitelné názvy entit
@@ -96,6 +104,8 @@ ENTITY_LABELS = {
     ENTITY_STOCK_TRANSFERS: 'Převodky',
     ENTITY_INVENTORY_VERIFICATIONS: 'Inventury',
     ENTITY_STOCK_WRITE_OFFS: 'Odpisy',
+    ENTITY_PICKING_LISTS: 'Výdejky',
+    ENTITY_PRICE_HISTORY: 'Historie cen surovin',
 }
 
 
@@ -524,6 +534,61 @@ def _export_stock_write_offs(root: ET.Element, include: bool = True) -> None:
                 item_el.set("notes", item.notes)
 
 
+def _export_picking_lists(root: ET.Element, include: bool = True) -> None:
+    """Exportuje dokumenty výdejek včetně položek."""
+    if not include:
+        return
+
+    docs_el = ET.SubElement(root, "PickingListDocuments")
+    for doc in PickingListDocument.objects.all().select_related(
+        "canteen", "created_by"
+    ).prefetch_related(
+        "items__ingredient", "items__warehouse", "items__production_order__recipe"
+    ).order_by("-created_at"):
+        doc_el = ET.SubElement(docs_el, "PickingListDocument")
+        doc_el.set("name", doc.name)
+        doc_el.set("canteenName", doc.canteen.name if doc.canteen else "")
+        doc_el.set("dateFrom", doc.date_from.isoformat())
+        doc_el.set("dateTo", doc.date_to.isoformat())
+        doc_el.set("createdAt", doc.created_at.isoformat())
+        doc_el.set("createdBy", doc.created_by.username if doc.created_by else "")
+        doc_el.set("archived", "true" if doc.archived else "false")
+        if doc.archived_at:
+            doc_el.set("archivedAt", doc.archived_at.isoformat())
+
+        items_el = ET.SubElement(doc_el, "Items")
+        for item in doc.items.all().select_related("ingredient", "warehouse", "production_order__recipe"):
+            item_el = ET.SubElement(items_el, "Item")
+            item_el.set("ingredientName", item.ingredient.name)
+            item_el.set("warehouseName", item.warehouse.name if item.warehouse else "")
+            item_el.set("quantityPlanned", str(item.quantity_planned))
+            if item.quantity_actual is not None:
+                item_el.set("quantityActual", str(item.quantity_actual))
+            item_el.set("status", item.status)
+            item_el.set("isCustomized", "true" if item.is_customized else "false")
+            if item.production_order and item.production_order.recipe:
+                item_el.set("recipeCode", item.production_order.recipe.code)
+                item_el.set("orderDate", item.production_order.date.isoformat())
+
+
+def _export_price_history(root: ET.Element, include: bool = True) -> None:
+    """Exportuje historii cen surovin."""
+    if not include:
+        return
+
+    history_el = ET.SubElement(root, "IngredientPriceHistory")
+    for record in IngredientPriceHistory.objects.all().select_related(
+        "ingredient", "warehouse", "warehouse__canteen"
+    ).order_by("-valid_from"):
+        rec_el = ET.SubElement(history_el, "PriceRecord")
+        rec_el.set("ingredientName", record.ingredient.name)
+        rec_el.set("warehouseName", record.warehouse.name if record.warehouse else "")
+        rec_el.set("canteenName", record.warehouse.canteen.name if record.warehouse and record.warehouse.canteen else "")
+        rec_el.set("price", str(record.price))
+        rec_el.set("validFrom", record.valid_from.isoformat())
+        rec_el.set("createdAt", record.created_at.isoformat())
+
+
 # ============================================================================
 # HLAVNÍ EXPORT FUNKCE
 # ============================================================================
@@ -563,7 +628,9 @@ def export_backup_xml(selected_entities: Optional[List[str]] = None) -> bytes:
     _export_stock_transfers(root, ENTITY_STOCK_TRANSFERS in entities_to_export)
     _export_inventory_verifications(root, ENTITY_INVENTORY_VERIFICATIONS in entities_to_export)
     _export_stock_write_offs(root, ENTITY_STOCK_WRITE_OFFS in entities_to_export)
-    
+    _export_picking_lists(root, ENTITY_PICKING_LISTS in entities_to_export)
+    _export_price_history(root, ENTITY_PRICE_HISTORY in entities_to_export)
+
     # Pretty print XML
     ET.indent(root, space='  ')
     
@@ -1338,6 +1405,140 @@ def _import_stock_write_offs(
         StockWriteOffItem.objects.bulk_create(items_to_create, ignore_conflicts=True)
 
 
+def _import_picking_lists(root: ET.Element, canteen_map, warehouse_map, ingredient_map, user, report: Dict[str, Any]) -> None:
+    """Importuje dokumenty výdejek včetně položek."""
+    report['picking_list_documents_created'] = 0
+    report['picking_list_items_created'] = 0
+
+    docs_el = root.find("PickingListDocuments")
+    if docs_el is None:
+        return
+
+    # Sestavime mapu (recipe_code, date) -> ProductionOrder z DB
+    production_order_map = {
+        (po.recipe.code, po.date): po
+        for po in ProductionOrder.objects.all().select_related('recipe')
+        if po.recipe
+    }
+
+    for doc_el in docs_el:
+        name = doc_el.get("name", "").strip()
+        canteen_name = doc_el.get("canteenName", "").strip()
+        date_from = _date_or_none(doc_el.get("dateFrom", ""))
+        date_to = _date_or_none(doc_el.get("dateTo", ""))
+        archived = _bool_or_none(doc_el.get("archived", "false")) or False
+        archived_at = _datetime_or_none(doc_el.get("archivedAt", ""))
+
+        if not name or not date_from or not date_to:
+            continue
+
+        canteen = canteen_map.get(canteen_name)
+        if canteen is None:
+            report["missing_references"].append(f"Canteen '{canteen_name}' for PickingListDocument '{name}'")
+            continue
+
+        doc, created = PickingListDocument.objects.get_or_create(
+            name=name,
+            canteen=canteen,
+            date_from=date_from,
+            date_to=date_to,
+            defaults={
+                'created_by': user,
+                'archived': archived,
+                'archived_at': archived_at,
+            }
+        )
+        if created:
+            report['picking_list_documents_created'] += 1
+
+        items_el = doc_el.find("Items") or []
+        items_to_create = []
+        for item_el in items_el:
+            ing_name = item_el.get("ingredientName", "").strip()
+            warehouse_name = item_el.get("warehouseName", "").strip()
+            quantity_planned = _decimal_or_none(item_el.get("quantityPlanned", ""))
+            quantity_actual = _decimal_or_none(item_el.get("quantityActual", ""))
+            status = item_el.get("status", PickingList.Status.PENDING)
+            is_customized = _bool_or_none(item_el.get("isCustomized", "false")) or False
+            recipe_code = item_el.get("recipeCode", "").strip()
+            order_date_str = item_el.get("orderDate", "").strip()
+
+            if ing_name not in ingredient_map or quantity_planned is None:
+                report["missing_references"].append(f"Ingredient '{ing_name}' for PickingList item in '{name}'")
+                continue
+
+            warehouse = warehouse_map.get(warehouse_name)
+            if warehouse is None:
+                report["missing_references"].append(f"Warehouse '{warehouse_name}' for PickingList item in '{name}'")
+                continue
+
+            # Najdeme production_order (klíč: recipe_code + order_date)
+            production_order = None
+            if recipe_code and order_date_str:
+                order_date = _date_or_none(order_date_str)
+                key = (recipe_code, order_date)
+                production_order = production_order_map.get(key)
+
+            if production_order is None:
+                report["missing_references"].append(f"ProductionOrder for recipe '{recipe_code}' on '{order_date_str}' in PickingList '{name}'")
+                continue
+
+            if not PickingList.objects.filter(production_order=production_order, ingredient=ingredient_map[ing_name]).exists():
+                items_to_create.append(PickingList(
+                    document=doc,
+                    production_order=production_order,
+                    warehouse=warehouse,
+                    ingredient=ingredient_map[ing_name],
+                    quantity_planned=quantity_planned,
+                    quantity_actual=quantity_actual,
+                    status=status,
+                    is_customized=is_customized,
+                ))
+
+        if items_to_create:
+            PickingList.objects.bulk_create(items_to_create, ignore_conflicts=True)
+            report['picking_list_items_created'] += len(items_to_create)
+
+
+def _import_price_history(root: ET.Element, ingredient_map, warehouse_map, report: Dict[str, Any]) -> None:
+    """Importuje historii cen surovin."""
+    report['price_history_created'] = 0
+
+    history_el = root.find("IngredientPriceHistory")
+    if history_el is None:
+        return
+
+    records_to_create = []
+    for rec_el in history_el:
+        ing_name = rec_el.get("ingredientName", "").strip()
+        warehouse_name = rec_el.get("warehouseName", "").strip()
+        price = _decimal_or_none(rec_el.get("price", ""))
+        valid_from = _datetime_or_none(rec_el.get("validFrom", ""))
+
+        if ing_name not in ingredient_map or price is None or valid_from is None:
+            report["missing_references"].append(f"PriceRecord ingredient='{ing_name}' warehouse='{warehouse_name}'")
+            continue
+
+        warehouse = warehouse_map.get(warehouse_name)
+        if warehouse is None:
+            report["missing_references"].append(f"Warehouse '{warehouse_name}' for PriceRecord ingredient='{ing_name}'")
+            continue
+
+        if not IngredientPriceHistory.objects.filter(
+            ingredient=ingredient_map[ing_name], warehouse=warehouse, valid_from=valid_from
+        ).exists():
+            records_to_create.append(IngredientPriceHistory(
+                ingredient=ingredient_map[ing_name],
+                warehouse=warehouse,
+                price=price,
+                valid_from=valid_from,
+            ))
+
+    if records_to_create:
+        IngredientPriceHistory.objects.bulk_create(records_to_create, ignore_conflicts=True)
+        report['price_history_created'] += len(records_to_create)
+
+
 # ============================================================================
 # HLAVNÍ IMPORT FUNKCE
 # ============================================================================
@@ -1388,6 +1589,9 @@ def import_backup_xml(xml_content: bytes, dry_run: bool = False, user=None) -> D
         "stock_transfers_created": 0,
         "inventory_verifications_created": 0,
         "stock_write_offs_created": 0,
+        "picking_list_documents_created": 0,
+        "picking_list_items_created": 0,
+        "price_history_created": 0,
     }
     
     root = DefusedET.fromstring(xml_content)
@@ -1578,6 +1782,12 @@ def import_backup_xml(xml_content: bytes, dry_run: bool = False, user=None) -> D
         _import_inventory_verifications(root, warehouse_map, ingredient_map, user, report)
         _import_stock_write_offs(root, warehouse_map, ingredient_map, user, report)
 
+        # Výdejky (volitelné, závisí na production_orders, warehouses, ingredients)
+        _import_picking_lists(root, canteen_map, warehouse_map, ingredient_map, user, report)
+
+        # Historie cen surovin (volitelné, závisí na ingredients, warehouses)
+        _import_price_history(root, ingredient_map, warehouse_map, report)
+
         if dry_run:
             transaction.set_rollback(True)
 
@@ -1617,6 +1827,8 @@ def get_entity_choices() -> List[Dict[str, Any]]:
         ENTITY_MENU_TEMPLATES: 'production',
         ENTITY_MENU_PLANS: 'production',
         ENTITY_PRODUCTION_ORDERS: 'production',
+        ENTITY_PICKING_LISTS: 'production',
+        ENTITY_PRICE_HISTORY: 'stock',
     }
     
     result = []
