@@ -202,7 +202,7 @@
               <th><i class="fas fa-boxes me-1"></i>Celkem</th>
               <th><i class="fas fa-check-circle me-1"></i>Dostupné</th>
               <th><i class="fas fa-lock me-1"></i>Blokované</th>
-              <th><i class="fas fa-coins me-1"></i>Cena za jednotku</th>
+              <th><i class="fas fa-coins me-1"></i>Cena za jednotku<br><small class="text-muted fw-normal">s DPH / bez DPH</small></th>
               <th><i class="fas fa-calculator me-1"></i>Celková hodnota</th>
               <th width="120"><i class="fas fa-cogs me-1"></i>Akce</th>
             </tr>
@@ -251,7 +251,11 @@
                 <span class="text-muted">-</span>
                 {% endif %}
               </td>
-              <td>{{ item.price|format_price }} Kč</td>
+              <td>
+                <strong>{{ item.price|format_price }} Kč</strong>
+                <small class="text-muted d-block">bez DPH: {{ item.price_without_vat|format_price }} Kč</small>
+                <span class="badge bg-secondary mt-1">DPH {{ item.vat_rate|floatformat:"0" }} %</span>
+              </td>
               <td>
                 {% widthratio item.quantity 1 item.price as total_value %}
                 <strong>{{ total_value|format_price }} Kč</strong>

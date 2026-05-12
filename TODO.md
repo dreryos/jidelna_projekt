@@ -13,6 +13,7 @@ Tento soubor sleduje hlavní úkoly, bugy a nápady pro projekt. Pro detailněj�
 - [x] v šablonách dodavatelů se výchozí DPH změní na 21 % i když chci 12 % (v adminu Django)
 - [x] vytvořit účty pro (Zuzku, Bětku a Barču)
 - [ ] k výdejkám přidat možnost zadat hlavního kuchaře, a do analýzy přidat možnost filtrovat podle kuchaře, a zobrazit za kolik průměrně vaří jídla
+- [x] přidat rozpis DPH do zásob skladu, Cena za jednotku s DPH (XY Kč (12%))
 
 ---
 
