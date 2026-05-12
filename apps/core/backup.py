@@ -557,10 +557,11 @@ def _export_picking_lists(root: ET.Element, include: bool = True) -> None:
             doc_el.set("archivedAt", doc.archived_at.isoformat())
 
         items_el = ET.SubElement(doc_el, "Items")
-        for item in doc.items.all().select_related("ingredient", "warehouse", "production_order__recipe", "production_order__canteen", "production_order__menu_plan__canteen"):
+        for item in doc.items.all().select_related("ingredient", "warehouse__canteen", "production_order__recipe", "production_order__canteen", "production_order__menu_plan__canteen"):
             item_el = ET.SubElement(items_el, "Item")
             item_el.set("ingredientName", item.ingredient.name)
             item_el.set("warehouseName", item.warehouse.name if item.warehouse else "")
+            item_el.set("warehouseCanteenName", item.warehouse.canteen.name if item.warehouse and item.warehouse.canteen else "")
             item_el.set("quantityPlanned", str(item.quantity_planned))
             if item.quantity_actual is not None:
                 item_el.set("quantityActual", str(item.quantity_actual))
@@ -575,7 +576,7 @@ def _export_picking_lists(root: ET.Element, include: bool = True) -> None:
 
     # Exportujeme položky výdejek, které nejsou přiřazeny k žádnému dokumentu
     unassigned_items = PickingList.objects.filter(document=None).select_related(
-        "ingredient", "warehouse", "production_order__recipe",
+        "ingredient", "warehouse__canteen", "production_order__recipe",
         "production_order__canteen", "production_order__menu_plan__canteen"
     )
     if unassigned_items.exists():
@@ -584,6 +585,7 @@ def _export_picking_lists(root: ET.Element, include: bool = True) -> None:
             item_el = ET.SubElement(unassigned_el, "Item")
             item_el.set("ingredientName", item.ingredient.name)
             item_el.set("warehouseName", item.warehouse.name if item.warehouse else "")
+            item_el.set("warehouseCanteenName", item.warehouse.canteen.name if item.warehouse and item.warehouse.canteen else "")
             item_el.set("quantityPlanned", str(item.quantity_planned))
             if item.quantity_actual is not None:
                 item_el.set("quantityActual", str(item.quantity_actual))
@@ -1497,7 +1499,13 @@ def _import_picking_lists(root: ET.Element, canteen_map, warehouse_map, ingredie
                 report["missing_references"].append(f"Ingredient '{ing_name}' for PickingList item in '{name}'")
                 continue
 
-            warehouse = warehouse_map.get(warehouse_name)
+            wh_canteen = item_el.get("warehouseCanteenName", "").strip() or order_canteen_name
+            wh_key = f"{wh_canteen}:{warehouse_name}"
+            warehouse = warehouse_map.get(wh_key)
+            if warehouse is None:
+                # Fallback pro starší zálohy bez warehouseCanteenName
+                wh_key_fb = next((k for k in warehouse_map if k.endswith(f":{warehouse_name}")), None)
+                warehouse = warehouse_map.get(wh_key_fb) if wh_key_fb else None
             if warehouse is None:
                 report["missing_references"].append(f"Warehouse '{warehouse_name}' for PickingList item in '{name}'")
                 continue
@@ -1559,7 +1567,13 @@ def _import_picking_lists(root: ET.Element, canteen_map, warehouse_map, ingredie
                 report["missing_references"].append(f"Ingredient '{ing_name}' for UnassignedPickingList item")
                 continue
 
-            warehouse = warehouse_map.get(warehouse_name)
+            wh_canteen = item_el.get("warehouseCanteenName", "").strip() or order_canteen_name
+            wh_key = f"{wh_canteen}:{warehouse_name}"
+            warehouse = warehouse_map.get(wh_key)
+            if warehouse is None:
+                # Fallback pro starší zálohy bez warehouseCanteenName
+                wh_key_fb = next((k for k in warehouse_map if k.endswith(f":{warehouse_name}")), None)
+                warehouse = warehouse_map.get(wh_key_fb) if wh_key_fb else None
             if warehouse is None:
                 report["missing_references"].append(f"Warehouse '{warehouse_name}' for UnassignedPickingList item")
                 continue
@@ -1617,7 +1631,9 @@ def _import_price_history(root: ET.Element, ingredient_map, warehouse_map, repor
             report["missing_references"].append(f"PriceRecord ingredient='{ing_name}' warehouse='{warehouse_name}'")
             continue
 
-        warehouse = warehouse_map.get(warehouse_name)
+        price_canteen_name = rec_el.get("canteenName", "").strip()
+        wh_key = f"{price_canteen_name}:{warehouse_name}"
+        warehouse = warehouse_map.get(wh_key)
         if warehouse is None:
             report["missing_references"].append(f"Warehouse '{warehouse_name}' for PriceRecord ingredient='{ing_name}'")
             continue
