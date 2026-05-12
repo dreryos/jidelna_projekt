@@ -1,5 +1,5 @@
 from django.contrib import admin
-from django.utils.html import format_html
+from django.utils.html import format_html, mark_safe
 from .models import (
     ProductionOrder, PickingList, MenuPlan, MenuPlanCoefficient, 
     PickingListDocument, MenuTemplate, ProductionOrderRecipeOverride,
@@ -88,7 +88,7 @@ class ProductionOrderAdmin(admin.ModelAdmin):
     def customization_indicator(self, obj):
         """Zobrazí ikonu pokud má jídlo upravené ingredience"""
         if obj.has_overrides:
-            return format_html(
+            return mark_safe(
                 '<span title="Upravené ingredience" style="color: orange; font-weight: bold;">✏️</span>'
             )
         return ''
@@ -119,7 +119,7 @@ class ProductionOrderAdmin(admin.ModelAdmin):
                 cost_info = f"Náklady: {prices['per_portion']} Kč"
                 vat_info = f"<br>S DPH ({prices['vat_rate']}%): {prices['per_portion_with_vat']} Kč"
                 warning = "<br><small style='color: orange;'>⚠️ Upravené ingredience</small>"
-                return format_html(f"{cost_info}{vat_info}{warning}")
+                return mark_safe(f"{cost_info}{vat_info}{warning}")
             else:
                 # Původní výpočet z receptu
                 prices = obj.recipe.calculate_portion_price(
@@ -131,7 +131,7 @@ class ProductionOrderAdmin(admin.ModelAdmin):
                 cost_info = f"Náklady: {prices['per_portion']} Kč"
                 if 'per_portion_with_vat' in prices:
                     vat_info = f"<br>S DPH ({prices['vat_rate']}%): {prices['per_portion_with_vat']} Kč"
-                    return format_html(f"{cost_info}{vat_info}")
+                    return mark_safe(f"{cost_info}{vat_info}")
                 return cost_info
         return "N/A"
     price_per_portion.short_description = "Cena/porce"
@@ -144,7 +144,7 @@ class ProductionOrderAdmin(admin.ModelAdmin):
                 cost_info = f"Náklady: {prices['total']} Kč"
                 vat_info = f"<br>S DPH ({prices['vat_rate']}%): {prices['total_with_vat']} Kč<br>DPH: {prices['vat_amount']} Kč"
                 warning = "<br><small style='color: orange;'>⚠️ Upravené ingredience</small>"
-                return format_html(f"{cost_info}{vat_info}{warning}")
+                return mark_safe(f"{cost_info}{vat_info}{warning}")
             else:
                 # Původní výpočet z receptu
                 prices = obj.recipe.calculate_portion_price(
@@ -156,7 +156,7 @@ class ProductionOrderAdmin(admin.ModelAdmin):
                 cost_info = f"Náklady: {prices['total']} Kč"
                 if 'total_with_vat' in prices:
                     vat_info = f"<br>S DPH ({prices['vat_rate']}%): {prices['total_with_vat']} Kč<br>DPH: {prices['vat_amount']} Kč"
-                    return format_html(f"{cost_info}{vat_info}")
+                    return mark_safe(f"{cost_info}{vat_info}")
                 return cost_info
         return "N/A"
     total_price.short_description = "Celková cena výroby"
