@@ -557,7 +557,7 @@ def _export_picking_lists(root: ET.Element, include: bool = True) -> None:
             doc_el.set("archivedAt", doc.archived_at.isoformat())
 
         items_el = ET.SubElement(doc_el, "Items")
-        for item in doc.items.all().select_related("ingredient", "warehouse", "production_order__recipe"):
+        for item in doc.items.all().select_related("ingredient", "warehouse", "production_order__recipe", "production_order__canteen", "production_order__menu_plan__canteen"):
             item_el = ET.SubElement(items_el, "Item")
             item_el.set("ingredientName", item.ingredient.name)
             item_el.set("warehouseName", item.warehouse.name if item.warehouse else "")
@@ -569,6 +569,32 @@ def _export_picking_lists(root: ET.Element, include: bool = True) -> None:
             if item.production_order and item.production_order.recipe:
                 item_el.set("recipeCode", item.production_order.recipe.code)
                 item_el.set("orderDate", item.production_order.date.isoformat())
+                item_el.set("mealType", item.production_order.meal_type)
+                order_canteen = item.production_order.resolved_canteen
+                item_el.set("orderCanteenName", order_canteen.name if order_canteen else "")
+
+    # Exportujeme položky výdejek, které nejsou přiřazeny k žádnému dokumentu
+    unassigned_items = PickingList.objects.filter(document=None).select_related(
+        "ingredient", "warehouse", "production_order__recipe",
+        "production_order__canteen", "production_order__menu_plan__canteen"
+    )
+    if unassigned_items.exists():
+        unassigned_el = ET.SubElement(root, "UnassignedPickingListItems")
+        for item in unassigned_items:
+            item_el = ET.SubElement(unassigned_el, "Item")
+            item_el.set("ingredientName", item.ingredient.name)
+            item_el.set("warehouseName", item.warehouse.name if item.warehouse else "")
+            item_el.set("quantityPlanned", str(item.quantity_planned))
+            if item.quantity_actual is not None:
+                item_el.set("quantityActual", str(item.quantity_actual))
+            item_el.set("status", item.status)
+            item_el.set("isCustomized", "true" if item.is_customized else "false")
+            if item.production_order and item.production_order.recipe:
+                item_el.set("recipeCode", item.production_order.recipe.code)
+                item_el.set("orderDate", item.production_order.date.isoformat())
+                item_el.set("mealType", item.production_order.meal_type)
+                order_canteen = item.production_order.resolved_canteen
+                item_el.set("orderCanteenName", order_canteen.name if order_canteen else "")
 
 
 def _export_price_history(root: ET.Element, include: bool = True) -> None:
@@ -1414,10 +1440,12 @@ def _import_picking_lists(root: ET.Element, canteen_map, warehouse_map, ingredie
     if docs_el is None:
         return
 
-    # Sestavime mapu (recipe_code, date) -> ProductionOrder z DB
+    # Sestavime mapu (recipe_code, date, meal_type, canteen_name) -> ProductionOrder z DB
+    # Čtyřprvkový klíč zajišťuje jednoznačnost i když existují dva příkazy pro stejný recept
+    # ve stejný den (např. snídaně a oběd) nebo pro různé jídelny.
     production_order_map = {
-        (po.recipe.code, po.date): po
-        for po in ProductionOrder.objects.all().select_related('recipe')
+        (po.recipe.code, po.date, po.meal_type, po.resolved_canteen.name if po.resolved_canteen else ""): po
+        for po in ProductionOrder.objects.all().select_related('recipe', 'canteen', 'menu_plan__canteen')
         if po.recipe
     }
 
@@ -1462,6 +1490,8 @@ def _import_picking_lists(root: ET.Element, canteen_map, warehouse_map, ingredie
             is_customized = _bool_or_none(item_el.get("isCustomized", "false")) or False
             recipe_code = item_el.get("recipeCode", "").strip()
             order_date_str = item_el.get("orderDate", "").strip()
+            meal_type = item_el.get("mealType", "").strip()
+            order_canteen_name = item_el.get("orderCanteenName", "").strip()
 
             if ing_name not in ingredient_map or quantity_planned is None:
                 report["missing_references"].append(f"Ingredient '{ing_name}' for PickingList item in '{name}'")
@@ -1472,15 +1502,24 @@ def _import_picking_lists(root: ET.Element, canteen_map, warehouse_map, ingredie
                 report["missing_references"].append(f"Warehouse '{warehouse_name}' for PickingList item in '{name}'")
                 continue
 
-            # Najdeme production_order (klíč: recipe_code + order_date)
+            # Najdeme production_order (klíč: recipe_code + date + meal_type + canteen)
             production_order = None
             if recipe_code and order_date_str:
                 order_date = _date_or_none(order_date_str)
-                key = (recipe_code, order_date)
+                key = (recipe_code, order_date, meal_type, order_canteen_name)
                 production_order = production_order_map.get(key)
+                # Zpětná kompatibilita se starými zálohami bez mealType/orderCanteenName:
+                # zkusíme dvouprvkový klíč jako fallback
+                if production_order is None:
+                    fallback_matches = [
+                        po for (rc, od, mt, cn), po in production_order_map.items()
+                        if rc == recipe_code and od == order_date
+                    ]
+                    if len(fallback_matches) == 1:
+                        production_order = fallback_matches[0]
 
             if production_order is None:
-                report["missing_references"].append(f"ProductionOrder for recipe '{recipe_code}' on '{order_date_str}' in PickingList '{name}'")
+                report["missing_references"].append(f"ProductionOrder for recipe '{recipe_code}' on '{order_date_str}' (meal_type='{meal_type}') in PickingList '{name}'")
                 continue
 
             if not PickingList.objects.filter(production_order=production_order, ingredient=ingredient_map[ing_name]).exists():
@@ -1498,6 +1537,65 @@ def _import_picking_lists(root: ET.Element, canteen_map, warehouse_map, ingredie
         if items_to_create:
             PickingList.objects.bulk_create(items_to_create, ignore_conflicts=True)
             report['picking_list_items_created'] += len(items_to_create)
+
+    # Importujeme položky bez dokumentu (UnassignedPickingListItems)
+    unassigned_el = root.find("UnassignedPickingListItems")
+    if unassigned_el is not None:
+        report['unassigned_picking_list_items_created'] = 0
+        unassigned_to_create = []
+        for item_el in unassigned_el:
+            ing_name = item_el.get("ingredientName", "").strip()
+            warehouse_name = item_el.get("warehouseName", "").strip()
+            quantity_planned = _decimal_or_none(item_el.get("quantityPlanned", ""))
+            quantity_actual = _decimal_or_none(item_el.get("quantityActual", ""))
+            status = item_el.get("status", PickingList.Status.PENDING)
+            is_customized = _bool_or_none(item_el.get("isCustomized", "false")) or False
+            recipe_code = item_el.get("recipeCode", "").strip()
+            order_date_str = item_el.get("orderDate", "").strip()
+            meal_type = item_el.get("mealType", "").strip()
+            order_canteen_name = item_el.get("orderCanteenName", "").strip()
+
+            if ing_name not in ingredient_map or quantity_planned is None:
+                report["missing_references"].append(f"Ingredient '{ing_name}' for UnassignedPickingList item")
+                continue
+
+            warehouse = warehouse_map.get(warehouse_name)
+            if warehouse is None:
+                report["missing_references"].append(f"Warehouse '{warehouse_name}' for UnassignedPickingList item")
+                continue
+
+            production_order = None
+            if recipe_code and order_date_str:
+                order_date = _date_or_none(order_date_str)
+                key = (recipe_code, order_date, meal_type, order_canteen_name)
+                production_order = production_order_map.get(key)
+                if production_order is None:
+                    fallback_matches = [
+                        po for (rc, od, mt, cn), po in production_order_map.items()
+                        if rc == recipe_code and od == order_date
+                    ]
+                    if len(fallback_matches) == 1:
+                        production_order = fallback_matches[0]
+
+            if production_order is None:
+                report["missing_references"].append(f"ProductionOrder for recipe '{recipe_code}' on '{order_date_str}' (meal_type='{meal_type}') in UnassignedPickingList")
+                continue
+
+            if not PickingList.objects.filter(production_order=production_order, ingredient=ingredient_map[ing_name]).exists():
+                unassigned_to_create.append(PickingList(
+                    document=None,
+                    production_order=production_order,
+                    warehouse=warehouse,
+                    ingredient=ingredient_map[ing_name],
+                    quantity_planned=quantity_planned,
+                    quantity_actual=quantity_actual,
+                    status=status,
+                    is_customized=is_customized,
+                ))
+
+        if unassigned_to_create:
+            PickingList.objects.bulk_create(unassigned_to_create, ignore_conflicts=True)
+            report['unassigned_picking_list_items_created'] += len(unassigned_to_create)
 
 
 def _import_price_history(root: ET.Element, ingredient_map, warehouse_map, report: Dict[str, Any]) -> None:
