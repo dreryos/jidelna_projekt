@@ -14,6 +14,31 @@
 .table tbody tr small {
     line-height: 1.4;
 }
+.table tbody tr.row-issued {
+    opacity: 0.65;
+}
+.table tbody tr.row-issued td {
+    text-decoration: line-through;
+    color: #6c757d;
+}
+.table tbody tr.row-issued td .no-strike,
+.table tbody tr.row-issued td input,
+.table tbody tr.row-issued td label {
+    text-decoration: none;
+    color: inherit;
+    opacity: 1;
+}
+.issued-checkbox {
+    width: 1.3rem;
+    height: 1.3rem;
+    cursor: pointer;
+    accent-color: #198754;
+}
+.issued-label {
+    cursor: pointer;
+    user-select: none;
+    font-size: 0.85rem;
+}
 </style>
 {% endblock %}
 
@@ -65,29 +90,33 @@
       <div class="card-body">
         <div class="alert alert-info">
           <i class="fas fa-info-circle me-2"></i>
-          <strong>Instrukce:</strong> Vyplňte skutečně vydaná množství a změňte status na "Vydáno" 
-          pro automatické odečtení ze skladu.
+          <strong>Instrukce:</strong> Upravte skutečně vydaná množství a zaškrtněte „Vydáno". Vydaný řádek se automaticky odečte ze skladu.
         </div>
 
         <form method="post">
           {% csrf_token %}
-          
+
           <div class="table-responsive">
             <table class="table table-hover">
               <thead class="table-light">
                 <tr>
                   <th style="width: 4%;">№</th>
-                  <th style="width: 28%;">Surovina</th>
-                  <th style="width: 28%;">Použití (recepty a porce)</th>
+                  <th style="width: 26%;">Surovina</th>
+                  <th style="width: 26%;">Použití (recepty a porce)</th>
                   <th style="width: 10%; text-align: center;">Plánováno</th>
                   <th style="width: 7%; text-align: center;">Jednotka</th>
                   <th style="width: 11%; text-align: center;">Skutečně vydáno</th>
-                  <th style="width: 12%;">Status</th>
+                  <th style="width: 16%; text-align: center;">
+                    Vydáno
+                    <input type="checkbox" id="check-all-toggle" class="issued-checkbox ms-2" title="Zaškrtnout / odškrtnout vše">
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {% for item in ingredient_totals %}
-                <tr class="{% if not item.has_stock %}table-danger{% elif not item.is_sufficient %}table-warning{% endif %}">
+                {% with issued=item.status|default:"PENDING" %}
+                <tr class="{% if not item.has_stock %}table-danger{% elif not item.is_sufficient %}table-warning{% endif %}{% if issued == 'COMPLETED' %} row-issued{% endif %}"
+                    data-ingredient-id="{{ item.ingredient.id }}">
                   <td style="text-align: center; font-weight: bold;">
                     {% if not item.has_stock %}
                         <i class="fas fa-times-circle text-danger" title="Není na skladě"></i> {{ forloop.counter }}
@@ -101,7 +130,7 @@
                     <strong>{{ item.ingredient.name }}</strong>
                     {% if item.warehouses_info %}
                     <br><small class="text-muted">
-                      <i class="fas fa-warehouse me-1"></i>Skladem: 
+                      <i class="fas fa-warehouse me-1"></i>Skladem:
                       {% for wh_name, qty, blocked, available in item.warehouses_info %}
                         {{ wh_name }} (celkem {{ qty|floatformat:1 }}, blokováno {{ blocked|floatformat:1 }}, dostupné {{ available|floatformat:1 }}){% if not forloop.last %}, {% endif %}
                       {% endfor %}
@@ -112,7 +141,7 @@
                     <small>
                       {% for order in item.orders %}
                       <div class="mb-1">
-                        • {{ order.date|date:"d.m." }} - <strong>{{ order.recipe }}</strong> 
+                        • {{ order.date|date:"d.m." }} - <strong>{{ order.recipe }}</strong>
                         ({{ order.portions }} porc./{{ order.effective_portions|floatformat:1 }} ef.: {{ order.quantity|floatformat:2 }} {{ item.unit }})
                       </div>
                       {% endfor %}
@@ -124,39 +153,49 @@
                   <td style="text-align: center;">
                     {{ item.unit }}
                   </td>
-                  <td>
-                    <input type="number" 
-                           step="0.001" 
-                           class="form-control form-control-sm" 
+                  <td class="no-strike">
+                    <input type="number"
+                           step="0.001"
+                           class="form-control form-control-sm qty-actual"
                            name="quantity_actual_ingredient_{{ item.ingredient.id }}"
-                           value="{% if item.quantity_actual %}{{ item.quantity_actual }}{% endif %}"
+                           data-planned="{{ item.planned }}"
+                           value="{% if item.quantity_actual is not None %}{{ item.quantity_actual }}{% else %}{{ item.planned }}{% endif %}"
                            placeholder="0.000">
                   </td>
-                  <td>
-                    <select class="form-select form-select-sm" name="status_ingredient_{{ item.ingredient.id }}">
-                      <option value="PENDING" {% if item.status == 'PENDING' %}selected{% endif %}>
-                        Čeká
-                      </option>
-                      <option value="COMPLETED" {% if item.status == 'COMPLETED' %}selected{% endif %}>
-                        Vydáno
-                      </option>
-                    </select>
+                  <td class="text-center no-strike">
+                    <input type="hidden" name="status_ingredient_{{ item.ingredient.id }}" value="PENDING">
+                    <input type="checkbox"
+                           class="issued-checkbox issued-check"
+                           id="issued_{{ item.ingredient.id }}"
+                           data-field="status_ingredient_{{ item.ingredient.id }}"
+                           {% if issued == 'COMPLETED' %}checked{% endif %}>
+                    <label class="issued-label ms-1" for="issued_{{ item.ingredient.id }}">Vydáno</label>
                   </td>
                 </tr>
+                {% endwith %}
                 {% endfor %}
               </tbody>
             </table>
           </div>
 
-          <div class="d-flex justify-content-between mt-4">
+          <div class="d-flex justify-content-between align-items-center mt-4 flex-wrap gap-2">
             <a href="{% url 'production:picking_list_pdf' document.id %}" 
                class="btn btn-outline-danger" 
                target="_blank">
               <i class="fas fa-file-pdf me-2"></i>Stáhnout PDF
             </a>
-            <button type="submit" class="btn btn-primary btn-lg">
-              <i class="fas fa-save me-2"></i>Uložit změny
-            </button>
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+              <span class="text-muted small" id="issued-counter"></span>
+              <button type="button" class="btn btn-outline-secondary" id="btn-unissue-all">
+                <i class="fas fa-times me-2"></i>Odebrat vydání
+              </button>
+              <button type="button" class="btn btn-success" id="btn-issue-all">
+                <i class="fas fa-check-double me-2"></i>Vydat vše
+              </button>
+              <button type="submit" class="btn btn-primary btn-lg">
+                <i class="fas fa-save me-2"></i>Uložit změny
+              </button>
+            </div>
           </div>
         </form>
       </div>
@@ -180,4 +219,82 @@
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+
+    // --- Pomocné funkce ---
+    function setRowIssued(row, checked) {
+        const cb = row.querySelector('.issued-check');
+        const hiddenField = row.querySelector('input[type="hidden"][name^="status_ingredient_"]');
+        if (!cb || !hiddenField) return;
+        cb.checked = checked;
+        hiddenField.value = checked ? 'COMPLETED' : 'PENDING';
+        row.classList.toggle('row-issued', checked);
+    }
+
+    function updateCounter() {
+        const total = document.querySelectorAll('.issued-check').length;
+        const issued = document.querySelectorAll('.issued-check:checked').length;
+        const el = document.getElementById('issued-counter');
+        if (el) el.textContent = `Vydáno ${issued} / ${total} položek`;
+        // Sync hlavičkový checkbox
+        const toggleAll = document.getElementById('check-all-toggle');
+        if (toggleAll) toggleAll.checked = issued === total && total > 0;
+    }
+
+    // --- A: Checkbox → aktualizuje hidden field a styl řádku ---
+    document.querySelectorAll('.issued-check').forEach(function (cb) {
+        cb.addEventListener('change', function () {
+            const row = this.closest('tr');
+            setRowIssued(row, this.checked);
+            updateCounter();
+        });
+    });
+
+    // --- B: Změna množství → auto-zaškrtne (nebo odškrtne při 0) ---
+    document.querySelectorAll('.qty-actual').forEach(function (input) {
+        input.addEventListener('change', function () {
+            const row = this.closest('tr');
+            const val = parseFloat(this.value);
+            if (!isNaN(val) && val > 0) {
+                setRowIssued(row, true);
+            } else if (!isNaN(val) && val === 0) {
+                setRowIssued(row, false);
+            }
+            updateCounter();
+        });
+    });
+
+    // --- C: Tlačítko „Vydat vše" ---
+    document.getElementById('btn-issue-all').addEventListener('click', function () {
+        document.querySelectorAll('tr[data-ingredient-id]').forEach(function (row) {
+            setRowIssued(row, true);
+        });
+        updateCounter();
+    });
+
+    // --- C: Tlačítko „Odebrat všechna vydání" ---
+    document.getElementById('btn-unissue-all').addEventListener('click', function () {
+        document.querySelectorAll('tr[data-ingredient-id]').forEach(function (row) {
+            setRowIssued(row, false);
+        });
+        updateCounter();
+    });
+
+    // --- Checkbox v hlavičce (toggle all) ---
+    document.getElementById('check-all-toggle').addEventListener('change', function () {
+        const checked = this.checked;
+        document.querySelectorAll('tr[data-ingredient-id]').forEach(function (row) {
+            setRowIssued(row, checked);
+        });
+        updateCounter();
+    });
+
+    // --- Počáteční stav counteru ---
+    updateCounter();
+});
+</script>
 {% endblock %}

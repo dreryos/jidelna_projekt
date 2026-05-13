@@ -135,7 +135,7 @@
                   {% endif %}
                 </td>
                 <td>
-                  {{ transfer.created_by.get_full_name|default:transfer.created_by.username }}<br>
+                  {% if transfer.created_by %}{{ transfer.created_by.get_full_name|default:transfer.created_by.username }}{% else %}<span class="text-muted">—</span>{% endif %}<br>
                   <small class="text-muted">{{ transfer.created_at|date:"d.m.Y H:i" }}</small>
                 </td>
                 <td>

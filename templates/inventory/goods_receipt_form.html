@@ -590,6 +590,16 @@ function syncDefaultWarehouse() {
 }
 
 // Inicializace Select2 na řádku formsetu
+function normalize(str) {
+  return (str || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
+
+function customMatcher(params, data) {
+  if (!params.term || params.term.trim() === '') return data;
+  if (normalize(data.text).includes(normalize(params.term))) return data;
+  return null;
+}
+
 function initRowSelect2(row) {
   const ingredientSelect = row.querySelector('select[name$="-ingredient"]');
   if (!ingredientSelect) return;
@@ -618,6 +628,7 @@ function initRowSelect2(row) {
     placeholder: 'Vyberte surovinu...',
     allowClear: true,
     width: '100%',
+    matcher: customMatcher,
     language: { noResults: function() { return 'Žádné výsledky'; } }
   });
 }

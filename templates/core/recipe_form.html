@@ -266,6 +266,10 @@
 // Načtení všech surovin pro autocomplete
 let allIngredients = {{ all_ingredients|safe }};
 
+function normalize(str) {
+    return (str || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     const addBtn = document.getElementById('add-ingredient-btn');
     const formContainer = document.getElementById('ingredient-forms');
@@ -318,7 +322,7 @@ document.addEventListener('DOMContentLoaded', function() {
         let currentFocus = -1;
         
         input.addEventListener('input', function(e) {
-            const val = this.value.toLowerCase();
+            const val = normalize(this.value);
             closeAllLists();
             
             if (!val) return;
@@ -331,7 +335,7 @@ document.addEventListener('DOMContentLoaded', function() {
             this.parentNode.appendChild(listDiv);
             
             allIngredients
-                .filter(ing => ing.name.toLowerCase().includes(val))
+                .filter(ing => normalize(ing.name).includes(val))
                 .slice(0, 10)
                 .forEach(ingredient => {
                     const item = document.createElement('a');

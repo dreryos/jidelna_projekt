@@ -4,6 +4,8 @@
 {% block title %}Nová převodka - Spíž{% endblock %}
 
 {% block extra_css %}
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet" />
 <style>
 .formset-table {
     width: 100%;
@@ -46,6 +48,15 @@ label.required::after {
 }
 
 .form-select, .form-control {
+    font-size: 0.9rem;
+}
+
+.formset-table .select2-container {
+    width: 100% !important;
+}
+
+.formset-table .select2-selection--single {
+    height: calc(1.5em + 0.5rem + 2px);
     font-size: 0.9rem;
 }
 
@@ -199,7 +210,49 @@ label.required::after {
 {% endblock %}
 
 {% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script>
+function normalize(str) {
+    return (str || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
+
+function customMatcher(params, data) {
+    if (!params.term || params.term.trim() === '') return data;
+    if (normalize(data.text).includes(normalize(params.term))) return data;
+    return null;
+}
+
+function initRowSelect2(row) {
+    const ingredientSelect = row.querySelector('select[name$="-ingredient"]');
+    if (!ingredientSelect) return;
+
+    const td = ingredientSelect.closest('td');
+    if (td) {
+        td.querySelectorAll('.select2').forEach(function(el) { el.remove(); });
+    }
+
+    ingredientSelect.classList.remove('select2-hidden-accessible');
+    ingredientSelect.removeAttribute('data-select2-id');
+    ingredientSelect.removeAttribute('tabindex');
+    ingredientSelect.removeAttribute('aria-hidden');
+    ingredientSelect.removeAttribute('aria-labelledby');
+    ingredientSelect.style.display = '';
+
+    ingredientSelect.querySelectorAll('option').forEach(function(opt) {
+        opt.removeAttribute('data-select2-id');
+    });
+
+    $(ingredientSelect).select2({
+        theme: 'bootstrap-5',
+        placeholder: 'Vyberte surovinu...',
+        allowClear: true,
+        width: '100%',
+        matcher: customMatcher,
+        language: { noResults: function() { return 'Žádné výsledky'; } }
+    });
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     const formsetBody = document.getElementById('formset-body');
     const addRowBtn = document.getElementById('add-row');
@@ -240,6 +293,7 @@ document.addEventListener('DOMContentLoaded', function() {
         totalFormsInput.value = formIndex;
         
         attachIngredientListener(newRow);
+        initRowSelect2(newRow);
     });
     
     // Sledování DELETE checkboxu
@@ -317,7 +371,10 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Připojit listenery ke všem existujícím řádkům
-    document.querySelectorAll('.formset-row').forEach(attachIngredientListener);
+    document.querySelectorAll('.formset-row').forEach(function(row) {
+        initRowSelect2(row);
+        attachIngredientListener(row);
+    });
 });
 </script>
 {% endblock %}

@@ -12,6 +12,7 @@ from django.http import JsonResponse
 from decimal import Decimal, InvalidOperation
 import json
 import logging
+from unidecode import unidecode
 from functools import wraps
 from typing import Any, Dict, Type, TYPE_CHECKING, cast
 from collections import defaultdict
@@ -26,7 +27,7 @@ MEAL_TYPE_ORDER = {
 }
 
 from django.db import models
-from django.db.models import F, Sum, Prefetch
+from django.db.models import F, Sum, Prefetch, Q
 from django.db.models.query import QuerySet
 from django.http import HttpRequest, HttpResponse
 from django.core.exceptions import PermissionDenied, ObjectDoesNotExist
@@ -1101,6 +1102,14 @@ def picking_list_edit(request, document_id):
                 
                 if key in ingredient_totals:
                     ingredient_totals[key]['planned'] += item.quantity_planned
+                    if item.quantity_actual is not None:
+                        if ingredient_totals[key]['quantity_actual'] is None:
+                            ingredient_totals[key]['quantity_actual'] = item.quantity_actual
+                        else:
+                            ingredient_totals[key]['quantity_actual'] += item.quantity_actual
+                    # Pokud je alespoň jedna položka PENDING, celkový status je PENDING
+                    if item.status == 'PENDING':
+                        ingredient_totals[key]['status'] = 'PENDING'
                     ingredient_totals[key]['orders'].append({
                         'date': order.date,
                         'recipe': order.recipe.name,
@@ -1134,6 +1143,8 @@ def picking_list_edit(request, document_id):
                     ingredient_totals[key] = {
                         'ingredient': item.ingredient,
                         'planned': item.quantity_planned,
+                        'quantity_actual': item.quantity_actual,
+                        'status': item.status,
                         'unit': item.ingredient.base_unit,
                         'available_stock': available_stock,
                         'has_stock': available_stock > 0,
@@ -1758,9 +1769,10 @@ def search_ingredients(request):
         if len(query) < 2:
             return JsonResponse({'success': True, 'results': []})
         
-        # Vyhledáme ingredience
+        # Vyhledáme ingredience - kombinace původního i ASCII verze dotazu (podpora bez diakritiky)
+        query_ascii = unidecode(query)
         ingredients = Ingredient.objects.filter(
-            name__icontains=query
+            Q(name__icontains=query) | Q(name__icontains=query_ascii)
         ).order_by('name')[:20]
         
         results = [
