@@ -87,7 +87,7 @@
         </div>
         <div class="info-row">
           <span class="info-label">Vytvořeno:</span>
-          <span class="ms-2">{{ goods_receipt.created_at|date:"d.m.Y H:i" }} ({{ goods_receipt.created_by.username }})</span>
+          <span class="ms-2">{{ goods_receipt.created_at|date:"d.m.Y H:i" }} ({{ goods_receipt.created_by.get_full_name|default:goods_receipt.created_by.username }})</span>
         </div>
         {% if goods_receipt.confirmed_at %}
         <div class="info-row">

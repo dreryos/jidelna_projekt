@@ -126,7 +126,7 @@
                   {% endif %}
                 </td>
                 <td>{{ receipt.get_total_value|floatformat:2 }} Kč</td>
-                <td>{{ receipt.created_by.username }}</td>
+                <td>{{ receipt.created_by.get_full_name|default:receipt.created_by.username }}</td>
                 <td>
                   <a href="{% url 'inventory:goods_receipt_detail' receipt.pk %}" 
                      class="btn btn-sm btn-info" title="Detail">

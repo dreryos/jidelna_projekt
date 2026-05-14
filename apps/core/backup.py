@@ -43,6 +43,7 @@ ENTITY_INVENTORY_VERIFICATIONS = 'inventory_verifications'
 ENTITY_STOCK_WRITE_OFFS = 'stock_write_offs'
 ENTITY_PICKING_LISTS = 'picking_lists'
 ENTITY_PRICE_HISTORY = 'price_history'
+ENTITY_USERS = 'users'
 
 # Všechny dostupné entity
 ALL_ENTITIES = [
@@ -62,6 +63,7 @@ ALL_ENTITIES = [
     ENTITY_STOCK_WRITE_OFFS,
     ENTITY_PICKING_LISTS,
     ENTITY_PRICE_HISTORY,
+    ENTITY_USERS,
 ]
 
 # Základní entity (zpětná kompatibilita)
@@ -86,6 +88,7 @@ ENTITY_DEPENDENCIES = {
     ENTITY_SUPPLIERS: [],
     ENTITY_PICKING_LISTS: [ENTITY_PRODUCTION_ORDERS, ENTITY_WAREHOUSES],
     ENTITY_PRICE_HISTORY: [ENTITY_INGREDIENTS, ENTITY_WAREHOUSES],
+    ENTITY_USERS: [],
 }
 
 # Lidsky čitelné názvy entit
@@ -106,6 +109,7 @@ ENTITY_LABELS = {
     ENTITY_STOCK_WRITE_OFFS: 'Odpisy',
     ENTITY_PICKING_LISTS: 'Výdejky',
     ENTITY_PRICE_HISTORY: 'Historie cen surovin',
+    ENTITY_USERS: 'Uživatelé',
 }
 
 
@@ -617,6 +621,43 @@ def _export_price_history(root: ET.Element, include: bool = True) -> None:
         rec_el.set("createdAt", record.created_at.isoformat())
 
 
+def _export_users(root: ET.Element, include: bool = True) -> None:
+    """Exportuje uživatele včetně hesel (hash), skupin a oprávnění."""
+    if not include:
+        return
+
+    User = get_user_model()
+    users_el = ET.SubElement(root, "Users")
+    for user in User.objects.all().order_by("username").prefetch_related(
+        "groups", "user_permissions__content_type"
+    ):
+        u_el = ET.SubElement(users_el, "User")
+        u_el.set("username", user.username)
+        u_el.set("firstName", user.first_name)
+        u_el.set("lastName", user.last_name)
+        u_el.set("email", user.email)
+        u_el.set("isStaff", "true" if user.is_staff else "false")
+        u_el.set("isSuperuser", "true" if user.is_superuser else "false")
+        u_el.set("isActive", "true" if user.is_active else "false")
+        u_el.set("password", user.password or "")
+        u_el.set("dateJoined", user.date_joined.isoformat() if user.date_joined else "")
+
+        groups = user.groups.all()
+        if groups:
+            groups_el = ET.SubElement(u_el, "Groups")
+            for group in groups:
+                g_el = ET.SubElement(groups_el, "Group")
+                g_el.set("name", group.name)
+
+        perms = user.user_permissions.all()
+        if perms:
+            perms_el = ET.SubElement(u_el, "Permissions")
+            for perm in perms:
+                p_el = ET.SubElement(perms_el, "Permission")
+                p_el.set("codename", perm.codename)
+                p_el.set("appLabel", perm.content_type.app_label)
+
+
 # ============================================================================
 # HLAVNÍ EXPORT FUNKCE
 # ============================================================================
@@ -658,6 +699,7 @@ def export_backup_xml(selected_entities: Optional[List[str]] = None) -> bytes:
     _export_stock_write_offs(root, ENTITY_STOCK_WRITE_OFFS in entities_to_export)
     _export_picking_lists(root, ENTITY_PICKING_LISTS in entities_to_export)
     _export_price_history(root, ENTITY_PRICE_HISTORY in entities_to_export)
+    _export_users(root, ENTITY_USERS in entities_to_export)
 
     # Pretty print XML
     ET.indent(root, space='  ')
@@ -1653,6 +1695,101 @@ def _import_price_history(root: ET.Element, ingredient_map, warehouse_map, repor
         report['price_history_created'] += len(records_to_create)
 
 
+def _import_users(root: ET.Element, report: Dict[str, Any]) -> None:
+    """
+    Importuje uživatele ze zálohy.
+    - Noví uživatelé: nastaví všechna pole včetně hesla (hash).
+    - Existující uživatelé: doplní jen prázdná pole (jméno, email), heslo nemění.
+    - Skupiny a přímá oprávnění se vždy synchronizují.
+    """
+    from django.contrib.auth.models import Group, Permission
+
+    report['users_created'] = 0
+    report['users_updated'] = 0
+
+    User = get_user_model()
+    users_el = root.find("Users")
+    if users_el is None:
+        return
+
+    for u_el in users_el:
+        username = u_el.get("username", "").strip()
+        if not username:
+            continue
+
+        first_name = u_el.get("firstName", "").strip()
+        last_name = u_el.get("lastName", "").strip()
+        email = u_el.get("email", "").strip()
+        is_staff = u_el.get("isStaff", "false") == "true"
+        is_superuser = u_el.get("isSuperuser", "false") == "true"
+        is_active = u_el.get("isActive", "true") == "true"
+        password_hash = u_el.get("password", "").strip()
+        date_joined_str = u_el.get("dateJoined", "").strip()
+
+        user, created = User.objects.get_or_create(username=username)
+
+        if created:
+            user.first_name = first_name
+            user.last_name = last_name
+            user.email = email
+            user.is_staff = is_staff
+            user.is_superuser = is_superuser
+            user.is_active = is_active
+            if password_hash:
+                user.password = password_hash
+            if date_joined_str:
+                try:
+                    from django.utils.dateparse import parse_datetime
+                    dt = parse_datetime(date_joined_str)
+                    if dt:
+                        user.date_joined = dt
+                except Exception:
+                    pass
+            user.save()
+            report['users_created'] += 1
+        else:
+            updated = False
+            if not user.first_name and first_name:
+                user.first_name = first_name
+                updated = True
+            if not user.last_name and last_name:
+                user.last_name = last_name
+                updated = True
+            if not user.email and email:
+                user.email = email
+                updated = True
+            if updated:
+                user.save()
+                report['users_updated'] += 1
+
+        # Skupiny
+        groups_el = u_el.find("Groups")
+        if groups_el is not None:
+            for g_el in groups_el:
+                group_name = g_el.get("name", "").strip()
+                if group_name:
+                    group, _ = Group.objects.get_or_create(name=group_name)
+                    user.groups.add(group)
+
+        # Přímá oprávnění
+        perms_el = u_el.find("Permissions")
+        if perms_el is not None:
+            for p_el in perms_el:
+                codename = p_el.get("codename", "").strip()
+                app_label = p_el.get("appLabel", "").strip()
+                if codename and app_label:
+                    try:
+                        perm = Permission.objects.get(
+                            codename=codename,
+                            content_type__app_label=app_label,
+                        )
+                        user.user_permissions.add(perm)
+                    except Permission.DoesNotExist:
+                        report['missing_references'].append(
+                            f"Permission not found: {app_label}.{codename}"
+                        )
+
+
 # ============================================================================
 # HLAVNÍ IMPORT FUNKCE
 # ============================================================================
@@ -1706,6 +1843,8 @@ def import_backup_xml(xml_content: bytes, dry_run: bool = False, user=None) -> D
         "picking_list_documents_created": 0,
         "picking_list_items_created": 0,
         "price_history_created": 0,
+        "users_created": 0,
+        "users_updated": 0,
     }
     
     root = DefusedET.fromstring(xml_content)
@@ -1716,6 +1855,9 @@ def import_backup_xml(xml_content: bytes, dry_run: bool = False, user=None) -> D
         user = User.objects.filter(is_superuser=True).first()
 
     with transaction.atomic():
+        # Uživatelé (importujeme jako první, aby created_by reference fungovaly)
+        _import_users(root, report)
+
         # Základní entity (vždy importujeme pokud jsou v XML)
         # Categories
         for cat_el in root.find("Categories") or []:
