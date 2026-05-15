@@ -989,12 +989,24 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('savePortions').addEventListener('click', function() {
         const orderId = document.getElementById('editOrderId').value;
         const variants = [];
+        let validationError = null;
         
         document.querySelectorAll('.variant-row').forEach((row, index) => {
-            const coefficient = parseDecimal(row.querySelector('.variant-coefficient').value);
+            const rawCoefficient = row.querySelector('.variant-coefficient').value;
+            const coefficient = parseDecimal(rawCoefficient);
+            const coefficientNum = parseFloat(coefficient);
             const portions = parseInt(row.querySelector('.variant-portions').value);
             const name = row.querySelector('.variant-name').value || '';
             const variantId = row.dataset.variantId || null;
+
+            if (rawCoefficient === '' || isNaN(coefficientNum) || coefficientNum <= 0) {
+                validationError = `Varianta ${index + 1}: koeficient musí být kladné číslo.`;
+                return;
+            }
+            if (isNaN(portions) || portions < 1) {
+                validationError = `Varianta ${index + 1}: počet porcí musí být alespoň 1.`;
+                return;
+            }
             
             variants.push({
                 id: variantId,
@@ -1004,6 +1016,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 order: index
             });
         });
+
+        if (validationError) {
+            alert(validationError);
+            return;
+        }
         
         fetch(`/production/vyrobni-prikazy/${orderId}/upravit-varianty/`, {
             method: 'POST',

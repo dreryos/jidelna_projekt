@@ -529,10 +529,13 @@ def update_order_variants(request, order_pk, *args, **kwargs):
             order.portion_variants.all().delete()
             
             for variant_info in variants_data:
+                raw_coefficient = variant_info['coefficient']
+                if raw_coefficient == '' or raw_coefficient is None:
+                    return JsonResponse({'success': False, 'error': 'Koeficient varianty nesmí být prázdný.'}, status=400)
                 ProductionOrderPortionVariant.objects.create(
                     production_order=order,
                     name=variant_info.get('name', ''),
-                    coefficient=Decimal(str(variant_info['coefficient'])),
+                    coefficient=Decimal(str(raw_coefficient)),
                     portions=int(variant_info['portions']),
                     order=int(variant_info.get('order', 0))
                 )
