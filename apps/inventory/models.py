@@ -307,7 +307,72 @@ class IngredientPriceHistory(models.Model):
     
     def __str__(self):
         return f"{self.ingredient.name} v {self.warehouse.name}: {self.price} Kč od {self.valid_from.strftime('%d.%m.%Y')}"
-    
+
+    @classmethod
+    def _to_query_date(cls, date):
+        """Interní helper: převede date/datetime na timezone-aware datetime."""
+        if hasattr(date, 'date'):
+            query_date = date
+        else:
+            query_date = datetime.combine(date, datetime.min.time())
+            if timezone.is_aware(timezone.now()):
+                query_date = timezone.make_aware(query_date)
+        return query_date
+
+    @classmethod
+    def get_prices_bulk(cls, ingredient_ids, warehouse_ids, date):
+        """
+        Efektivně vrátí ceny pro více kombinací ingredience+sklad najednou (1 DB dotaz).
+
+        Args:
+            ingredient_ids: list ID ingrediencí
+            warehouse_ids:  list ID skladů
+            date:           datum nebo datetime pro historické ceny
+
+        Returns:
+            dict: {(ingredient_id, warehouse_id): Decimal(cena)}
+        """
+        if not ingredient_ids or not warehouse_ids:
+            return {}
+
+        query_date = cls._to_query_date(date)
+
+        # Jeden dotaz pro všechny kombinace – z důvodu kompatibility se SQLite
+        # řadíme v Pythonu místo DISTINCT ON (PostgreSQL-only).
+        records = cls.objects.filter(
+            ingredient_id__in=ingredient_ids,
+            warehouse_id__in=warehouse_ids,
+            valid_from__lte=query_date,
+        ).order_by(
+            'ingredient_id', 'warehouse_id', '-valid_from'
+        ).values('ingredient_id', 'warehouse_id', 'price')
+
+        prices: dict = {}
+        for record in records:
+            key = (record['ingredient_id'], record['warehouse_id'])
+            if key not in prices:  # první = nejnovější (viz order_by)
+                prices[key] = record['price']
+
+        # Fallback: StockItem pro chybějící kombinace (jeden dotaz)
+        missing_keys = {
+            (iid, wid)
+            for iid in ingredient_ids
+            for wid in warehouse_ids
+            if (iid, wid) not in prices
+        }
+        if missing_keys:
+            missing_iids = list({k[0] for k in missing_keys})
+            missing_wids = list({k[1] for k in missing_keys})
+            for item in StockItem.objects.filter(
+                ingredient_id__in=missing_iids,
+                warehouse_id__in=missing_wids,
+            ).values('ingredient_id', 'warehouse_id', 'price'):
+                key = (item['ingredient_id'], item['warehouse_id'])
+                if key in missing_keys:
+                    prices[key] = item['price']
+
+        return prices
+
     @classmethod
     def get_price_at_date(cls, ingredient, warehouse, date):
         """

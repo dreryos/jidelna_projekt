@@ -9,6 +9,7 @@ Tento modul poskytuje:
 
 from django.shortcuts import render, get_object_or_404
 from django.contrib.auth.decorators import login_required
+from django.core.paginator import Paginator
 from django.db.models import Avg, Count, Q, Sum
 from django.core.exceptions import ObjectDoesNotExist
 from decimal import Decimal
@@ -31,28 +32,30 @@ def menu_analytics_list(request):
     
     # Superuser vidí všechno, ostatní vidí jen jejich jídelny
     if user.is_superuser:
-        menu_plans = MenuPlan.objects.all().select_related('canteen').prefetch_related(
-            'production_orders__recipe__recipeingredient_set__ingredient',
-            'production_orders__portion_variants',
-            'production_orders__canteen__warehouses',
-        ).order_by('-created_at')
+        menu_plans_qs = MenuPlan.objects.all().select_related('canteen').order_by('-created_at')
     else:
         try:
             user_canteens = user.profile.canteens.all()
-            menu_plans = MenuPlan.objects.filter(canteen__in=user_canteens).select_related('canteen').prefetch_related(
-                'production_orders__recipe__recipeingredient_set__ingredient',
-                'production_orders__portion_variants',
-                'production_orders__canteen__warehouses',
-            ).order_by('-created_at')
+            menu_plans_qs = MenuPlan.objects.filter(canteen__in=user_canteens).select_related('canteen').order_by('-created_at')
         except ObjectDoesNotExist:
-            menu_plans = MenuPlan.objects.none()
-    
-    # Pro každý jídelníček vypočítáme analytické údaje
+            menu_plans_qs = MenuPlan.objects.none()
+
+    # Stránkování: 15 jídelníčků na stránku, aby se nepočítalo vše najednou
+    paginator = Paginator(menu_plans_qs, 15)
+    page_number = request.GET.get('page', 1)
+    page_obj = paginator.get_page(page_number)
+
+    # Pro každý jídelníček na aktuální stránce vypočítáme analytické údaje
     analytics_data = []
-    for menu_plan in menu_plans:
-        # Získáme všechny výrobní příkazy pro tento jídelníček
-        orders = menu_plan.production_orders.all().select_related('recipe').prefetch_related('portion_variants')
-        
+    for menu_plan in page_obj:
+        # Získáme příkazy s minimálním prefetch (jen to co opravdu potřebujeme)
+        orders = menu_plan.production_orders.select_related(
+            'recipe', 'canteen',
+        ).prefetch_related(
+            'portion_variants',
+            'recipe__recipeingredient_set',
+        )
+
         if not orders.exists():
             continue
             
@@ -95,6 +98,8 @@ def menu_analytics_list(request):
     
     context = {
         'analytics_data': analytics_data,
+        'page_obj': page_obj,
+        'paginator': paginator,
     }
     
     return render(request, 'analytics/menu_list.html', context)

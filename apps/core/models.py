@@ -266,35 +266,27 @@ class Recipe(models.Model):
         total_price = Decimal('0')
         ingredients_breakdown = [] if return_breakdown else None
 
-        recipe_ingredients = self.recipeingredient_set.all()
+        recipe_ingredients = list(self.recipeingredient_set.all())
 
         if price_date is not None:
-            # Načteme sklady jednou pro všechny ingredience (ne uvnitř smyčky)
+            # --- Bulk fetch: 1 DB dotaz pro všechny kombinace ingredience+sklad ---
             warehouses = list(canteen.warehouses.all())
-            # Cache pro historické ceny: (ingredient_id, warehouse_id) -> price
-            price_cache = {}
+            ingredient_ids = [item.ingredient_id for item in recipe_ingredients]
+            warehouse_ids = [w.pk for w in warehouses]
+
+            prices_map = IngredientPriceHistory.get_prices_bulk(
+                ingredient_ids, warehouse_ids, price_date
+            )
 
             for item in recipe_ingredients:
-                prices = []
-                for warehouse in warehouses:
-                    cache_key = (item.ingredient_id, warehouse.pk)
-                    if cache_key not in price_cache:
-                        price_cache[cache_key] = IngredientPriceHistory.get_price_at_date(
-                            item.ingredient,
-                            warehouse,
-                            price_date
-                        )
-                    p = price_cache[cache_key]
-                    if p > 0:
-                        prices.append(p)
+                ingredient_prices = [
+                    prices_map[(item.ingredient_id, wid)]
+                    for wid in warehouse_ids
+                    if prices_map.get((item.ingredient_id, wid), Decimal('0')) > 0
+                ]
+                avg_price = sum(ingredient_prices) / len(ingredient_prices) if ingredient_prices else Decimal('0')
 
-                # Průměr z historických cen
-                avg_price = sum(prices) / len(prices) if prices else Decimal('0')
-
-                # Vypočítáme množství v základních jednotkách (kg)
                 quantity_needed = item.get_quantity_in_base_unit(portions, portion_coefficient)
-
-                # Cena = množství × průměrná cena za jednotku
                 ingredient_total = quantity_needed * avg_price
                 total_price += ingredient_total
 
@@ -317,10 +309,7 @@ class Recipe(models.Model):
                 ).aggregate(avg_price=Avg('price'))
                 avg_price = avg_price_data.get('avg_price') or Decimal('0')
 
-                # Vypočítáme množství v základních jednotkách (kg)
                 quantity_needed = item.get_quantity_in_base_unit(portions, portion_coefficient)
-
-                # Cena = množství × průměrná cena za jednotku
                 ingredient_total = quantity_needed * avg_price
                 total_price += ingredient_total
 
