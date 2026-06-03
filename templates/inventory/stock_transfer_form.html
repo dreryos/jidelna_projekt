@@ -291,9 +291,10 @@ document.addEventListener('DOMContentLoaded', function() {
         
         formIndex++;
         totalFormsInput.value = formIndex;
-        
-        attachIngredientListener(newRow);
+
+        // Nejprve inicializujeme Select2, pak přidáme listener (stejné pořadí jako u existujících řádků)
         initRowSelect2(newRow);
+        attachIngredientListener(newRow);
     });
     
     // Sledování DELETE checkboxu
@@ -332,26 +333,27 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Funkce pro načtení ceny a dostupného množství při výběru suroviny
     function attachIngredientListener(row) {
-        const ingredientSelect = row.querySelector('[name*="ingredient"]');
+        const ingredientSelect = row.querySelector('select[name*="ingredient"]');
         const priceInput = row.querySelector('[name*="unit_price_with_vat"]');
         const availableSpan = row.querySelector('.available-quantity');
         const unitSpan = row.querySelector('.unit-display');
-        
+
         if (!ingredientSelect) return;
-        
-        ingredientSelect.addEventListener('change', function() {
-            const ingredientId = this.value;
-            const warehouseId = warehouseFromSelect.value;
-            
+
+        // Select2 spouští jQuery change event – musíme použít jQuery .on(), ne nativní addEventListener
+        $(ingredientSelect).on('change', function() {
+            const ingredientId = $(this).val();
+            const warehouseId = $(warehouseFromSelect).val() || warehouseFromSelect.value;
+
             if (!ingredientId || !warehouseId) {
                 if (priceInput) priceInput.value = '';
                 if (availableSpan) availableSpan.textContent = '-';
                 if (unitSpan) unitSpan.textContent = '-';
                 return;
             }
-            
+
             // AJAX dotaz na získání ceny a dostupného množství
-            fetch(`/inventory/api/stock-item-price/?ingredient=${ingredientId}&warehouse=${warehouseId}`)
+            fetch(`/inventory/api/stock-item-price/?ingredient=${encodeURIComponent(ingredientId)}&warehouse=${encodeURIComponent(warehouseId)}`)
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
@@ -359,13 +361,13 @@ document.addEventListener('DOMContentLoaded', function() {
                         if (availableSpan) availableSpan.textContent = `${data.available_quantity} ${data.unit}`;
                         if (unitSpan) unitSpan.textContent = data.unit;
                     } else {
-                        if (priceInput) priceInput.value = '0.00';
+                        if (priceInput) priceInput.value = '';
                         if (availableSpan) availableSpan.textContent = 'Není na skladu';
                         if (unitSpan) unitSpan.textContent = '-';
                     }
                 })
                 .catch(error => {
-                    console.error('Error fetching price:', error);
+                    console.error('Chyba při načítání ceny suroviny:', error);
                 });
         });
     }

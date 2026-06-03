@@ -413,7 +413,6 @@ class StockTransferItemForm(forms.ModelForm):
             'ingredient': forms.Select(attrs={
                 'class': 'form-select ingredient-select',
                 'required': True,
-                'onchange': 'loadIngredientPrice(this)'
             }),
             'quantity': forms.NumberInput(attrs={
                 'class': 'form-control',
