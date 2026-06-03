@@ -31,11 +31,19 @@ def menu_analytics_list(request):
     
     # Superuser vidí všechno, ostatní vidí jen jejich jídelny
     if user.is_superuser:
-        menu_plans = MenuPlan.objects.all().select_related('canteen').order_by('-created_at')
+        menu_plans = MenuPlan.objects.all().select_related('canteen').prefetch_related(
+            'production_orders__recipe__recipeingredient_set__ingredient',
+            'production_orders__portion_variants',
+            'production_orders__canteen__warehouses',
+        ).order_by('-created_at')
     else:
         try:
             user_canteens = user.profile.canteens.all()
-            menu_plans = MenuPlan.objects.filter(canteen__in=user_canteens).select_related('canteen').order_by('-created_at')
+            menu_plans = MenuPlan.objects.filter(canteen__in=user_canteens).select_related('canteen').prefetch_related(
+                'production_orders__recipe__recipeingredient_set__ingredient',
+                'production_orders__portion_variants',
+                'production_orders__canteen__warehouses',
+            ).order_by('-created_at')
         except ObjectDoesNotExist:
             menu_plans = MenuPlan.objects.none()
     
@@ -100,7 +108,11 @@ def menu_detail_analytics(request, menu_id):
     menu_plan = get_object_or_404(MenuPlan, pk=menu_id)
     
     # Získáme všechny výrobní příkazy pro tento jídelníček
-    orders = menu_plan.production_orders.all().select_related('recipe', 'canteen').prefetch_related('portion_variants')
+    orders = menu_plan.production_orders.all().select_related('recipe', 'canteen').prefetch_related(
+        'portion_variants',
+        'recipe__recipeingredient_set__ingredient',
+        'canteen__warehouses',
+    )
     
     # Pro každý výrobní příkaz vypočítáme náklady
     meals_data = []
@@ -121,45 +133,14 @@ def menu_detail_analytics(request, menu_id):
         if portions <= 0:
             continue
             
-        # Vypočítáme cenu za všechny porce s použitím historických cen a DPH
+        # Vypočítáme cenu za všechny porce i s rozpisem ingrediencí najednou (bez opakovaných dotazů)
         price_info = order.recipe.calculate_portion_price(
             canteen, 
             portions=int(portions),
             price_date=order.date,
-            vat_rate=order.selling_vat_rate
+            vat_rate=order.selling_vat_rate,
+            return_breakdown=True,
         )
-        
-        # Získáme ingredience a jejich ceny (s historickými cenami)
-        ingredients_breakdown = []
-        for recipe_ingredient in order.recipe.recipeingredient_set.all():
-            # Najdeme průměrnou historickou cenu suroviny k datu objednávky
-            from apps.inventory.models import IngredientPriceHistory
-            warehouses = canteen.warehouses.all()
-            prices = []
-            for warehouse in warehouses:
-                price = IngredientPriceHistory.get_price_at_date(
-                    recipe_ingredient.ingredient,
-                    warehouse,
-                    order.date
-                )
-                if price > 0:
-                    prices.append(price)
-            
-            avg_price = sum(prices) / len(prices) if prices else Decimal('0')
-            
-            # Vypočítáme množství v receptových jednotkách a cenu
-            quantity_base = recipe_ingredient.get_quantity_in_base_unit(int(portions), 1.0)
-            ingredient_total_cost = quantity_base * avg_price
-            quantity_recipe = recipe_ingredient.quantity_per_portion * int(portions)
-            
-            ingredients_breakdown.append({
-                'ingredient': recipe_ingredient.ingredient,
-                'quantity': round(quantity_recipe, 3),
-                'unit': recipe_ingredient.ingredient.recipe_unit,
-                'price_per_unit': round(avg_price, 2),
-                'price_per_unit_label': recipe_ingredient.ingredient.base_unit,
-                'total_cost': round(ingredient_total_cost, 2),
-            })
         
         meals_data.append({
             'order': order,
@@ -173,7 +154,7 @@ def menu_detail_analytics(request, menu_id):
             'vat_amount': price_info.get('vat_amount', Decimal('0')),
             'vat_amount_per_portion': price_info.get('vat_amount_per_portion', Decimal('0')),
             'vat_rate': price_info.get('vat_rate', order.selling_vat_rate),
-            'ingredients': ingredients_breakdown,
+            'ingredients': price_info.get('ingredients', []),
         })
         
         total_cost += price_info['total']

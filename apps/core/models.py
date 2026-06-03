@@ -239,7 +239,7 @@ class Recipe(models.Model):
         
         super().save(*args, **kwargs)
 
-    def calculate_portion_price(self, canteen, portions=1, portion_coefficient=1.0, price_date=None, vat_rate=None):
+    def calculate_portion_price(self, canteen, portions=1, portion_coefficient=1.0, price_date=None, vat_rate=None, return_breakdown=False):
         """
         Vypočítá cenu porce pro danou jídelnu.
         Cena se počítá na základě průměrné ceny surovin ve skladech dané jídelny.
@@ -250,38 +250,66 @@ class Recipe(models.Model):
             portion_coefficient: Koeficient velikosti porce (1.0 = normální, 0.5 = poloviční atd.)
             price_date: Datum pro historické ceny (None = aktuální ceny)
             vat_rate: Sazba DPH v procentech (None = bez výpočtu DPH)
+            return_breakdown: Pokud True, vrátí také 'ingredients' seznam s detailem cen per ingredience
         
         Returns:
             dict: {'total': celková cena, 'per_portion': cena za porci, 
                    'total_with_vat': cena s DPH (pokud je vat_rate zadán),
                    'per_portion_with_vat': cena za porci s DPH,
                    'vat_amount': částka DPH,
-                   'vat_rate': použitá sazba DPH}
+                   'vat_rate': použitá sazba DPH,
+                   'ingredients': seznam ingrediencí (pokud return_breakdown=True)}
         """
         from apps.inventory.models import StockItem, IngredientPriceHistory
         from django.db.models import Avg
 
         total_price = Decimal('0')
+        ingredients_breakdown = [] if return_breakdown else None
 
         recipe_ingredients = self.recipeingredient_set.all()
 
-        for item in recipe_ingredients:
-            if price_date is not None:
-                # Použijeme historické ceny pro každý sklad
-                warehouses = canteen.warehouses.all()
+        if price_date is not None:
+            # Načteme sklady jednou pro všechny ingredience (ne uvnitř smyčky)
+            warehouses = list(canteen.warehouses.all())
+            # Cache pro historické ceny: (ingredient_id, warehouse_id) -> price
+            price_cache = {}
+
+            for item in recipe_ingredients:
                 prices = []
                 for warehouse in warehouses:
-                    price = IngredientPriceHistory.get_price_at_date(
-                        item.ingredient, 
-                        warehouse, 
-                        price_date
-                    )
-                    if price > 0:
-                        prices.append(price)
-                
+                    cache_key = (item.ingredient_id, warehouse.pk)
+                    if cache_key not in price_cache:
+                        price_cache[cache_key] = IngredientPriceHistory.get_price_at_date(
+                            item.ingredient,
+                            warehouse,
+                            price_date
+                        )
+                    p = price_cache[cache_key]
+                    if p > 0:
+                        prices.append(p)
+
                 # Průměr z historických cen
                 avg_price = sum(prices) / len(prices) if prices else Decimal('0')
-            else:
+
+                # Vypočítáme množství v základních jednotkách (kg)
+                quantity_needed = item.get_quantity_in_base_unit(portions, portion_coefficient)
+
+                # Cena = množství × průměrná cena za jednotku
+                ingredient_total = quantity_needed * avg_price
+                total_price += ingredient_total
+
+                if return_breakdown:
+                    quantity_recipe = item.quantity_per_portion * int(portions)
+                    ingredients_breakdown.append({
+                        'ingredient': item.ingredient,
+                        'quantity': round(quantity_recipe, 3),
+                        'unit': item.ingredient.recipe_unit,
+                        'price_per_unit': round(avg_price, 2),
+                        'price_per_unit_label': item.ingredient.base_unit,
+                        'total_cost': round(ingredient_total, 2),
+                    })
+        else:
+            for item in recipe_ingredients:
                 # Použijeme aktuální ceny
                 avg_price_data = StockItem.objects.filter(
                     ingredient=item.ingredient,
@@ -289,11 +317,23 @@ class Recipe(models.Model):
                 ).aggregate(avg_price=Avg('price'))
                 avg_price = avg_price_data.get('avg_price') or Decimal('0')
 
-            # Vypočítáme množství v základních jednotkách (kg)
-            quantity_needed = item.get_quantity_in_base_unit(portions, portion_coefficient)
-            
-            # Cena = množství × průměrná cena za jednotku
-            total_price += quantity_needed * avg_price
+                # Vypočítáme množství v základních jednotkách (kg)
+                quantity_needed = item.get_quantity_in_base_unit(portions, portion_coefficient)
+
+                # Cena = množství × průměrná cena za jednotku
+                ingredient_total = quantity_needed * avg_price
+                total_price += ingredient_total
+
+                if return_breakdown:
+                    quantity_recipe = item.quantity_per_portion * int(portions)
+                    ingredients_breakdown.append({
+                        'ingredient': item.ingredient,
+                        'quantity': round(quantity_recipe, 3),
+                        'unit': item.ingredient.recipe_unit,
+                        'price_per_unit': round(avg_price, 2),
+                        'price_per_unit_label': item.ingredient.base_unit,
+                        'total_cost': round(ingredient_total, 2),
+                    })
 
         price_per_portion = total_price / Decimal(str(portions)) if portions > 0 else Decimal('0')
 
@@ -301,7 +341,10 @@ class Recipe(models.Model):
             'total': round(total_price, 2),
             'per_portion': round(price_per_portion, 2)
         }
-        
+
+        if return_breakdown:
+            result['ingredients'] = ingredients_breakdown
+
         # Pokud je zadána DPH sazba, vypočítáme ceny s DPH
         if vat_rate is not None:
             vat_rate_decimal = Decimal(str(vat_rate))
