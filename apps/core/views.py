@@ -10,6 +10,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.forms import inlineformset_factory
 from django.core.exceptions import ObjectDoesNotExist
 from django.db.models import Model, ProtectedError
+from django.utils import timezone
 from typing import Type, Any
 from functools import wraps
 import json
@@ -324,51 +325,34 @@ class IngredientDeleteView(LoginRequiredMixin, DeleteView):
 	model = Ingredient
 	template_name = 'core/ingredient_confirm_delete.html'
 	success_url = reverse_lazy('core:ingredient_list')
-	
+
 	def post(self, request, *args, **kwargs):
 		"""
-		Přepsaná metoda pro ošetření ProtectedError při mazání.
-		Zobrazí uživatelsky přívětivou chybovou hlášku.
+		Pokusí se surovinu smazat. Pokud je chráněna referencemi
+		v historických záznamech, automaticky ji deaktivuje (soft delete).
 		"""
 		self.object = self.get_object()
-		
+
 		try:
 			return super().post(request, *args, **kwargs)
-		except ProtectedError as e:
-			# Zjistíme, které objekty brání smazání
-			protected_objects = e.protected_objects
-			
-			# Vytvoříme seznam typů objektů
-			object_types = {}
-			for protected_obj in protected_objects:
-				obj_type = type(protected_obj).__name__
-				if obj_type in object_types:
-					object_types[obj_type] += 1
-				else:
-					object_types[obj_type] = 1
-			
-			# Vytvoříme čitelnou zprávu
-			items_list = []
-			for obj_type, count in object_types.items():
-				# Přeložíme názvy modelů do češtiny
-				translations = {
-					'PickingList': 'výdejky',
-					'GoodsReceiptItem': 'položky příjmu zboží',
-					'InventoryVerificationItem': 'položky inventury',
-					'StockTransferItem': 'položky převodky',
-					'ProductionOrderIngredientOverride': 'úpravy surovin ve výrobních příkazech'
-				}
-				translated_name = translations.get(obj_type, obj_type)
-				items_list.append(f"{count}× {translated_name}")
-			
-			message = (
-				f'Nelze smazat surovinu "{self.object.name}", protože je použita v následujících záznamech: '
-				f'{", ".join(items_list)}. '
-				f'Nejprve odstraňte nebo upravte tyto záznamy.'
-			)
-			
-			messages.error(request, message)
-			return redirect('core:ingredient_list')
+		except ProtectedError:
+			return self._deactivate()
+
+	def _deactivate(self):
+		"""Deaktivuje surovinu – zachová historická data, skryje ze seznamů."""
+		from django.utils import timezone
+		self.object.is_active = False
+		self.object.deactivated_at = timezone.now()
+		self.object.deactivated_by = self.request.user
+		self.object.save(update_fields=['is_active', 'deactivated_at', 'deactivated_by'])
+		messages.warning(
+			self.request,
+			f'Surovina "{self.object.name}" nemohla být smazána, protože je použita '
+			f'v historických záznamech (příjmy, výdejky, inventury). '
+			f'Byla proto deaktivována – nebude se zobrazovat v nabídkách, '
+			f'ale historická data zůstávají zachována.'
+		)
+		return redirect(self.success_url)
 
 
 from django.views.decorators.http import require_POST
