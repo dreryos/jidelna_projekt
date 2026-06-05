@@ -147,11 +147,6 @@
                         <td class="col-num">{{ forloop.counter }}</td>
                         <td class="col-ingredient">
                             <strong>{{ item.name }}</strong>
-                            {% if item.warehouses_info %}
-                            <div class="warehouse-info">
-                                Skladem: {% for wh_name, qty, blocked, available in item.warehouses_info %}{% if large_document %}{{ wh_name }}: {{ available|floatformat:1 }}{% else %}{{ wh_name }} ({{ qty|floatformat:1 }} kg, blok. {{ blocked|floatformat:1 }} kg, dostupné {{ available|floatformat:1 }} kg){% endif %}{% if not forloop.last %}, {% endif %}{% endfor %}
-                            </div>
-                            {% endif %}
                         </td>
                         <td class="col-planned">{{ item.quantity|floatformat:2 }}</td>
                         <td class="col-unit">{{ item.unit }}</td>
