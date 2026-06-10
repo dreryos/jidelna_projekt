@@ -106,8 +106,7 @@
             <strong>Vytvořil:</strong><br>
             {{ document.created_by.get_full_name|default:document.created_by.username }}
           </div>
-        </div>
-      </div>
+        </div>      </div>
     </div>
   </div>
 </div>
@@ -126,6 +125,34 @@
 
 <form method="post" id="vydejka-form">
   {% csrf_token %}
+
+  <div class="card mb-3 border-secondary">
+    <div class="card-body py-2">
+      <div class="row align-items-center g-2">
+        <div class="col-auto">
+          <label class="col-form-label fw-semibold" for="id_cook">
+            <i class="fas fa-user-chef me-1"></i>Kuchař:
+          </label>
+        </div>
+        <div class="col-md-4">
+          <select class="form-select form-select-sm" name="cook" id="id_cook">
+            <option value="">— nepřiřazen —</option>
+            {% for u in available_cooks %}
+            <option value="{{ u.id }}"
+              {% if document.cook_id == u.id %}selected{% endif %}>
+              {% if u.get_full_name %}{{ u.get_full_name }} ({{ u.username }}){% else %}{{ u.username }}{% endif %}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+        {% if document.cook %}
+        <div class="col-auto text-muted small">
+          <i class="fas fa-check-circle text-success me-1"></i>Aktuálně přiřazen: <strong>{{ document.cook.get_full_name|default:document.cook.username }}</strong>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
 
   {% for day, meals in daily_picking_data %}
   <div class="mb-4">

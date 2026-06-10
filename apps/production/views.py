@@ -1051,7 +1051,27 @@ def picking_list_edit(request, document_id):
             # Zpracování formuláře s editací skutečných množství (per-item)
             updated_count = 0
             added_count = 0
-            picking_items_map = {item.id: item for item in picking_items}
+            # Re-fetch picking items fresh (nekombinujeme s pre-evaluovaným QS z locked check)
+            picking_items_fresh = list(
+                PickingList.objects.filter(document=document).select_related('ingredient', 'warehouse')
+            )
+            picking_items_map = {item.id: item for item in picking_items_fresh}
+
+            # Uložení kuchaře
+            from django.contrib.auth import get_user_model
+            User = get_user_model()
+            cook_id_str = request.POST.get('cook', '').strip()
+            if cook_id_str:
+                try:
+                    cook_obj = User.objects.get(id=int(cook_id_str))
+                    document.cook = cook_obj
+                    document.save(update_fields=['cook'])
+                except (ValueError, User.DoesNotExist):
+                    messages.error(request, 'Zadaný kuchař neexistuje.')
+            else:
+                # Prázdný výběr = odebrat kuchaře
+                document.cook = None
+                document.save(update_fields=['cook'])
             
             for key, value in request.POST.items():
                 if key.startswith('quantity_actual_item_'):
@@ -1068,6 +1088,7 @@ def picking_list_edit(request, document_id):
                     quantity_str = value.strip()
                     if quantity_str:
                         try:
+                            from django.core.exceptions import ValidationError as DjangoValidationError
                             quantity = Decimal(quantity_str.replace(',', '.'))
                             status = request.POST.get(status_key, 'PENDING')
                             item.quantity_actual = quantity
@@ -1076,6 +1097,8 @@ def picking_list_edit(request, document_id):
                             updated_count += 1
                         except (ValueError, InvalidOperation):
                             messages.error(request, f'Neplatné množství pro {item.ingredient.name}')
+                        except DjangoValidationError as e:
+                            messages.error(request, f'Chyba validace pro {item.ingredient.name}: {"; ".join(e.messages)}')
             
             # Zpracování nových položek přidaných uživatelem
             from apps.core.models import Ingredient as IngredientModel
@@ -1272,18 +1295,22 @@ def picking_list_edit(request, document_id):
         
         from apps.core.models import Ingredient as IngredientModel
         from apps.canteens.models import Warehouse
-        
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+
         canteen_warehouses = Warehouse.objects.filter(
             canteen=document.canteen, is_locked=False, is_transit_warehouse=False
         ).order_by('name')
         all_ingredients = IngredientModel.objects.filter(is_active=True).order_by('name')
-        
+        available_cooks = User.objects.filter(is_active=True).order_by('last_name', 'first_name', 'username')
+
         context = {
             'document': document,
             'ingredient_totals': sorted_ingredients,
             'daily_picking_data': sorted_daily_data,
             'canteen_warehouses': canteen_warehouses,
             'all_ingredients': all_ingredients,
+            'available_cooks': available_cooks,
         }
         
         return render(request, 'production/picking_list_edit.html', context)

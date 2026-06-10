@@ -519,3 +519,114 @@ def write_off_analytics(request):
     }
     
     return render(request, 'analytics/write_off_analytics.html', context)
+
+
+@login_required
+def cook_analytics(request):
+    """
+    Analytika podle kuchařů.
+    Zobrazuje přehled výdejek přiřazených jednotlivým kuchařům:
+    - Počet výdejek
+    - Celkové plánované a skutečné množství (v kg ekvivalentu)
+    - Odchylka skutečného množství od plánovaného
+    - Detail výdejek za zvolené období
+    """
+    from django.contrib.auth import get_user_model
+    from apps.production.models import PickingListDocument, PickingList
+    from apps.inventory.models import StockItem
+    from django.db.models import Count
+
+    User = get_user_model()
+
+    user = request.user
+
+    # Filtry
+    date_from_str = request.GET.get('date_from', '')
+    date_to_str = request.GET.get('date_to', '')
+    canteen_id = request.GET.get('canteen', '')
+
+    # Základní QS dokumentů přístupných tomuto uživateli
+    if user.is_superuser:
+        docs_qs = PickingListDocument.objects.select_related('cook', 'canteen')
+        canteens_qs = Canteen.objects.all().order_by('name')
+    else:
+        try:
+            user_canteens = user.profile.canteens.all()
+        except ObjectDoesNotExist:
+            user_canteens = Canteen.objects.none()
+        docs_qs = PickingListDocument.objects.filter(canteen__in=user_canteens).select_related('cook', 'canteen')
+        canteens_qs = user_canteens.order_by('name')
+
+    # Aplikujeme filtry
+    if date_from_str:
+        docs_qs = docs_qs.filter(date_from__gte=date_from_str)
+    if date_to_str:
+        docs_qs = docs_qs.filter(date_to__lte=date_to_str)
+    if canteen_id:
+        docs_qs = docs_qs.filter(canteen_id=canteen_id)
+
+    # Agregace per kuchař
+    # Pro každý dokument načteme sumy z PickingList items
+    cook_stats = {}  # cook_id -> dict
+
+    UNASSIGNED_KEY = '__unassigned__'
+
+    for doc in docs_qs.prefetch_related('items'):
+        cook = doc.cook
+        key = cook.id if cook else UNASSIGNED_KEY
+        label = (cook.get_full_name() or cook.username) if cook else '— nepřiřazen —'
+
+        if key not in cook_stats:
+            cook_stats[key] = {
+                'cook': cook,
+                'label': label,
+                'doc_count': 0,
+                'qty_planned': Decimal('0'),
+                'qty_actual': Decimal('0'),
+                'completed_items': 0,
+                'pending_items': 0,
+                'documents': [],
+            }
+
+        items = list(doc.items.all())
+        planned = sum(i.quantity_planned for i in items)
+        actual = sum(i.quantity_actual for i in items if i.quantity_actual is not None)
+        completed = sum(1 for i in items if i.status == PickingList.Status.COMPLETED)
+        pending = sum(1 for i in items if i.status == PickingList.Status.PENDING)
+
+        cook_stats[key]['doc_count'] += 1
+        cook_stats[key]['qty_planned'] += planned
+        cook_stats[key]['qty_actual'] += actual
+        cook_stats[key]['completed_items'] += completed
+        cook_stats[key]['pending_items'] += pending
+        cook_stats[key]['documents'].append({
+            'doc': doc,
+            'qty_planned': round(planned, 3),
+            'qty_actual': round(actual, 3),
+            'completed': completed,
+            'pending': pending,
+        })
+
+    # Vypočítáme odchylku a seřadíme (přiřazení kuchaři první, pak nepřiřazeno)
+    cook_stats_list = []
+    for key, data in cook_stats.items():
+        planned = data['qty_planned']
+        actual = data['qty_actual']
+        data['deviation'] = round(actual - planned, 3)
+        data['deviation_pct'] = round(
+            (actual - planned) / planned * 100, 1
+        ) if planned else Decimal('0')
+        data['qty_planned'] = round(planned, 3)
+        data['qty_actual'] = round(actual, 3)
+        cook_stats_list.append((key, data))
+
+    cook_stats_list.sort(key=lambda x: (x[0] == UNASSIGNED_KEY, str(x[1]['label'])))
+
+    context = {
+        'cook_stats_list': cook_stats_list,
+        'canteens': canteens_qs,
+        'selected_date_from': date_from_str,
+        'selected_date_to': date_to_str,
+        'selected_canteen': canteen_id,
+    }
+    return render(request, 'analytics/cook_analytics.html', context)

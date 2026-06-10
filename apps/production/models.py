@@ -718,6 +718,15 @@ class PickingListDocument(models.Model):
     date_to = models.DateField(verbose_name="Datum do")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Vytvořeno")
     created_by = models.ForeignKey('auth.User', on_delete=models.PROTECT, verbose_name="Vytvořil")
+    cook = models.ForeignKey(
+        'auth.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='cooked_picking_lists',
+        verbose_name="Kuchař",
+        help_text="Kuchař, který připravoval jídlo v tomto období",
+    )
     archived = models.BooleanField(default=False, verbose_name="Archivováno")
     archived_at = models.DateTimeField(null=True, blank=True, verbose_name="Archivováno dne")
     

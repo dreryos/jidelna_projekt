@@ -16,4 +16,7 @@ urlpatterns = [
     
     # Analytika odepisování zboží
     path('write-offs/', views.write_off_analytics, name='write_off_analytics'),
+
+    # Analytika kuchařů
+    path('kuchari/', views.cook_analytics, name='cook_analytics'),
 ]
