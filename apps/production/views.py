@@ -1048,43 +1048,101 @@ def picking_list_edit(request, document_id):
             return render(request, 'production/picking_list_edit.html', context)
         
         if request.method == 'POST':
-            # Zpracování formuláře s editací skutečných množství
+            # Zpracování formuláře s editací skutečných množství (per-item)
             updated_count = 0
+            added_count = 0
+            picking_items_map = {item.id: item for item in picking_items}
             
-            # Zpracujeme agregované položky (po ingrediencích)
             for key, value in request.POST.items():
-                if key.startswith('quantity_actual_ingredient_'):
-                    ingredient_id = int(key.replace('quantity_actual_ingredient_', ''))
-                    status_key = f'status_ingredient_{ingredient_id}'
+                if key.startswith('quantity_actual_item_'):
+                    try:
+                        item_id = int(key.replace('quantity_actual_item_', ''))
+                    except ValueError:
+                        continue
                     
+                    item = picking_items_map.get(item_id)
+                    if item is None:
+                        continue
+                    
+                    status_key = f'status_item_{item_id}'
                     quantity_str = value.strip()
                     if quantity_str:
                         try:
                             quantity = Decimal(quantity_str.replace(',', '.'))
                             status = request.POST.get(status_key, 'PENDING')
-                            
-                            # Aktualizujeme všechny picking list items pro tuto surovinu
-                            items = picking_items.filter(ingredient_id=ingredient_id)
-                            for item in items:
-                                # Rozpočítáme množství proporcionálně podle plánovaného množství
-                                total_planned = items.aggregate(total=models.Sum('quantity_planned'))['total']
-                                if total_planned > 0:
-                                    proportion = item.quantity_planned / total_planned
-                                    item.quantity_actual = quantity * proportion
-                                else:
-                                    item.quantity_actual = quantity / items.count()
-                                
-                                item.status = status
-                                item.save()
-                                updated_count += 1
+                            item.quantity_actual = quantity
+                            item.status = status
+                            item.save()
+                            updated_count += 1
                         except (ValueError, InvalidOperation):
-                            from apps.core.models import Ingredient
-                            try:
-                                ingredient = Ingredient.objects.get(id=ingredient_id)
-                                messages.error(request, f'Neplatné množství pro {ingredient.name}')
-                            except Ingredient.DoesNotExist:
-                                messages.error(request, f'Neplatné množství pro surovinu ID {ingredient_id}')
+                            messages.error(request, f'Neplatné množství pro {item.ingredient.name}')
             
+            # Zpracování nových položek přidaných uživatelem
+            from apps.core.models import Ingredient as IngredientModel
+            from apps.canteens.models import Warehouse
+            
+            # Sestáváme skupiny nových položek: new_order__{order_id}__{idx}
+            new_order_ids = set()
+            for key in request.POST.keys():
+                if key.startswith('new_ingredient_order_'):
+                    parts = key.split('_')  # new, ingredient, order, {order_id}, {idx}
+                    if len(parts) >= 5:
+                        try:
+                            new_order_ids.add((int(parts[4]), int(parts[5])))
+                        except (ValueError, IndexError):
+                            pass
+            
+            # Platné orders pro tento dokument
+            valid_order_ids = set(
+                ProductionOrder.objects.filter(
+                    picking_list_items__document=document
+                ).values_list('id', flat=True)
+            )
+            
+            for order_id_new, idx in sorted(new_order_ids):
+                if order_id_new not in valid_order_ids:
+                    messages.error(request, 'Neplatný výrobní příkaz.')
+                    continue
+                
+                ingredient_id_str = request.POST.get(f'new_ingredient_order_{order_id_new}_{idx}', '').strip()
+                warehouse_id_str = request.POST.get(f'new_warehouse_order_{order_id_new}_{idx}', '').strip()
+                quantity_str = request.POST.get(f'new_quantity_order_{order_id_new}_{idx}', '').strip()
+                
+                if not ingredient_id_str or not warehouse_id_str or not quantity_str:
+                    continue
+                
+                try:
+                    ingredient_id_new = int(ingredient_id_str)
+                    warehouse_id_new = int(warehouse_id_str)
+                    quantity_new = Decimal(quantity_str.replace(',', '.'))
+                    if quantity_new <= 0:
+                        messages.error(request, 'Množství musí být kladné.')
+                        continue
+                except (ValueError, InvalidOperation):
+                    messages.error(request, 'Neplatné hodnoty pro novou surovinu.')
+                    continue
+                
+                try:
+                    order_obj = ProductionOrder.objects.get(id=order_id_new)
+                    ingredient_obj = IngredientModel.objects.get(id=ingredient_id_new, is_active=True)
+                    warehouse_obj = Warehouse.objects.get(id=warehouse_id_new, canteen=document.canteen)
+                except (ProductionOrder.DoesNotExist, IngredientModel.DoesNotExist, Warehouse.DoesNotExist):
+                    messages.error(request, 'Některý ze zadaných údajů (jídlo / surovina / sklad) nebyl nalezen.')
+                    continue
+                
+                PickingList.objects.create(
+                    production_order=order_obj,
+                    document=document,
+                    warehouse=warehouse_obj,
+                    ingredient=ingredient_obj,
+                    quantity_planned=quantity_new,
+                    quantity_actual=quantity_new,
+                    status=PickingList.Status.PENDING,
+                )
+                added_count += 1
+            
+            if added_count:
+                messages.success(request, f'Přidáno {added_count} nových položek.')
             messages.success(request, f'Aktualizováno {updated_count} položek.')
             return redirect('production:picking_list_edit', document_id=document_id)
         
@@ -1175,8 +1233,11 @@ def picking_list_edit(request, document_id):
                 total_info = ingredient_totals.get(item.ingredient.id)
                 
                 order_ingredients.append({
+                    'item_id': item.id,
                     'name': item.ingredient.name,
                     'quantity': item.quantity_planned,
+                    'quantity_actual': item.quantity_actual,
+                    'status': item.status,
                     'unit': item.ingredient.base_unit,
                     'has_stock': total_info['has_stock'] if total_info else True,
                     'is_sufficient': total_info['is_sufficient'] if total_info else True,
@@ -1187,6 +1248,7 @@ def picking_list_edit(request, document_id):
             order_ingredients.sort(key=lambda x: x['name'])
             
             daily_picking_data[order.date].append({
+                'order_id': order.id,
                 'recipe_name': order.recipe.name,
                 'meal_type': order.meal_type,
                 'portions': order.total_portions,
@@ -1208,10 +1270,20 @@ def picking_list_edit(request, document_id):
         missing_count = sum(1 for i in ingredient_totals.values() if not i['has_stock'])
         insufficient_count = sum(1 for i in ingredient_totals.values() if i['has_stock'] and not i['is_sufficient'])
         
+        from apps.core.models import Ingredient as IngredientModel
+        from apps.canteens.models import Warehouse
+        
+        canteen_warehouses = Warehouse.objects.filter(
+            canteen=document.canteen, is_locked=False, is_transit_warehouse=False
+        ).order_by('name')
+        all_ingredients = IngredientModel.objects.filter(is_active=True).order_by('name')
+        
         context = {
             'document': document,
             'ingredient_totals': sorted_ingredients,
             'daily_picking_data': sorted_daily_data,
+            'canteen_warehouses': canteen_warehouses,
+            'all_ingredients': all_ingredients,
         }
         
         return render(request, 'production/picking_list_edit.html', context)

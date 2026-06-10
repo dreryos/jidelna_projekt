@@ -5,28 +5,56 @@
 
 {% block extra_css %}
 <style>
-.table tbody tr.table-danger {
-    background-color: #f8d7da;
+.day-heading {
+    background: #0d6efd;
+    color: #fff;
+    padding: 0.5rem 1rem;
+    border-radius: 0.375rem;
+    font-size: 1.1rem;
+    font-weight: 700;
 }
-.table tbody tr.table-warning {
-    background-color: #fff3cd;
+.meal-card {
+    border-left: 4px solid #0d6efd;
 }
-.table tbody tr small {
-    line-height: 1.4;
+.meal-card .card-header {
+    background: #e9f0ff;
+    font-weight: 600;
 }
-.table tbody tr.row-issued {
-    opacity: 0.65;
+.meal-badge {
+    font-size: 0.78rem;
 }
-.table tbody tr.row-issued td {
+.add-ingredient-panel {
+    background: #f8f9fa;
+    border-top: 1px dashed #adb5bd;
+}
+.add-ingredient-row select,
+.add-ingredient-row input {
+    font-size: 0.85rem;
+}
+.table-ingredients th {
+    background: #f8f9fa;
+    font-size: 0.85rem;
+    white-space: nowrap;
+}
+.table-ingredients td {
+    vertical-align: middle;
+}
+.table-ingredients tr.row-issued td {
     text-decoration: line-through;
     color: #6c757d;
 }
-.table tbody tr.row-issued td .no-strike,
-.table tbody tr.row-issued td input,
-.table tbody tr.row-issued td label {
+.table-ingredients tr.row-issued td.no-strike,
+.table-ingredients tr.row-issued td input,
+.table-ingredients tr.row-issued td label {
     text-decoration: none;
     color: inherit;
     opacity: 1;
+}
+.table-ingredients tr.table-danger {
+    background-color: #f8d7da;
+}
+.table-ingredients tr.table-warning {
+    background-color: #fff3cd;
 }
 .issued-checkbox {
     width: 1.3rem;
@@ -38,6 +66,9 @@
     cursor: pointer;
     user-select: none;
     font-size: 0.85rem;
+}
+.meal-issue-all-btn {
+    font-size: 0.8rem;
 }
 </style>
 {% endblock %}
@@ -81,139 +112,194 @@
   </div>
 </div>
 
-<div class="row">
-  <div class="col-12">
-    <div class="card shadow">
-      <div class="card-header bg-primary text-white">
-        <h5 class="mb-0"><i class="fas fa-clipboard-list me-2"></i>Položky výdejky</h5>
-      </div>
-      <div class="card-body">
-        <div class="alert alert-info">
-          <i class="fas fa-info-circle me-2"></i>
-          <strong>Instrukce:</strong> Upravte skutečně vydaná množství a zaškrtněte „Vydáno". Vydaný řádek se automaticky odečte ze skladu.
+{% if locked %}
+<div class="alert alert-danger">
+  <i class="fas fa-lock me-2"></i>
+  <strong>Sklad je uzamčen.</strong> Editace není možná.
+</div>
+{% else %}
+
+<div class="alert alert-info mb-3">
+  <i class="fas fa-info-circle me-2"></i>
+  <strong>Instrukce:</strong> Zadejte skutečně vydaná množství a zaškrtněte „Vydáno". Vydaný řádek se automaticky odečte ze skladu.
+</div>
+
+<form method="post" id="vydejka-form">
+  {% csrf_token %}
+
+  {% for day, meals in daily_picking_data %}
+  <div class="mb-4">
+    <div class="day-heading mb-3">
+      <i class="fas fa-calendar-day me-2"></i>{{ day|date:"l, j. F Y" }}
+    </div>
+
+    {% for meal in meals %}
+    <div class="card meal-card mb-3 shadow-sm">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span>
+          {% if meal.meal_type == 'BREAKFAST' %}<span class="badge bg-warning text-dark meal-badge me-2">Snídaně</span>
+          {% elif meal.meal_type == 'SNACK_MORNING' %}<span class="badge bg-secondary meal-badge me-2">Svačina dop.</span>
+          {% elif meal.meal_type == 'LUNCH' %}<span class="badge bg-primary meal-badge me-2">Oběd</span>
+          {% elif meal.meal_type == 'SNACK_AFTERNOON' %}<span class="badge bg-secondary meal-badge me-2">Svačina odp.</span>
+          {% elif meal.meal_type == 'DINNER' %}<span class="badge bg-dark meal-badge me-2">Večeře</span>
+          {% else %}<span class="badge bg-light text-dark meal-badge me-2">{{ meal.meal_type }}</span>{% endif %}
+          {{ meal.recipe_name }}
+          <small class="text-muted ms-2">{{ meal.portions }} porcí{% if meal.is_customized %} <i class="fas fa-star text-warning ms-1" title="Upravené jídlo"></i>{% endif %}</small>
+        </span>
+        <div class="d-flex gap-2">
+          <button type="button" class="btn btn-outline-success btn-sm meal-issue-all-btn" data-meal-id="{{ forloop.parentloop.counter }}_{{ forloop.counter }}">
+            <i class="fas fa-check-double me-1"></i>Vydat vše v jídle
+          </button>
         </div>
-
-        <form method="post">
-          {% csrf_token %}
-
-          <div class="table-responsive">
-            <table class="table table-hover">
-              <thead class="table-light">
-                <tr>
-                  <th style="width: 4%;">№</th>
-                  <th style="width: 26%;">Surovina</th>
-                  <th style="width: 26%;">Použití (recepty a porce)</th>
-                  <th style="width: 10%; text-align: center;">Plánováno</th>
-                  <th style="width: 7%; text-align: center;">Jednotka</th>
-                  <th style="width: 11%; text-align: center;">Skutečně vydáno</th>
-                  <th style="width: 16%; text-align: center;">
-                    Vydáno
-                    <input type="checkbox" id="check-all-toggle" class="issued-checkbox ms-2" title="Zaškrtnout / odškrtnout vše">
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for item in ingredient_totals %}
-                {% with issued=item.status|default:"PENDING" %}
-                <tr class="{% if not item.has_stock %}table-danger{% elif not item.is_sufficient %}table-warning{% endif %}{% if issued == 'COMPLETED' %} row-issued{% endif %}"
-                    data-ingredient-id="{{ item.ingredient.id }}">
-                  <td style="text-align: center; font-weight: bold;">
-                    {% if not item.has_stock %}
-                        <i class="fas fa-times-circle text-danger" title="Není na skladě"></i> {{ forloop.counter }}
-                    {% elif not item.is_sufficient %}
-                        <i class="fas fa-exclamation-triangle text-warning" title="Nedostatečné množství"></i> {{ forloop.counter }}
-                    {% else %}
-                        {{ forloop.counter }}
-                    {% endif %}
-                  </td>
-                  <td>
-                    <strong>{{ item.ingredient.name }}</strong>
-                    {% if item.warehouses_info %}
-                    <br><small class="text-muted">
-                      <i class="fas fa-warehouse me-1"></i>Skladem:
-                      {% for wh_name, qty, blocked, available in item.warehouses_info %}
-                        {{ wh_name }} (celkem {{ qty|floatformat:1 }}, blokováno {{ blocked|floatformat:1 }}, dostupné {{ available|floatformat:1 }}){% if not forloop.last %}, {% endif %}
-                      {% endfor %}
-                    </small>
-                    {% endif %}
-                  </td>
-                  <td>
-                    <small>
-                      {% for order in item.orders %}
-                      <div class="mb-1">
-                        • {{ order.date|date:"d.m." }} - <strong>{{ order.recipe }}</strong>
-                        ({{ order.portions }} porc./{{ order.effective_portions|floatformat:1 }} ef.: {{ order.quantity|floatformat:2 }} {{ item.unit }})
-                      </div>
-                      {% endfor %}
-                    </small>
-                  </td>
-                  <td style="text-align: center; font-weight: bold; font-size: 1.1rem;">
-                    {{ item.planned|floatformat:2 }}
-                  </td>
-                  <td style="text-align: center;">
-                    {{ item.unit }}
-                  </td>
-                  <td class="no-strike">
-                    <input type="number"
-                           step="0.001"
-                           class="form-control form-control-sm qty-actual"
-                           name="quantity_actual_ingredient_{{ item.ingredient.id }}"
-                           data-planned="{{ item.planned }}"
-                           value="{% if item.quantity_actual is not None %}{{ item.quantity_actual }}{% else %}{{ item.planned }}{% endif %}"
-                           placeholder="0.000">
-                  </td>
-                  <td class="text-center no-strike">
-                    <input type="hidden" name="status_ingredient_{{ item.ingredient.id }}" value="PENDING">
-                    <input type="checkbox"
-                           class="issued-checkbox issued-check"
-                           id="issued_{{ item.ingredient.id }}"
-                           data-field="status_ingredient_{{ item.ingredient.id }}"
-                           {% if issued == 'COMPLETED' %}checked{% endif %}>
-                    <label class="issued-label ms-1" for="issued_{{ item.ingredient.id }}">Vydáno</label>
-                  </td>
-                </tr>
-                {% endwith %}
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-sm table-hover table-ingredients mb-0">
+            <thead>
+              <tr>
+                <th style="width:3%; text-align:center;">#</th>
+                <th style="width:32%;">Surovina</th>
+                <th style="width:13%; text-align:center;">Plánováno</th>
+                <th style="width:7%; text-align:center;">Jedn.</th>
+                <th style="width:20%; text-align:center;">Skutečně vydáno</th>
+                <th style="width:25%; text-align:center;">Vydáno</th>
+              </tr>
+            </thead>
+            <tbody data-meal="{{ forloop.parentloop.counter }}_{{ forloop.counter }}">
+              {% for ing in meal.ingredients %}
+              <tr class="{% if not ing.has_stock %}table-danger{% elif not ing.is_sufficient %}table-warning{% endif %}{% if ing.status == 'COMPLETED' %} row-issued{% endif %}"
+                  data-item-id="{{ ing.item_id }}">
+                <td style="text-align:center; font-weight:bold;">
+                  {% if not ing.has_stock %}
+                    <i class="fas fa-times-circle text-danger" title="Není na skladě"></i>
+                  {% elif not ing.is_sufficient %}
+                    <i class="fas fa-exclamation-triangle text-warning" title="Nedostatečné množství na skladě"></i>
+                  {% else %}
+                    {{ forloop.counter }}
+                  {% endif %}
+                </td>
+                <td>
+                  <strong>{{ ing.name }}</strong>
+                  {% if ing.warehouses_info %}
+                  <br><small class="text-muted">
+                    <i class="fas fa-warehouse me-1"></i>
+                    {% for wh_name, qty, blocked, available in ing.warehouses_info %}
+                      {{ wh_name }}: dostupné {{ available|floatformat:1 }} {% if not forloop.last %}/ {% endif %}
+                    {% endfor %}
+                  </small>
+                  {% endif %}
+                </td>
+                <td style="text-align:center; font-weight:bold;">{{ ing.quantity|floatformat:3 }}</td>
+                <td style="text-align:center;">{{ ing.unit }}</td>
+                <td class="no-strike">
+                  <input type="number"
+                         step="0.001"
+                         min="0"
+                         class="form-control form-control-sm qty-actual"
+                         name="quantity_actual_item_{{ ing.item_id }}"
+                         data-planned="{{ ing.quantity }}"
+                         value="{% if ing.quantity_actual is not None %}{{ ing.quantity_actual }}{% else %}{{ ing.quantity }}{% endif %}"
+                         placeholder="0.000">
+                </td>
+                <td class="text-center no-strike">
+                  <input type="hidden" name="status_item_{{ ing.item_id }}" value="{% if ing.status == 'COMPLETED' %}COMPLETED{% else %}PENDING{% endif %}">
+                  <input type="checkbox"
+                         class="issued-checkbox issued-check"
+                         id="issued_item_{{ ing.item_id }}"
+                         {% if ing.status == 'COMPLETED' %}checked{% endif %}>
+                  <label class="issued-label ms-1" for="issued_item_{{ ing.item_id }}">Vydáno</label>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <!-- Panel pro přidání nové suroviny -->
+      <div class="add-ingredient-panel p-2">
+        <button type="button"
+                class="btn btn-outline-primary btn-sm w-100 btn-toggle-add-ingredient"
+                data-order-id="{{ meal.order_id }}"
+                data-meal-key="{{ forloop.parentloop.counter }}_{{ forloop.counter }}">
+          <i class="fas fa-plus me-1"></i>Přidat surovinu do tohoto jídla
+        </button>
+        <div class="add-ingredient-rows mt-2" id="add-rows-{{ meal.order_id }}" style="display:none;">
+          <div class="add-ingredient-row row g-2 align-items-end mb-2" data-order-id="{{ meal.order_id }}" data-idx="0">
+            <div class="col-md-5">
+              <label class="form-label mb-0 small">Surovina</label>
+              <select class="form-select form-select-sm ingredient-select"
+                      name="new_ingredient_order_{{ meal.order_id }}_0">
+                <option value="">-- vyberte surovinu --</option>
+                {% for ing in all_ingredients %}
+                <option value="{{ ing.id }}">{{ ing.name }} ({{ ing.base_unit }})</option>
                 {% endfor %}
-              </tbody>
-            </table>
-          </div>
-
-          <div class="d-flex justify-content-between align-items-center mt-4 flex-wrap gap-2">
-            <a href="{% url 'production:picking_list_pdf' document.id %}" 
-               class="btn btn-outline-danger" 
-               target="_blank">
-              <i class="fas fa-file-pdf me-2"></i>Stáhnout PDF
-            </a>
-            <div class="d-flex align-items-center gap-2 flex-wrap">
-              <span class="text-muted small" id="issued-counter"></span>
-              <button type="button" class="btn btn-outline-secondary" id="btn-unissue-all">
-                <i class="fas fa-times me-2"></i>Odebrat vydání
-              </button>
-              <button type="button" class="btn btn-success" id="btn-issue-all">
-                <i class="fas fa-check-double me-2"></i>Vydat vše
-              </button>
-              <button type="submit" class="btn btn-primary btn-lg">
-                <i class="fas fa-save me-2"></i>Uložit změny
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label mb-0 small">Sklad</label>
+              <select class="form-select form-select-sm"
+                      name="new_warehouse_order_{{ meal.order_id }}_0">
+                <option value="">-- vyberte sklad --</option>
+                {% for wh in canteen_warehouses %}
+                <option value="{{ wh.id }}">{{ wh.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-2">
+              <label class="form-label mb-0 small">Množství</label>
+              <input type="number" step="0.001" min="0.001"
+                     class="form-control form-control-sm"
+                     name="new_quantity_order_{{ meal.order_id }}_0"
+                     placeholder="0.000">
+            </div>
+            <div class="col-md-2 d-flex gap-1">
+              <button type="button" class="btn btn-success btn-sm btn-add-ingredient-row flex-fill"
+                      data-order-id="{{ meal.order_id }}">
+                <i class="fas fa-plus"></i>
               </button>
             </div>
           </div>
-        </form>
+        </div>
       </div>
     </div>
+    {% endfor %}
   </div>
-</div>
+  {% endfor %}
 
-<div class="row mt-4">
+  <div class="d-flex justify-content-between align-items-center mt-4 mb-5 flex-wrap gap-2">
+    <a href="{% url 'production:picking_list_pdf' document.id %}"
+       class="btn btn-outline-danger"
+       target="_blank">
+      <i class="fas fa-file-pdf me-2"></i>Stáhnout PDF
+    </a>
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+      <span class="text-muted small" id="issued-counter"></span>
+      <button type="button" class="btn btn-outline-secondary" id="btn-unissue-all">
+        <i class="fas fa-times me-2"></i>Odebrat vydání
+      </button>
+      <button type="button" class="btn btn-success" id="btn-issue-all">
+        <i class="fas fa-check-double me-2"></i>Vydat vše
+      </button>
+      <button type="submit" class="btn btn-primary btn-lg">
+        <i class="fas fa-save me-2"></i>Uložit změny
+      </button>
+    </div>
+  </div>
+</form>
+
+{% endif %}
+
+<div class="row mt-2 mb-4">
   <div class="col-12">
     <div class="card">
       <div class="card-body">
         <h6 class="card-title">
           <i class="fas fa-question-circle me-2"></i>Co se stane po uložení?
         </h6>
-        <ul>
-          <li>Položky se stavem <strong>"Čeká na vydání"</strong> - suroviny zůstanou zablokovány</li>
-          <li>Položky se stavem <strong>"Vydáno"</strong> - skutečné množství se automaticky odečte ze skladu</li>
-          <li>Ujistěte se, že máte vyplněno skutečné množství před změnou statusu na "Vydáno"</li>
+        <ul class="mb-0">
+          <li>Položky se stavem <strong>"Čeká na vydání"</strong> – suroviny zůstanou zablokovány</li>
+          <li>Položky se stavem <strong>"Vydáno"</strong> – skutečné množství se automaticky odečte ze skladu</li>
+          <li>Ujistěte se, že máte vyplněno skutečné množství před změnou statusu na „Vydáno"</li>
         </ul>
       </div>
     </div>
@@ -225,10 +311,9 @@
 <script>
 document.addEventListener('DOMContentLoaded', function () {
 
-    // --- Pomocné funkce ---
     function setRowIssued(row, checked) {
         const cb = row.querySelector('.issued-check');
-        const hiddenField = row.querySelector('input[type="hidden"][name^="status_ingredient_"]');
+        const hiddenField = row.querySelector('input[type="hidden"][name^="status_item_"]');
         if (!cb || !hiddenField) return;
         cb.checked = checked;
         hiddenField.value = checked ? 'COMPLETED' : 'PENDING';
@@ -240,12 +325,9 @@ document.addEventListener('DOMContentLoaded', function () {
         const issued = document.querySelectorAll('.issued-check:checked').length;
         const el = document.getElementById('issued-counter');
         if (el) el.textContent = `Vydáno ${issued} / ${total} položek`;
-        // Sync hlavičkový checkbox
-        const toggleAll = document.getElementById('check-all-toggle');
-        if (toggleAll) toggleAll.checked = issued === total && total > 0;
     }
 
-    // --- A: Checkbox → aktualizuje hidden field a styl řádku ---
+    // Checkbox → aktualizuje hidden field a styl řádku
     document.querySelectorAll('.issued-check').forEach(function (cb) {
         cb.addEventListener('change', function () {
             const row = this.closest('tr');
@@ -254,7 +336,7 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
 
-    // --- B: Změna množství → auto-zaškrtne (nebo odškrtne při 0) ---
+    // Změna množství → auto-zaškrtne (nebo odškrtne při 0)
     document.querySelectorAll('.qty-actual').forEach(function (input) {
         input.addEventListener('change', function () {
             const row = this.closest('tr');
@@ -268,33 +350,90 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
 
-    // --- C: Tlačítko „Vydat vše" ---
+    // Tlačítko „Vydat vše v jídle" – per-meal
+    document.querySelectorAll('.meal-issue-all-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            const mealId = this.dataset.mealId;
+            const tbody = document.querySelector(`tbody[data-meal="${mealId}"]`);
+            if (!tbody) return;
+            tbody.querySelectorAll('tr[data-item-id]').forEach(function (row) {
+                setRowIssued(row, true);
+            });
+            updateCounter();
+        });
+    });
+
+    // Tlačítko „Vydat vše"
     document.getElementById('btn-issue-all').addEventListener('click', function () {
-        document.querySelectorAll('tr[data-ingredient-id]').forEach(function (row) {
+        document.querySelectorAll('tr[data-item-id]').forEach(function (row) {
             setRowIssued(row, true);
         });
         updateCounter();
     });
 
-    // --- C: Tlačítko „Odebrat všechna vydání" ---
+    // Tlačítko „Odebrat vydání"
     document.getElementById('btn-unissue-all').addEventListener('click', function () {
-        document.querySelectorAll('tr[data-ingredient-id]').forEach(function (row) {
+        document.querySelectorAll('tr[data-item-id]').forEach(function (row) {
             setRowIssued(row, false);
         });
         updateCounter();
     });
 
-    // --- Checkbox v hlavičce (toggle all) ---
-    document.getElementById('check-all-toggle').addEventListener('change', function () {
-        const checked = this.checked;
-        document.querySelectorAll('tr[data-ingredient-id]').forEach(function (row) {
-            setRowIssued(row, checked);
+    // Počáteční stav counteru
+    updateCounter();
+
+    // --- Toggle panelu pro přidávání surovin ---
+    document.querySelectorAll('.btn-toggle-add-ingredient').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            const orderId = this.dataset.orderId;
+            const panel = document.getElementById('add-rows-' + orderId);
+            if (!panel) return;
+            const isVisible = panel.style.display !== 'none';
+            panel.style.display = isVisible ? 'none' : 'block';
+            this.innerHTML = isVisible
+                ? '<i class="fas fa-plus me-1"></i>Přidat surovinu do tohoto jídla'
+                : '<i class="fas fa-minus me-1"></i>Skrýt přidávání surovin';
         });
-        updateCounter();
     });
 
-    // --- Počáteční stav counteru ---
-    updateCounter();
+    // --- Přidání dalšího řádku pro surovinu ---
+    document.addEventListener('click', function (e) {
+        const btn = e.target.closest('.btn-add-ingredient-row');
+        if (!btn) return;
+
+        const orderId = btn.dataset.orderId;
+        const container = document.getElementById('add-rows-' + orderId);
+        if (!container) return;
+
+        const existingRows = container.querySelectorAll('.add-ingredient-row');
+        const newIdx = existingRows.length;
+
+        // Klonujeme první řádek
+        const firstRow = existingRows[0].cloneNode(true);
+        firstRow.dataset.idx = newIdx;
+
+        // Opravíme name atributy
+        firstRow.querySelectorAll('[name]').forEach(function (el) {
+            el.name = el.name.replace(/_\d+$/, '_' + newIdx);
+            if (el.tagName === 'INPUT') el.value = '';
+            if (el.tagName === 'SELECT') el.selectedIndex = 0;
+        });
+
+        // Tlačítko v novém řádku: přepnout na "odebrat"
+        const addBtn = firstRow.querySelector('.btn-add-ingredient-row');
+        addBtn.classList.remove('btn-success', 'btn-add-ingredient-row');
+        addBtn.classList.add('btn-danger', 'btn-remove-ingredient-row');
+        addBtn.innerHTML = '<i class="fas fa-trash"></i>';
+
+        container.appendChild(firstRow);
+    });
+
+    // --- Odebrání řádku ---
+    document.addEventListener('click', function (e) {
+        const btn = e.target.closest('.btn-remove-ingredient-row');
+        if (!btn) return;
+        btn.closest('.add-ingredient-row').remove();
+    });
 });
 </script>
 {% endblock %}
