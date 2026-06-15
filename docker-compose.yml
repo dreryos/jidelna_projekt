@@ -1,6 +1,6 @@
 services:
   spiz:
-    image: dreryos/spiz:latest
+    image: dreryos/jidelna_projekt:latest
     volumes:
       - sqlite_data:/app/data
       - static_volume:/app/staticfiles
