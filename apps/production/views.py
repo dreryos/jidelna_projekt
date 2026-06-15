@@ -1013,6 +1013,12 @@ def picking_list_edit(request, document_id):
     
     try:
         document = PickingListDocument.objects.get(id=document_id)
+        logger.info(
+            "picking_list_edit opened: document_id=%s user_id=%s method=%s",
+            document_id,
+            request.user.id,
+            request.method,
+        )
         
         # Kontrola oprávnění
         if not request.user.is_superuser:
@@ -1032,6 +1038,12 @@ def picking_list_edit(request, document_id):
                 locked_warehouses.add(item.warehouse)
         
         if locked_warehouses:
+            logger.warning(
+                "picking_list_edit blocked by locked warehouses: document_id=%s user_id=%s locked_count=%s",
+                document_id,
+                request.user.id,
+                len(locked_warehouses),
+            )
             for warehouse in locked_warehouses:
                 messages.error(
                     request,
@@ -1051,11 +1063,21 @@ def picking_list_edit(request, document_id):
             # Zpracování formuláře s editací skutečných množství (per-item)
             updated_count = 0
             added_count = 0
+            missing_quantity_fields = 0
+            item_validation_errors = 0
             # Re-fetch picking items fresh (nekombinujeme s pre-evaluovaným QS z locked check)
             picking_items_fresh = list(
                 PickingList.objects.filter(document=document).select_related('ingredient', 'warehouse')
             )
             picking_items_map = {item.id: item for item in picking_items_fresh}
+
+            logger.info(
+                "picking_list_edit POST start: document_id=%s user_id=%s post_keys=%s item_count=%s",
+                document_id,
+                request.user.id,
+                len(request.POST.keys()),
+                len(picking_items_map),
+            )
 
             # Uložení kuchaře
             from django.contrib.auth import get_user_model
@@ -1073,32 +1095,50 @@ def picking_list_edit(request, document_id):
                 document.cook = None
                 document.save(update_fields=['cook'])
             
-            for key, value in request.POST.items():
-                if key.startswith('quantity_actual_item_'):
-                    try:
-                        item_id = int(key.replace('quantity_actual_item_', ''))
-                    except ValueError:
-                        continue
-                    
-                    item = picking_items_map.get(item_id)
-                    if item is None:
-                        continue
-                    
-                    status_key = f'status_item_{item_id}'
-                    quantity_str = value.strip()
-                    if quantity_str:
-                        try:
-                            from django.core.exceptions import ValidationError as DjangoValidationError
-                            quantity = Decimal(quantity_str.replace(',', '.'))
-                            status = request.POST.get(status_key, 'PENDING')
-                            item.quantity_actual = quantity
-                            item.status = status
-                            item.save()
-                            updated_count += 1
-                        except (ValueError, InvalidOperation):
-                            messages.error(request, f'Neplatné množství pro {item.ingredient.name}')
-                        except DjangoValidationError as e:
-                            messages.error(request, f'Chyba validace pro {item.ingredient.name}: {"; ".join(e.messages)}')
+            for item_id, item in picking_items_map.items():
+                quantity_key = f'quantity_actual_item_{item_id}'
+                status_key = f'status_item_{item_id}'
+                had_quantity_in_post = quantity_key in request.POST
+
+                quantity_str = request.POST.get(quantity_key, '').strip()
+                # Prohlížeč může poslat prázdný řetězec pro pre-filled <input type="number">
+                # pokud hodnota selže HTML5 validaci (step/min) nebo pole vůbec neodešle.
+                if not quantity_str:
+                    if not had_quantity_in_post:
+                        missing_quantity_fields += 1
+                    if item.quantity_actual is not None:
+                        quantity_str = str(item.quantity_actual)
+                    else:
+                        quantity_str = str(item.quantity_planned)
+
+                try:
+                    from django.core.exceptions import ValidationError as DjangoValidationError
+                    quantity = Decimal(quantity_str.replace(',', '.'))
+                    status = request.POST.get(status_key, item.status or PickingList.Status.PENDING)
+                    item.quantity_actual = quantity
+                    item.status = status
+                    item.save()
+                    updated_count += 1
+                except (ValueError, InvalidOperation):
+                    item_validation_errors += 1
+                    logger.warning(
+                        "picking_list_edit invalid quantity: document_id=%s item_id=%s ingredient=%s raw_value=%s",
+                        document_id,
+                        item_id,
+                        item.ingredient.name,
+                        quantity_str,
+                    )
+                    messages.error(request, f'Neplatné množství pro {item.ingredient.name}')
+                except DjangoValidationError as e:
+                    item_validation_errors += 1
+                    logger.warning(
+                        "picking_list_edit validation error: document_id=%s item_id=%s ingredient=%s error=%s",
+                        document_id,
+                        item_id,
+                        item.ingredient.name,
+                        '; '.join(e.messages),
+                    )
+                    messages.error(request, f'Chyba validace pro {item.ingredient.name}: {"; ".join(e.messages)}')
             
             # Zpracování nových položek přidaných uživatelem
             from apps.core.models import Ingredient as IngredientModel
@@ -1166,6 +1206,17 @@ def picking_list_edit(request, document_id):
             
             if added_count:
                 messages.success(request, f'Přidáno {added_count} nových položek.')
+
+            logger.info(
+                "picking_list_edit POST summary: document_id=%s user_id=%s updated=%s added=%s missing_quantity_fields=%s item_validation_errors=%s",
+                document_id,
+                request.user.id,
+                updated_count,
+                added_count,
+                missing_quantity_fields,
+                item_validation_errors,
+            )
+
             messages.success(request, f'Aktualizováno {updated_count} položek.')
             return redirect('production:picking_list_edit', document_id=document_id)
         
