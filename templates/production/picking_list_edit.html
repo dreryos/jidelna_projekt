@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% load django_bootstrap5 %}
+{% load l10n %}
 
 {% block title %}Editace výdejky {{ document.name }} - Spíž{% endblock %}
 
@@ -224,8 +225,8 @@
                          min="0"
                          class="form-control form-control-sm qty-actual"
                          name="quantity_actual_item_{{ ing.item_id }}"
-                         data-planned="{{ ing.quantity }}"
-                         value="{% if ing.quantity_actual is not None %}{{ ing.quantity_actual }}{% else %}{{ ing.quantity }}{% endif %}"
+                         data-planned="{{ ing.quantity|unlocalize }}"
+                         value="{% if ing.quantity_actual is not None %}{{ ing.quantity_actual|unlocalize }}{% else %}{{ ing.quantity|unlocalize }}{% endif %}"
                          placeholder="0.000">
                 </td>
                 <td class="text-center no-strike">
