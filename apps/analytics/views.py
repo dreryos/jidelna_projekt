@@ -527,14 +527,15 @@ def cook_analytics(request):
     Analytika podle kuchařů.
     Zobrazuje přehled výdejek přiřazených jednotlivým kuchařům:
     - Počet výdejek
-    - Celkové plánované a skutečné množství (v kg ekvivalentu)
-    - Odchylka skutečného množství od plánovaného
+    - Celkové plánované a skutečné náklady (v Kč)
+    - Průměrná cena porce
+    - Odchylka skutečných nákladů od plánovaných v %
     - Detail výdejek za zvolené období
     """
     from django.contrib.auth import get_user_model
-    from apps.production.models import PickingListDocument, PickingList
+    from apps.production.models import PickingListDocument, PickingList, ProductionOrder
     from apps.inventory.models import StockItem
-    from django.db.models import Count
+    from django.db.models import Count, Sum
 
     User = get_user_model()
 
@@ -565,8 +566,7 @@ def cook_analytics(request):
     if canteen_id:
         docs_qs = docs_qs.filter(canteen_id=canteen_id)
 
-    # Agregace per kuchař
-    # Pro každý dokument načteme sumy z PickingList items
+    # Agregace per kuchař - nyní s peněžními hodnotami
     cook_stats = {}  # cook_id -> dict
 
     UNASSIGNED_KEY = '__unassigned__'
@@ -581,28 +581,80 @@ def cook_analytics(request):
                 'cook': cook,
                 'label': label,
                 'doc_count': 0,
-                'qty_planned': Decimal('0'),
-                'qty_actual': Decimal('0'),
+                'cost_planned': Decimal('0'),
+                'cost_actual': Decimal('0'),
+                'total_portions': 0,
                 'completed_items': 0,
                 'pending_items': 0,
                 'documents': [],
             }
 
         items = list(doc.items.all())
-        planned = sum(i.quantity_planned for i in items)
-        actual = sum(i.quantity_actual for i in items if i.quantity_actual is not None)
-        completed = sum(1 for i in items if i.status == PickingList.Status.COMPLETED)
-        pending = sum(1 for i in items if i.status == PickingList.Status.PENDING)
+        
+        # Výpočet plánovaných a skutečných nákladů
+        cost_planned = Decimal('0')
+        cost_actual = Decimal('0')
+        total_portions = 0
+        completed = 0
+        pending = 0
+
+        for item in items:
+            # Získáme výrobní příkaz pro tento picking list item
+            order = item.production_order
+            if not order or not order.recipe:
+                continue
+
+            canteen = order.resolved_canteen
+            if not canteen:
+                continue
+
+            # Získáme počet porcí z výrobního příkazu
+            portions = order.get_total_effective_portions()
+            if portions <= 0:
+                continue
+
+            # Vypočítáme cenu porce pomocí historických cen (datum od výdejky)
+            price_info = order.recipe.calculate_portion_price(
+                canteen,
+                portions=1,
+                price_date=doc.date_from
+            )
+            cost_per_portion = price_info['per_portion']
+
+            # Přepočet quantity_planned z kg na porce (použijeme průměrnou porci)
+            # quantity_planned je v kg, potřebujeme porce
+            # Použijeme průměrnou hmotnost porce z výrobního příkazu
+            avg_portion_weight = order.get_total_effective_portions() / max(order.total_portions, 1)
+            
+            # Plánované množství v porcích (přibližně)
+            qty_planned_portions = item.quantity_planned / max(avg_portion_weight, Decimal('0.1'))
+            cost_planned += qty_planned_portions * cost_per_portion
+
+            # Skutečné množství v porcích (pokud je vyplněno)
+            if item.quantity_actual is not None:
+                qty_actual_portions = item.quantity_actual / max(avg_portion_weight, Decimal('0.1'))
+                cost_actual += qty_actual_portions * cost_per_portion
+                total_portions += int(portions)
+            else:
+                # Pokud není skutečné množství vyplněno, použijeme plánované
+                total_portions += int(portions)
+
+            if item.status == PickingList.Status.COMPLETED:
+                completed += 1
+            elif item.status == PickingList.Status.PENDING:
+                pending += 1
 
         cook_stats[key]['doc_count'] += 1
-        cook_stats[key]['qty_planned'] += planned
-        cook_stats[key]['qty_actual'] += actual
+        cook_stats[key]['cost_planned'] += cost_planned
+        cook_stats[key]['cost_actual'] += cost_actual
         cook_stats[key]['completed_items'] += completed
         cook_stats[key]['pending_items'] += pending
+        
+        # Uložíme detaily výdejky
         cook_stats[key]['documents'].append({
             'doc': doc,
-            'qty_planned': round(planned, 3),
-            'qty_actual': round(actual, 3),
+            'cost_planned': round(cost_planned, 2),
+            'cost_actual': round(cost_actual, 2) if cost_actual > 0 else None,
             'completed': completed,
             'pending': pending,
         })
@@ -610,14 +662,30 @@ def cook_analytics(request):
     # Vypočítáme odchylku a seřadíme (přiřazení kuchaři první, pak nepřiřazeno)
     cook_stats_list = []
     for key, data in cook_stats.items():
-        planned = data['qty_planned']
-        actual = data['qty_actual']
-        data['deviation'] = round(actual - planned, 3)
-        data['deviation_pct'] = round(
-            (actual - planned) / planned * 100, 1
-        ) if planned else Decimal('0')
-        data['qty_planned'] = round(planned, 3)
-        data['qty_actual'] = round(actual, 3)
+        cost_planned = data['cost_planned']
+        cost_actual = data['cost_actual']
+        
+        # Přepočítáme celkový počet porcí – total_effective_portions je Python property,
+        # nelze použít v ORM agregaci; sečteme přes instance
+        total_portions = 0
+        for doc_item in data['documents']:
+            for order in ProductionOrder.objects.filter(
+                picking_list_items__document=doc_item['doc']
+            ).prefetch_related('portion_variants').distinct():
+                total_portions += int(order.total_effective_portions)
+
+        avg_cost_per_portion = cost_actual / Decimal(str(total_portions)) if total_portions > 0 else Decimal('0')
+
+        # Odchylka v procentech
+        deviation_pct = round(
+            (cost_actual - cost_planned) / cost_planned * 100, 1
+        ) if cost_planned else Decimal('0')
+
+        data['avg_cost_per_portion'] = round(avg_cost_per_portion, 2)
+        data['deviation_pct'] = deviation_pct
+        data['cost_planned'] = round(cost_planned, 2)
+        data['cost_actual'] = round(cost_actual, 2)
+        data['total_portions'] = total_portions
         cook_stats_list.append((key, data))
 
     cook_stats_list.sort(key=lambda x: (x[0] == UNASSIGNED_KEY, str(x[1]['label'])))

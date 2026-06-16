@@ -1175,7 +1175,7 @@ def picking_list_edit(request, document_id):
                     parts = key.split('_')  # new, ingredient, order, {order_id}, {idx}
                     if len(parts) >= 5:
                         try:
-                            new_order_ids.add((int(parts[4]), int(parts[5])))
+                            new_order_ids.add((int(parts[3]), int(parts[4])))
                         except (ValueError, IndexError):
                             pass
             
@@ -1216,6 +1216,18 @@ def picking_list_edit(request, document_id):
                 except (ProductionOrder.DoesNotExist, IngredientModel.DoesNotExist, Warehouse.DoesNotExist):
                     messages.error(request, 'Některý ze zadaných údajů (jídlo / surovina / sklad) nebyl nalezen.')
                     continue
+                
+                # Vytvoření override pro trvalé uložení přidané suroviny
+                from .models import ProductionOrderIngredientOverride
+                ProductionOrderIngredientOverride.objects.create(
+                    production_order=order_obj,
+                    ingredient=ingredient_obj,
+                    quantity_per_portion=None,  # pro přidané suroviny je None
+                    original_quantity=Decimal('0'),
+                    is_added=True,
+                    is_removed=False,
+                    notes=''
+                )
                 
                 PickingList.objects.create(
                     production_order=order_obj,

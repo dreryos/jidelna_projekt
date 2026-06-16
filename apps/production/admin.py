@@ -172,7 +172,7 @@ class PickingListDocumentAdmin(admin.ModelAdmin):
     
     fieldsets = (
         (None, {
-            'fields': ('name', 'canteen', 'date_from', 'date_to')
+            'fields': ('name', 'canteen', 'date_from', 'date_to', 'cook')
         }),
         ('Metadata', {
             'fields': ('created_at', 'created_by'),
