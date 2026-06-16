@@ -10,7 +10,7 @@ Tento modul poskytuje:
 from django.shortcuts import render, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
-from django.db.models import Avg, Count, Q, Sum
+from django.db.models import Avg, Count, Q, Sum, Prefetch
 from django.core.exceptions import ObjectDoesNotExist
 from decimal import Decimal
 from datetime import timedelta
@@ -533,12 +533,9 @@ def cook_analytics(request):
     - Detail výdejek za zvolené období
     """
     from django.contrib.auth import get_user_model
-    from apps.production.models import PickingListDocument, PickingList, ProductionOrder
-    from apps.inventory.models import StockItem
-    from django.db.models import Count, Sum
+    from apps.production.models import PickingListDocument, PickingList
 
     User = get_user_model()
-
     user = request.user
 
     # Filtry
@@ -566,12 +563,32 @@ def cook_analytics(request):
     if canteen_id:
         docs_qs = docs_qs.filter(canteen_id=canteen_id)
 
-    # Agregace per kuchař - nyní s peněžními hodnotami
-    cook_stats = {}  # cook_id -> dict
+    # Deep prefetch – eliminuje N+1 na production_order a jeho závislosti.
+    # Výsledek: konstantní počet DB dotazů bez ohledu na počet výdejek/položek.
+    # Zahrnuje i recipeingredient_set__ingredient, které čte calculate_portion_price interně.
+    from apps.production.models import PickingList as _PL
+    docs_qs = docs_qs.prefetch_related(
+        Prefetch(
+            'items',
+            queryset=_PL.objects.select_related(
+                'production_order__recipe',
+                'production_order__canteen',
+                'production_order__menu_plan__canteen',
+            ).prefetch_related(
+                'production_order__portion_variants',
+                'production_order__recipe__recipeingredient_set__ingredient',
+            ),
+        )
+    )
 
     UNASSIGNED_KEY = '__unassigned__'
+    cook_stats = {}
 
-    for doc in docs_qs.prefetch_related('items'):
+    # Cache cen: (recipe_id, canteen_id, date) -> Decimal (cena za porci)
+    # Zamezuje opakovanému volání calculate_portion_price pro stejnou kombinaci.
+    price_cache = {}
+
+    for doc in docs_qs:
         cook = doc.cook
         key = cook.id if cook else UNASSIGNED_KEY
         label = (cook.get_full_name() or cook.username) if cook else '— nepřiřazen —'
@@ -589,17 +606,22 @@ def cook_analytics(request):
                 'documents': [],
             }
 
-        items = list(doc.items.all())
-        
-        # Výpočet plánovaných a skutečných nákladů
         cost_planned = Decimal('0')
         cost_actual = Decimal('0')
         total_portions = 0
         completed = 0
         pending = 0
 
-        for item in items:
-            # Získáme výrobní příkaz pro tento picking list item
+        # Deduplikace per výrobní příkaz: calculate_portion_price se volá JEDNOU
+        # per unikátní (recept, jídelna, datum), ne per každou ingredienci/položku.
+        seen_orders = {}  # order_id -> {'cost_per_portion': Decimal, 'eff_portions': int, 'completed_items': int, 'total_items': int}
+
+        for item in doc.items.all():
+            if item.status == _PL.Status.COMPLETED:
+                completed += 1
+            elif item.status == _PL.Status.PENDING:
+                pending += 1
+
             order = item.production_order
             if not order or not order.recipe:
                 continue
@@ -608,49 +630,53 @@ def cook_analytics(request):
             if not canteen:
                 continue
 
-            # Získáme počet porcí z výrobního příkazu
-            portions = order.get_total_effective_portions()
-            if portions <= 0:
+            order_id = order.pk
+            if order_id not in seen_orders:
+                eff_portions = int(order.total_effective_portions)
+                if eff_portions <= 0:
+                    seen_orders[order_id] = None
+                    continue
+
+                cache_key = (order.recipe_id, canteen.id, doc.date_from)
+                if cache_key not in price_cache:
+                    price_info = order.recipe.calculate_portion_price(
+                        canteen, portions=1, price_date=doc.date_from
+                    )
+                    price_cache[cache_key] = price_info['per_portion']
+
+                seen_orders[order_id] = {
+                    'cost_per_portion': price_cache[cache_key],
+                    'eff_portions': eff_portions,
+                    'completed_items': 0,
+                    'total_items': 0,
+                }
+
+            entry = seen_orders[order_id]
+            if entry is None:
                 continue
 
-            # Vypočítáme cenu porce pomocí historických cen (datum od výdejky)
-            price_info = order.recipe.calculate_portion_price(
-                canteen,
-                portions=1,
-                price_date=doc.date_from
-            )
-            cost_per_portion = price_info['per_portion']
+            entry['total_items'] += 1
+            if item.status == _PL.Status.COMPLETED:
+                entry['completed_items'] += 1
 
-            # Přepočet quantity_planned z kg na porce (použijeme průměrnou porci)
-            # quantity_planned je v kg, potřebujeme porce
-            # Použijeme průměrnou hmotnost porce z výrobního příkazu
-            avg_portion_weight = order.get_total_effective_portions() / max(order.total_portions, 1)
-            
-            # Plánované množství v porcích (přibližně)
-            qty_planned_portions = item.quantity_planned / max(avg_portion_weight, Decimal('0.1'))
-            cost_planned += qty_planned_portions * cost_per_portion
-
-            # Skutečné množství v porcích (pokud je vyplněno)
-            if item.quantity_actual is not None:
-                qty_actual_portions = item.quantity_actual / max(avg_portion_weight, Decimal('0.1'))
-                cost_actual += qty_actual_portions * cost_per_portion
-                total_portions += int(portions)
-            else:
-                # Pokud není skutečné množství vyplněno, použijeme plánované
-                total_portions += int(portions)
-
-            if item.status == PickingList.Status.COMPLETED:
-                completed += 1
-            elif item.status == PickingList.Status.PENDING:
-                pending += 1
+        # Sečteme náklady – jednou per výrobní příkaz
+        for entry in seen_orders.values():
+            if entry is None:
+                continue
+            cost_for_order = entry['cost_per_portion'] * entry['eff_portions']
+            cost_planned += cost_for_order
+            total_portions += entry['eff_portions']
+            # Skutečné náklady počítáme jen u plně dokončených výrobních příkazů
+            if entry['total_items'] > 0 and entry['completed_items'] == entry['total_items']:
+                cost_actual += cost_for_order
 
         cook_stats[key]['doc_count'] += 1
         cook_stats[key]['cost_planned'] += cost_planned
         cook_stats[key]['cost_actual'] += cost_actual
+        cook_stats[key]['total_portions'] += total_portions
         cook_stats[key]['completed_items'] += completed
         cook_stats[key]['pending_items'] += pending
-        
-        # Uložíme detaily výdejky
+
         cook_stats[key]['documents'].append({
             'doc': doc,
             'cost_planned': round(cost_planned, 2),
@@ -659,27 +685,20 @@ def cook_analytics(request):
             'pending': pending,
         })
 
-    # Vypočítáme odchylku a seřadíme (přiřazení kuchaři první, pak nepřiřazeno)
+    # Finalizace – odchylka a řazení (kuchaři abecedně, nepřiřazeno na konec)
     cook_stats_list = []
     for key, data in cook_stats.items():
         cost_planned = data['cost_planned']
         cost_actual = data['cost_actual']
-        
-        # Přepočítáme celkový počet porcí – total_effective_portions je Python property,
-        # nelze použít v ORM agregaci; sečteme přes instance
-        total_portions = 0
-        for doc_item in data['documents']:
-            for order in ProductionOrder.objects.filter(
-                picking_list_items__document=doc_item['doc']
-            ).prefetch_related('portion_variants').distinct():
-                total_portions += int(order.total_effective_portions)
+        total_portions = data['total_portions']
 
-        avg_cost_per_portion = cost_actual / Decimal(str(total_portions)) if total_portions > 0 else Decimal('0')
-
-        # Odchylka v procentech
-        deviation_pct = round(
-            (cost_actual - cost_planned) / cost_planned * 100, 1
-        ) if cost_planned else Decimal('0')
+        avg_cost_per_portion = (
+            cost_actual / Decimal(str(total_portions)) if total_portions > 0 else Decimal('0')
+        )
+        deviation_pct = (
+            round((cost_actual - cost_planned) / cost_planned * 100, 1)
+            if cost_planned else Decimal('0')
+        )
 
         data['avg_cost_per_portion'] = round(avg_cost_per_portion, 2)
         data['deviation_pct'] = deviation_pct
