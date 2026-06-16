@@ -196,7 +196,7 @@
             <tbody data-meal="{{ forloop.parentloop.counter }}_{{ forloop.counter }}">
               {% for ing in meal.ingredients %}
               <tr class="{% if not ing.has_stock %}table-danger{% elif not ing.is_sufficient %}table-warning{% endif %}{% if ing.status == 'COMPLETED' %} row-issued{% endif %}"
-                  data-item-id="{{ ing.item_id }}">
+                  data-item-id="{{ ing.item_id|unlocalize }}">
                 <td style="text-align:center; font-weight:bold;">
                   {% if not ing.has_stock %}
                     <i class="fas fa-times-circle text-danger" title="Není na skladě"></i>
@@ -220,22 +220,22 @@
                 <td style="text-align:center; font-weight:bold;">{{ ing.quantity|floatformat:3 }}</td>
                 <td style="text-align:center;">{{ ing.unit }}</td>
                 <td class="no-strike">
-                  <input type="number"
-                         step="0.001"
-                         min="0"
-                         class="form-control form-control-sm qty-actual"
-                         name="quantity_actual_item_{{ ing.item_id }}"
+                      <input type="text"
+                        inputmode="decimal"
+                        class="form-control form-control-sm qty-actual"
+                         name="quantity_actual_item_{{ ing.item_id|unlocalize }}"
                          data-planned="{{ ing.quantity|unlocalize }}"
                          value="{% if ing.quantity_actual is not None %}{{ ing.quantity_actual|unlocalize }}{% else %}{{ ing.quantity|unlocalize }}{% endif %}"
                          placeholder="0.000">
                 </td>
                 <td class="text-center no-strike">
-                  <input type="hidden" name="status_item_{{ ing.item_id }}" value="{% if ing.status == 'COMPLETED' %}COMPLETED{% else %}PENDING{% endif %}">
                   <input type="checkbox"
                          class="issued-checkbox issued-check"
-                         id="issued_item_{{ ing.item_id }}"
+                         name="status_item_{{ ing.item_id|unlocalize }}"
+                         value="COMPLETED"
+                         id="issued_item_{{ ing.item_id|unlocalize }}"
                          {% if ing.status == 'COMPLETED' %}checked{% endif %}>
-                  <label class="issued-label ms-1" for="issued_item_{{ ing.item_id }}">Vydáno</label>
+                  <label class="issued-label ms-1" for="issued_item_{{ ing.item_id|unlocalize }}">Vydáno</label>
                 </td>
               </tr>
               {% endfor %}
@@ -341,10 +341,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function setRowIssued(row, checked) {
         const cb = row.querySelector('.issued-check');
-        const hiddenField = row.querySelector('input[type="hidden"][name^="status_item_"]');
-        if (!cb || !hiddenField) return;
+      if (!cb) return;
         cb.checked = checked;
-        hiddenField.value = checked ? 'COMPLETED' : 'PENDING';
         row.classList.toggle('row-issued', checked);
     }
 
@@ -368,7 +366,11 @@ document.addEventListener('DOMContentLoaded', function () {
     document.querySelectorAll('.qty-actual').forEach(function (input) {
         input.addEventListener('change', function () {
             const row = this.closest('tr');
-            const val = parseFloat(this.value);
+        const normalized = (this.value || '').replace(',', '.').trim();
+        if (normalized !== this.value) {
+          this.value = normalized;
+        }
+        const val = Number(normalized);
             if (!isNaN(val) && val > 0) {
                 setRowIssued(row, true);
             } else if (!isNaN(val) && val === 0) {
@@ -462,6 +464,32 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!btn) return;
         btn.closest('.add-ingredient-row').remove();
     });
+
+    // --- Submit handler: zaruč odeslání všech qty hodnot ---
+    var form = document.getElementById('vydejka-form');
+    if (form) {
+        form.addEventListener('submit', function () {
+            var qtyInputs = form.querySelectorAll('.qty-actual');
+            qtyInputs.forEach(function (input) {
+                // Normalizuj čárku na tečku
+                var val = (input.value || '').replace(',', '.').trim();
+                // Pokud prázdné, doplň z data-planned
+                if (!val || isNaN(Number(val))) {
+                    val = (input.dataset.planned || '0').replace(',', '.');
+                }
+                input.value = val;
+            });
+            // Přidej debug pole s počtem qty inputů (pro server log)
+            var dbg = form.querySelector('input[name="debug_qty_count"]');
+            if (!dbg) {
+                dbg = document.createElement('input');
+                dbg.type = 'hidden';
+                dbg.name = 'debug_qty_count';
+                form.appendChild(dbg);
+            }
+            dbg.value = qtyInputs.length;
+        });
+    }
 });
 </script>
 {% endblock %}

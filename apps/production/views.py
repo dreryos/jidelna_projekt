@@ -1062,21 +1062,33 @@ def picking_list_edit(request, document_id):
         if request.method == 'POST':
             # Zpracování formuláře s editací skutečných množství (per-item)
             updated_count = 0
+            processed_count = 0
             added_count = 0
             missing_quantity_fields = 0
             item_validation_errors = 0
+            completed_count_after_save = 0
+            pending_count_after_save = 0
             # Re-fetch picking items fresh (nekombinujeme s pre-evaluovaným QS z locked check)
             picking_items_fresh = list(
                 PickingList.objects.filter(document=document).select_related('ingredient', 'warehouse')
             )
             picking_items_map = {item.id: item for item in picking_items_fresh}
 
+            qty_keys_in_post = [k for k in request.POST.keys() if k.startswith('quantity_actual_item_')]
+            status_keys_in_post = [k for k in request.POST.keys() if k.startswith('status_item_')]
+            debug_qty_count = request.POST.get('debug_qty_count', 'missing')
             logger.info(
-                "picking_list_edit POST start: document_id=%s user_id=%s post_keys=%s item_count=%s",
+                "picking_list_edit POST start: document_id=%s user_id=%s post_keys=%s item_count=%s "
+                "qty_fields_in_post=%s status_fields_in_post=%s debug_qty_count=%s "
+                "sample_post_keys=%s",
                 document_id,
                 request.user.id,
                 len(request.POST.keys()),
                 len(picking_items_map),
+                len(qty_keys_in_post),
+                len(status_keys_in_post),
+                debug_qty_count,
+                list(request.POST.keys())[:10],
             )
 
             # Uložení kuchaře
@@ -1114,11 +1126,23 @@ def picking_list_edit(request, document_id):
                 try:
                     from django.core.exceptions import ValidationError as DjangoValidationError
                     quantity = Decimal(quantity_str.replace(',', '.'))
-                    status = request.POST.get(status_key, item.status or PickingList.Status.PENDING)
+                    status = request.POST.get(status_key, PickingList.Status.PENDING)
+                    old_quantity_actual = item.quantity_actual
+                    old_status = item.status
+
                     item.quantity_actual = quantity
                     item.status = status
-                    item.save()
-                    updated_count += 1
+
+                    has_changed = (old_quantity_actual != item.quantity_actual) or (old_status != item.status)
+                    if has_changed:
+                        item.save()
+                        updated_count += 1
+
+                    processed_count += 1
+                    if item.status == PickingList.Status.COMPLETED:
+                        completed_count_after_save += 1
+                    elif item.status == PickingList.Status.PENDING:
+                        pending_count_after_save += 1
                 except (ValueError, InvalidOperation):
                     item_validation_errors += 1
                     logger.warning(
@@ -1208,16 +1232,22 @@ def picking_list_edit(request, document_id):
                 messages.success(request, f'Přidáno {added_count} nových položek.')
 
             logger.info(
-                "picking_list_edit POST summary: document_id=%s user_id=%s updated=%s added=%s missing_quantity_fields=%s item_validation_errors=%s",
+                "picking_list_edit POST summary: document_id=%s user_id=%s processed=%s updated=%s added=%s completed=%s pending=%s missing_quantity_fields=%s item_validation_errors=%s",
                 document_id,
                 request.user.id,
+                processed_count,
                 updated_count,
                 added_count,
+                completed_count_after_save,
+                pending_count_after_save,
                 missing_quantity_fields,
                 item_validation_errors,
             )
 
-            messages.success(request, f'Aktualizováno {updated_count} položek.')
+            messages.success(
+                request,
+                f'Aktualizováno {updated_count} položek. Vydáno: {completed_count_after_save}, čeká na vydání: {pending_count_after_save}.'
+            )
             return redirect('production:picking_list_edit', document_id=document_id)
         
         # Agregujeme suroviny stejně jako v PDF
