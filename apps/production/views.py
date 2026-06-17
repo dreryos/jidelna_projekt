@@ -1229,6 +1229,55 @@ def picking_list_edit(request, document_id):
                 )
                 added_count += 1
             
+            # Zpracování nových položek bez ProductionOrder (mimo jídla)
+            new_without_order_ids = set()
+            for key in request.POST.keys():
+                if key.startswith('new_ingredient_without_order_'):
+                    parts = key.split('_')  # new, ingredient, without, order, {idx}
+                    if len(parts) >= 5:
+                        try:
+                            # parts[4] = idx
+                            new_without_order_ids.add(int(parts[4]))
+                        except (ValueError, IndexError):
+                            pass
+            
+            for idx in sorted(new_without_order_ids):
+                ingredient_id_str = request.POST.get(f'new_ingredient_without_order_{idx}', '').strip()
+                warehouse_id_str = request.POST.get(f'new_warehouse_without_order_{idx}', '').strip()
+                quantity_str = request.POST.get(f'new_quantity_without_order_{idx}', '').strip()
+                
+                if not ingredient_id_str or not warehouse_id_str or not quantity_str:
+                    continue
+                
+                try:
+                    ingredient_id_new = int(ingredient_id_str)
+                    warehouse_id_new = int(warehouse_id_str)
+                    quantity_new = Decimal(quantity_str.replace(',', '.'))
+                    if quantity_new <= 0:
+                        messages.error(request, 'Množství musí být kladné.')
+                        continue
+                except (ValueError, InvalidOperation):
+                    messages.error(request, 'Neplatné hodnoty pro novou surovinu.')
+                    continue
+                
+                try:
+                    ingredient_obj = IngredientModel.objects.get(id=ingredient_id_new, is_active=True)
+                    warehouse_obj = Warehouse.objects.get(id=warehouse_id_new, canteen=document.canteen)
+                except (IngredientModel.DoesNotExist, Warehouse.DoesNotExist):
+                    messages.error(request, 'Některý ze zadaných údajů (surovina / sklad) nebyl nalezen.')
+                    continue
+                
+                PickingList.objects.create(
+                    production_order=None,
+                    document=document,
+                    warehouse=warehouse_obj,
+                    ingredient=ingredient_obj,
+                    quantity_planned=quantity_new,
+                    quantity_actual=quantity_new,
+                    status=PickingList.Status.COMPLETED,
+                )
+                added_count += 1
+            
             if added_count:
                 messages.success(request, f'Přidáno {added_count} nových položek.')
 
@@ -1375,6 +1424,12 @@ def picking_list_edit(request, document_id):
         missing_count = sum(1 for i in ingredient_totals.values() if not i['has_stock'])
         insufficient_count = sum(1 for i in ingredient_totals.values() if i['has_stock'] and not i['is_sufficient'])
         
+        # Získáme položky bez ProductionOrder (mimo jídla)
+        items_without_orders = PickingList.objects.filter(
+            document=document,
+            production_order__isnull=True
+        ).select_related('ingredient', 'warehouse').order_by('ingredient__name')
+        
         from apps.core.models import Ingredient as IngredientModel
         from apps.canteens.models import Warehouse
         from django.contrib.auth import get_user_model
@@ -1390,6 +1445,7 @@ def picking_list_edit(request, document_id):
             'document': document,
             'ingredient_totals': sorted_ingredients,
             'daily_picking_data': sorted_daily_data,
+            'items_without_orders': items_without_orders,
             'canteen_warehouses': canteen_warehouses,
             'all_ingredients': all_ingredients,
             'available_cooks': available_cooks,
