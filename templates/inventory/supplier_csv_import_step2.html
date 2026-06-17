@@ -1,0 +1,94 @@
+{% extends 'base.html' %}
+
+{% block title %}Import CSV (Makro) - Krok 2{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>Import CSV (Makro) - Krok 2</h2>
+    
+    <div class="card mb-4">
+        <div class="card-body">
+            <h5 class="card-title">Základní Informace</h5>
+            <p><strong>Číslo dokladu:</strong> {{ receipt_data.receipt_number }}</p>
+            <p><strong>Datum příjmu:</strong> {{ receipt_data.receipt_date }}</p>
+            <p><strong>Dodavatel:</strong> {{ receipt_data.supplier }}</p>
+        </div>
+    </div>
+    
+    <form method="post" action="{% url 'inventory:supplier_csv_import_step3' %}">
+        {% csrf_token %}
+        
+        <div class="card mb-4">
+            <div class="card-body">
+                <h5 class="card-title">Položky</h5>
+                
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Název</th>
+                            <th>Množství</th>
+                            <th>Jednotka</th>
+                            <th>Cena bez DPH</th>
+                            <th>DPH</th>
+                            <th>Cena s DPH</th>
+                            <th>Surovina</th>
+                            <th>Sklad</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in receipt_data.items %}
+                        <tr>
+                            <td>{{ item.item_name }}</td>
+                            <td>
+                                <input type="text" class="form-control" name="quantity_{{ forloop.counter0 }}" value="{{ item.quantity }}">
+                            </td>
+                            <td>{{ item.unit_mapped }}</td>
+                            <td>{{ item.price_per_unit_net }}</td>
+                            <td>{{ item.vat_rate }}%</td>
+                            <td>{{ item.price_per_unit_gross }}</td>
+                            <td>
+                                {% if item.suggested_ingredient_id %}
+                                    <select class="form-select" name="ingredient_{{ forloop.counter0 }}">
+                                        <option value="">-- Vybrat surovinu --</option>
+                                        <option value="{{ item.suggested_ingredient_id }}" selected>
+                                            {{ item.suggested_ingredient_name }} ({{ item.match_ratio }}%)
+                                        </option>
+                                        {% for ingredient in all_ingredients %}
+                                            <option value="{{ ingredient.id }}">{{ ingredient.name }}</option>
+                                        {% endfor %}
+                                    </select>
+                                {% else %}
+                                    <select class="form-select" name="ingredient_{{ forloop.counter0 }}">
+                                        <option value="" selected>-- Vybrat surovinu --</option>
+                                        {% for ingredient in all_ingredients %}
+                                            <option value="{{ ingredient.id }}">{{ ingredient.name }}</option>
+                                        {% endfor %}
+                                    </select>
+                                {% endif %}
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="create_new_{{ forloop.counter0 }}" id="create_new_{{ forloop.counter0 }}">
+                                    <label class="form-check-label" for="create_new_{{ forloop.counter0 }}">
+                                        Vytvořit novou surovinu
+                                    </label>
+                                </div>
+                            </td>
+                            <td>
+                                <select class="form-select" name="warehouse_{{ forloop.counter0 }}">
+                                    {% for warehouse in warehouses %}
+                                        <option value="{{ warehouse.id }}" {% if warehouse.id == default_warehouse_id %}selected{% endif %}>
+                                            {{ warehouse.name }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <button type="submit" class="btn btn-primary">Uložit Příjem</button>
+    </form>
+</div>
+{% endblock %}
