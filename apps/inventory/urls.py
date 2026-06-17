@@ -40,6 +40,11 @@ urlpatterns = [
     path('bidfood-import/preview/', views.bidfood_xml_import_step2, name='bidfood_import_step2'),
     path('bidfood-import/create/', views.bidfood_xml_import_step3, name='bidfood_import_step3'),
     
+    # Makro CSV Import
+    path('supplier-csv-import/', views.supplier_csv_import_step1, name='supplier_csv_import_step1'),
+    path('supplier-csv-import/preview/', views.supplier_csv_import_step2, name='supplier_csv_import_step2'),
+    path('supplier-csv-import/create/', views.supplier_csv_import_step3, name='supplier_csv_import_step3'),
+    
     # Příjem zboží (GoodsReceipt)
     path('goods-receipts/', views.GoodsReceiptListView.as_view(), name='goods_receipt_list'),
     path('goods-receipts/create/', views.goods_receipt_create, name='goods_receipt_create'),

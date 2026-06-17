@@ -293,6 +293,98 @@
     {% endfor %}
   </div>
   {% endfor %}
+  
+  <!-- Sekce pro položky mimo plánovaná jídla -->
+  <div class="mt-4 mb-4">
+    <div class="card">
+      <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">
+          <i class="fas fa-utensils me-2"></i>Vydáno mimo plánovaná jídla
+        </h5>
+      </div>
+      <div class="card-body">
+        <!-- Tabulka existujících položek mimo jídla -->
+        {% if items_without_orders %}
+        <div class="table-responsive mb-3">
+          <table class="table table-sm table-hover">
+            <thead>
+              <tr>
+                <th>Surovina</th>
+                <th>Sklad</th>
+                <th>Plánované množství</th>
+                <th>Skutečné množství</th>
+                <th>Stav</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in items_without_orders %}
+              <tr>
+                <td>{{ item.ingredient.name }}</td>
+                <td>{{ item.warehouse.name }}</td>
+                <td>{{ item.quantity_planned }} {{ item.ingredient.base_unit }}</td>
+                <td>{{ item.quantity_actual|default:"-" }}</td>
+                <td>
+                  {% if item.status == 'COMPLETED' %}
+                  <span class="badge bg-success">Vydáno</span>
+                  {% else %}
+                  <span class="badge bg-warning text-dark">Čeká</span>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% endif %}
+        
+        <!-- Formulář pro přidání nové položky mimo jídlo -->
+        <div class="add-ingredient-panel p-2">
+          <button type="button"
+                  class="btn btn-outline-primary btn-sm w-100 btn-toggle-add-ingredient-no-order"
+                  data-meal-key="no-order">
+            <i class="fas fa-plus me-1"></i>Přidat surovinu mimo jídlo
+          </button>
+          <div class="add-ingredient-rows mt-2" id="add-rows-no-order" style="display:none;">
+            <div class="add-ingredient-row row g-2 align-items-end mb-2" data-order-id="no-order" data-idx="0">
+              <div class="col-md-5">
+                <label class="form-label mb-0 small">Surovina</label>
+                <select class="form-select form-select-sm ingredient-select"
+                        name="new_ingredient_without_order_0">
+                  <option value="">-- vyberte surovinu --</option>
+                  {% for ing in all_ingredients %}
+                  <option value="{{ ing.id }}">{{ ing.name }} ({{ ing.base_unit }})</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="col-md-3">
+                <label class="form-label mb-0 small">Sklad</label>
+                <select class="form-select form-select-sm"
+                        name="new_warehouse_without_order_0">
+                  <option value="">-- vyberte sklad --</option>
+                  {% for wh in canteen_warehouses %}
+                  <option value="{{ wh.id }}">{{ wh.name }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="col-md-2">
+                <label class="form-label mb-0 small">Množství</label>
+                <input type="number" step="0.001" min="0.001"
+                       class="form-control form-control-sm"
+                       name="new_quantity_without_order_0"
+                       placeholder="0.000">
+              </div>
+              <div class="col-md-2 d-flex gap-1">
+                <button type="button" class="btn btn-success btn-sm btn-add-ingredient-row-no-order flex-fill"
+                        data-order-id="no-order">
+                  <i class="fas fa-plus"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <div class="d-flex justify-content-between align-items-center mt-4 mb-5 flex-wrap gap-2">
     <a href="{% url 'production:picking_list_pdf' document.id %}"
@@ -463,6 +555,51 @@ document.addEventListener('DOMContentLoaded', function () {
         const btn = e.target.closest('.btn-remove-ingredient-row');
         if (!btn) return;
         btn.closest('.add-ingredient-row').remove();
+    });
+    
+    // --- Toggle panelu pro přidávání surovin mimo jídla ---
+    document.querySelectorAll('.btn-toggle-add-ingredient-no-order').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            const panel = document.getElementById('add-rows-no-order');
+            if (!panel) return;
+            const isVisible = panel.style.display !== 'none';
+            panel.style.display = isVisible ? 'none' : 'block';
+            this.innerHTML = isVisible
+                ? '<i class="fas fa-plus me-1"></i>Přidat surovinu mimo jídlo'
+                : '<i class="fas fa-minus me-1"></i>Skrýt přidávání surovin';
+        });
+    });
+    
+    // --- Přidání dalšího řádku pro surovinu mimo jídlo ---
+    document.addEventListener('click', function (e) {
+        const btn = e.target.closest('.btn-add-ingredient-row-no-order');
+        if (!btn) return;
+
+        const orderId = btn.dataset.orderId;
+        const container = document.getElementById('add-rows-' + orderId);
+        if (!container) return;
+
+        const existingRows = container.querySelectorAll('.add-ingredient-row');
+        const newIdx = existingRows.length;
+
+        // Klonujeme první řádek
+        const firstRow = existingRows[0].cloneNode(true);
+        firstRow.dataset.idx = newIdx;
+
+        // Opravíme name atributy
+        firstRow.querySelectorAll('[name]').forEach(function (el) {
+            el.name = el.name.replace(/_\d+$/, '_' + newIdx);
+            if (el.tagName === 'INPUT') el.value = '';
+            if (el.tagName === 'SELECT') el.selectedIndex = 0;
+        });
+
+        // Tlačítko v novém řádku: přepnout na "odebrat"
+        const addBtn = firstRow.querySelector('.btn-add-ingredient-row-no-order');
+        addBtn.classList.remove('btn-success', 'btn-add-ingredient-row-no-order');
+        addBtn.classList.add('btn-danger', 'btn-remove-ingredient-row');
+        addBtn.innerHTML = '<i class="fas fa-trash"></i>';
+
+        container.appendChild(firstRow);
     });
 
     // --- Submit handler: zaruč odeslání všech qty hodnot ---

@@ -749,7 +749,7 @@ class PickingList(models.Model):
         PENDING = 'PENDING', 'Čeká na vydání'
         COMPLETED = 'COMPLETED', 'Vydáno'
 
-    production_order = models.ForeignKey(ProductionOrder, on_delete=models.CASCADE, related_name='picking_list_items', verbose_name="Výrobní příkaz")
+    production_order = models.ForeignKey(ProductionOrder, on_delete=models.CASCADE, related_name='picking_list_items', verbose_name="Výrobní příkaz", null=True, blank=True)
     document = models.ForeignKey(PickingListDocument, on_delete=models.CASCADE, related_name='items', verbose_name="Dokument výdejky", null=True, blank=True)
     warehouse = models.ForeignKey(Warehouse, on_delete=models.PROTECT, verbose_name="Sklad", help_text="Sklad, ze kterého se má surovina vydat.", null=True, blank=False)
     ingredient = models.ForeignKey(Ingredient, on_delete=models.PROTECT, verbose_name="Surovina")
@@ -767,7 +767,18 @@ class PickingList(models.Model):
 
     def clean(self):
         # Kontrola, zda sklad patří ke správné jídelně
-        order_canteen = self.production_order.get_canteen()
+        order_canteen = None
+        production_order = getattr(self, 'production_order', None)
+        if production_order:
+            try:
+                order_canteen = production_order.get_canteen()
+            except Exception:
+                order_canteen = None
+        
+        # Pokud je ProductionOrder None, použijeme jídelnu z dokumentu
+        if not order_canteen and self.document:
+            order_canteen = self.document.canteen
+        
         if self.warehouse and order_canteen and self.warehouse.canteen != order_canteen:
             raise ValidationError(f"Sklad '{self.warehouse}' nepatří k jídelně '{order_canteen}'.")
         
@@ -778,7 +789,7 @@ class PickingList(models.Model):
                 f"Nelze vytvářet ani dokončovat výdejky na uzamčený sklad."
             )
         
-        # Kontrola, zda je vyplněno skutečné množství při dokončení
+        # Kontrola, zda je vyplněto skutečné množství při dokončení
         if self.status == self.Status.COMPLETED and self.quantity_actual is None:
             raise ValidationError("Při dokončení výdeje musí být vyplněno skutečné množství.")
 

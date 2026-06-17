@@ -1,0 +1,34 @@
+{% extends 'base.html' %}
+
+{% block title %}Import CSV (Makro) - Krok 1{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>Import CSV (Makro) - Krok 1</h2>
+    
+    <div class="card">
+        <div class="card-body">
+            <form method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+                
+                <div class="mb-3">
+                    <label for="csv_file" class="form-label">CSV Soubor</label>
+                    <input type="file" class="form-control" id="csv_file" name="csv_file" accept=".csv" required>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="warehouse" class="form-label">Výchozí Sklad</label>
+                    <select class="form-select" id="warehouse" name="warehouse" required>
+                        <option value="" selected disabled>Vyberte sklad</option>
+                        {% for warehouse in warehouses %}
+                            <option value="{{ warehouse.id }}">{{ warehouse.name }} ({{ warehouse.canteen.name }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <button type="submit" class="btn btn-primary">Načíst CSV</button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

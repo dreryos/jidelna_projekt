@@ -817,6 +817,7 @@ def goods_receipt_delete(request, pk):
 # Bidfood XML Import
 
 from .bidfood_parser import parse_bidfood_xml
+from .supplier_csv_parser import parse_supplier_csv
 from difflib import SequenceMatcher
 
 
@@ -1599,22 +1600,22 @@ def stock_transfer_pdf(request, pk):
     
     # Generování PDF pomocí WeasyPrint
     try:
-        from weasyprint import HTML
+        from weasyprint import HTML, CSS
+        from io import BytesIO
         
-        html = HTML(string=html_string, base_url=request.build_absolute_uri())
-        response = HttpResponse(content_type='application/pdf')
+        pdf_file = BytesIO()
+        HTML(string=html_string).write_pdf(pdf_file)
+        pdf_file.seek(0)
         
-        filename = f'prevodka_{transfer.transfer_number}.pdf'
-        response['Content-Disposition'] = f'attachment; filename="{filename}"'
-        
-        html.write_pdf(response)
+        response = HttpResponse(pdf_file.read(), content_type='application/pdf')
+        response['Content-Disposition'] = f'inline; filename="odepsani_{transfer.pk}_{transfer.transfer_number}.pdf"'
         
         return response
     except ImportError:
-        messages.error(request, 'WeasyPrint není nainstalován. PDF export není dostupný.')
+        messages.error(request, 'WeasyPrint není nainstalován. PDF nelze vygenerovat.')
         return redirect('inventory:stock_transfer_detail', pk=pk)
     except Exception as e:
-        logger.error(f'Error generating PDF for transfer {pk}: {e}', exc_info=True)
+        logger.error(f'Error generating PDF: {e}', exc_info=True)
         messages.error(request, f'Chyba při generování PDF: {str(e)}')
         return redirect('inventory:stock_transfer_detail', pk=pk)
 
@@ -1988,3 +1989,236 @@ def stock_write_off_pdf(request, pk):
         messages.error(request, f'Chyba při generování PDF: {str(e)}')
         return redirect('inventory:stock_write_off_detail', pk=pk)
 
+
+# Supplier CSV Import (Makro)
+
+@login_required
+def supplier_csv_import_step1(request):
+    """Krok 1: Upload CSV souboru a výběr výchozího skladu"""
+    if request.method == 'POST':
+        csv_file = request.FILES.get('csv_file')
+        default_warehouse_id = request.POST.get('warehouse')
+        
+        if not csv_file or not default_warehouse_id:
+            messages.error(request, 'Musíte vybrat CSV soubor a výchozí sklad.')
+            return redirect('inventory:supplier_csv_import_step1')
+        
+        try:
+            # Parsování CSV
+            receipt_data = parse_supplier_csv(csv_file)
+            
+            # Uložení do session (konverze na JSON-serializovatelná data)
+            request.session['supplier_csv_receipt_data'] = {
+                'receipt_number': receipt_data['receipt_number'],
+                'receipt_date': receipt_data['receipt_date'].isoformat(),
+                'supplier': receipt_data['supplier'],
+                'items': [
+                    {
+                        'item_id': item['item_id'],
+                        'item_name': item['item_name'],
+                        'quantity': str(item['quantity']),
+                        'unit': item['unit'],
+                        'unit_mapped': item['unit_mapped'],
+                        'price_per_unit_net': str(item['price_per_unit_net']),
+                        'price_per_unit_gross': str(item['price_per_unit_gross']),
+                        'vat_rate': str(item['vat_rate']),
+                        'vat_amount': str(item['vat_amount']),
+                        'total_price': str(item['total_price']),
+                    }
+                    for item in receipt_data['items']
+                ]
+            }
+            request.session['supplier_csv_default_warehouse'] = default_warehouse_id
+            
+            messages.success(request, f'CSV načten: {len(receipt_data["items"])} položek')
+            return redirect('inventory:supplier_csv_import_step2')
+            
+        except Exception as e:
+            messages.error(request, f'Chyba při načítání CSV: {e}')
+    
+    warehouses = Warehouse.objects.select_related('canteen').all()
+    if not request.user.is_superuser:
+        try:
+            user_canteens = request.user.profile.canteens.all()
+            warehouses = warehouses.filter(canteen__in=user_canteens)
+        except ObjectDoesNotExist:
+            warehouses = Warehouse.objects.none()
+    return render(request, 'inventory/supplier_csv_import_step1.html', {
+        'warehouses': warehouses
+    })
+
+
+def _normalize_ingredient_name(name):
+    """
+    Normalizuje název suroviny pro lepší matching.
+    
+    Odstraní čísla, velikost balení (např. 40x, 24x), speciální znaky
+    a převede na malá písmena.
+    
+    Args:
+        name: Původní název suroviny
+    
+    Returns:
+        Normalizovaný název
+    """
+    import re
+    
+    # Převod na malá písmena
+    name = name.lower().strip()
+    
+    # Odstranění velikosti balení (40x, 24x, atd.)
+    name = re.sub(r'\s*\d+x\s*', ' ', name)
+    
+    # Odstranění číselných hodnot (51g, 80g, atd.)
+    name = re.sub(r'\s*\d+\s*(g|kg|ml|l|ks)?\s*', ' ', name)
+    
+    # Odstranění speciálních znaků a přebytečných mezer
+    name = re.sub(r'[^\w\s]', ' ', name)
+    name = re.sub(r'\s+', ' ', name).strip()
+    
+    return name
+
+
+@login_required
+def supplier_csv_import_step2(request):
+    """Krok 2: Preview, mapování surovin, editace jednotek a skladů"""
+    receipt_data = request.session.get('supplier_csv_receipt_data')
+    if not receipt_data:
+        messages.error(request, 'Session vypršela. Začněte znovu.')
+        return redirect('inventory:supplier_csv_import_step1')
+    
+    default_warehouse_id = int(request.session.get('supplier_csv_default_warehouse'))
+    warehouses = Warehouse.objects.all()
+    if not request.user.is_superuser:
+        try:
+            user_canteens = request.user.profile.canteens.all()
+            warehouses = warehouses.filter(canteen__in=user_canteens)
+        except ObjectDoesNotExist:
+            warehouses = Warehouse.objects.none()
+    all_ingredients = list(Ingredient.objects.all())
+    
+    # Automatické mapování surovin pomocí fuzzy matching
+    for item in receipt_data['items']:
+        best_match = None
+        best_ratio = 0
+        
+        # Normalizovaný název z CSV (odstraníme čísla a speciální znaky pro lepší matching)
+        csv_name_normalized = _normalize_ingredient_name(item['item_name'])
+        
+        for ingredient in all_ingredients:
+            # Normalizovaný název suroviny z DB
+            db_name_normalized = _normalize_ingredient_name(ingredient.name)
+            
+            # Nejprve zkusíme přesnou shodu normalizovaných názvů
+            if csv_name_normalized == db_name_normalized:
+                ratio = 1.0
+            else:
+                # Pokud není přesná shoda, použijeme fuzzy matching
+                ratio = SequenceMatcher(
+                    None,
+                    csv_name_normalized,
+                    db_name_normalized
+                ).ratio()
+            
+            if ratio > best_ratio:
+                best_ratio = ratio
+                best_match = ingredient
+        
+        # Pokud je shoda > 40%, navrhne me surovinu (nižší práh pro lepší matching)
+        if best_ratio > 0.4:
+            item['suggested_ingredient_id'] = best_match.id
+            item['suggested_ingredient_name'] = best_match.name
+            item['suggested_ingredient_unit'] = best_match.unit
+            item['match_ratio'] = round(best_ratio * 100)
+        else:
+            item['suggested_ingredient_id'] = None
+            item['suggested_ingredient_name'] = None
+            item['suggested_ingredient_unit'] = None
+            item['match_ratio'] = 0
+    
+    context = {
+        'receipt_data': receipt_data,
+        'warehouses': warehouses,
+        'default_warehouse_id': default_warehouse_id,
+        'all_ingredients': all_ingredients,
+    }
+    
+    return render(request, 'inventory/supplier_csv_import_step2.html', context)
+
+
+@login_required
+@transaction.atomic
+def supplier_csv_import_step3(request):
+    """Krok 3: Vytvoření GoodsReceipt s položkami"""
+    if request.method != 'POST':
+        return redirect('inventory:supplier_csv_import_step1')
+    
+    receipt_data = request.session.get('supplier_csv_receipt_data')
+    if not receipt_data:
+        messages.error(request, 'Session vypršela. Začněte znovu.')
+        return redirect('inventory:supplier_csv_import_step1')
+    
+    default_warehouse_id = request.session.get('supplier_csv_default_warehouse')
+    default_warehouse = Warehouse.objects.get(id=default_warehouse_id)
+    
+    # Kontrola oprávnění - přístup k jídelně skladu
+    if not user_can_access_canteen(request.user, default_warehouse.canteen):
+        messages.error(request, 'Nemáte oprávnění zapisovat do tohoto skladu.')
+        return redirect('inventory:supplier_csv_import_step1')
+    
+    # Vytvoření GoodsReceipt
+    goods_receipt = GoodsReceipt.objects.create(
+        warehouse=default_warehouse,
+        receipt_number=receipt_data['receipt_number'],
+        receipt_date=receipt_data['receipt_date'],
+        supplier=receipt_data['supplier'],
+        status=GoodsReceipt.Status.DRAFT,
+        created_by=request.user,
+        notes=f"Importováno z CSV (Makro)"
+    )
+    
+    # Zpracování položek
+    created_ingredients_count = 0
+    
+    for idx, item in enumerate(receipt_data['items']):
+        # Načtení dat z formuláře
+        create_new = request.POST.get(f'create_new_{idx}') == 'on'
+        
+        if create_new:
+            # Vytvoření nové suroviny
+            ingredient_name = request.POST.get(f'ingredient_name_{idx}', item['item_name'])
+            ingredient_unit = request.POST.get(f'ingredient_unit_{idx}', item['unit_mapped'])
+            
+            ingredient, created = Ingredient.objects.get_or_create(
+                name=ingredient_name,
+                defaults={
+                    'unit': ingredient_unit,
+                    'category_id': 1,  # Default category
+                }
+            )
+            if created:
+                created_ingredients_count += 1
+        else:
+            ingredient_id = request.POST.get(f'ingredient_{idx}')
+            if not ingredient_id:
+                messages.error(request, f'Položka {idx + 1}: Musíte vybrat surovinu nebo vytvořit novou.')
+                return redirect('inventory:supplier_csv_import_step2')
+            ingredient = Ingredient.objects.get(id=ingredient_id)
+        
+        # Získání skladu pro tuto položku
+        warehouse_id = request.POST.get(f'warehouse_{idx}', default_warehouse_id)
+        warehouse = Warehouse.objects.get(id=warehouse_id)
+        
+        # Vytvoření položky příjmu
+        GoodsReceiptItem.objects.create(
+            goods_receipt=goods_receipt,
+            ingredient=ingredient,
+            quantity=item['quantity'],
+            price_without_vat=item['price_per_unit_net'],
+            vat_rate=item['vat_rate'],
+            price=item['price_per_unit_gross'],
+            warehouse=warehouse,
+        )
+    
+    messages.success(request, f'Příjem vytvořen: {len(receipt_data["items"])} položek, {created_ingredients_count} nových surovin.')
+    return redirect('inventory:goods_receipt_detail', pk=goods_receipt.pk)
