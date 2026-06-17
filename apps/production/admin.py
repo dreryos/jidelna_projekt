@@ -251,4 +251,34 @@ class ProductionOrderIngredientOverrideAdmin(admin.ModelAdmin):
         }),
     )
 
-# admin.site.register(PickingList)
+@admin.register(PickingList)
+class PickingListAdmin(admin.ModelAdmin):
+    """Admin pro položky výdejek (PickingList)"""
+    list_display = ('production_order', 'ingredient', 'warehouse', 'quantity_planned', 'quantity_actual', 'status', 'document', 'is_customized')
+    list_filter = ('status', 'is_customized', 'warehouse', 'document')
+    search_fields = ('production_order__recipe__name', 'ingredient__name', 'warehouse__name')
+    autocomplete_fields = ['production_order', 'ingredient', 'warehouse', 'document']
+    
+    fieldsets = (
+        (None, {
+            'fields': ('production_order', 'document', 'ingredient', 'warehouse')
+        }),
+        ('Množství', {
+            'fields': ('quantity_planned', 'quantity_actual')
+        }),
+        ('Stav', {
+            'fields': ('status', 'is_customized')
+        }),
+    )
+
+    def has_add_permission(self, request):
+        # Položky výdejky se vytvářejí automaticky při generování výdejky nebo při editaci
+        return False
+    
+    def has_change_permission(self, request, obj=None):
+        # Umožnit úpravu skutečného množství a stavu
+        return True
+    
+    def has_delete_permission(self, request, obj=None):
+        # Odstranění položek by mělo být omezeno
+        return False
