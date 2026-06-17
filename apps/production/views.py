@@ -1218,6 +1218,18 @@ def picking_list_edit(request, document_id):
                     messages.error(request, 'Některý ze zadaných údajů (jídlo / surovina / sklad) nebyl nalezen.')
                     continue
                 
+                # Vytvoření override pro trvalé uložení přidané suroviny
+                from .models import ProductionOrderIngredientOverride
+                ProductionOrderIngredientOverride.objects.create(
+                    production_order=order_obj,
+                    ingredient=ingredient_obj,
+                    quantity_per_portion=None,  # pro přidané suroviny je None
+                    original_quantity=Decimal('0'),
+                    is_added=True,
+                    is_removed=False,
+                    notes=''
+                )
+                
                 PickingList.objects.create(
                     production_order=order_obj,
                     document=document,

@@ -91,20 +91,23 @@
         <table class="table table-sm table-borderless mb-0" style="font-size:0.85rem;">
           <tr>
             <td class="text-muted">Plánováno:</td>
-            <td class="text-end fw-semibold">{{ data.qty_planned }} kg</td>
+            <td class="text-end fw-semibold">{{ data.cost_planned }} Kč</td>
           </tr>
           <tr>
             <td class="text-muted">Skutečně:</td>
-            <td class="text-end fw-semibold">{{ data.qty_actual }} kg</td>
+            <td class="text-end fw-semibold">{{ data.cost_actual }} Kč</td>
+          </tr>
+          <tr>
+            <td class="text-muted">Průměrná cena porce:</td>
+            <td class="text-end fw-semibold">{{ data.avg_cost_per_portion }} Kč</td>
           </tr>
           <tr>
             <td class="text-muted">Odchylka:</td>
             <td class="text-end fw-semibold
-              {% if data.deviation > 0 %}text-danger
-              {% elif data.deviation < 0 %}text-success
+              {% if data.deviation_pct > 0 %}text-danger
+              {% elif data.deviation_pct < 0 %}text-success
               {% else %}text-secondary{% endif %}">
-              {% if data.deviation > 0 %}+{% endif %}{{ data.deviation }} kg
-              ({% if data.deviation_pct > 0 %}+{% endif %}{{ data.deviation_pct }} %)
+              {% if data.deviation_pct > 0 %}+{% endif %}{{ data.deviation_pct }} %
             </td>
           </tr>
         </table>
@@ -131,7 +134,11 @@
             <span class="text-muted">{{ doc_item.doc.date_from|date:"d.m.Y" }} – {{ doc_item.doc.date_to|date:"d.m.Y" }}</span>
           </div>
           <div class="text-end ms-2">
-            <span class="text-muted">{{ doc_item.qty_actual }} / {{ doc_item.qty_planned }} kg</span><br>
+            {% if doc_item.cost_actual %}
+            <span class="text-muted">{{ doc_item.cost_actual }} / {{ doc_item.cost_planned }} Kč</span><br>
+            {% else %}
+            <span class="text-muted">- / {{ doc_item.cost_planned }} Kč</span><br>
+            {% endif %}
             {% if doc_item.pending > 0 %}
             <span class="badge bg-warning text-dark" style="font-size:0.65rem;">{{ doc_item.pending }} čeká</span>
             {% else %}
@@ -162,8 +169,8 @@
           <th>Výdejka</th>
           <th>Jídelna</th>
           <th>Období</th>
-          <th class="text-center">Plánováno (kg)</th>
-          <th class="text-center">Skutečně (kg)</th>
+          <th class="text-center">Plánováno (Kč)</th>
+          <th class="text-center">Skutečně (Kč)</th>
           <th class="text-center">Stav</th>
         </tr>
       </thead>
@@ -175,8 +182,14 @@
           </td>
           <td>{{ doc_item.doc.canteen.name }}</td>
           <td>{{ doc_item.doc.date_from|date:"d.m.Y" }} – {{ doc_item.doc.date_to|date:"d.m.Y" }}</td>
-          <td class="text-center">{{ doc_item.qty_planned }}</td>
-          <td class="text-center">{{ doc_item.qty_actual }}</td>
+          <td class="text-center">{{ doc_item.cost_planned }} Kč</td>
+          <td class="text-center">
+            {% if doc_item.cost_actual %}
+            {{ doc_item.cost_actual }} Kč
+            {% else %}
+            -
+            {% endif %}
+          </td>
           <td class="text-center">
             {% if doc_item.pending > 0 %}
             <span class="badge bg-warning text-dark">{{ doc_item.pending }} čeká</span>
@@ -205,9 +218,9 @@
           <tr>
             <th>Kuchař</th>
             <th class="text-center">Výdejek</th>
-            <th class="text-center">Plánováno (kg)</th>
-            <th class="text-center">Skutečně (kg)</th>
-            <th class="text-center">Odchylka (kg)</th>
+            <th class="text-center">Plánováno (Kč)</th>
+            <th class="text-center">Skutečně (Kč)</th>
+            <th class="text-center">Prům. cena porce (Kč)</th>
             <th class="text-center">Odchylka (%)</th>
             <th class="text-center">Vydáno položek</th>
             <th class="text-center">Čeká položek</th>
@@ -225,14 +238,9 @@
               {{ data.label }}
             </td>
             <td class="text-center">{{ data.doc_count }}</td>
-            <td class="text-center">{{ data.qty_planned }}</td>
-            <td class="text-center">{{ data.qty_actual }}</td>
-            <td class="text-center
-              {% if data.deviation > 0 %}text-danger
-              {% elif data.deviation < 0 %}text-success
-              {% else %}text-secondary{% endif %}">
-              {% if data.deviation > 0 %}+{% endif %}{{ data.deviation }}
-            </td>
+            <td class="text-center">{{ data.cost_planned }} Kč</td>
+            <td class="text-center">{{ data.cost_actual }} Kč</td>
+            <td class="text-center">{{ data.avg_cost_per_portion }} Kč</td>
             <td class="text-center
               {% if data.deviation_pct > 0 %}text-danger
               {% elif data.deviation_pct < 0 %}text-success
