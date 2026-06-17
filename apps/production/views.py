@@ -1175,7 +1175,8 @@ def picking_list_edit(request, document_id):
                     parts = key.split('_')  # new, ingredient, order, {order_id}, {idx}
                     if len(parts) >= 5:
                         try:
-                            new_order_ids.add((int(parts[4]), int(parts[5])))
+                            # parts[3] = order_id, parts[4] = idx
+                            new_order_ids.add((int(parts[3]), int(parts[4])))
                         except (ValueError, IndexError):
                             pass
             
@@ -1224,7 +1225,7 @@ def picking_list_edit(request, document_id):
                     ingredient=ingredient_obj,
                     quantity_planned=quantity_new,
                     quantity_actual=quantity_new,
-                    status=PickingList.Status.PENDING,
+                    status=PickingList.Status.COMPLETED,
                 )
                 added_count += 1
             
