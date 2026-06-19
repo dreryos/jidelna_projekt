@@ -3,10 +3,12 @@ Management command pro generování chybějících PDF souborů výdejek.
 """
 
 import logging
+import os
 import time
 from datetime import datetime
 from django.core.management.base import BaseCommand
 from django.db.models import Q
+from django.conf import settings
 from apps.production.models import PickingListDocument
 from apps.production.utils import generate_picking_list_pdf_file
 
@@ -47,7 +49,9 @@ class Command(BaseCommand):
         include_archived = options['include_archived']
 
         # Setup logování do souboru
-        log_filename = f'logs/pdf_migration_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log'
+        logs_dir = settings.BASE_DIR / 'logs'
+        os.makedirs(logs_dir, exist_ok=True)
+        log_filename = logs_dir / f'pdf_migration_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log'
         file_handler = logging.FileHandler(log_filename)
         file_handler.setLevel(logging.INFO)
         formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
@@ -100,7 +104,6 @@ class Command(BaseCommand):
         # Zpracování
         success_count = 0
         error_count = 0
-        skipped_count = 0
         
         self.stdout.write('Zpracování...\n')
         start_time = time.time()
@@ -139,9 +142,6 @@ class Command(BaseCommand):
         
         if error_count > 0:
             self.stdout.write(self.style.ERROR(f'  ✗ Selhalo: {error_count}'))
-        
-        if skipped_count > 0:
-            self.stdout.write(self.style.WARNING(f'  ⊘ Přeskočeno: {skipped_count}'))
         
         avg_time = total_time / to_process if to_process > 0 else 0
         self.stdout.write(f'\nPrůměrný čas: {avg_time:.1f}s na dokument')

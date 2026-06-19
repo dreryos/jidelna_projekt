@@ -27,19 +27,21 @@ MEAL_TYPE_ORDER = {
 }
 
 
-def generate_picking_list_pdf_file(document, base_url='/'):
+def generate_picking_list_pdf_file(document, base_url='/', save=True):
     """
     Vygeneruje PDF soubor pro výdejku a uloží ho do document.pdf_file.
     
     Args:
         document: PickingListDocument instance
         base_url: Base URL pro WeasyPrint (default '/')
+        save: Pokud True, uloží PDF do document.pdf_file; pokud False, vrátí BytesIO objekt (default True)
     
     Returns:
-        bool: True pokud úspěch, False při chybě
+        bool: True při úspěchu (pokud save=True)
+        BytesIO: PDF soubor v paměti (pokud save=False)
     
     Raises:
-        Exception: Při kritických chybách (WeasyPrint missing, MemoryError)
+        Exception: Při jakékoliv chybě během generování (WeasyPrint missing, MemoryError, atd.)
     """
     try:
         gen_start = time.monotonic()
@@ -215,21 +217,33 @@ def generate_picking_list_pdf_file(document, base_url='/'):
         html.write_pdf(pdf_file)
         pdf_file.seek(0)
         
-        # Uložíme do FileField
-        filename = f"{document.name}_{document.canteen.id}_{timezone.now().strftime('%Y%m%d_%H%M%S')}.pdf"
-        document.pdf_file.save(filename, ContentFile(pdf_file.read()), save=False)
-        document.pdf_generated_at = timezone.now()
-        document.save(update_fields=['pdf_file', 'pdf_generated_at'])
+        if save:
+            # Uložíme do FileField
+            filename = f"{document.name}_{document.canteen.id}_{timezone.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+            document.pdf_file.save(filename, ContentFile(pdf_file.read()), save=False)
+            document.pdf_generated_at = timezone.now()
+            document.save(update_fields=['pdf_file', 'pdf_generated_at'])
 
-        total_time = time.monotonic() - gen_start
-        pdf_time = time.monotonic() - pdf_start
-        logger.info(
-            f"Picking list PDF file saved: document={document.id}, days={num_days}, "
-            f"meals={total_items}, ingredients={len(ingredient_totals)}, "
-            f"data={data_time:.2f}s, pdf={pdf_time:.2f}s, total={total_time:.2f}s"
-        )
-        
-        return True
+            total_time = time.monotonic() - gen_start
+            pdf_time = time.monotonic() - pdf_start
+            logger.info(
+                f"Picking list PDF file saved: document={document.id}, days={num_days}, "
+                f"meals={total_items}, ingredients={len(ingredient_totals)}, "
+                f"data={data_time:.2f}s, pdf={pdf_time:.2f}s, total={total_time:.2f}s"
+            )
+            
+            return True
+        else:
+            # Vrátíme BytesIO objekt pro on-the-fly servování
+            total_time = time.monotonic() - gen_start
+            pdf_time = time.monotonic() - pdf_start
+            logger.info(
+                f"Picking list PDF generated on-the-fly: document={document.id}, days={num_days}, "
+                f"meals={total_items}, ingredients={len(ingredient_totals)}, "
+                f"data={data_time:.2f}s, pdf={pdf_time:.2f}s, total={total_time:.2f}s"
+            )
+            
+            return pdf_file
         
     except MemoryError:
         logger.error(f"MemoryError generating picking list PDF: document={document.id}")
