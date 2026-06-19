@@ -29,7 +29,7 @@ MEAL_TYPE_ORDER = {
 from django.db import models
 from django.db.models import F, Sum, Prefetch, Q
 from django.db.models.query import QuerySet
-from django.http import HttpRequest, HttpResponse
+from django.http import HttpRequest, HttpResponse, FileResponse
 from django.core.exceptions import PermissionDenied, ObjectDoesNotExist
 from django.http import JsonResponse, Http404
 from django.db import transaction
