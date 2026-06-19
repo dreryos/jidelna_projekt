@@ -1490,7 +1490,7 @@ def _picking_pdf_response(document, file_obj, cache=True):
         f'attachment; filename="{document.name}_{document.canteen.name}.pdf"'
     )
     if cache:
-        response['Cache-Control'] = 'public, max-age=3600'
+        response['Cache-Control'] = 'private, max-age=3600'
     return response
 
 
@@ -1500,7 +1500,6 @@ def picking_list_pdf(request, document_id):
     View pro stažení PDF výdejky.
     Vrací pre-generovaný PDF soubor pokud existuje, jinak vygeneruje on-the-fly.
     """
-    import os
     from .models import PickingListDocument
     from .utils import generate_picking_list_pdf_file
 
@@ -1514,7 +1513,7 @@ def picking_list_pdf(request, document_id):
                 raise PermissionDenied("Nemáte oprávnění k této jídelně")
         
         # Pokud existuje pre-generovaný PDF soubor, vrátíme ho
-        if document.pdf_file and os.path.exists(document.pdf_file.path):
+        if document.pdf_file and document.pdf_file.storage.exists(document.pdf_file.name):
             logger.info(f"Serving pre-generated PDF for document {document_id}")
             return _picking_pdf_response(document, document.pdf_file.open('rb'))
         
@@ -1526,7 +1525,7 @@ def picking_list_pdf(request, document_id):
                 generate_picking_list_pdf_file(document, base_url=request.build_absolute_uri('/'))
                 document.refresh_from_db()
                 
-                if document.pdf_file and os.path.exists(document.pdf_file.path):
+                if document.pdf_file and document.pdf_file.storage.exists(document.pdf_file.name):
                     logger.info(f"Serving newly generated PDF for document {document_id}")
                     return _picking_pdf_response(document, document.pdf_file.open('rb'))
                 else:

@@ -137,14 +137,12 @@ def generate_picking_list_pdf_file(document, base_url='/', save=True):
                 ingredient_totals[key]['picking_items'].append(item)
 
                 # Současně plníme data pro denní přehled
-                total_info = ingredient_totals[key]
                 order_ingredients.append({
+                    'ingredient_id': item.ingredient_id,  # Pro pozdější lookup
                     'name': item.ingredient.name,
                     'quantity': item.quantity_planned,
                     'unit': item.ingredient.base_unit,
-                    'has_stock': total_info['has_stock'],
-                    'is_sufficient': total_info['is_sufficient'],
-                    'warehouses_info': total_info['warehouses_info'],
+                    'warehouses_info': ingredient_totals[key]['warehouses_info'],
                 })
 
             # Seřadíme suroviny abecedně
@@ -164,6 +162,15 @@ def generate_picking_list_pdf_file(document, base_url='/', save=True):
         # Aktualizace is_sufficient po finální agregaci
         for totals in ingredient_totals.values():
             totals['is_sufficient'] = totals['available_stock'] >= totals['planned']
+        
+        # Aktualizace flagů v daily_picking_data podle finálních hodnot z ingredient_totals
+        for date_meals in daily_picking_data.values():
+            for meal in date_meals:
+                for ing in meal['ingredients']:
+                    total_info = ingredient_totals.get(ing['ingredient_id'])
+                    if total_info:
+                        ing['has_stock'] = total_info['has_stock']
+                        ing['is_sufficient'] = total_info['is_sufficient']
         
         # Seřadíme dny a jídla
         sorted_daily_data = sorted(daily_picking_data.items())
