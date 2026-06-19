@@ -1319,7 +1319,7 @@ def inventory_verification_pdf(request, pk):
     try:
         from weasyprint import HTML
         
-        html = HTML(string=html_string, base_url=request.build_absolute_uri())
+        html = HTML(string=html_string, base_url=request.build_absolute_uri('/'))
         response = HttpResponse(content_type='application/pdf')
         
         filename = f'inventura_{verification.warehouse.name}_{verification.started_at.strftime("%Y%m%d") if verification.started_at else "koncept"}.pdf'

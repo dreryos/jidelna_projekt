@@ -1660,7 +1660,7 @@ def picking_list_pdf(request, document_id):
         html_string = render_to_string('production/picking_list_pdf.html', context)
 
         pdf_start = time.monotonic()
-        html = HTML(string=html_string, base_url=request.build_absolute_uri())
+        html = HTML(string=html_string, base_url=request.build_absolute_uri('/'))
         
         response = HttpResponse(content_type='application/pdf')
         response['Content-Disposition'] = f'attachment; filename="{document.name}_{document.canteen.name}.pdf"'
