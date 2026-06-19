@@ -913,6 +913,16 @@ def picking_list_generator(request):
                     item.document = picking_document
                     item.save(update_fields=['status', 'document'])
             
+            # Vygenerujeme PDF soubor a uložíme ho
+            try:
+                from .utils import generate_picking_list_pdf_file
+                generate_picking_list_pdf_file(picking_document, base_url=request.build_absolute_uri('/'))
+                logger.info(f"PDF file generated and saved for picking document {picking_document.id}")
+            except Exception as e:
+                # Pokud generování PDF selže, logujeme ale pokračujeme (PDF se vygeneruje on-demand později)
+                logger.error(f"Failed to generate PDF file for picking document {picking_document.id}: {e}")
+                messages.warning(request, 'Výdejka byla vytvořena, ale nepodařilo se vygenerovat PDF. Bude vygenerováno při prvním stažení.')
+            
             # Počítáme problematické položky
             missing_count = len(missing_ingredients)
             insufficient_count = len(insufficient_ingredients)
@@ -1476,13 +1486,14 @@ def picking_list_edit(request, document_id):
 @login_required
 def picking_list_pdf(request, document_id):
     """
-    View pro regeneraci PDF z existujícího dokumentu výdejky.
-    Optimalizováno pro velké výdejky (batch DB dotazy, single-pass agregace).
+    View pro stažení PDF výdejky.
+    Vrací pre-generovaný PDF soubor pokud existuje, jinak vygeneruje on-the-fly.
     """
     import time
+    import os
     from .models import PickingListDocument
-    from apps.inventory.models import StockItem
-    from django.template.loader import render_to_string
+    from django.http import FileResponse
+    from .utils import generate_picking_list_pdf_file
 
     try:
         document = PickingListDocument.objects.get(id=document_id)
@@ -1493,7 +1504,46 @@ def picking_list_pdf(request, document_id):
             if document.canteen not in profile.canteens.all():
                 raise PermissionDenied("Nemáte oprávnění k této jídelně")
         
+        # Pokud existuje pre-generovaný PDF soubor, vrátíme ho
+        if document.pdf_file and os.path.exists(document.pdf_file.path):
+            logger.info(f"Serving pre-generated PDF for document {document_id}")
+            response = FileResponse(
+                document.pdf_file.open('rb'),
+                content_type='application/pdf'
+            )
+            response['Content-Disposition'] = f'attachment; filename="{document.name}_{document.canteen.name}.pdf"'
+            response['Cache-Control'] = 'public, max-age=3600'  # Cache na 1 hodinu
+            return response
+        
+        # Fallback: vygenerujeme PDF on-the-fly
+        logger.info(f"PDF file not found for document {document_id}, generating on-the-fly")
+        
         gen_start = time.monotonic()
+        
+        # Pro archivované dokumenty vygenerujeme, ale neuložíme
+        should_save = not document.archived
+        
+        if should_save:
+            # Vygenerujeme a uložíme pro budoucí použití
+            try:
+                generate_picking_list_pdf_file(document, base_url=request.build_absolute_uri('/'))
+                # Znovu načteme dokument pro získání fresh PDF file
+                document.refresh_from_db()
+                
+                if document.pdf_file and os.path.exists(document.pdf_file.path):
+                    response = FileResponse(
+                        document.pdf_file.open('rb'),
+                        content_type='application/pdf'
+                    )
+                    response['Content-Disposition'] = f'attachment; filename="{document.name}_{document.canteen.name}.pdf"'
+                    return response
+            except Exception as e:
+                logger.error(f"Failed to generate and save PDF for document {document_id}: {e}")
+                # Pokračujeme k původní on-the-fly logice níže
+        
+        # On-the-fly generování pro archivované nebo při selhání uložení
+        from apps.inventory.models import StockItem
+        from django.template.loader import render_to_string
 
         # Načteme orders s Prefetch filtrovaným na tento dokument (eliminuje N+1 na picking_list_items)
         orders = ProductionOrder.objects.filter(
@@ -1729,6 +1779,19 @@ def archive_picking_list(request, document_id):
         # Archivace dokumentu
         document.archived = True
         document.archived_at = timezone.now()
+        
+        # Smažeme PDF soubor při archivaci (úspora místa na disku)
+        if document.pdf_file:
+            try:
+                document.pdf_file.delete(save=False)
+                logger.info(f"Deleted PDF file for archived document {document_id}")
+            except FileNotFoundError:
+                # Soubor už neexistuje, to je v pořádku
+                logger.warning(f"PDF file not found when archiving document {document_id}")
+            except Exception as e:
+                # Logujeme chybu, ale pokračujeme s archivací
+                logger.error(f"Error deleting PDF file for document {document_id}: {e}")
+        
         document.save()
         
         return JsonResponse({

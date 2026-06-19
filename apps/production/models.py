@@ -729,6 +729,19 @@ class PickingListDocument(models.Model):
     )
     archived = models.BooleanField(default=False, verbose_name="Archivováno")
     archived_at = models.DateTimeField(null=True, blank=True, verbose_name="Archivováno dne")
+    pdf_file = models.FileField(
+        upload_to='picking_lists/pdf/',
+        null=True,
+        blank=True,
+        verbose_name="PDF soubor",
+        help_text="Pre-vygenerovaný PDF soubor výdejky"
+    )
+    pdf_generated_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="PDF vygenerováno",
+        help_text="Časová značka posledního vygenerování PDF"
+    )
     
     def can_be_archived(self):
         """Kontroluje, zda mohou být všechny položky archivovány (všechny mají status COMPLETED)"""
