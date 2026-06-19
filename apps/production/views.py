@@ -1087,6 +1087,14 @@ def picking_list_edit(request, document_id):
                 ).select_related('ingredient', 'warehouse')
             )
             picking_items_map = {item.id: item for item in picking_items_fresh}
+            
+            # Debug: Ověříme, že žádná položka v mapě nemá production_order=None
+            for item in picking_items_map.values():
+                if item.production_order is None:
+                    logger.error(
+                        f"CRITICAL: Item {item.id} in picking_items_map has production_order=None! "
+                        f"This should never happen. Document={document_id}"
+                    )
 
             qty_keys_in_post = [k for k in request.POST.keys() if k.startswith('quantity_actual_item_')]
             status_keys_in_post = [k for k in request.POST.keys() if k.startswith('status_item_')]
@@ -1306,6 +1314,23 @@ def picking_list_edit(request, document_id):
             
             if added_count:
                 messages.success(request, f'Přidáno {added_count} nových položek.')
+
+            # Debug: Logujeme stav položek bez production_order
+            items_without_order_before = list(
+                PickingList.objects.filter(
+                    document=document,
+                    production_order__isnull=True
+                ).values('id', 'ingredient__name', 'status')
+            )
+            if items_without_order_before:
+                logger.info(
+                    f"Items without production_order for document {document_id}: {items_without_order_before}"
+                )
+
+            # Přepočítáme statistiky včetně položek mimo jídla
+            all_items_stats = PickingList.objects.filter(document=document).values_list('status', flat=True)
+            completed_count_after_save = sum(1 for s in all_items_stats if s == PickingList.Status.COMPLETED)
+            pending_count_after_save = sum(1 for s in all_items_stats if s == PickingList.Status.PENDING)
 
             logger.info(
                 "picking_list_edit POST summary: document_id=%s user_id=%s processed=%s updated=%s added=%s completed=%s pending=%s missing_quantity_fields=%s item_validation_errors=%s",
