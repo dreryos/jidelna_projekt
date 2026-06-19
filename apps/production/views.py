@@ -1079,8 +1079,12 @@ def picking_list_edit(request, document_id):
             completed_count_after_save = 0
             pending_count_after_save = 0
             # Re-fetch picking items fresh (nekombinujeme s pre-evaluovaným QS z locked check)
+            # Načteme pouze položky s production_order (položky mimo jídla se needitují v této smyčce)
             picking_items_fresh = list(
-                PickingList.objects.filter(document=document).select_related('ingredient', 'warehouse')
+                PickingList.objects.filter(
+                    document=document,
+                    production_order__isnull=False
+                ).select_related('ingredient', 'warehouse')
             )
             picking_items_map = {item.id: item for item in picking_items_fresh}
 

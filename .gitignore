@@ -137,3 +137,4 @@ cython_debug/
 AIprompts.md
 .github/*
 /backups/*
+/picking_lists/*
