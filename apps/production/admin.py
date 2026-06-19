@@ -164,15 +164,30 @@ class ProductionOrderAdmin(admin.ModelAdmin):
 
 @admin.register(PickingListDocument)
 class PickingListDocumentAdmin(admin.ModelAdmin):
-    list_display = ('name', 'canteen', 'date_from', 'date_to', 'created_at', 'created_by')
-    list_filter = ('canteen', 'date_from', 'created_at')
+    list_display = ('name', 'canteen', 'date_from', 'date_to', 'created_at', 'created_by', 'has_pdf', 'archived')
+    list_filter = ('canteen', 'date_from', 'created_at', 'archived')
     search_fields = ('name', 'canteen__name')
-    readonly_fields = ('created_at', 'created_by')
+    readonly_fields = ('created_at', 'created_by', 'pdf_file', 'pdf_generated_at', 'archived_at')
     autocomplete_fields = ['canteen']
+    
+    def has_pdf(self, obj):
+        """Indikátor existence PDF souboru"""
+        if obj.pdf_file:
+            return format_html('<span style="color: green;">✓</span>')
+        return format_html('<span style="color: red;">✗</span>')
+    has_pdf.short_description = 'PDF'
     
     fieldsets = (
         (None, {
             'fields': ('name', 'canteen', 'date_from', 'date_to', 'cook')
+        }),
+        ('PDF Soubor', {
+            'fields': ('pdf_file', 'pdf_generated_at'),
+            'classes': ('collapse',)
+        }),
+        ('Archivace', {
+            'fields': ('archived', 'archived_at'),
+            'classes': ('collapse',)
         }),
         ('Metadata', {
             'fields': ('created_at', 'created_by'),

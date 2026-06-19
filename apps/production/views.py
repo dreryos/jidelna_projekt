@@ -913,6 +913,16 @@ def picking_list_generator(request):
                     item.document = picking_document
                     item.save(update_fields=['status', 'document'])
             
+            # Vygenerujeme PDF soubor a uložíme ho
+            try:
+                from .utils import generate_picking_list_pdf_file
+                generate_picking_list_pdf_file(picking_document, base_url=request.build_absolute_uri('/'))
+                logger.info(f"PDF file generated and saved for picking document {picking_document.id}")
+            except Exception as e:
+                # Pokud generování PDF selže, logujeme ale pokračujeme (PDF se vygeneruje on-demand později)
+                logger.error(f"Failed to generate PDF file for picking document {picking_document.id}: {e}")
+                messages.warning(request, 'Výdejka byla vytvořena, ale nepodařilo se vygenerovat PDF. Bude vygenerováno při prvním stažení.')
+            
             # Počítáme problematické položky
             missing_count = len(missing_ingredients)
             insufficient_count = len(insufficient_ingredients)
@@ -1473,16 +1483,25 @@ def picking_list_edit(request, document_id):
         return redirect('production:picking_list_generator')
 
 
+def _picking_pdf_response(document, file_obj, cache=True):
+    """Helper pro vytvoření FileResponse s PDF souborem výdejky."""
+    response = FileResponse(file_obj, content_type='application/pdf')
+    response['Content-Disposition'] = (
+        f'attachment; filename="{document.name}_{document.canteen.name}.pdf"'
+    )
+    if cache:
+        response['Cache-Control'] = 'private, max-age=3600'
+    return response
+
+
 @login_required
 def picking_list_pdf(request, document_id):
     """
-    View pro regeneraci PDF z existujícího dokumentu výdejky.
-    Optimalizováno pro velké výdejky (batch DB dotazy, single-pass agregace).
+    View pro stažení PDF výdejky.
+    Vrací pre-generovaný PDF soubor pokud existuje, jinak vygeneruje on-the-fly.
     """
-    import time
     from .models import PickingListDocument
-    from apps.inventory.models import StockItem
-    from django.template.loader import render_to_string
+    from .utils import generate_picking_list_pdf_file
 
     try:
         document = PickingListDocument.objects.get(id=document_id)
@@ -1493,188 +1512,36 @@ def picking_list_pdf(request, document_id):
             if document.canteen not in profile.canteens.all():
                 raise PermissionDenied("Nemáte oprávnění k této jídelně")
         
-        gen_start = time.monotonic()
-
-        # Načteme orders s Prefetch filtrovaným na tento dokument (eliminuje N+1 na picking_list_items)
-        orders = ProductionOrder.objects.filter(
-            picking_list_items__document=document
-        ).distinct().select_related(
-            'recipe', 'canteen', 'menu_plan'
-        ).prefetch_related(
-            'portion_variants',
-            Prefetch(
-                'picking_list_items',
-                queryset=PickingList.objects.filter(document=document).select_related('ingredient'),
-                to_attr='document_items'
-            )
-        ).order_by('date', 'recipe__name')
-
-        # Sesbíráme všechny unikátní ingredient IDs jedním průchodem
-        all_ingredient_ids = set()
-        for order in orders:
-            for item in order.document_items:
-                all_ingredient_ids.add(item.ingredient_id)
-
-        # Batch načtení skladových zásob — JEDEN dotaz místo N dotazů
-        stock_by_ingredient = defaultdict(list)
-        if all_ingredient_ids:
-            stock_qs = StockItem.objects.filter(
-                ingredient_id__in=all_ingredient_ids,
-                warehouse__canteen=document.canteen
-            ).select_related('warehouse').annotate(
-                available=F('quantity') - F('quantity_blocked')
-            )
-            for si in stock_qs:
-                stock_by_ingredient[si.ingredient_id].append(si)
-
-        # Pomocná funkce pro zpracování skladových zásob z pre-loaded dat
-        def _get_stock_info(ingredient_id):
-            stock_items = stock_by_ingredient.get(ingredient_id, [])
-            available_stock = sum(
-                si.available for si in stock_items if si.available > 0
-            ) or Decimal('0')
-            warehouses_with_stock = []
-            for si in stock_items:
-                if si.quantity > 0 or si.quantity_blocked > 0:
-                    available = si.quantity - si.quantity_blocked
-                    warehouses_with_stock.append(
-                        (si.warehouse.name, si.quantity, si.quantity_blocked, available)
-                    )
-            return available_stock, warehouses_with_stock
-
-        # Single-pass: agregace ingredient_totals + daily_picking_data současně
-        ingredient_totals = {}
-        daily_picking_data = {}
-
-        for order in orders:
-            order_ingredients = []
-
-            for item in order.document_items:
-                key = item.ingredient_id
-
-                # Agregace pro celkový přehled
-                if key in ingredient_totals:
-                    ingredient_totals[key]['planned'] += item.quantity_planned
-                    ingredient_totals[key]['orders'].append({
-                        'date': order.date,
-                        'recipe': order.recipe.name,
-                        'portions': order.total_portions,
-                        'effective_portions': order.total_effective_portions,
-                        'quantity': item.quantity_planned
-                    })
+        # Pokud existuje pre-generovaný PDF soubor, vrátíme ho
+        if document.pdf_file and document.pdf_file.storage.exists(document.pdf_file.name):
+            logger.info(f"Serving pre-generated PDF for document {document_id}")
+            return _picking_pdf_response(document, document.pdf_file.open('rb'))
+        
+        # Pokusíme se vygenerovat a uložit (pokud není archivováno)
+        should_save = not document.archived
+        
+        if should_save:
+            try:
+                generate_picking_list_pdf_file(document, base_url=request.build_absolute_uri('/'))
+                document.refresh_from_db()
+                
+                if document.pdf_file and document.pdf_file.storage.exists(document.pdf_file.name):
+                    logger.info(f"Serving newly generated PDF for document {document_id}")
+                    return _picking_pdf_response(document, document.pdf_file.open('rb'))
                 else:
-                    available_stock, warehouses_with_stock = _get_stock_info(key)
-
-                    ingredient_totals[key] = {
-                        'ingredient': item.ingredient,
-                        'planned': item.quantity_planned,
-                        'unit': item.ingredient.base_unit,
-                        'available_stock': available_stock,
-                        'has_stock': available_stock > 0,
-                        'is_sufficient': available_stock >= item.quantity_planned,
-                        'warehouses_info': warehouses_with_stock,
-                        'orders': [{
-                            'date': order.date,
-                            'recipe': order.recipe.name,
-                            'portions': order.total_portions,
-                            'effective_portions': order.total_effective_portions,
-                            'quantity': item.quantity_planned
-                        }],
-                        'picking_items': []
-                    }
-
-                ingredient_totals[key]['picking_items'].append(item)
-
-                # Současně plníme data pro denní přehled
-                total_info = ingredient_totals[key]
-                order_ingredients.append({
-                    'name': item.ingredient.name,
-                    'quantity': item.quantity_planned,
-                    'unit': item.ingredient.base_unit,
-                    'has_stock': total_info['has_stock'],
-                    'is_sufficient': total_info['is_sufficient'],
-                    'warehouses_info': total_info['warehouses_info'],
-                })
-
-            # Seřadíme suroviny abecedně
-            order_ingredients.sort(key=lambda x: x['name'])
-
-            if order.date not in daily_picking_data:
-                daily_picking_data[order.date] = []
-
-            daily_picking_data[order.date].append({
-                'recipe_name': order.recipe.name,
-                'meal_type': order.meal_type,
-                'portions': order.total_portions,
-                'ingredients': order_ingredients,
-                'is_customized': order.has_overrides
-            })
-
-        # Aktualizace is_sufficient po finální agregaci planned množství
-        for totals in ingredient_totals.values():
-            totals['is_sufficient'] = totals['available_stock'] >= totals['planned']
+                    logger.warning(f"PDF file not present after generation for document {document_id}")
+            except Exception as e:
+                logger.error(f"Failed to generate and save PDF for document {document_id}: {e}")
+                # fall through to on-the-fly path
         
-        # Seřadíme dny a jídla v každém dni podle typu jídla
-        sorted_daily_data = sorted(daily_picking_data.items())
-        sorted_daily_data = [
-            (d, sorted(meals, key=lambda m: MEAL_TYPE_ORDER.get(m.get('meal_type', ''), 99)))
-            for d, meals in sorted_daily_data
-        ]
-        
-        # Seřadíme ingredience abecedně
-        sorted_ingredients = sorted(ingredient_totals.values(), key=lambda x: x['ingredient'].name)
-        
-        # Počítáme problematické položky
-        missing_count = sum(1 for i in ingredient_totals.values() if not i['has_stock'])
-        insufficient_count = sum(1 for i in ingredient_totals.values() if i['has_stock'] and not i['is_sufficient'])
-
-        num_days = len(sorted_daily_data)
-        total_items = sum(len(meals) for _, meals in sorted_daily_data)
-        
-        context = {
-            'canteen': document.canteen,
-            'date_from': document.date_from,
-            'date_to': document.date_to,
-            'orders': orders,
-            'ingredient_totals': sorted_ingredients,
-            'daily_picking_data': sorted_daily_data,
-            'total_orders': orders.count(),
-            'generated_at': timezone.now(),
-            'missing_count': missing_count,
-            'insufficient_count': insufficient_count,
-            'large_document': total_items > 40,
-        }
-
-        data_time = time.monotonic() - gen_start
-        
-        # Vygenerujeme PDF
-        try:
-            from weasyprint import HTML
-        except OSError as e:
-            if "libgobject" in str(e) or "cannot load library" in str(e):
-                messages.error(request, "Chyba: V systému chybí knihovny GTK3 potřebné pro generování PDF (WeasyPrint). Prosím nainstalujte GTK3 Runtime.")
-                logger.error(f"WeasyPrint GTK3 libraries missing: {e}")
-                return redirect('production:picking_list_generator')
-            raise e
-
-        html_string = render_to_string('production/picking_list_pdf.html', context)
-
-        pdf_start = time.monotonic()
-        html = HTML(string=html_string, base_url=request.build_absolute_uri('/'))
-        
-        response = HttpResponse(content_type='application/pdf')
-        response['Content-Disposition'] = f'attachment; filename="{document.name}_{document.canteen.name}.pdf"'
-        html.write_pdf(response)
-
-        total_time = time.monotonic() - gen_start
-        pdf_time = time.monotonic() - pdf_start
-        logger.info(
-            f"Picking list PDF generated: document={document_id}, days={num_days}, "
-            f"meals={total_items}, ingredients={len(ingredient_totals)}, "
-            f"data={data_time:.2f}s, pdf={pdf_time:.2f}s, total={total_time:.2f}s"
+        # Fallback: on-the-fly generování (pro archivované nebo při selhání uložení)
+        logger.info(f"Generating on-the-fly PDF for document {document_id}")
+        pdf_fileobj = generate_picking_list_pdf_file(
+            document,
+            base_url=request.build_absolute_uri('/'),
+            save=False,
         )
-        
-        return response
+        return _picking_pdf_response(document, pdf_fileobj, cache=False)
         
     except PickingListDocument.DoesNotExist:
         messages.error(request, 'Dokument výdejky neexistuje.')
@@ -1729,6 +1596,22 @@ def archive_picking_list(request, document_id):
         # Archivace dokumentu
         document.archived = True
         document.archived_at = timezone.now()
+        
+        # Smažeme PDF soubor při archivaci (úspora místa na disku)
+        if document.pdf_file:
+            try:
+                document.pdf_file.delete(save=False)
+                logger.info(f"Deleted PDF file for archived document {document_id}")
+            except FileNotFoundError:
+                # Soubor už neexistuje, to je v pořádku
+                logger.warning(f"PDF file not found when archiving document {document_id}")
+            except Exception as e:
+                # Logujeme chybu, ale pokračujeme s archivací
+                logger.error(f"Error deleting PDF file for document {document_id}: {e}")
+        
+        # Vymažeme i timestamp pro konzistenci stavu
+        document.pdf_generated_at = None
+        
         document.save()
         
         return JsonResponse({
