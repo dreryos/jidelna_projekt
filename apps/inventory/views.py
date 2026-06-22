@@ -895,25 +895,34 @@ def bidfood_xml_import_step2(request):
             warehouses = Warehouse.objects.none()
     all_ingredients = list(Ingredient.objects.all())
     
-    # Automatické mapování surovin pomocí fuzzy matching
+    # Automatické mapování surovin pomocí pokročilého fuzzy matching
     for item in receipt_data['items']:
         best_match = None
         best_ratio = 0
         
+        # Normalizovaný název z XML (odstraníme čísla a speciální znaky pro lepší matching)
+        xml_name_normalized = _normalize_ingredient_name(item['item_name'])
+        
         for ingredient in all_ingredients:
-            # Porovnání názvu z XML s názvem suroviny
-            ratio = SequenceMatcher(
-                None,
-                item['item_name'].lower().strip(),
-                ingredient.name.lower().strip()
-            ).ratio()
+            # Normalizovaný název suroviny z DB
+            db_name_normalized = _normalize_ingredient_name(ingredient.name)
+            
+            # Nejprve zkusíme přesnou shodu normalizovaných názvů
+            if xml_name_normalized == db_name_normalized:
+                ratio = 1.0
+            else:
+                # Použijeme pokročilý matching s kontrolou společných slov
+                ratio = _calculate_ingredient_similarity(
+                    xml_name_normalized,
+                    db_name_normalized
+                )
             
             if ratio > best_ratio:
                 best_ratio = ratio
                 best_match = ingredient
         
-        # Pokud je shoda > 60%, navrhne me surovinu
-        if best_ratio > 0.6:
+        # Pokud je shoda > 40%, navrhne me surovinu
+        if best_ratio > 0.4:
             item['suggested_ingredient_id'] = best_match.id
             item['suggested_ingredient_name'] = best_match.name
             item['suggested_ingredient_unit'] = best_match.unit
@@ -2079,6 +2088,65 @@ def _normalize_ingredient_name(name):
     return name
 
 
+def _calculate_ingredient_similarity(name1, name2):
+    """
+    Vypočítá podobnost mezi dvěma názvy surovin s pokročilou logikou.
+    
+    Kombinuje:
+    - Token-based matching (společná celá slova)
+    - Character-based matching (SequenceMatcher)
+    - Kontrolu prvního slova (klíčová kategorie)
+    
+    Args:
+        name1: První název (normalizovaný)
+        name2: Druhý název (normalizovaný)
+    
+    Returns:
+        float: Skóre podobnosti 0.0 - 1.0
+    """
+    # Rozdělení na slova
+    tokens1 = set(name1.split())
+    tokens2 = set(name2.split())
+    
+    # Kontrola minimální délky slov (ignorovat "a", "s", "z", atd.)
+    tokens1 = {t for t in tokens1 if len(t) >= 3}
+    tokens2 = {t for t in tokens2 if len(t) >= 3}
+    
+    # Pokud nemáme dostatečně dlouhá slova, fallback na character matching
+    if not tokens1 or not tokens2:
+        return SequenceMatcher(None, name1, name2).ratio()
+    
+    # Token-based similarity (Jaccard index)
+    common_tokens = tokens1 & tokens2
+    all_tokens = tokens1 | tokens2
+    token_similarity = len(common_tokens) / len(all_tokens) if all_tokens else 0
+    
+    # KRITICKÁ KONTROLA: Musí existovat alespoň jedno společné slovo
+    if not common_tokens:
+        # Žádné společné slovo = maximálně 40% (nikdy nenašeptá)
+        return min(0.4, SequenceMatcher(None, name1, name2).ratio())
+    
+    # Bonus pokud jeden název je podmnožina druhého (např. "halali" v "hamé halali")
+    subset_bonus = 0
+    if tokens1.issubset(tokens2) or tokens2.issubset(tokens1):
+        subset_bonus = 0.15
+    
+    # Character-based similarity
+    char_similarity = SequenceMatcher(None, name1, name2).ratio()
+    
+    # Bonus za shodu prvního slova (hlavní kategorie)
+    first_word_bonus = 0
+    words1 = name1.split()
+    words2 = name2.split()
+    if words1 and words2 and words1[0] == words2[0]:
+        first_word_bonus = 0.15
+    
+    # Kombinované skóre: 45% token + 35% character + 15% first word + 15% subset
+    final_score = (0.45 * token_similarity) + (0.35 * char_similarity) + first_word_bonus + subset_bonus
+    
+    return min(1.0, final_score)
+
+
 @login_required
 def supplier_csv_import_step2(request):
     """Krok 2: Preview, mapování surovin, editace jednotek a skladů"""
@@ -2097,7 +2165,7 @@ def supplier_csv_import_step2(request):
             warehouses = Warehouse.objects.none()
     all_ingredients = list(Ingredient.objects.all())
     
-    # Automatické mapování surovin pomocí fuzzy matching
+    # Automatické mapování surovin pomocí pokročilého fuzzy matching
     for item in receipt_data['items']:
         best_match = None
         best_ratio = 0
@@ -2113,18 +2181,17 @@ def supplier_csv_import_step2(request):
             if csv_name_normalized == db_name_normalized:
                 ratio = 1.0
             else:
-                # Pokud není přesná shoda, použijeme fuzzy matching
-                ratio = SequenceMatcher(
-                    None,
+                # Použijeme pokročilý matching s kontrolou společných slov
+                ratio = _calculate_ingredient_similarity(
                     csv_name_normalized,
                     db_name_normalized
-                ).ratio()
+                )
             
             if ratio > best_ratio:
                 best_ratio = ratio
                 best_match = ingredient
         
-        # Pokud je shoda > 40%, navrhne me surovinu (nižší práh pro lepší matching)
+        # Pokud je shoda > 40%, navrhne me surovinu
         if best_ratio > 0.4:
             item['suggested_ingredient_id'] = best_match.id
             item['suggested_ingredient_name'] = best_match.name

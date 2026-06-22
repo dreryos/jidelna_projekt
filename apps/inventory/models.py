@@ -740,20 +740,23 @@ class InventoryVerification(models.Model):
         if self.status != self.Status.DRAFT:
             raise ValidationError("Inventuru lze zahájit pouze ve stavu Koncept")
         
-        # Kontrola zda sklad není již zamčen
-        if self.warehouse.is_locked:
-            locked_by = self.warehouse.locked_by_inventory
-            raise ValidationError(
-                f"Sklad je již uzamčen inventurou zahájenou "
-                f"{locked_by.started_by.get_full_name() or locked_by.started_by.username} "
-                f"dne {locked_by.started_at.strftime('%d.%m.%Y %H:%M')}"
-            )
-        
         with transaction.atomic():
+            # Zamknout řádek skladu na úrovni DB pro prevenci race condition
+            warehouse = Warehouse.objects.select_for_update().get(pk=self.warehouse_id)
+            
+            # Kontrola zda sklad není již zamčen
+            if warehouse.is_locked:
+                locked_by = warehouse.locked_by_inventory
+                raise ValidationError(
+                    f"Sklad je již uzamčen inventurou zahájenou "
+                    f"{locked_by.started_by.get_full_name() or locked_by.started_by.username} "
+                    f"dne {locked_by.started_at.strftime('%d.%m.%Y %H:%M')}"
+                )
+            
             # Zamknout sklad
-            self.warehouse.is_locked = True
-            self.warehouse.locked_by_inventory = self
-            self.warehouse.save(update_fields=['is_locked', 'locked_by_inventory'])
+            warehouse.is_locked = True
+            warehouse.locked_by_inventory = self
+            warehouse.save(update_fields=['is_locked', 'locked_by_inventory'])
             
             # Nastavit stav a audit pole
             self.status = self.Status.IN_PROGRESS
@@ -762,7 +765,7 @@ class InventoryVerification(models.Model):
             self.save()
             
             # Vytvořit položky pro všechny existující StockItem
-            stock_items = StockItem.objects.filter(warehouse=self.warehouse).select_related('ingredient')
+            stock_items = StockItem.objects.filter(warehouse=warehouse).select_related('ingredient')
             for stock_item in stock_items:
                 InventoryVerificationItem.objects.create(
                     verification=self,
@@ -774,7 +777,7 @@ class InventoryVerification(models.Model):
             # Logování
             logger.info(
                 f"Inventory verification {self.id} STARTED by user {user.id} ({user.username}) "
-                f"for warehouse {self.warehouse.id} ({self.warehouse.name}) at {self.started_at}. "
+                f"for warehouse {warehouse.id} ({warehouse.name}) at {self.started_at}. "
                 f"Items to verify: {stock_items.count()}"
             )
     
@@ -790,6 +793,15 @@ class InventoryVerification(models.Model):
         """
         if self.status != self.Status.IN_PROGRESS:
             raise ValidationError("Dokončit lze pouze probíhající inventuru")
+        
+        # Validace - všechny položky musí být spočítány
+        uncounted_items = self.items.filter(counted_quantity__isnull=True)
+        if uncounted_items.exists():
+            uncounted_count = uncounted_items.count()
+            raise ValidationError(
+                f"Nelze dokončit inventuru. {uncounted_count} položek "
+                f"nemá zadané spočítané množství."
+            )
         
         with transaction.atomic():
             items_updated = 0
@@ -831,7 +843,7 @@ class InventoryVerification(models.Model):
                 else:
                     # Aktualizace existující položky
                     try:
-                        stock_item = StockItem.objects.get(
+                        stock_item = StockItem.objects.select_for_update().get(
                             ingredient=item.ingredient,
                             warehouse=self.warehouse
                         )
@@ -880,21 +892,22 @@ class InventoryVerification(models.Model):
     def cancel(self, user):
         """
         Zruší probíhající inventuru - odemkne sklad bez aktualizace množství.
-        Může zrušit pouze uživatel, který inventuru zahájil.
+        Může zrušit pouze uživatel, který inventuru zahájil, nebo superuser.
         
         Args:
             user: User objekt, který inventuru ruší
             
         Raises:
-            ValidationError: Pokud inventura není ve stavu IN_PROGRESS nebo user není started_by
+            ValidationError: Pokud inventura není ve stavu IN_PROGRESS nebo user není started_by/superuser
         """
         if self.status != self.Status.IN_PROGRESS:
             raise ValidationError("Zrušit lze pouze probíhající inventuru")
         
-        if self.started_by != user:
+        if self.started_by != user and not user.is_superuser:
             raise ValidationError(
                 f"Inventuru může zrušit pouze uživatel, který ji zahájil "
-                f"({self.started_by.get_full_name() or self.started_by.username})"
+                f"({self.started_by.get_full_name() or self.started_by.username}) "
+                f"nebo administrátor"
             )
         
         with transaction.atomic():
