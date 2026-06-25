@@ -1043,40 +1043,60 @@ def picking_list_edit(request, document_id):
             if document.canteen not in profile.canteens.all():
                 raise PermissionDenied("Nemáte oprávnění k této jídelně")
         
+        # Inicializace readonly režimu
+        readonly_mode = False
+        readonly_reason = ''
+        
+        # Kontrola zda dokument není archivován
+        if document.archived:
+            logger.info(
+                "picking_list_edit archived document view: document_id=%s user_id=%s",
+                document_id,
+                request.user.id,
+            )
+            readonly_mode = True
+            readonly_reason = 'Dokument je archivován.'
+        
         # Načteme všechny picking list items tohoto dokumentu
         picking_items = PickingList.objects.filter(document=document).select_related(
             'ingredient', 'production_order__recipe', 'warehouse'
         ).order_by('ingredient__name')
         
-        # Kontrola zda některý sklad není uzamčen
-        locked_warehouses = set()
-        for item in picking_items:
-            if item.warehouse and item.warehouse.is_locked:
-                locked_warehouses.add(item.warehouse)
-        
-        if locked_warehouses:
-            logger.warning(
-                "picking_list_edit blocked by locked warehouses: document_id=%s user_id=%s locked_count=%s",
-                document_id,
-                request.user.id,
-                len(locked_warehouses),
-            )
-            for warehouse in locked_warehouses:
-                messages.error(
-                    request,
-                    f"Sklad '{warehouse.name}' je uzamčen kvůli probíhající inventuře "
-                    f"zahájené {warehouse.locked_by_inventory.started_by.get_full_name() or warehouse.locked_by_inventory.started_by.username} "
-                    f"dne {warehouse.locked_by_inventory.started_at.strftime('%d.%m.%Y %H:%M')}. "
-                    f"Nelze editovat výdejky na uzamčených skladech."
+        # Kontrola zda některý sklad není uzamčen (jen pro nearchivované dokumenty)
+        if not readonly_mode:
+            locked_warehouses = set()
+            for item in picking_items:
+                if item.warehouse and item.warehouse.is_locked:
+                    locked_warehouses.add(item.warehouse)
+            
+            if locked_warehouses:
+                logger.warning(
+                    "picking_list_edit blocked by locked warehouses: document_id=%s user_id=%s locked_count=%s",
+                    document_id,
+                    request.user.id,
+                    len(locked_warehouses),
                 )
-            # Zobrazíme detail, ale bez možnosti editace
-            context = {
-                'document': document,
-                'locked': True,
-            }
-            return render(request, 'production/picking_list_edit.html', context)
+                for warehouse in locked_warehouses:
+                    messages.error(
+                        request,
+                        f"Sklad '{warehouse.name}' je uzamčen kvůli probíhající inventuře "
+                        f"zahájené {warehouse.locked_by_inventory.started_by.get_full_name() or warehouse.locked_by_inventory.started_by.username} "
+                        f"dne {warehouse.locked_by_inventory.started_at.strftime('%d.%m.%Y %H:%M')}. "
+                        f"Nelze editovat výdejky na uzamčených skladech."
+                    )
+                readonly_mode = True
+                readonly_reason = 'Některý sklad je uzamčen kvůli probíhající inventuře.'
         
         if request.method == 'POST':
+            # Bezpečnostní kontrola - readonly dokumenty nelze editovat
+            if readonly_mode:
+                logger.warning(
+                    "picking_list_edit POST attempt on readonly document: document_id=%s user_id=%s reason=%s",
+                    document_id,
+                    request.user.id,
+                    readonly_reason,
+                )
+                raise PermissionDenied(f"Dokument nelze editovat: {readonly_reason}")
             # Zpracování formuláře s editací skutečných množství (per-item)
             updated_count = 0
             processed_count = 0
@@ -1507,6 +1527,8 @@ def picking_list_edit(request, document_id):
             'canteen_warehouses': canteen_warehouses,
             'all_ingredients': all_ingredients,
             'available_cooks': available_cooks,
+            'readonly_mode': readonly_mode,
+            'readonly_reason': readonly_reason,
         }
         
         return render(request, 'production/picking_list_edit.html', context)

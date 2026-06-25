@@ -173,8 +173,8 @@ class PickingListDocumentAdmin(admin.ModelAdmin):
     def has_pdf(self, obj):
         """Indikátor existence PDF souboru"""
         if obj.pdf_file:
-            return format_html('<span style="color: green;">✓</span>')
-        return format_html('<span style="color: red;">✗</span>')
+            return mark_safe('<span style="color: green;">✓</span>')
+        return mark_safe('<span style="color: red;">✗</span>')
     has_pdf.short_description = 'PDF'
     
     fieldsets = (

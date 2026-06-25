@@ -254,10 +254,9 @@
                 <td class="text-end">
                   <div class="btn-group" role="group">
                     <a href="{% url 'production:picking_list_edit' doc.id %}" 
-                       class="btn btn-sm btn-outline-primary disabled" 
-                       title="Editace skutečných množství"
-                       disabled>
-                      <i class="fas fa-edit"></i>
+                       class="btn btn-sm btn-outline-info" 
+                       title="Zobrazit detail (jen pro čtení)">
+                      <i class="fas fa-eye"></i>
                     </a>
                     <a href="{% url 'production:picking_list_pdf' doc.id %}" 
                        class="btn btn-sm btn-outline-danger" 

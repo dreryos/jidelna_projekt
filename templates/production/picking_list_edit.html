@@ -112,10 +112,10 @@
   </div>
 </div>
 
-{% if locked %}
-<div class="alert alert-danger">
-  <i class="fas fa-lock me-2"></i>
-  <strong>Sklad je uzamčen.</strong> Editace není možná.
+{% if readonly_mode %}
+<div class="alert alert-warning">
+  <i class="fas fa-eye me-2"></i>
+  <strong>Režim jen pro čtení.</strong> {{ readonly_reason }}
 </div>
 {% else %}
 
@@ -123,8 +123,9 @@
   <i class="fas fa-info-circle me-2"></i>
   <strong>Instrukce:</strong> Zadejte skutečně vydaná množství a zaškrtněte „Vydáno". Vydaný řádek se automaticky odečte ze skladu.
 </div>
+{% endif %}
 
-<form method="post" id="vydejka-form" novalidate>
+<form {% if not readonly_mode %}method="post"{% endif %} id="vydejka-form" novalidate>
   {% csrf_token %}
 
   <div class="card mb-3 border-secondary">
@@ -136,7 +137,7 @@
           </label>
         </div>
         <div class="col-md-4">
-          <select class="form-select form-select-sm" name="cook" id="id_cook">
+          <select class="form-select form-select-sm" name="cook" id="id_cook" {% if readonly_mode %}disabled{% endif %}>
             <option value="">— nepřiřazen —</option>
             {% for u in available_cooks %}
             <option value="{{ u.id }}"
@@ -174,11 +175,13 @@
           {{ meal.recipe_name }}
           <small class="text-muted ms-2">{{ meal.portions }} porcí{% if meal.is_customized %} <i class="fas fa-star text-warning ms-1" title="Upravené jídlo"></i>{% endif %}</small>
         </span>
+        {% if not readonly_mode %}
         <div class="d-flex gap-2">
           <button type="button" class="btn btn-outline-success btn-sm meal-issue-all-btn" data-meal-id="{{ forloop.parentloop.counter }}_{{ forloop.counter }}">
             <i class="fas fa-check-double me-1"></i>Vydat vše v jídle
           </button>
         </div>
+        {% endif %}
       </div>
       <div class="card-body p-0">
         <div class="table-responsive">
@@ -226,7 +229,8 @@
                          name="quantity_actual_item_{{ ing.item_id|unlocalize }}"
                          data-planned="{{ ing.quantity|unlocalize }}"
                          value="{% if ing.quantity_actual is not None %}{{ ing.quantity_actual|unlocalize }}{% else %}{{ ing.quantity|unlocalize }}{% endif %}"
-                         placeholder="0.000">
+                         placeholder="0.000"
+                         {% if readonly_mode %}readonly{% endif %}>
                 </td>
                 <td class="text-center no-strike">
                   <input type="checkbox"
@@ -234,7 +238,8 @@
                          name="status_item_{{ ing.item_id|unlocalize }}"
                          value="COMPLETED"
                          id="issued_item_{{ ing.item_id|unlocalize }}"
-                         {% if ing.status == 'COMPLETED' %}checked{% endif %}>
+                         {% if ing.status == 'COMPLETED' %}checked{% endif %}
+                         {% if readonly_mode %}disabled{% endif %}>
                   <label class="issued-label ms-1" for="issued_item_{{ ing.item_id|unlocalize }}">Vydáno</label>
                 </td>
               </tr>
@@ -244,6 +249,7 @@
         </div>
       </div>
       <!-- Panel pro přidání nové suroviny -->
+      {% if not readonly_mode %}
       <div class="add-ingredient-panel p-2">
         <button type="button"
                 class="btn btn-outline-primary btn-sm w-100 btn-toggle-add-ingredient"
@@ -289,6 +295,7 @@
           </div>
         </div>
       </div>
+      {% endif %}
     </div>
     {% endfor %}
   </div>
@@ -338,6 +345,7 @@
         {% endif %}
         
         <!-- Formulář pro přidání nové položky mimo jídlo -->
+        {% if not readonly_mode %}
         <div class="add-ingredient-panel p-2">
           <button type="button"
                   class="btn btn-outline-primary btn-sm w-100 btn-toggle-add-ingredient-no-order"
@@ -382,6 +390,7 @@
             </div>
           </div>
         </div>
+        {% endif %}
       </div>
     </div>
   </div>
@@ -392,6 +401,7 @@
        target="_blank">
       <i class="fas fa-file-pdf me-2"></i>Stáhnout PDF
     </a>
+    {% if not readonly_mode %}
     <div class="d-flex align-items-center gap-2 flex-wrap">
       <span class="text-muted small" id="issued-counter"></span>
       <button type="button" class="btn btn-outline-secondary" id="btn-unissue-all">
@@ -404,10 +414,9 @@
         <i class="fas fa-save me-2"></i>Uložit změny
       </button>
     </div>
+    {% endif %}
   </div>
 </form>
-
-{% endif %}
 
 <div class="row mt-2 mb-4">
   <div class="col-12">
@@ -486,20 +495,26 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     // Tlačítko „Vydat vše"
-    document.getElementById('btn-issue-all').addEventListener('click', function () {
-        document.querySelectorAll('tr[data-item-id]').forEach(function (row) {
-            setRowIssued(row, true);
+    const btnIssueAll = document.getElementById('btn-issue-all');
+    if (btnIssueAll) {
+        btnIssueAll.addEventListener('click', function () {
+            document.querySelectorAll('tr[data-item-id]').forEach(function (row) {
+                setRowIssued(row, true);
+            });
+            updateCounter();
         });
-        updateCounter();
-    });
+    }
 
     // Tlačítko „Odebrat vydání"
-    document.getElementById('btn-unissue-all').addEventListener('click', function () {
-        document.querySelectorAll('tr[data-item-id]').forEach(function (row) {
-            setRowIssued(row, false);
+    const btnUnissueAll = document.getElementById('btn-unissue-all');
+    if (btnUnissueAll) {
+        btnUnissueAll.addEventListener('click', function () {
+            document.querySelectorAll('tr[data-item-id]').forEach(function (row) {
+                setRowIssued(row, false);
+            });
+            updateCounter();
         });
-        updateCounter();
-    });
+    }
 
     // Počáteční stav counteru
     updateCounter();
