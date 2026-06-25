@@ -83,10 +83,49 @@
             <a href="{% url 'inventory:inventory_verification_detail' verification.pk %}" class="btn btn-secondary">
                 <i class="fas fa-arrow-left me-1"></i>Zpět bez uložení
             </a>
-            <button type="submit" class="btn btn-primary">
+            <button type="submit" class="btn btn-primary" id="submit-btn">
                 <i class="fas fa-save me-1"></i>Uložit spočítané množství
             </button>
         </div>
     </form>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Získej všechny input a select pole v tabulce (kromě hidden polí)
+    const formInputs = Array.from(document.querySelectorAll('#inventory-table input:not([type="hidden"]), #inventory-table select'))
+        .filter(input => input.offsetParent !== null); // Filtruj pouze viditelné
+    
+    // Přidej event listener na každé pole
+    formInputs.forEach((input, index) => {
+        input.addEventListener('keydown', function(e) {
+            // Pokud je stisknut Enter
+            if (e.key === 'Enter') {
+                e.preventDefault(); // Zabraň odeslání formuláře
+                
+                // Najdi další pole
+                const nextIndex = index + 1;
+                if (nextIndex < formInputs.length) {
+                    // Přesuň focus na další pole
+                    formInputs[nextIndex].focus();
+                    // Pro number input vybere celý text
+                    if (formInputs[nextIndex].type === 'number' || formInputs[nextIndex].type === 'text') {
+                        formInputs[nextIndex].select();
+                    }
+                } else {
+                    // Na posledním poli - přejdi na submit tlačítko
+                    document.getElementById('submit-btn').focus();
+                }
+            }
+        });
+    });
+    
+    // Zabránit odeslání formuláře při Enter (kromě submit tlačítka)
+    document.querySelector('form').addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && e.target.id !== 'submit-btn') {
+            e.preventDefault();
+        }
+    });
+});
+</script>
 {% endblock %}

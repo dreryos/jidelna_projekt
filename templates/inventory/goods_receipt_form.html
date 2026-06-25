@@ -833,7 +833,16 @@ function loadSupplierTemplate(supplierSlug) {
       'X-Requested-With': 'XMLHttpRequest',
     }
   })
-  .then(response => response.json())
+  .then(response => {
+    if (!response.ok) {
+      return response.json().then(data => {
+        throw new Error(data.error || 'Server error');
+      }).catch(() => {
+        throw new Error('Server error: ' + response.status);
+      });
+    }
+    return response.json();
+  })
   .then(data => {
     showTemplateLoading(false);
     
@@ -848,7 +857,7 @@ function loadSupplierTemplate(supplierSlug) {
   .catch(error => {
     console.error('Template loading error:', error);
     showTemplateLoading(false);
-    showTemplateAlert('danger', 'Chyba při komunikaci se serverem');
+    showTemplateAlert('danger', 'Chyba při komunikaci se serverem: ' + error.message);
   });
 }
 
@@ -1106,7 +1115,16 @@ function generateReceiptNumber() {
       'X-Requested-With': 'XMLHttpRequest',
     }
   })
-  .then(response => response.json())
+  .then(response => {
+    if (!response.ok) {
+      return response.json().then(data => {
+        throw new Error(data.error || 'Server error');
+      }).catch(() => {
+        throw new Error('Server error: ' + response.status);
+      });
+    }
+    return response.json();
+  })
   .then(data => {
     generateBtn.disabled = false;
     generateBtn.innerHTML = originalIcon;

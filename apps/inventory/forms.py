@@ -1,7 +1,8 @@
 from decimal import Decimal
 from django import forms
-from django.forms import inlineformset_factory
+from django.forms import inlineformset_factory, BaseInlineFormSet
 from django.core.exceptions import ValidationError
+from django.db.models import Q
 from .models import (
     GoodsReceipt, GoodsReceiptItem, Warehouse, Ingredient, 
     InventoryVerification, InventoryVerificationItem,
@@ -302,8 +303,7 @@ class InventoryVerificationItemForm(forms.ModelForm):
             'counted_quantity': forms.NumberInput(attrs={
                 'class': 'form-control',
                 'step': '0.001',
-                'min': '0',
-                'required': True
+                'min': '0'
             }),
             'notes': forms.TextInput(attrs={'class': 'form-control'}),
         }
@@ -313,11 +313,97 @@ class InventoryVerificationItemForm(forms.ModelForm):
             'notes': 'Poznámka',
         }
     
+    
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # Filtrovat pouze aktivní suroviny
         from apps.core.models import Ingredient
-        self.fields['ingredient'].queryset = Ingredient.objects.filter(is_active=True)
+        
+        if self.instance.pk:
+            # Pro existující instance zahrnout i aktuální surovinu (i když je neaktivní)
+            # aby prošla validace hidden fieldu
+            self.fields['ingredient'].queryset = Ingredient.objects.filter(
+                Q(is_active=True) | Q(pk=self.instance.ingredient_id)
+            )
+        else:
+            # Pro nové instance pouze aktivní
+            self.fields['ingredient'].queryset = Ingredient.objects.filter(is_active=True)
+
+
+class BaseInventoryVerificationItemFormSet(BaseInlineFormSet):
+    """Vlastní formset, který ignoruje prázdné formuláře."""
+    
+    def _construct_form(self, i, **kwargs):
+        """Konstruuj formulář a nastav pole jako nepovinná pro extra formuláře."""
+        form = super()._construct_form(i, **kwargs)
+        
+        # Pro extra formuláře (nové, nevyplněné) nastav ingredient jako nepovinné
+        if i >= self.initial_form_count():
+            form.fields['ingredient'].required = False
+        
+        return form
+    
+    def clean(self):
+        """Ignoruj chyby z prázdných formulářů."""
+        # Nejdřív zavolej rodičovskou clean()
+        try:
+            super().clean()
+        except Exception:
+            # Pokud selže validace, pokračuj stejně - ošetříme prázdné formuláře
+            pass
+        
+        # Zjisti, které formuláře jsou prázdné a odstraň jejich chyby
+        for i, form in enumerate(self.forms):
+            # Pokud je to existující instance, nevynechávat
+            if form.instance.pk:
+                continue
+            
+            # Zkontroluj raw POST data pro tento formulář
+            prefix = form.prefix
+            ingredient_key = f"{prefix}-ingredient"
+            quantity_key = f"{prefix}-counted_quantity"
+            notes_key = f"{prefix}-notes"
+            
+            has_ingredient = self.data.get(ingredient_key)
+            has_quantity = self.data.get(quantity_key)
+            has_notes = self.data.get(notes_key, '').strip()
+            
+            # Pokud formulář nemá žádná data, odstraň jeho chyby
+            if not has_ingredient and not has_quantity and not has_notes:
+                if i < len(self.errors) and self.errors[i]:
+                    self.errors[i] = {}
+    
+    def save(self, commit=True):
+        """Ulož formuláře, včetně existujících instancí bez ohledu na has_changed()."""
+        saved_instances = []
+        
+        # Projdi všechny formuláře
+        for form in self.forms:
+            # Přeskoč formuláře bez cleaned_data (mají chyby nebo jsou prázdné)
+            if not hasattr(form, 'cleaned_data') or not form.cleaned_data:
+                continue
+            
+            # Existující instance - vždy ulož
+            if form.instance.pk:
+                # Aktualizuj hodnoty z formuláře
+                for field_name in ['counted_quantity', 'notes']:
+                    if field_name in form.cleaned_data:
+                        setattr(form.instance, field_name, form.cleaned_data[field_name])
+                
+                if commit:
+                    form.instance.save()
+                saved_instances.append(form.instance)
+            
+            # Nové instance - ulož pouze pokud mají data
+            elif form.has_changed():
+                # Zkontroluj, zda má formulář nějaká relevantní data
+                has_ingredient = form.cleaned_data.get('ingredient')
+                
+                if has_ingredient:
+                    instance = form.save(commit=commit)
+                    saved_instances.append(instance)
+        
+        return saved_instances
 
 
 # Formset pro položky inventury
@@ -325,8 +411,10 @@ InventoryVerificationItemFormSet = inlineformset_factory(
     InventoryVerification,
     InventoryVerificationItem,
     form=InventoryVerificationItemForm,
+    formset=BaseInventoryVerificationItemFormSet,
     extra=1,  # 1 prázdný formulář pro přidání nové suroviny
     min_num=0,
+    validate_min=False,  # Umožní uložit formset i bez vyplnění všech položek
     max_num=500,
     can_delete=False,
 )

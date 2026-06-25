@@ -1183,9 +1183,21 @@ def inventory_verification_count(request, pk):
         formset = InventoryVerificationItemFormSet(request.POST, instance=verification)
         
         if formset.is_valid():
+            # Debug: zkontroluj, kolik formulářů má změny
+            changed_forms = [f for f in formset.forms if f.has_changed()]
+            
             formset.save()
-            messages.success(request, 'Spočítaná množství byla uložena.')
+            messages.success(
+                request, 
+                f'Spočítaná množství byla uložena. Aktualizováno položek: {len(changed_forms)}'
+            )
             return redirect('inventory:inventory_verification_detail', pk=pk)
+        else:
+            # Zobraz konkrétní chyby validace pro ladění
+            for i, form in enumerate(formset.forms):
+                if form.errors:
+                    for field, errors in form.errors.items():
+                        messages.error(request, f'Formulář {i}: {field} - {", ".join(errors)}')
     else:
         formset = InventoryVerificationItemFormSet(instance=verification)
     
@@ -1214,16 +1226,37 @@ def inventory_verification_start(request, pk):
                 f'Inventura skladu "{verification.warehouse.name}" byla zahájena. '
                 f'Sklad je nyní uzamčen.'
             )
+            return redirect('inventory:inventory_verification_started', pk=pk)
         except ValidationError as e:
             messages.error(request, str(e))
-        
-        return redirect('inventory:inventory_verification_count', pk=pk)
+            return redirect('inventory:inventory_verification_detail', pk=pk)
     
     # GET - zobrazíme potvrzovací stránku
     context = {
         'verification': verification,
     }
     return render(request, 'inventory/inventory_verification_start_confirm.html', context)
+
+
+@login_required
+def inventory_verification_started(request, pk):
+    """Stránka po zahájení inventury s doporučením papírové inventury."""
+    verification = get_object_or_404(InventoryVerification, pk=pk)
+    
+    # Kontrola oprávnění - přístup k jídelně
+    if not user_can_access_canteen(request.user, verification.warehouse.canteen):
+        messages.error(request, 'Nemáte oprávnění k této akci.')
+        return redirect('inventory:inventory_verification_list')
+    
+    # Kontrola stavu
+    if verification.status != InventoryVerification.Status.IN_PROGRESS:
+        messages.warning(request, 'Inventura není v probíhajícím stavu.')
+        return redirect('inventory:inventory_verification_detail', pk=pk)
+    
+    context = {
+        'verification': verification,
+    }
+    return render(request, 'inventory/inventory_verification_started.html', context)
 
 
 @login_required

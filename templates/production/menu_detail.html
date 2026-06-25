@@ -1,6 +1,7 @@
 {% extends 'base.html' %}
 {% load django_bootstrap5 %}
 {% load core_filters %}
+{% load l10n %}
 
 {% block title %}{{ menu_plan.name }} - Detail jídelníčku{% endblock %}
 
@@ -198,11 +199,11 @@
                             </tr>
                             
                             {% for order in meal_orders %}
-                            <tr data-order-id="{{ order.id }}">
+                            <tr data-order-id="{{ order.id|unlocalize }}">
                                 <!-- Checkbox -->
                                 <td class="align-middle text-center">
                                     <input type="checkbox" class="form-check-input meal-checkbox" 
-                                           value="{{ order.id }}"
+                                           value="{{ order.id|unlocalize }}"
                                            {% if order.has_issued_picking_list %}disabled{% endif %}>
                                 </td>
                                 
@@ -258,19 +259,19 @@
                                             {% if not request.user.profile.is_readonly %}
                                             <button type="button" 
                                                     class="btn btn-outline-success edit-ingredients-btn"
-                                                    data-order-id="{{ order.id }}"
+                                                    data-order-id="{{ order.id|unlocalize }}"
                                                     title="Upravit ingredience">
                                                 <i class="fas fa-clipboard-list"></i>
                                             </button>
                                             <button type="button" 
                                                     class="btn btn-outline-warning edit-portions-btn"
-                                                    data-order-id="{{ order.id }}"
+                                                    data-order-id="{{ order.id|unlocalize }}"
                                                     title="Upravit porce">
                                                 <i class="fas fa-edit"></i>
                                             </button>
                                             <button type="button" 
                                                     class="btn btn-outline-danger delete-meal-btn" 
-                                                    data-order-id="{{ order.id }}"
+                                                    data-order-id="{{ order.id|unlocalize }}"
                                                     title="Smazat">
                                                 <i class="fas fa-trash"></i>
                                             </button>
@@ -833,7 +834,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 variants: variants
             })
         })
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(data => {
+                    throw new Error(data.error || 'Server error');
+                }).catch(() => {
+                    throw new Error('Server error: ' + response.status);
+                });
+            }
+            return response.json();
+        })
         .then(data => {
             if (data.success) {
                 location.reload();
@@ -843,7 +853,7 @@ document.addEventListener('DOMContentLoaded', function() {
         })
         .catch(error => {
             console.error('Error:', error);
-            alert('Nastala chyba při přidávání jídla.');
+            alert('Chyba při přidávání jídla: ' + error.message);
         });
     });
     
@@ -1032,7 +1042,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 variants: variants
             })
         })
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(data => {
+                    throw new Error(data.error || 'Server error');
+                }).catch(() => {
+                    throw new Error('Server error: ' + response.status);
+                });
+            }
+            return response.json();
+        })
         .then(data => {
             if (data.success) {
                 location.reload();
@@ -1042,7 +1061,7 @@ document.addEventListener('DOMContentLoaded', function() {
         })
         .catch(error => {
             console.error('Error:', error);
-            alert('Nastala chyba při úpravě porcí.');
+            alert('Chyba při úpravě porcí: ' + error.message);
         });
     });
     
@@ -1076,7 +1095,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 portion_coefficient: coefficient
             })
         })
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(data => {
+                    throw new Error(data.error || 'Server error');
+                }).catch(() => {
+                    throw new Error('Server error: ' + response.status);
+                });
+            }
+            return response.json();
+        })
         .then(data => {
             if (data.success) {
                 location.reload();
@@ -1086,34 +1114,93 @@ document.addEventListener('DOMContentLoaded', function() {
         })
         .catch(error => {
             console.error('Error:', error);
-            alert('Nastala chyba při úpravě porcí.');
+            alert('Chyba při úpravě porcí: ' + error.message);
         });
     });
     
     // Mazání jídla
     document.querySelectorAll('.delete-meal-btn').forEach(btn => {
         btn.addEventListener('click', function() {
-            if (confirm('Opravdu chcete smazat toto jídlo?')) {
-                const orderId = this.dataset.orderId;
-                fetch(`/production/vyrobni-prikazy/${orderId}/smazat/`, {
-                    method: 'DELETE',
-                    headers: {
-                        'X-CSRFToken': csrfToken
-                    }
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        location.reload();
-                    } else {
-                        alert('Chyba při mazání jídla: ' + data.error);
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    alert('Nastala chyba při mazání jídla.');
-                });
+            const orderId = this.dataset.orderId;
+            
+            if (!orderId) {
+                console.error('Order ID not found on button:', this);
+                alert('Chyba: ID jídla nenalezeno.');
+                return;
             }
+            
+            // Log debugging info
+            console.log('=== DELETE MEAL DEBUG ===');
+            console.log('Order ID:', orderId);
+            console.log('Order ID type:', typeof orderId);
+            console.log('Button element:', this);
+            console.log('Parent row:', this.closest('tr'));
+            const parentRow = this.closest('tr');
+            if (parentRow) {
+                console.log('Row data-order-id:', parentRow.dataset.orderId);
+            }
+            
+            const deleteUrl = `/production/vyrobni-prikazy/${orderId}/smazat/`;
+            console.log('Delete URL:', deleteUrl);
+            console.log('CSRF Token:', csrfToken);
+            
+            if (!confirm('Opravdu chcete smazat toto jídlo?')) {
+                console.log('User cancelled deletion');
+                return;
+            }
+            
+            // Disable button to prevent double-click
+            this.disabled = true;
+            const originalContent = this.innerHTML;
+            this.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            
+            console.log('Sending DELETE request...');
+            
+            fetch(deleteUrl, {
+                method: 'DELETE',
+                headers: {
+                    'X-CSRFToken': csrfToken
+                }
+            })
+            .then(response => {
+                console.log('Response status:', response.status);
+                console.log('Response ok:', response.ok);
+                console.log('Response headers:', response.headers);
+                
+                if (!response.ok) {
+                    return response.text().then(text => {
+                        console.log('Error response body:', text);
+                        // Try to parse as JSON
+                        try {
+                            const data = JSON.parse(text);
+                            throw new Error(data.error || 'Server error');
+                        } catch (e) {
+                            // Not JSON, throw with status
+                            throw new Error(`Server error ${response.status}: ${text.substring(0, 100)}`);
+                        }
+                    });
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('Success response data:', data);
+                if (data.success) {
+                    console.log('Meal deleted successfully, reloading page...');
+                    location.reload();
+                } else {
+                    console.error('Delete failed:', data.error);
+                    alert('Chyba při mazání jídla: ' + data.error);
+                    this.disabled = false;
+                    this.innerHTML = originalContent;
+                }
+            })
+            .catch(error => {
+                console.error('Delete error:', error);
+                console.error('Error stack:', error.stack);
+                alert('Chyba při mazání jídla: ' + error.message);
+                this.disabled = false;
+                this.innerHTML = originalContent;
+            });
         });
     });
     
@@ -1136,7 +1223,16 @@ document.addEventListener('DOMContentLoaded', function() {
         fetch(`/production/vyrobni-prikazy/${orderId}/ingredience/`, {
             headers: {'X-CSRFToken': csrfToken}
         })
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(data => {
+                    throw new Error(data.error || 'Server error');
+                }).catch(() => {
+                    throw new Error('Server error: ' + response.status);
+                });
+            }
+            return response.json();
+        })
         .then(data => {
             if (data.success) {
                 currentIngredientsData = data.ingredients;
@@ -1302,7 +1398,16 @@ document.addEventListener('DOMContentLoaded', function() {
             fetch(`/production/ingredience/hledat/?q=${encodeURIComponent(query)}`, {
                 headers: {'X-CSRFToken': csrfToken}
             })
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(data => {
+                        throw new Error(data.error || 'Server error');
+                    }).catch(() => {
+                        throw new Error('Server error: ' + response.status);
+                    });
+                }
+                return response.json();
+            })
             .then(data => {
                 if (data.success) {
                     const resultsDiv = document.getElementById('ingredientSearchResults');
@@ -1401,7 +1506,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 customization_note: customizationNote
             })
         })
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(data => {
+                    throw new Error(data.error || 'Server error');
+                }).catch(() => {
+                    throw new Error('Server error: ' + response.status);
+                });
+            }
+            return response.json();
+        })
         .then(data => {
             if (data.success) {
                 alert('Ingredience byly úspěšně uloženy.');
@@ -1413,7 +1527,7 @@ document.addEventListener('DOMContentLoaded', function() {
         })
         .catch(error => {
             console.error('Error:', error);
-            alert('Nastala chyba při ukládání ingrediencí.');
+            alert('Chyba při ukládání ingrediencí: ' + error.message);
         });
     });
     
@@ -1481,7 +1595,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 target_order_id: targetOrderId
             })
         })
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(data => {
+                    throw new Error(data.error || 'Server error');
+                }).catch(() => {
+                    throw new Error('Server error: ' + response.status);
+                });
+            }
+            return response.json();
+        })
         .then(data => {
             if (data.success) {
                 alert(data.message);
@@ -1493,7 +1616,7 @@ document.addEventListener('DOMContentLoaded', function() {
         })
         .catch(error => {
             console.error('Error:', error);
-            alert('Nastala chyba při kopírování úprav.');
+            alert('Chyba při kopírování úprav: ' + error.message);
         });
     });
     
@@ -1518,7 +1641,16 @@ document.addEventListener('DOMContentLoaded', function() {
                     order_ids: orderIds
                 })
             })
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(data => {
+                        throw new Error(data.error || 'Server error');
+                    }).catch(() => {
+                        throw new Error('Server error: ' + response.status);
+                    });
+                }
+                return response.json();
+            })
             .then(data => {
                 if (data.success) {
                     alert(data.message);
@@ -1529,7 +1661,7 @@ document.addEventListener('DOMContentLoaded', function() {
             })
             .catch(error => {
                 console.error('Error:', error);
-                alert('Nastala chyba při resetování úprav.');
+                alert('Chyba při resetování úprav: ' + error.message);
             });
         }
     });

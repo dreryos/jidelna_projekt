@@ -507,7 +507,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 'conversion_factor': conversion
             })
         })
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(data => {
+                    throw new Error(data.error || 'Server error');
+                }).catch(() => {
+                    throw new Error('Server error: ' + response.status);
+                });
+            }
+            return response.json();
+        })
         .then(data => {
             if (data.success) {
                 // Přidat novou surovinu do seznamu

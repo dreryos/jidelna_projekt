@@ -1,0 +1,79 @@
+{% extends 'base.html' %}
+
+{% block title %}Inventura zahájena{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card border-success">
+                <div class="card-header bg-success text-white">
+                    <h3 class="mb-0">
+                        <i class="fas fa-check-circle me-2"></i>
+                        Inventura byla úspěšně zahájena
+                    </h3>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-success">
+                        <h5 class="alert-heading">
+                            <i class="fas fa-clipboard-list me-2"></i>
+                            Sklad "{{ verification.warehouse.name }}" je uzamčen
+                        </h5>
+                        <p class="mb-0">
+                            Inventura má {{ verification.items.count }} položek připravených ke spočítání.
+                        </p>
+                    </div>
+
+                    <div class="alert alert-warning mt-4">
+                        <h5 class="alert-heading">
+                            <i class="fas fa-lightbulb me-2"></i>
+                            Důrazně doporučujeme papírovou inventuru
+                        </h5>
+                        <p>
+                            Pro přesné a efektivní provedení inventury doporučujeme:
+                        </p>
+                        <ol class="mb-0">
+                            <li>Vytisknout inventurní seznam pomocí tlačítka níže</li>
+                            <li>Provést fyzickou inventuru ve skladu s vytištěným seznamem</li>
+                            <li>Zapsat spočítaná množství na tisknutý formulář</li>
+                            <li>Následně zadat spočítaná data z papíru do systému</li>
+                        </ol>
+                    </div>
+
+                    <div class="d-grid gap-3 mt-4">
+                        <a href="{% url 'inventory:inventory_verification_pdf' verification.pk %}" 
+                           class="btn btn-primary btn-lg" target="_blank">
+                            <i class="fas fa-print me-2"></i>
+                            Vytisknout inventurní seznam (PDF)
+                        </a>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <a href="{% url 'inventory:inventory_verification_list' %}" 
+                                   class="btn btn-secondary btn-lg w-100">
+                                    <i class="fas fa-list me-2"></i>
+                                    Zpět na seznam inventur
+                                </a>
+                            </div>
+                            <div class="col-md-6">
+                                <a href="{% url 'inventory:inventory_verification_count' verification.pk %}" 
+                                   class="btn btn-success btn-lg w-100">
+                                    <i class="fas fa-keyboard me-2"></i>
+                                    Zadat spočítaná data
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="alert alert-info mt-4 mb-0">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Poznámka:</strong> 
+                        Můžete data zadávat průběžně a kdykoliv se vrátit. 
+                        Sklad zůstane uzamčen až do dokončení inventury.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

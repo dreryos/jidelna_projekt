@@ -84,6 +84,7 @@ def user_can_access_canteen_object(model: Type[models.Model]):
             try:
                 obj = get_object_or_404(model, pk=pk)
             except Http404:
+                logger.warning(f"{model.__name__} with pk={pk} not found (404)")
                 return JsonResponse({'success': False, 'error': 'Object not found.'}, status=404)
 
             user = cast('User', request.user)
@@ -555,17 +556,23 @@ def delete_order_ajax(request, order_pk, *args, **kwargs):
     """AJAX view pro smazání výrobního příkazu"""
     order = request.instance
     
+    logger.info(f"Delete request for ProductionOrder {order_pk} by user {request.user.id}")
+    
     if request.method != 'DELETE':
+        logger.warning(f"Invalid method {request.method} for delete_order_ajax")
         return JsonResponse({'success': False, 'error': 'Invalid request method.'}, status=405)
 
     if order.has_issued_picking_list():
+        logger.info(f"Cannot delete order {order_pk}: has issued picking list")
         return JsonResponse({'success': False, 'error': 'Nelze smazat jídlo s vydanou výdejkou.'}, status=403)
 
     try:
         with transaction.atomic():
             order_id = order.id
+            recipe_name = order.recipe.name
             order.delete()
         
+        logger.info(f"Successfully deleted ProductionOrder {order_id} ({recipe_name}) by user {request.user.id}")
         return JsonResponse({'success': True, 'order_id': order_id})
             
     except Exception as e: # Catch potential db integrity errors

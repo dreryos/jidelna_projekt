@@ -354,7 +354,16 @@ document.addEventListener('DOMContentLoaded', function() {
 
             // AJAX dotaz na získání ceny a dostupného množství
             fetch(`/inventory/api/stock-item-price/?ingredient=${encodeURIComponent(ingredientId)}&warehouse=${encodeURIComponent(warehouseId)}`)
-                .then(response => response.json())
+                .then(response => {
+                    if (!response.ok) {
+                        return response.json().then(data => {
+                            throw new Error(data.error || 'Server error');
+                        }).catch(() => {
+                            throw new Error('Server error: ' + response.status);
+                        });
+                    }
+                    return response.json();
+                })
                 .then(data => {
                     if (data.success) {
                         if (priceInput) priceInput.value = data.price;
@@ -368,6 +377,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 })
                 .catch(error => {
                     console.error('Chyba při načítání ceny suroviny:', error);
+                    if (priceInput) priceInput.value = '';
+                    if (availableSpan) availableSpan.textContent = 'Chyba';
+                    if (unitSpan) unitSpan.textContent = '-';
                 });
         });
     }

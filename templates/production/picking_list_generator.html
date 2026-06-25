@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% load django_bootstrap5 %}
+{% load l10n %}
 
 {% block title %}Generátor výdejek - Spíž{% endblock %}
 
@@ -179,7 +180,7 @@
                     </a>
                     <button type="button" 
                             class="btn btn-sm btn-outline-secondary archive-btn" 
-                            data-document-id="{{ doc.id }}"
+                            data-document-id="{{ doc.id|unlocalize }}"
                             {% if not doc.can_be_archived %}disabled{% endif %}
                             title="{% if doc.can_be_archived %}Archivovat výdejku{% else %}Všechny položky musí být vydány{% endif %}">
                       <i class="fas fa-archive"></i>
@@ -322,7 +323,16 @@ document.querySelectorAll('.archive-btn').forEach(function(btn) {
         'Content-Type': 'application/json'
       }
     })
-    .then(response => response.json())
+    .then(response => {
+      if (!response.ok) {
+        return response.json().then(data => {
+          throw new Error(data.error || 'Server error');
+        }).catch(() => {
+          throw new Error('Server error: ' + response.status);
+        });
+      }
+      return response.json();
+    })
     .then(data => {
       if (data.success) {
         // Reload page to move the row to the archived table
@@ -340,7 +350,7 @@ document.querySelectorAll('.archive-btn').forEach(function(btn) {
       console.error('Error:', error);
       var alertDiv = document.createElement('div');
       alertDiv.className = 'alert alert-danger alert-dismissible fade show';
-      alertDiv.innerHTML = '<i class="fas fa-exclamation-circle me-2"></i>Došlo k chybě při archivaci.' + 
+      alertDiv.innerHTML = '<i class="fas fa-exclamation-circle me-2"></i>Došlo k chybě při archivaci: ' + error.message + 
         '<button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
       document.querySelector('.row').prepend(alertDiv);
     });
