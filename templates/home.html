@@ -48,6 +48,19 @@
 </div>
 {% endif %}
 
+{% if active_users_count %}
+<div class="alert alert-info alert-dismissible fade show" role="alert">
+  <h5 class="alert-heading">
+    <i class="fas fa-users me-2"></i>Aktuálně přihlášených uživatelů
+  </h5>
+  <p class="mb-0">
+    V systému je aktuálně přihlášeno <strong>{{ active_users_count }} uživatel{{ active_users_count|pluralize:"a,ů" }}</strong>.
+  </p>
+  <hr>
+  <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+</div>
+{% endif %}
+
 <div class="row g-4">
   <!-- Recepty a suroviny -->
   <div class="col-lg-6">
