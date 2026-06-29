@@ -264,21 +264,35 @@ def bufet_upload_step3(request):
         imported_at=timezone.now(),
     )
 
+    # Agregace po surovině — tatáž surovina může být namapována z více artiklů
+    ingredient_data: dict[int, dict] = {}
+    for import_item in bufet_import.items.filter(skip=False, ingredient__isnull=False):
+        iid = import_item.ingredient_id
+        if iid not in ingredient_data:
+            ingredient_data[iid] = {
+                'ingredient': import_item.ingredient,
+                'quantity': Decimal('0'),
+                'names': [],
+            }
+        ingredient_data[iid]['quantity'] += import_item.quantity
+        ingredient_data[iid]['names'].append(import_item.name)
+
     skipped_no_stock = []
     written_off_count = 0
 
-    for import_item in bufet_import.items.filter(skip=False, ingredient__isnull=False):
+    for iid, data in ingredient_data.items():
+        notes = 'Bufet prodej: ' + ', '.join(data['names'])
         try:
             StockWriteOffItem.objects.create(
                 write_off=write_off,
-                ingredient=import_item.ingredient,
-                quantity=import_item.quantity,
-                notes=f"Bufet prodej – {import_item.name} (artikl {import_item.article_code})",
+                ingredient=data['ingredient'],
+                quantity=data['quantity'],
+                notes=notes[:200],
                 unit_cost=Decimal('0'),  # save() přepíše hodnotou ze skladu
             )
             written_off_count += 1
         except ValidationError as e:
-            skipped_no_stock.append(f"{import_item.name}: {e.message}")
+            skipped_no_stock.append(f"{data['ingredient'].name}: {e.message}")
 
     # Propojení importu s write_off a potvrzení
     bufet_import.write_off_id = write_off.id
