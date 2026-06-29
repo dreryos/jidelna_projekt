@@ -1,0 +1,68 @@
+{% extends 'base.html' %}
+{% load django_bootstrap5 %}
+
+{% block title %}Bufet – přehledy prodeje{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h1>
+    <i class="fas fa-cash-register me-2"></i>Bufet – přehledy prodeje
+  </h1>
+  {% if not request.user.profile.is_readonly %}
+  <a href="{% url 'bufet:upload_step1' %}" class="btn btn-success">
+    <i class="fas fa-file-upload me-2"></i>Nahrát přehled (CSV)
+  </a>
+  {% endif %}
+</div>
+
+{% if imports %}
+<div class="card">
+  <div class="card-body p-0">
+    <table class="table table-hover mb-0">
+      <thead class="table-dark">
+        <tr>
+          <th>Datum exportu</th>
+          <th>Soubor</th>
+          <th>Sklad</th>
+          <th>Položky</th>
+          <th>Tržba s DPH</th>
+          <th>Stav</th>
+          <th>Nahráno</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for imp in imports %}
+        <tr>
+          <td>{{ imp.export_date|date:"d.m.Y"|default:"–" }}</td>
+          <td class="text-muted small">{{ imp.filename }}</td>
+          <td>{{ imp.warehouse }}</td>
+          <td>{{ imp.items.count }}</td>
+          <td class="fw-bold">{{ imp.get_total_revenue|floatformat:0 }} Kč</td>
+          <td>
+            {% if imp.status == 'CONFIRMED' %}
+              <span class="badge bg-success">Potvrzeno</span>
+            {% else %}
+              <span class="badge bg-secondary">Náhled</span>
+            {% endif %}
+          </td>
+          <td class="text-muted small">{{ imp.created_at|date:"d.m.Y H:i" }}</td>
+          <td>
+            <a href="{% url 'bufet:detail' imp.pk %}" class="btn btn-sm btn-outline-primary">
+              <i class="fas fa-eye"></i>
+            </a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="alert alert-info">
+  <i class="fas fa-info-circle me-2"></i>
+  Zatím nebyl nahrán žádný přehled prodeje.
+  <a href="{% url 'bufet:upload_step1' %}">Nahrajte první CSV ze systému FiskalPRO.</a>
+</div>
+{% endif %}
+{% endblock %}

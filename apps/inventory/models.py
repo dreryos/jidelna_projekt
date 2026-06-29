@@ -1398,6 +1398,7 @@ class StockWriteOff(models.Model):
         EDUCATIONAL_STAFF = 'EDUCATIONAL_STAFF', 'Výchovný personál'
         TEACHERS = 'TEACHERS', 'Pedagogové'
         ACCOMMODATION = 'ACCOMMODATION', 'Ubytovací akce'
+        BUFET_SALE = 'BUFET_SALE', 'Bufet – prodej'
         OTHER = 'OTHER', 'Ostatní'
     
     document_number = models.CharField(

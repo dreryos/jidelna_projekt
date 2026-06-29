@@ -51,6 +51,7 @@ INSTALLED_APPS = [
     'apps.canteens',
     'apps.reports',
     'apps.analytics',
+    'apps.bufet',
 ]
 
 MIDDLEWARE = [

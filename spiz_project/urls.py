@@ -33,4 +33,7 @@ urlpatterns = [
     
     # Analytika a statistiky
     path('analytics/', include('apps.analytics.urls', namespace='analytics')),
+
+    # Bufet – import přehledů prodeje z FiskalPRO
+    path('bufet/', include('apps.bufet.urls', namespace='bufet')),
 ]
