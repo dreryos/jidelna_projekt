@@ -77,7 +77,7 @@
           </tr>
         </thead>
         <tbody>
-          {% for item in import.items.select_related %}
+          {% for item in items %}
           <tr {% if item.skip %}class="table-light text-muted"{% endif %}>
             <td class="small">{{ item.article_code }}</td>
             <td>{{ item.name }}</td>
