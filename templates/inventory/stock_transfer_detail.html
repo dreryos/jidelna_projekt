@@ -193,7 +193,7 @@
             </tr>
           </thead>
           <tbody>
-            {% for item in items %}
+            {% for item in transfer.items.all %}
               <tr>
                 <td><strong>{{ item.ingredient.name }}</strong></td>
                 <td class="text-end">{{ item.quantity|floatformat:3 }}</td>
