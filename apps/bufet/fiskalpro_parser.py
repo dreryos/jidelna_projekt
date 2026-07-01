@@ -22,12 +22,19 @@ def parse_export_date(filename: str) -> date | None:
         return None
 
 
-def _parse_decimal(value: str) -> Decimal:
-    """Převede číslo s desetinnou čárkou na Decimal."""
+def _parse_decimal(value) -> Decimal:
+    """Převede číslo s desetinnou čárkou na Decimal. Bezpečně zpracuje None/chybějící hodnoty."""
+    if not isinstance(value, str):
+        return Decimal('0')
     try:
         return Decimal(value.strip().replace(',', '.') or '0')
     except InvalidOperation:
         return Decimal('0')
+
+
+def _safe_str(value) -> str:
+    """Bezpečně ořeže hodnotu buňky CSV; chybějící/None hodnoty (u zkrácených řádků) vrátí jako ''."""
+    return value.strip() if isinstance(value, str) else ''
 
 
 def parse_fiskalpro_csv(csv_file) -> list[dict]:
@@ -57,8 +64,11 @@ def parse_fiskalpro_csv(csv_file) -> list[dict]:
     else:
         raw = csv_file.read()
 
-    # Detekce kódování: FiskalPRO exportuje Windows-1250
-    for encoding in ('cp1250', 'utf-8-sig', 'utf-8'):
+    # Detekce kódování: zkusíme nejdřív striktní UTF-8 varianty (chybný vstup spolehlivě
+    # vyhodí UnicodeDecodeError), teprve pak cp1250 jako fallback. Opačné pořadí je nebezpečné –
+    # cp1250 dekóduje téměř libovolnou bajtovou sekvenci bez chyby, takže by tiše "úspěšně"
+    # ale špatně dekódoval i skutečné UTF-8 exporty s českou diakritikou.
+    for encoding in ('utf-8-sig', 'utf-8', 'cp1250'):
         try:
             text = raw.decode(encoding)
             break
@@ -69,7 +79,7 @@ def parse_fiskalpro_csv(csv_file) -> list[dict]:
 
     reader = csv.DictReader(io.StringIO(text), delimiter=';')
 
-    required_columns = {'Artikl', 'Název', 'Množství', 'Cena celkem s DPH'}
+    required_columns = {'Artikl', 'Název', 'Množství', 'Cena celkem', 'Cena celkem s DPH'}
     if not required_columns.issubset(set(reader.fieldnames or [])):
         missing = required_columns - set(reader.fieldnames or [])
         raise ValueError(f"CSV neobsahuje očekávané sloupce: {', '.join(missing)}")
@@ -78,18 +88,20 @@ def parse_fiskalpro_csv(csv_file) -> list[dict]:
     aggregated: dict[str, dict] = {}
 
     for row in reader:
-        code = row['Artikl'].strip()
+        # csv.DictReader vrátí None pro chybějící pole u zkrácených/poškozených řádků,
+        # proto nelze na hodnotu spolehnout se voláním .strip() přímo.
+        code = _safe_str(row.get('Artikl'))
         if not code:
             continue
 
         qty = _parse_decimal(row.get('Množství', '0'))
         price_with_vat = _parse_decimal(row.get('Cena celkem s DPH', '0'))
         price_without_vat = _parse_decimal(row.get('Cena celkem', '0'))
-        barcode = row.get('Čárový kód', '').strip()
-        name = row.get('Název', '').strip()
-        group = row.get('Skupina', '').strip()
-        unit = row.get('MJ', 'ks').strip()
-        establishment = row.get('Název provozovny', '').strip()
+        barcode = _safe_str(row.get('Čárový kód'))
+        name = _safe_str(row.get('Název'))
+        group = _safe_str(row.get('Skupina'))
+        unit = _safe_str(row.get('MJ')) or 'ks'
+        establishment = _safe_str(row.get('Název provozovny'))
 
         if code not in aggregated:
             aggregated[code] = {

@@ -2,6 +2,7 @@ from django.db import models
 from django.utils import timezone
 from apps.canteens.models import Warehouse
 from apps.core.models import Ingredient
+from apps.inventory.models import StockWriteOff
 
 
 class BufetImport(models.Model):
@@ -36,10 +37,13 @@ class BufetImport(models.Model):
         on_delete=models.PROTECT,
         verbose_name="Vytvořil",
     )
-    write_off_id = models.IntegerField(
+    write_off = models.ForeignKey(
+        StockWriteOff,
+        on_delete=models.SET_NULL,
         null=True, blank=True,
-        verbose_name="ID odepsání",
-        help_text="ID záznamu StockWriteOff vytvořeného při potvrzení importu",
+        related_name='bufet_imports',
+        verbose_name="Odepsání ze skladu",
+        help_text="Záznam StockWriteOff vytvořený při potvrzení importu",
     )
 
     class Meta:
