@@ -1,0 +1,188 @@
+{% extends 'base.html' %}
+{% load django_bootstrap5 %}
+
+{% block title %}Bufet – náhled a párování{% endblock %}
+
+{% block extra_css %}
+<style>
+.match-high { background-color: rgba(25, 135, 84, 0.08); }
+.match-low  { background-color: rgba(255, 193, 7, 0.08); }
+.match-none { background-color: rgba(220, 53, 69, 0.06); }
+.item-skipped td { opacity: 0.45; text-decoration: line-through; }
+.ingredient-select { min-width: 220px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1>
+    <i class="fas fa-list-check me-2"></i>Krok 2 – Náhled a párování surovin
+  </h1>
+  <a href="{% url 'bufet:upload_step1' %}" class="btn btn-outline-secondary">
+    <i class="fas fa-arrow-left me-2"></i>Zpět (nový soubor)
+  </a>
+</div>
+
+{% if messages %}
+  {% for message in messages %}
+  <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+  {% endfor %}
+{% endif %}
+
+<div class="alert alert-info d-flex align-items-start gap-2 mb-3">
+  <i class="fas fa-info-circle mt-1"></i>
+  <div>
+    <strong>Soubor:</strong> {{ filename }}&nbsp;&nbsp;
+    <strong>Sklad:</strong> {{ warehouse }}&nbsp;&nbsp;
+    {% if export_date %}<strong>Datum exportu:</strong> {{ export_date }}{% endif %}<br>
+    Zkontrolujte párování artiklů se surovinami. Nepotřebné položky označte jako <em>Přeskočit</em>.
+    Po kliknutí na <strong>Potvrdit import</strong> se prodané množství odepíše ze skladu.
+  </div>
+</div>
+
+<form method="post" action="{% url 'bufet:upload_step3' %}">
+  {% csrf_token %}
+
+  <div class="d-flex justify-content-between align-items-center mb-2">
+    <div class="text-muted small">
+      <span id="mapped-count">0</span> spárováno &nbsp;|&nbsp;
+      <span id="skipped-count">0</span> přeskočeno &nbsp;|&nbsp;
+      {{ items|length }} celkem
+    </div>
+    <div class="d-flex gap-2">
+      <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-skip-unmapped">
+        Přeskočit nespárované
+      </button>
+      <button type="submit" class="btn btn-success">
+        <i class="fas fa-check me-2"></i>Potvrdit import
+      </button>
+    </div>
+  </div>
+
+  <div class="mb-3">
+    <label class="form-label fw-bold">Poznámka k importu</label>
+    <input type="text" name="notes" class="form-control" placeholder="Volitelná poznámka…">
+  </div>
+
+  <div class="table-responsive">
+    <table class="table table-sm table-bordered align-middle" id="items-table">
+      <thead class="table-dark">
+        <tr>
+          <th style="width:3%">#</th>
+          <th style="width:18%">Artikl / Název</th>
+          <th style="width:10%">Skupina</th>
+          <th style="width:8%">Množství</th>
+          <th style="width:10%">Tržba s DPH</th>
+          <th style="width:10%">Provozovny</th>
+          <th style="width:28%">Surovina ve skladu</th>
+          <th style="width:8%" class="text-center">Shoda</th>
+          <th style="width:5%" class="text-center">Přeskočit</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in items %}
+        {% if item.suggested_id %}
+          {% if item.match_score >= 70 %}
+          <tr class="match-high item-row" data-idx="{{ forloop.counter0 }}" data-has-match="1">
+          {% else %}
+          <tr class="match-low item-row" data-idx="{{ forloop.counter0 }}" data-has-match="1">
+          {% endif %}
+        {% else %}
+          <tr class="match-none item-row" data-idx="{{ forloop.counter0 }}" data-has-match="0">
+        {% endif %}
+          <td class="text-muted small">{{ forloop.counter }}</td>
+          <td>
+            <div class="fw-semibold">{{ item.name }}</div>
+            <div class="text-muted small">
+              Artikl: {{ item.article_code }}
+              {% if item.barcode %} · EAN: {{ item.barcode }}{% endif %}
+            </div>
+          </td>
+          <td class="small">{{ item.group|default:"–" }}</td>
+          <td class="fw-bold">{{ item.quantity }} {{ item.unit }}</td>
+          <td>{{ item.total_price_with_vat|floatformat:0 }} Kč</td>
+          <td class="small text-muted">{{ item.establishments|default:"–" }}</td>
+          <td>
+            <select name="ingredient_{{ forloop.counter0 }}"
+                    class="form-select form-select-sm ingredient-select ingredient-field"
+                    data-idx="{{ forloop.counter0 }}">
+              <option value="">– nevybráno –</option>
+              {% for ing in all_ingredients %}
+              <option value="{{ ing.id }}"
+                {% if ing.id == item.suggested_id %}selected{% endif %}>
+                {{ ing.name }} ({{ ing.unit }})
+              </option>
+              {% endfor %}
+            </select>
+          </td>
+          <td class="text-center">
+            {% if item.match_score >= 70 %}
+              <span class="badge bg-success">{{ item.match_score }}%</span>
+            {% elif item.match_score > 0 %}
+              <span class="badge bg-warning text-dark">{{ item.match_score }}%</span>
+            {% else %}
+              <span class="badge bg-danger">–</span>
+            {% endif %}
+          </td>
+          <td class="text-center">
+            <input type="checkbox" name="skip_{{ forloop.counter0 }}"
+                   class="form-check-input skip-checkbox" data-idx="{{ forloop.counter0 }}"
+                   value="on">
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="d-flex justify-content-end mt-3">
+    <button type="submit" class="btn btn-success btn-lg">
+      <i class="fas fa-check me-2"></i>Potvrdit import a odepsat ze skladu
+    </button>
+  </div>
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const rows = document.querySelectorAll('.item-row');
+  const mappedEl = document.getElementById('mapped-count');
+  const skippedEl = document.getElementById('skipped-count');
+
+  function updateCounters() {
+    let mapped = 0, skipped = 0;
+    rows.forEach(function (row) {
+      const idx = row.dataset.idx;
+      const skip = document.querySelector('[name="skip_' + idx + '"]').checked;
+      const sel = document.querySelector('[name="ingredient_' + idx + '"]');
+      if (skip) {
+        skipped++;
+        row.classList.add('item-skipped');
+      } else {
+        row.classList.remove('item-skipped');
+        if (sel && sel.value) mapped++;
+      }
+    });
+    mappedEl.textContent = mapped;
+    skippedEl.textContent = skipped;
+  }
+
+  document.querySelectorAll('.skip-checkbox, .ingredient-field').forEach(function (el) {
+    el.addEventListener('change', updateCounters);
+  });
+
+  document.getElementById('btn-skip-unmapped').addEventListener('click', function () {
+    rows.forEach(function (row) {
+      const idx = row.dataset.idx;
+      const sel = document.querySelector('[name="ingredient_' + idx + '"]');
+      const skip = document.querySelector('[name="skip_' + idx + '"]');
+      if (!sel.value) skip.checked = true;
+    });
+    updateCounters();
+  });
+
+  updateCounters();
+});
+</script>
+{% endblock %}

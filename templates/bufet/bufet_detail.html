@@ -1,0 +1,144 @@
+{% extends 'base.html' %}
+{% load django_bootstrap5 %}
+
+{% block title %}Bufet import – {{ import.filename }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h1>
+    <i class="fas fa-cash-register me-2"></i>Detail importu bufetu
+  </h1>
+  <a href="{% url 'bufet:list' %}" class="btn btn-outline-secondary">
+    <i class="fas fa-arrow-left me-2"></i>Zpět na seznam
+  </a>
+</div>
+
+<div class="row mb-4">
+  <div class="col-md-6">
+    <div class="card h-100">
+      <div class="card-header"><strong>Informace o importu</strong></div>
+      <div class="card-body">
+        <table class="table table-sm mb-0">
+          <tr><th style="width:40%">Soubor</th><td class="text-break">{{ import.filename }}</td></tr>
+          <tr><th>Datum exportu</th><td>{{ import.export_date|date:"d.m.Y"|default:"–" }}</td></tr>
+          <tr><th>Sklad</th><td>{{ import.warehouse }}</td></tr>
+          <tr><th>Stav</th><td>
+            {% if import.status == 'CONFIRMED' %}
+              <span class="badge bg-success">Potvrzeno</span>
+            {% else %}
+              <span class="badge bg-secondary">Náhled</span>
+            {% endif %}
+          </td></tr>
+          <tr><th>Nahráno</th><td>{{ import.created_at|date:"d.m.Y H:i" }} ({{ import.created_by.get_full_name|default:import.created_by.username }})</td></tr>
+          {% if import.notes %}<tr><th>Poznámka</th><td>{{ import.notes }}</td></tr>{% endif %}
+        </table>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="card h-100">
+      <div class="card-header"><strong>Souhrn</strong></div>
+      <div class="card-body">
+        <table class="table table-sm mb-0">
+          <tr><th style="width:55%">Počet artiklů</th><td>{{ import.items.count }}</td></tr>
+          <tr><th>Spárováno se surovinou</th><td>{{ import.get_mapped_count }}</td></tr>
+          <tr><th>Přeskočeno</th><td>{{ import.get_skipped_count }}</td></tr>
+          <tr><th>Celková tržba (s DPH)</th><td class="fw-bold">{{ import.get_total_revenue|floatformat:0 }} Kč</td></tr>
+          {% if import.write_off_id %}
+          <tr><th>Odepsání ze skladu</th>
+            <td><a href="{% url 'inventory:stock_write_off_detail' import.write_off_id %}">Zobrazit odepsání #{{ import.write_off_id }}</a></td>
+          </tr>
+          {% endif %}
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <strong>Položky importu</strong>
+    <span class="text-muted small">{{ import.items.count }} artiklů</span>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-sm table-hover mb-0">
+        <thead class="table-secondary">
+          <tr>
+            <th>Artikl</th>
+            <th>Název</th>
+            <th>Skupina</th>
+            <th>EAN</th>
+            <th>Množství</th>
+            <th>Tržba s DPH</th>
+            <th>Provozovny</th>
+            <th>Surovina</th>
+            <th>Stav</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in items %}
+          <tr {% if item.skip %}class="table-light text-muted"{% endif %}>
+            <td class="small">{{ item.article_code }}</td>
+            <td>{{ item.name }}</td>
+            <td class="small">{{ item.group|default:"–" }}</td>
+            <td class="small text-muted">{{ item.barcode|default:"–" }}</td>
+            <td>{{ item.quantity }} {{ item.unit }}</td>
+            <td>{{ item.total_price_with_vat|floatformat:0 }} Kč</td>
+            <td class="small text-muted">{{ item.establishments|default:"–" }}</td>
+            <td>
+              {% if item.ingredient %}
+                <span class="text-success">{{ item.ingredient.name }}</span>
+              {% else %}
+                <span class="text-muted">–</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if item.skip %}
+                <span class="badge bg-secondary">Přeskočeno</span>
+              {% elif item.ingredient %}
+                <span class="badge bg-success">Odepsáno</span>
+              {% else %}
+                <span class="badge bg-warning text-dark">Nespárováno</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+{% if write_off %}
+<div class="card mt-4">
+  <div class="card-header">
+    <strong><i class="fas fa-trash-alt me-2"></i>Odepsání ze skladu (StockWriteOff #{{ write_off.id }})</strong>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-sm mb-0">
+        <thead class="table-secondary">
+          <tr>
+            <th>Surovina</th>
+            <th>Množství</th>
+            <th>Nákupní cena/j.</th>
+            <th>Celková nákupní cena</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for witem in write_off.items.all %}
+          <tr>
+            <td>{{ witem.ingredient.name }}</td>
+            <td>{{ witem.quantity }} {{ witem.ingredient.base_unit }}</td>
+            <td>{{ witem.unit_cost|floatformat:2 }} Kč</td>
+            <td>{{ witem.get_total_cost|floatformat:2 }} Kč</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
