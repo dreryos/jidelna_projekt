@@ -429,7 +429,7 @@ class StockTransferForm(forms.ModelForm):
         widgets = {
             'warehouse_from': forms.Select(attrs={'class': 'form-select'}),
             'warehouse_to': forms.Select(attrs={'class': 'form-select'}),
-            'transfer_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+            'transfer_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}, format='%Y-%m-%d'),
             'notes': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
         }
         labels = {
@@ -595,7 +595,7 @@ class StockWriteOffForm(forms.ModelForm):
         widgets = {
             'warehouse': forms.Select(attrs={'class': 'form-select'}),
             'category': forms.Select(attrs={'class': 'form-select'}),
-            'write_off_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+            'write_off_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}, format='%Y-%m-%d'),
             'document_number': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Číslo dokladu'}),
             'notes': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
         }
