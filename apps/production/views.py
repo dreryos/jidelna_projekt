@@ -1693,7 +1693,6 @@ def picking_list_delete(request, document_id):
     COMPLETED položky se nerevertují (skutečná spotřeba ze skladu zůstane odečtena).
     """
     from .models import PickingListDocument, PickingList
-    from apps.inventory.models import StockItem
 
     try:
         document = PickingListDocument.objects.get(id=document_id)
@@ -1721,19 +1720,11 @@ def picking_list_delete(request, document_id):
     completed_items = document.items.filter(status=PickingList.Status.COMPLETED).select_related('ingredient', 'warehouse')
 
     if request.method == 'POST':
-        # Odblokovat všechny PENDING položky
-        for item in pending_items:
-            try:
-                stock_item = StockItem.objects.get(warehouse=item.warehouse, ingredient=item.ingredient)
-                stock_item.unblock_quantity(item.quantity_planned)
-            except StockItem.DoesNotExist:
-                pass
-            except Exception as e:
-                logger.error(f"Error unblocking stock item during picking list deletion: {e}", exc_info=True)
-
         doc_name = document.name
-        document.delete()
-        messages.success(request, f'Výdejka "{doc_name}" byla smazána a blokované suroviny byly odblokování.')
+        # Odblokování PENDING položek zajišťuje post_delete signál na PickingList
+        with transaction.atomic():
+            document.delete()
+        messages.success(request, f'Výdejka "{doc_name}" byla smazána a blokované suroviny byly odblokovány.')
         return redirect('production:picking_list_generator')
 
     return render(request, 'production/picking_list_confirm_delete.html', {

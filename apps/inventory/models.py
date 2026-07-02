@@ -199,30 +199,51 @@ class StockItem(models.Model):
         """
         Zablokuje zadané množství ze skladu.
         Množství se neodečte ze skladu, pouze se zaznamená jako blokované.
+        Aktualizace probíhá atomicky přes F() výraz, aby souběžné blokace
+        nepřepisovaly navzájem své hodnoty.
         """
         from decimal import Decimal
         amount = Decimal(str(amount))
         if amount < 0:
             raise ValueError("Nelze blokovat záporné množství")
-        self.quantity_blocked += amount
-        self.save(update_fields=['quantity_blocked'])
-    
+        StockItem.objects.filter(pk=self.pk).update(
+            quantity_blocked=models.F('quantity_blocked') + amount
+        )
+        self.refresh_from_db(fields=['quantity_blocked'])
+        self._normalize_quantity_blocked()
+
     def unblock_quantity(self, amount):
         """
         Uvolní (odblokuje) zadané množství.
         Používá se když je výdejka zrušena nebo změněna.
+        Aktualizace probíhá atomicky přes F() výraz.
         """
         from decimal import Decimal
         amount = Decimal(str(amount))
         if amount < 0:
             raise ValueError("Nelze odblokovat záporné množství")
-        self.quantity_blocked -= amount
-        if self.quantity_blocked < 0:
-            self.quantity_blocked = Decimal('0')
-        # Pokud je blokované množství velmi blízko nule (< 0.001), nastavíme ho na přesně 0
-        elif abs(self.quantity_blocked) < Decimal('0.001'):
-            self.quantity_blocked = Decimal('0')
-        self.save(update_fields=['quantity_blocked'])
+        StockItem.objects.filter(pk=self.pk).update(
+            quantity_blocked=models.F('quantity_blocked') - amount
+        )
+        self.refresh_from_db(fields=['quantity_blocked'])
+        self._normalize_quantity_blocked()
+
+    def _normalize_quantity_blocked(self):
+        """
+        Zaokrouhlí blokované množství po atomickém update:
+        záporné nebo téměř nulové (< 0.001) hodnoty na přesnou 0,
+        u kusových položek drobné nepřesnosti na celé číslo.
+        """
+        from decimal import Decimal
+        normalized = self.quantity_blocked
+        if normalized < 0 or abs(normalized) < Decimal('0.001'):
+            normalized = Decimal('0')
+        elif self.ingredient.base_unit in ['ks', 'kus', 'kusy']:
+            if abs(normalized - round(normalized)) < Decimal('0.005'):
+                normalized = Decimal(round(normalized))
+        if normalized != self.quantity_blocked:
+            StockItem.objects.filter(pk=self.pk).update(quantity_blocked=normalized)
+            self.quantity_blocked = normalized
 
     def save(self, *args, **kwargs):
         # Výpočet ceny bez DPH (price je cena s DPH)

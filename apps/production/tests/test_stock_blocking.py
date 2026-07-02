@@ -450,3 +450,128 @@ class StockBlockingTest(TestCase):
         self.stock.unblock_quantity(Decimal('5.000'))
         self.stock.refresh_from_db()
         self.assertEqual(self.stock.quantity_blocked, Decimal('0.000'))
+
+    def _create_blocked_item(self, portions=3):
+        """Helper: vytvoří příkaz s výdejkou přiřazenou k dokumentu (blokuje sklad)."""
+        menu_plan = MenuPlan.objects.create(
+            name='Test Menu',
+            canteen=self.canteen,
+            date_from=date(2025, 9, 10),
+            date_to=date(2025, 9, 10)
+        )
+        order = ProductionOrder.objects.create(
+            recipe=self.recipe,
+            canteen=self.canteen,
+            menu_plan=menu_plan,
+            date=date(2025, 9, 10)
+        )
+        ProductionOrderPortionVariant.objects.create(
+            production_order=order,
+            portions=portions,
+            coefficient=Decimal('1.0')
+        )
+        order.generate_picking_list()
+        document = PickingListDocument.objects.create(
+            name='Test Document',
+            canteen=self.canteen,
+            date_from=date(2025, 9, 10),
+            date_to=date(2025, 9, 10),
+            created_by=self.user
+        )
+        pl = order.picking_list_items.first()
+        pl.document = document
+        pl.save()
+        return order, document, pl
+
+    def test_unblock_on_document_delete(self):
+        """
+        Test že smazání dokumentu výdejky (cascade na položky)
+        automaticky uvolní blokované množství přes post_delete signál.
+        """
+        order, document, pl = self._create_blocked_item(portions=3)
+        self.stock.refresh_from_db()
+        self.assertEqual(self.stock.quantity_blocked, Decimal('3.000'))
+
+        document.delete()
+
+        self.stock.refresh_from_db()
+        self.assertEqual(self.stock.quantity_blocked, Decimal('0.000'))
+        self.assertEqual(self.stock.quantity, Decimal('10.000'))
+
+    def test_unblock_on_production_order_delete(self):
+        """
+        Test že smazání výrobního příkazu (cascade na položky výdejky)
+        automaticky uvolní blokované množství.
+        """
+        order, document, pl = self._create_blocked_item(portions=4)
+        self.stock.refresh_from_db()
+        self.assertEqual(self.stock.quantity_blocked, Decimal('4.000'))
+
+        order.delete()
+
+        self.stock.refresh_from_db()
+        self.assertEqual(self.stock.quantity_blocked, Decimal('0.000'))
+
+    def test_completed_item_delete_does_not_unblock(self):
+        """
+        Test že smazání COMPLETED položky blokaci nemění
+        (blokace už byla uvolněna při dokončení).
+        """
+        order, document, pl = self._create_blocked_item(portions=3)
+        pl.quantity_actual = Decimal('3.000')
+        pl.status = PickingList.Status.COMPLETED
+        pl.save()
+
+        self.stock.refresh_from_db()
+        self.assertEqual(self.stock.quantity_blocked, Decimal('0.000'))
+        self.assertEqual(self.stock.quantity, Decimal('7.000'))
+
+        document.delete()
+
+        self.stock.refresh_from_db()
+        self.assertEqual(self.stock.quantity_blocked, Decimal('0.000'))
+        self.assertEqual(self.stock.quantity, Decimal('7.000'))
+
+    def test_revert_completed_to_pending(self):
+        """
+        Test že vrácení statusu COMPLETED -> PENDING vrátí vydané množství
+        na sklad a obnoví blokaci plánovaného množství.
+        """
+        order, document, pl = self._create_blocked_item(portions=3)
+        pl.quantity_actual = Decimal('3.500')
+        pl.status = PickingList.Status.COMPLETED
+        pl.save()
+
+        self.stock.refresh_from_db()
+        self.assertEqual(self.stock.quantity, Decimal('6.500'))
+        self.assertEqual(self.stock.quantity_blocked, Decimal('0.000'))
+
+        # Revert zpět na PENDING
+        pl.status = PickingList.Status.PENDING
+        pl.save()
+
+        self.stock.refresh_from_db()
+        self.assertEqual(self.stock.quantity, Decimal('10.000'))
+        self.assertEqual(self.stock.quantity_blocked, Decimal('3.000'))
+        self.assertEqual(self.stock.quantity_available, Decimal('7.000'))
+
+    def test_quantity_planned_change_adjusts_block(self):
+        """
+        Test že změna plánovaného množství u blokované PENDING položky
+        upraví blokaci o rozdíl (oběma směry).
+        """
+        order, document, pl = self._create_blocked_item(portions=3)
+        self.stock.refresh_from_db()
+        self.assertEqual(self.stock.quantity_blocked, Decimal('3.000'))
+
+        # Navýšení plánu 3 -> 5 kg
+        pl.quantity_planned = Decimal('5.000')
+        pl.save()
+        self.stock.refresh_from_db()
+        self.assertEqual(self.stock.quantity_blocked, Decimal('5.000'))
+
+        # Snížení plánu 5 -> 2 kg
+        pl.quantity_planned = Decimal('2.000')
+        pl.save()
+        self.stock.refresh_from_db()
+        self.assertEqual(self.stock.quantity_blocked, Decimal('2.000'))

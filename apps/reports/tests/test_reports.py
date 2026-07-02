@@ -369,6 +369,55 @@ class ReportPickingListCoverageTest(TestCase):
         self.assertEqual(it['stock'], 2.0)
         self.assertEqual(it['to_order'], 2.0)
 
+    def test_order_changed_after_picking_list_counts_residual_need(self):
+        """
+        Příkaz upravený PO vytvoření výdejky: blokace kryje jen původní
+        plánované množství, zbytek potřeby se musí započítat do objednávky.
+        """
+        PickingList.objects.create(
+            production_order=self.order,
+            document=self._make_document(),
+            warehouse=self.w1,
+            ingredient=self.ingredient,
+            quantity_planned=Decimal('3.000')
+        )
+        self.stock.refresh_from_db()
+        self.assertEqual(self.stock.quantity_available, Decimal('2.000'))
+
+        # Navýšíme porce 3 -> 6 (potřeba 6 kg, blokováno jen 3 kg)
+        variant = self.order.portion_variants.first()
+        variant.portions = 6
+        variant.save()
+
+        report = generate_order_report(self.canteen, '2025-09-01', '2025-09-30')
+        self.assertEqual(len(report['items']), 1)
+        it = report['items'][0]
+        # Zbytek potřeby nad blokaci = 6 - 3 = 3 kg, dostupné 2 kg -> objednat 1 kg
+        self.assertEqual(it['needed'], 3.0)
+        self.assertEqual(it['stock'], 2.0)
+        self.assertEqual(it['to_order'], 1.0)
+
+    def test_order_reduced_after_picking_list_fully_covered(self):
+        """
+        Příkaz zmenšený PO vytvoření výdejky: blokace potřebu kryje celou,
+        surovina se v reportu neobjeví.
+        """
+        PickingList.objects.create(
+            production_order=self.order,
+            document=self._make_document(),
+            warehouse=self.w1,
+            ingredient=self.ingredient,
+            quantity_planned=Decimal('3.000')
+        )
+
+        # Snížíme porce 3 -> 2 (potřeba 2 kg < blokováno 3 kg)
+        variant = self.order.portion_variants.first()
+        variant.portions = 2
+        variant.save()
+
+        report = generate_order_report(self.canteen, '2025-09-01', '2025-09-30')
+        self.assertEqual(len(report['items']), 0)
+
 
 class ReportIngredientOverrideTest(TestCase):
     """Testy, že report respektuje úpravy jídelníčku (ingredient overrides)."""

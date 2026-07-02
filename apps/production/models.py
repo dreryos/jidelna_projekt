@@ -836,6 +836,51 @@ class PickingList(models.Model):
                     price=Decimal('0')
                 )
 
+        # Logika pro úpravu blokace při změně plánovaného množství
+        # u PENDING položky, která je již přiřazena k dokumentu (= blokuje sklad)
+        if (
+            original_state is not None
+            and original_state.document is not None
+            and self.document
+            and self.warehouse
+            and original_state.status == self.Status.PENDING
+            and self.status == self.Status.PENDING
+            and original_state.quantity_planned != self.quantity_planned
+        ):
+            delta = self.quantity_planned - original_state.quantity_planned
+            with transaction.atomic():
+                stock_item, _ = StockItem.objects.select_for_update().get_or_create(
+                    warehouse=self.warehouse,
+                    ingredient=self.ingredient,
+                    defaults={'quantity': Decimal('0'), 'price': Decimal('0')}
+                )
+                if delta > 0:
+                    stock_item.block_quantity(delta)
+                else:
+                    stock_item.unblock_quantity(-delta)
+
+        # Logika pro revert dokončené položky zpět na PENDING:
+        # vrátíme skutečně vydané množství na sklad a obnovíme blokaci
+        # plánovaného množství, aby report objednávek nepočítal potřebu dvakrát.
+        if (
+            original_state is not None
+            and original_state.status == self.Status.COMPLETED
+            and self.status == self.Status.PENDING
+            and self.warehouse is not None
+        ):
+            with transaction.atomic():
+                stock_item, _ = StockItem.objects.select_for_update().get_or_create(
+                    warehouse=self.warehouse,
+                    ingredient=self.ingredient,
+                    defaults={'quantity': Decimal('0'), 'price': Decimal('0')}
+                )
+                if original_state.quantity_actual is not None:
+                    StockItem.objects.filter(pk=stock_item.pk).update(
+                        quantity=models.F('quantity') + original_state.quantity_actual
+                    )
+                if self.document:
+                    stock_item.block_quantity(self.quantity_planned)
+
         # Logika pro odečtení ze skladu a uvolnění blokace
         # Spustí se pouze pokud je status změněn na COMPLETED
         if self.status == self.Status.COMPLETED and (original_state is None or original_state.status != self.Status.COMPLETED):

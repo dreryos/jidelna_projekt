@@ -10,7 +10,7 @@ from django.http import HttpResponse
 from django.urls import reverse
 from django.utils import timezone
 from django.contrib.auth.decorators import login_required
-from django.db.models import Q
+from django.db.models import Q, Sum
 from django.core.exceptions import ObjectDoesNotExist
 from decimal import Decimal
 
@@ -88,9 +88,14 @@ def generate_order_report(canteen, date_from, date_to):
     - Potřeba surovin přes ProductionOrder.get_required_ingredients(),
       která respektuje varianty porcí i ingredient overrides
       (změněné množství, odstraněné a přidané suroviny).
-    - Potřeba pokrytá výdejkou, která je už promítnutá do skladu
-      (přiřazená k dokumentu = blokovaná zásoba, nebo COMPLETED = vydaná),
-      se přeskočí, aby se nepočítala dvakrát.
+    - Potřeba pokrytá výdejkou, která je už promítnutá do skladu,
+      se nepočítá dvakrát:
+      * COMPLETED položky (vydáno, spotřeba odečtena ze skladu) potřebu
+        kryjí celou — pár (příkaz, surovina) se přeskočí.
+      * PENDING položky přiřazené k dokumentu (blokovaná zásoba) kryjí
+        potřebu jen do výše blokace (quantity_planned). Pokud byl výrobní
+        příkaz po vytvoření výdejky upraven (více porcí, override), zbytek
+        potřeby nad blokaci se do odhadu objednávky započítá.
     """
     # Najdeme výrobní příkazy pro jídelnu v daném období
     # Filtrujeme podle jídelny - buď přímo nebo přes menu_plan
@@ -108,13 +113,25 @@ def generate_order_report(canteen, date_from, date_to):
         'ingredient_overrides__ingredient'
     )
 
-    # Dvojice (production_order_id, ingredient_id), jejichž potřeba je už
-    # promítnutá ve stavu skladu (blokace přes dokument výdejky nebo výdej)
-    covered = set(PickingList.objects.filter(
-        production_order__in=orders
-    ).filter(
-        Q(document__isnull=False) | Q(status=PickingList.Status.COMPLETED)
+    # Dvojice (production_order_id, ingredient_id) vydané výdejkou —
+    # spotřeba je už odečtena ze skladu, potřebu kryjí celou
+    completed = set(PickingList.objects.filter(
+        production_order__in=orders,
+        status=PickingList.Status.COMPLETED
     ).values_list('production_order_id', 'ingredient_id'))
+
+    # Blokované plánované množství PENDING položek s dokumentem —
+    # kryje potřebu jen do výše blokace
+    blocked_planned = {
+        (row['production_order_id'], row['ingredient_id']): row['total_planned']
+        for row in PickingList.objects.filter(
+            production_order__in=orders,
+            status=PickingList.Status.PENDING,
+            document__isnull=False
+        ).values('production_order_id', 'ingredient_id').annotate(
+            total_planned=Sum('quantity_planned')
+        )
+    }
 
     needs = {}
 
@@ -123,8 +140,17 @@ def generate_order_report(canteen, date_from, date_to):
             ingredient = item['ingredient']
             ing_id = ingredient.pk
 
-            if (order.pk, ing_id) in covered:
+            if (order.pk, ing_id) in completed:
                 continue
+
+            amount = item['amount']
+            planned = blocked_planned.get((order.pk, ing_id))
+            if planned is not None:
+                # Blokace se v reportu projeví přes snížené dostupné zásoby,
+                # do potřeby počítáme jen zbytek nad blokované množství
+                amount = amount - planned
+                if amount <= 0:
+                    continue
 
             # Inicializujeme nebo aktualizujeme potřebu suroviny
             if ing_id not in needs:
@@ -133,7 +159,7 @@ def generate_order_report(canteen, date_from, date_to):
                     'unit': ingredient.base_unit,
                     'needed': Decimal('0')
                 }
-            needs[ing_id]['needed'] += item['amount']
+            needs[ing_id]['needed'] += amount
 
     # Porovnáme s aktuálním stavem ve skladech jídelny
     for data in needs.values():
