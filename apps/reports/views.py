@@ -15,7 +15,7 @@ from django.core.exceptions import ObjectDoesNotExist
 from decimal import Decimal
 
 from apps.canteens.models import Canteen
-from apps.production.models import ProductionOrder
+from apps.production.models import ProductionOrder, PickingList
 from apps.core.models import Ingredient
 from apps.inventory.models import StockItem
 
@@ -83,10 +83,14 @@ def generate_order_report(canteen, date_from, date_to):
     """Aggreguje potřebu surovin z plánovaných výrobních příkazů a porovná s aktuálními zásobami.
 
     Vrací dict s položkami: ingredient, unit, needed, stock, to_order
-    
-    Nová logika:
-    - Používá ProductionOrderPortionVariant s koeficienty místo portions_adult/portions_child
-    - Počítá pomocí RecipeIngredient.get_quantity_in_base_unit()
+
+    Logika:
+    - Potřeba surovin přes ProductionOrder.get_required_ingredients(),
+      která respektuje varianty porcí i ingredient overrides
+      (změněné množství, odstraněné a přidané suroviny).
+    - Potřeba pokrytá výdejkou, která je už promítnutá do skladu
+      (přiřazená k dokumentu = blokovaná zásoba, nebo COMPLETED = vydaná),
+      se přeskočí, aby se nepočítala dvakrát.
     """
     # Najdeme výrobní příkazy pro jídelnu v daném období
     # Filtrujeme podle jídelny - buď přímo nebo přes menu_plan
@@ -100,33 +104,36 @@ def generate_order_report(canteen, date_from, date_to):
         'menu_plan'
     ).prefetch_related(
         'portion_variants',
-        'recipe__recipeingredient_set__ingredient'
+        'recipe__recipeingredient_set__ingredient',
+        'ingredient_overrides__ingredient'
     )
+
+    # Dvojice (production_order_id, ingredient_id), jejichž potřeba je už
+    # promítnutá ve stavu skladu (blokace přes dokument výdejky nebo výdej)
+    covered = set(PickingList.objects.filter(
+        production_order__in=orders
+    ).filter(
+        Q(document__isnull=False) | Q(status=PickingList.Status.COMPLETED)
+    ).values_list('production_order_id', 'ingredient_id'))
 
     needs = {}
 
     for order in orders:
-        # Pro každý recept vezmeme normy
-        for recipe_ingredient in order.recipe.recipeingredient_set.all():
-            ing_id = recipe_ingredient.ingredient_id
-            
-            # Vypočítáme celkové množství ze všech variant porcí
-            total_quantity = Decimal('0')
-            for variant in order.portion_variants.all():
-                quantity = recipe_ingredient.get_quantity_in_base_unit(
-                    portions=variant.portions,
-                    coefficient=variant.coefficient
-                )
-                total_quantity += quantity
-            
+        for item in order.get_required_ingredients():
+            ingredient = item['ingredient']
+            ing_id = ingredient.pk
+
+            if (order.pk, ing_id) in covered:
+                continue
+
             # Inicializujeme nebo aktualizujeme potřebu suroviny
             if ing_id not in needs:
                 needs[ing_id] = {
-                    'ingredient': recipe_ingredient.ingredient,
-                    'unit': recipe_ingredient.ingredient.base_unit,
+                    'ingredient': ingredient,
+                    'unit': ingredient.base_unit,
                     'needed': Decimal('0')
                 }
-            needs[ing_id]['needed'] += total_quantity
+            needs[ing_id]['needed'] += item['amount']
 
     # Porovnáme s aktuálním stavem ve skladech jídelny
     for data in needs.values():

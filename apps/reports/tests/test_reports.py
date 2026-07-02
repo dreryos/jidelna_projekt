@@ -5,7 +5,14 @@ from django.contrib.auth import get_user_model
 from apps.canteens.models import Canteen, Warehouse
 from apps.core.models import Ingredient, Recipe, RecipeIngredient
 from apps.inventory.models import StockItem
-from apps.production.models import ProductionOrder, MenuPlan, ProductionOrderPortionVariant
+from apps.production.models import (
+    ProductionOrder,
+    MenuPlan,
+    ProductionOrderPortionVariant,
+    ProductionOrderIngredientOverride,
+    PickingList,
+    PickingListDocument,
+)
 from apps.reports.views import generate_order_report
 
 User = get_user_model()
@@ -30,7 +37,7 @@ class ReportAggregationTest(TestCase):
             warehouse=self.w1,
             ingredient=self.ingredient,
             quantity=Decimal('5.000'),
-            price=10.0
+            price=Decimal('10.0')
         )
 
         self.recipe = Recipe.objects.create(name='Koláč')
@@ -194,7 +201,7 @@ class ReportAggregationTest(TestCase):
             warehouse=self.w1,
             ingredient=ingredient2,
             quantity=Decimal('20.000'),
-            price=15.0
+            price=Decimal('15.0')
         )
         
         # Add second ingredient to recipe
@@ -224,3 +231,238 @@ class ReportAggregationTest(TestCase):
         self.assertEqual(len(report['items']), 2)
         self.assertEqual(report['sufficient_stock_count'], 1)  # Mouka has enough
         self.assertEqual(report['to_order_count'], 1)  # Cukr needs ordering
+
+
+class ReportPickingListCoverageTest(TestCase):
+    """Testy dvojího počítání: potřeba krytá výdejkou promítnutou do skladu se nesmí počítat znovu."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='tester', password='x')
+        self.canteen = Canteen.objects.create(name='Růžená')
+        self.w1 = Warehouse.objects.create(name='Sklad1', canteen=self.canteen)
+
+        self.ingredient = Ingredient.objects.create(
+            name='Cukr',
+            base_unit='kg',
+            recipe_unit='g',
+            conversion_factor=KG_TO_G_CONVERSION
+        )
+        self.stock = StockItem.objects.create(
+            warehouse=self.w1,
+            ingredient=self.ingredient,
+            quantity=Decimal('5.000'),
+            price=Decimal('10.0')
+        )
+
+        self.recipe = Recipe.objects.create(name='Koláč')
+        RecipeIngredient.objects.create(
+            recipe=self.recipe,
+            ingredient=self.ingredient,
+            quantity_per_portion=KG_TO_G_CONVERSION  # 1 kg na porci
+        )
+
+        self.menu_plan = MenuPlan.objects.create(
+            name='Test Menu',
+            canteen=self.canteen,
+            date_from='2025-09-01',
+            date_to='2025-09-30'
+        )
+        self.order = ProductionOrder.objects.create(
+            recipe=self.recipe,
+            menu_plan=self.menu_plan,
+            canteen=self.canteen,
+            date='2025-09-01'
+        )
+        ProductionOrderPortionVariant.objects.create(
+            production_order=self.order,
+            coefficient=Decimal('1.0'),
+            portions=3
+        )
+
+    def _make_document(self):
+        return PickingListDocument.objects.create(
+            name='Výdejka test',
+            canteen=self.canteen,
+            date_from='2025-09-01',
+            date_to='2025-09-30',
+            created_by=self.user
+        )
+
+    def test_pending_picking_list_without_document_is_counted(self):
+        """PENDING výdejka bez dokumentu nic neblokuje -> potřeba se počítá normálně."""
+        PickingList.objects.create(
+            production_order=self.order,
+            warehouse=self.w1,
+            ingredient=self.ingredient,
+            quantity_planned=Decimal('3.000')
+        )
+
+        report = generate_order_report(self.canteen, '2025-09-01', '2025-09-30')
+        self.assertEqual(len(report['items']), 1)
+        it = report['items'][0]
+        self.assertEqual(it['needed'], 3.0)
+        self.assertEqual(it['stock'], 5.0)
+        self.assertEqual(it['to_order'], 0)
+
+    def test_blocked_picking_list_not_double_counted(self):
+        """Výdejka přiřazená k dokumentu blokuje zásobu -> potřeba se už nepočítá."""
+        PickingList.objects.create(
+            production_order=self.order,
+            document=self._make_document(),
+            warehouse=self.w1,
+            ingredient=self.ingredient,
+            quantity_planned=Decimal('3.000')
+        )
+        self.stock.refresh_from_db()
+        # Sanity: blokace proběhla, dostupné = 5 - 3 = 2 kg
+        self.assertEqual(self.stock.quantity_available, Decimal('2.000'))
+
+        report = generate_order_report(self.canteen, '2025-09-01', '2025-09-30')
+        # Potřeba příkazu je krytá blokací -> surovina se v reportu neobjeví
+        self.assertEqual(len(report['items']), 0)
+
+    def test_completed_picking_list_not_double_counted(self):
+        """COMPLETED výdejka: zásoba už odečtená -> potřeba se už nepočítá."""
+        pl = PickingList.objects.create(
+            production_order=self.order,
+            document=self._make_document(),
+            warehouse=self.w1,
+            ingredient=self.ingredient,
+            quantity_planned=Decimal('3.000')
+        )
+        pl.status = PickingList.Status.COMPLETED
+        pl.quantity_actual = Decimal('3.000')
+        pl.save()
+        self.stock.refresh_from_db()
+        # Sanity: odblokováno a odečteno, zbývá 2 kg
+        self.assertEqual(self.stock.quantity_available, Decimal('2.000'))
+
+        report = generate_order_report(self.canteen, '2025-09-01', '2025-09-30')
+        self.assertEqual(len(report['items']), 0)
+
+    def test_covered_order_does_not_hide_other_orders_need(self):
+        """Krytý příkaz se přeskočí, ale potřeba jiného příkazu se počítá dál."""
+        PickingList.objects.create(
+            production_order=self.order,
+            document=self._make_document(),
+            warehouse=self.w1,
+            ingredient=self.ingredient,
+            quantity_planned=Decimal('3.000')
+        )
+        order2 = ProductionOrder.objects.create(
+            recipe=self.recipe,
+            menu_plan=self.menu_plan,
+            canteen=self.canteen,
+            date='2025-09-15'
+        )
+        ProductionOrderPortionVariant.objects.create(
+            production_order=order2,
+            coefficient=Decimal('1.0'),
+            portions=4
+        )
+
+        report = generate_order_report(self.canteen, '2025-09-01', '2025-09-30')
+        self.assertEqual(len(report['items']), 1)
+        it = report['items'][0]
+        # order2: 4 kg, dostupné 5 - 3 (blokace) = 2 kg -> objednat 2 kg
+        self.assertEqual(it['needed'], 4.0)
+        self.assertEqual(it['stock'], 2.0)
+        self.assertEqual(it['to_order'], 2.0)
+
+
+class ReportIngredientOverrideTest(TestCase):
+    """Testy, že report respektuje úpravy jídelníčku (ingredient overrides)."""
+
+    def setUp(self):
+        self.canteen = Canteen.objects.create(name='Růžená')
+        self.w1 = Warehouse.objects.create(name='Sklad1', canteen=self.canteen)
+
+        self.ingredient = Ingredient.objects.create(
+            name='Cukr',
+            base_unit='kg',
+            recipe_unit='g',
+            conversion_factor=KG_TO_G_CONVERSION
+        )
+        StockItem.objects.create(
+            warehouse=self.w1,
+            ingredient=self.ingredient,
+            quantity=Decimal('5.000'),
+            price=Decimal('10.0')
+        )
+
+        self.recipe = Recipe.objects.create(name='Koláč')
+        RecipeIngredient.objects.create(
+            recipe=self.recipe,
+            ingredient=self.ingredient,
+            quantity_per_portion=KG_TO_G_CONVERSION  # 1 kg na porci
+        )
+
+        self.menu_plan = MenuPlan.objects.create(
+            name='Test Menu',
+            canteen=self.canteen,
+            date_from='2025-09-01',
+            date_to='2025-09-30'
+        )
+        self.order = ProductionOrder.objects.create(
+            recipe=self.recipe,
+            menu_plan=self.menu_plan,
+            canteen=self.canteen,
+            date='2025-09-01'
+        )
+        ProductionOrderPortionVariant.objects.create(
+            production_order=self.order,
+            coefficient=Decimal('1.0'),
+            portions=3
+        )
+
+    def test_override_changed_quantity(self):
+        """Změněné množství na porci se promítne do potřeby."""
+        ProductionOrderIngredientOverride.objects.create(
+            production_order=self.order,
+            ingredient=self.ingredient,
+            quantity_per_portion=Decimal('500'),  # 0.5 kg místo 1 kg
+            original_quantity=KG_TO_G_CONVERSION
+        )
+
+        report = generate_order_report(self.canteen, '2025-09-01', '2025-09-30')
+        self.assertEqual(len(report['items']), 1)
+        # 3 porce × 0.5 kg = 1.5 kg
+        self.assertEqual(report['items'][0]['needed'], 1.5)
+
+    def test_override_removed_ingredient(self):
+        """Odstraněná surovina se v reportu neobjeví."""
+        ProductionOrderIngredientOverride.objects.create(
+            production_order=self.order,
+            ingredient=self.ingredient,
+            quantity_per_portion=None,
+            original_quantity=KG_TO_G_CONVERSION,
+            is_removed=True
+        )
+
+        report = generate_order_report(self.canteen, '2025-09-01', '2025-09-30')
+        self.assertEqual(len(report['items']), 0)
+
+    def test_override_added_ingredient(self):
+        """Přidaná surovina (mimo recept) se do reportu započítá."""
+        added = Ingredient.objects.create(
+            name='Vanilka',
+            base_unit='kg',
+            recipe_unit='g',
+            conversion_factor=KG_TO_G_CONVERSION
+        )
+        ProductionOrderIngredientOverride.objects.create(
+            production_order=self.order,
+            ingredient=added,
+            quantity_per_portion=Decimal('100'),  # 0.1 kg na porci
+            original_quantity=Decimal('0'),
+            is_added=True
+        )
+
+        report = generate_order_report(self.canteen, '2025-09-01', '2025-09-30')
+        self.assertEqual(len(report['items']), 2)
+        by_name = {it['ingredient'].name: it for it in report['items']}
+        self.assertIn('Vanilka', by_name)
+        # 3 porce × 0.1 kg = 0.3 kg, sklad 0 -> objednat 0.3
+        self.assertEqual(by_name['Vanilka']['needed'], 0.3)
+        self.assertEqual(by_name['Vanilka']['stock'], 0.0)
+        self.assertEqual(by_name['Vanilka']['to_order'], 0.3)
