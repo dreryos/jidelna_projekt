@@ -638,11 +638,14 @@ class StockWriteOffItemForm(forms.ModelForm):
     def __init__(self, *args, warehouse=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.warehouse = warehouse
-        # Queryset musí obsahovat všechny aktivní ingredience – omezení jen na
-        # sklad by způsobilo chybu "Vyberte platnou možnost" pro ID, která
-        # nejsou v querysetu. Validace dostupnosti probíhá v clean().
+        # Queryset musí obsahovat aktivní ingredience A NAVÍC i neaktivní
+        # (soft-smazané) ingredience, které stále mají zásobu na skladě –
+        # ty je totiž potřeba umět odepsat (např. doprodej vyřazeného zboží).
+        # Bez nich by výběr takové suroviny skončil chybou "Vyberte platnou
+        # možnost". Omezení jen na sklad tu nepoužíváme (způsobilo by chybu
+        # pro ID mimo queryset); dostupnost se validuje v clean().
         self.fields['ingredient'].queryset = Ingredient.objects.filter(
-            is_active=True
+            Q(is_active=True) | Q(pk__in=StockItem.objects.values('ingredient'))
         ).order_by('name')
 
     def clean(self):

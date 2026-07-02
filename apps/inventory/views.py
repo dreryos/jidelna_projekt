@@ -1936,16 +1936,22 @@ def stock_write_off_create(request):
         form = StockWriteOffForm(user=request.user)
         formset = StockWriteOffItemFormSet()
     
-    # Připravíme data surovin pro autocomplete jako JSON
+    # Připravíme data surovin pro autocomplete jako JSON.
+    # Musí odpovídat querysetu ve StockWriteOffItemForm – tj. aktivní suroviny
+    # plus neaktivní se zásobou na skladě. Jinak by autocomplete nabídl surovinu,
+    # kterou formulář následně odmítne chybou "Vyberte platnou možnost".
     import json
+    selectable_ingredients = Ingredient.objects.filter(
+        Q(is_active=True) | Q(pk__in=StockItem.objects.values('ingredient'))
+    ).order_by('name')
     ingredients_list = [
         {
-            'id': ing.id, 
+            'id': ing.id,
             'name': ing.name,
             'unit': ing.recipe_unit,
             'base_unit': ing.base_unit
-        } 
-        for ing in Ingredient.objects.all().order_by('name')
+        }
+        for ing in selectable_ingredients
     ]
     
     return render(request, 'inventory/stock_write_off_form.html', {
