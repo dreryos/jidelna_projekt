@@ -138,3 +138,6 @@ AIprompts.md
 .github/*
 /backups/*
 /picking_lists/*
+
+# Roo Code
+.roo/
