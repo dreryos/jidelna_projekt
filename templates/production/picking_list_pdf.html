@@ -39,8 +39,12 @@
             margin-bottom: 0;
         }
         
-        .meals-container {
-            columns: {% if large_document %}1{% else %}2{% endif %};
+        /* Vícesloupcové (CSS columns) rozložení je ve WeasyPrintu paměťově
+           náročné – u velkých dokumentů (mnoho dnů/jídel) vyvolávalo
+           vyčerpání paměti a pád workeru. Multicol proto používáme jen pro
+           malé výdejky; velké renderujeme jako prostý blokový tok. */
+        .meals-container.cols-2 {
+            columns: 2;
             column-gap: 15px;
         }
         
@@ -124,7 +128,7 @@
     <div class="day-section">
         <div class="page-header">{{ canteen.name }} — {{ date|date:"l d.m.Y" }}</div>
         
-        <div class="meals-container">
+        <div class="meals-container {% if not large_document %}cols-2{% endif %}">
         {% for meal in meals %}
         <div class="meal-item">
             <div class="meal-header">

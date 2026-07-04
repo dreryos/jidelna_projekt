@@ -27,6 +27,59 @@ MEAL_TYPE_ORDER = {
 }
 
 
+# Nad tímto počtem jídel (a při více než jednom dni) renderujeme výdejku
+# po dnech a slijeme přes pypdf, aby špička paměti WeasyPrintu zůstala nízko.
+# Menší výdejky renderujeme jednorázově (zachová průběžné číslování stran).
+PDF_CHUNK_MEAL_THRESHOLD = 60
+
+
+def _render_picking_pdf(context, base_url, sorted_daily_data, HTML,
+                        num_days, total_items):
+    """
+    Vyrenderuje PDF výdejky do BytesIO.
+
+    Malé výdejky: jeden průchod WeasyPrintem.
+    Velké vícedenní výdejky: render po jednotlivých dnech + sloučení přes pypdf.
+    Každý den beztak začíná na nové stránce (page-break-before), takže výstup
+    vypadá stejně; jen se výrazně sníží špičková spotřeba paměti (celý layout
+    dokumentu se v paměti nedrží najednou). Pata "Strana X / Y" je u chunkované
+    varianty číslovaná v rámci dne.
+    """
+    chunked = num_days > 1 and total_items > PDF_CHUNK_MEAL_THRESHOLD
+
+    if not chunked:
+        pdf_file = BytesIO()
+        HTML(
+            string=render_to_string('production/picking_list_pdf.html', context),
+            base_url=base_url,
+        ).write_pdf(pdf_file)
+        pdf_file.seek(0)
+        return pdf_file
+
+    from pypdf import PdfReader, PdfWriter
+
+    writer = PdfWriter()
+    for day_entry in sorted_daily_data:
+        day_context = dict(context)
+        day_context['daily_picking_data'] = [day_entry]
+        chunk = BytesIO()
+        HTML(
+            string=render_to_string('production/picking_list_pdf.html', day_context),
+            base_url=base_url,
+        ).write_pdf(chunk)
+        chunk.seek(0)
+        for page in PdfReader(chunk).pages:
+            writer.add_page(page)
+        # Uvolníme layout dne z paměti před renderem dalšího
+        chunk.close()
+
+    pdf_file = BytesIO()
+    writer.write(pdf_file)
+    writer.close()
+    pdf_file.seek(0)
+    return pdf_file
+
+
 def generate_picking_list_pdf_file(document, base_url='/', save=True):
     """
     Vygeneruje PDF soubor pro výdejku a uloží ho do document.pdf_file.
@@ -214,15 +267,16 @@ def generate_picking_list_pdf_file(document, base_url='/', save=True):
                 raise Exception("WeasyPrint GTK3 knihovny nejsou nainstalovány") from e
             raise e
 
-        html_string = render_to_string('production/picking_list_pdf.html', context)
-
         pdf_start = time.monotonic()
-        html = HTML(string=html_string, base_url=base_url)
-        
-        # Vygenerujeme PDF do paměti
-        pdf_file = BytesIO()
-        html.write_pdf(pdf_file)
-        pdf_file.seek(0)
+
+        # Velké vícedenní výdejky renderujeme po dnech a slijeme (viz
+        # _render_picking_pdf). WeasyPrint drží celý layout dokumentu v paměti,
+        # takže jednorázový render velkého dokumentu spotřeboval stovky MB a
+        # shazoval gunicorn worker (SIGKILL / OOM). Chunkování drží peak nízko.
+        pdf_file = _render_picking_pdf(
+            context, base_url, sorted_daily_data, HTML,
+            num_days=num_days, total_items=total_items,
+        )
         
         if save:
             # Uložíme do FileField
