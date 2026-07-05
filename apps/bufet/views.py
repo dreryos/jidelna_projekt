@@ -14,7 +14,7 @@ from apps.core.models import Ingredient
 from apps.core.views import user_can_access_canteen
 from apps.inventory.models import StockWriteOff, StockWriteOffItem
 
-from .fiskalpro_parser import parse_export_date, parse_fiskalpro_csv
+from .fiskalpro_parser import parse_bufet_file, parse_export_date
 from .models import BufetImport, BufetImportItem
 
 NUMERIC_FIELDS = ('quantity', 'total_price_with_vat', 'total_price_without_vat')
@@ -242,16 +242,16 @@ def bufet_upload_step1(request):
     warehouses = _get_user_warehouses(request.user)
 
     if request.method == 'POST':
-        csv_file = request.FILES.get('csv_file')
+        upload = request.FILES.get('csv_file')
         warehouse_id = request.POST.get('warehouse')
 
-        if not csv_file or not warehouse_id:
-            messages.error(request, 'Musíte vybrat CSV soubor a sklad.')
+        if not upload or not warehouse_id:
+            messages.error(request, 'Musíte vybrat soubor (CSV/XLSX) a sklad.')
             return render(request, 'bufet/bufet_upload_step1.html', {'warehouses': warehouses})
 
         try:
             warehouse = Warehouse.objects.get(id=warehouse_id)
-        except Warehouse.DoesNotExist:
+        except (Warehouse.DoesNotExist, ValueError):
             messages.error(request, 'Vybraný sklad neexistuje.')
             return render(request, 'bufet/bufet_upload_step1.html', {'warehouses': warehouses})
 
@@ -260,20 +260,24 @@ def bufet_upload_step1(request):
             return render(request, 'bufet/bufet_upload_step1.html', {'warehouses': warehouses})
 
         try:
-            items = parse_fiskalpro_csv(csv_file)
+            items = parse_bufet_file(upload, upload.name)
         except ValueError as e:
-            messages.error(request, f'Chyba při načítání CSV: {e}')
+            messages.error(request, f'Chyba při načítání souboru: {e}')
             return render(request, 'bufet/bufet_upload_step1.html', {'warehouses': warehouses})
 
-        export_date = parse_export_date(csv_file.name)
+        if not items:
+            messages.error(request, 'Soubor neobsahuje žádné prodané položky.')
+            return render(request, 'bufet/bufet_upload_step1.html', {'warehouses': warehouses})
+
+        export_date = parse_export_date(upload.name)
 
         # Uložení do session
         request.session['bufet_warehouse_id'] = warehouse_id
-        request.session['bufet_filename'] = csv_file.name
+        request.session['bufet_filename'] = upload.name
         request.session['bufet_export_date'] = export_date.isoformat() if export_date else None
         request.session['bufet_items'] = [_serialize_bufet_item(it) for it in items]
 
-        messages.success(request, f'CSV načteno: {len(items)} unikátních artiklů.')
+        messages.success(request, f'Soubor načten: {len(items)} položek.')
         return redirect('bufet:upload_step2')
 
     return render(request, 'bufet/bufet_upload_step1.html', {'warehouses': warehouses})

@@ -30,11 +30,11 @@
           {% csrf_token %}
 
           <div class="mb-4">
-            <label class="form-label fw-bold">CSV soubor z FiskalPRO</label>
-            <input type="file" name="csv_file" accept=".csv" required class="form-control">
+            <label class="form-label fw-bold">Soubor XLSX z FiskalPRO</label>
+            <input type="file" name="csv_file" accept=".xlsx" required class="form-control">
             <div class="form-text">
-              Přehled prodeje generovaný z FiskalPRO (formát: <em>Přehled prodeje YYYYMMDD-HHMMSS.csv</em>).<br>
-              Kódování Windows-1250, oddělovač středník.
+              Export <em>Položky dokladů – kumulované … .xlsx</em> z FiskalPRO
+              (agregace po názvu; storno se odečítá).
             </div>
           </div>
 
