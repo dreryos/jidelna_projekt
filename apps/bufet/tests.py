@@ -75,7 +75,9 @@ class BufetXlsxParserTest(TestCase):
     def test_missing_columns_raise(self):
         wb = openpyxl.Workbook()
         wb.active.append(['Typ', 'Artikl', 'Název'])  # chybí Množství, Celkem s DPH
-        buf = io.BytesIO(); wb.save(buf); buf.seek(0)
+        buf = io.BytesIO()
+        wb.save(buf)
+        buf.seek(0)
         with self.assertRaises(ValueError):
             parse_fiskalpro_xlsx(buf)
 

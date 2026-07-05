@@ -246,7 +246,7 @@ def bufet_upload_step1(request):
         warehouse_id = request.POST.get('warehouse')
 
         if not upload or not warehouse_id:
-            messages.error(request, 'Musíte vybrat soubor (CSV/XLSX) a sklad.')
+            messages.error(request, 'Musíte vybrat soubor XLSX a sklad.')
             return render(request, 'bufet/bufet_upload_step1.html', {'warehouses': warehouses})
 
         try:

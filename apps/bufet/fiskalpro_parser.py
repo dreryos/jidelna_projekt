@@ -79,12 +79,14 @@ def parse_fiskalpro_xlsx(xlsx_file) -> list[dict]:
     try:
         header = next(rows)
     except StopIteration:
-        raise ValueError("XLSX je prázdný.")
+        wb.close()
+        raise ValueError("XLSX je prázdný.") from None
 
     col = {str(name).strip(): idx for idx, name in enumerate(header) if name is not None}
     missing = XLSX_REQUIRED_COLUMNS - set(col)
     if missing:
-        raise ValueError(f"XLSX neobsahuje očekávané sloupce: {', '.join(sorted(missing))}")
+        wb.close()
+        raise ValueError(f"XLSX neobsahuje očekávané sloupce: {', '.join(sorted(missing))}") from None
 
     def cell(row, name, default=''):
         idx = col.get(name)
