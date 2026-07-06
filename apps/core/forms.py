@@ -1,4 +1,8 @@
+from decimal import Decimal
+
 from django import forms
+from django.db.models import Q
+
 from apps.core.models import Recipe, RecipeIngredient, Ingredient
 from apps.core.widgets import DecimalFormField
 from apps.core.constants import VAT_RATE_CHOICES
@@ -11,6 +15,7 @@ class RecipeIngredientForm(forms.ModelForm):
         label="Množství na 1 porci",
         help_text="",  # Help text moved to table header
         required=True,
+        min_value=Decimal('0.001'),
     )
     
     class Meta:
@@ -26,8 +31,14 @@ class RecipeIngredientForm(forms.ModelForm):
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Filtrovat pouze aktivní suroviny v autocomplete
-        self.fields['ingredient'].queryset = Ingredient.objects.filter(is_active=True)
+        # Filtrovat pouze aktivní suroviny v autocomplete.
+        # Existující řádek s deaktivovanou surovinou musí zůstat validní,
+        # jinak by ji <select> vykreslil bez vybrané hodnoty a prohlížeč
+        # by tiše odeslal první aktivní surovinu.
+        ingredient_filter = Q(is_active=True)
+        if self.instance.pk and self.instance.ingredient_id:
+            ingredient_filter |= Q(pk=self.instance.ingredient_id)
+        self.fields['ingredient'].queryset = Ingredient.objects.filter(ingredient_filter)
 
 
 class RecipeForm(forms.ModelForm):

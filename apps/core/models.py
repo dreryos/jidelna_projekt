@@ -5,6 +5,7 @@ from django.contrib.auth import get_user_model
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.core.exceptions import ValidationError
+from django.core.validators import MinValueValidator
 from django.utils import timezone
 
 from apps.canteens.models import Canteen
@@ -373,8 +374,9 @@ class RecipeIngredient(models.Model):
     
     # Nová struktura - pouze množství na 1 porci v receptových jednotkách (obvykle gramy)
     quantity_per_portion = models.DecimalField(
-        max_digits=10, 
-        decimal_places=3, 
+        max_digits=10,
+        decimal_places=3,
+        validators=[MinValueValidator(Decimal('0.001'))],
         verbose_name="Množství na 1 porci",
         help_text="Množství suroviny na 1 porci v receptových jednotkách (např. gramy)"
     )

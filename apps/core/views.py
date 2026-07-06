@@ -9,6 +9,7 @@ from django.urls import reverse_lazy
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.forms import inlineformset_factory
 from django.core.exceptions import ObjectDoesNotExist
+from django.db import transaction
 from django.db.models import Model, ProtectedError
 from django.utils import timezone
 from typing import Type, Any
@@ -236,10 +237,11 @@ class RecipeCreateView(LoginRequiredMixin, CreateView):
 		context = self.get_context_data()
 		ingredients = context['ingredients']
 		if ingredients.is_valid():
-			self.object = form.save()
-			ingredients.instance = self.object
-			ingredients.save()
-			return super().form_valid(form)
+			with transaction.atomic():
+				self.object = form.save()
+				ingredients.instance = self.object
+				ingredients.save()
+			return redirect(self.get_success_url())
 		else:
 			return self.render_to_response(context)
 
@@ -275,10 +277,11 @@ class RecipeUpdateView(LoginRequiredMixin, UpdateView):
 		context = self.get_context_data()
 		ingredients = context['ingredients']
 		if ingredients.is_valid():
-			self.object = form.save()
-			ingredients.instance = self.object
-			ingredients.save()
-			return super().form_valid(form)
+			with transaction.atomic():
+				self.object = form.save()
+				ingredients.instance = self.object
+				ingredients.save()
+			return redirect(self.get_success_url())
 		else:
 			return self.render_to_response(context)
 
