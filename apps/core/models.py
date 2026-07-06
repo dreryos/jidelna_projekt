@@ -216,29 +216,27 @@ class Recipe(models.Model):
     def save(self, *args, **kwargs):
         """Automatické generování kódu receptu při vytvoření"""
         if not self.code and self.category:
-            # Najdeme nejvyšší číslo receptu v této kategorii
-            last_recipe = Recipe.objects.filter(
-                category=self.category
-            ).exclude(
-                code=''
-            ).order_by('-id').first()
-            
-            if last_recipe and last_recipe.code:
-                # Pokusíme se extrahovat číslo z posledního kódu
-                try:
-                    last_number = int(last_recipe.code.split('-')[-1])
-                    next_number = last_number + 1
-                except (ValueError, IndexError):
-                    # Pokud se nepodaří extrahovat číslo, začneme od 1
-                    next_number = 1
-            else:
-                # První recept v kategorii
-                next_number = 1
-            
-            # Vygenerujeme nový kód ve formátu "KATEGORIE-XXX"
-            self.code = f"{self.category.code}-{next_number:03d}"
-        
+            self.code = self._generate_code()
+
         super().save(*args, **kwargs)
+
+    def _generate_code(self):
+        """Vygeneruje další volný kód ve formátu "KATEGORIE-XXX".
+
+        Kódy s daným prefixem se prohledávají globálně, ne jen v aktuální
+        kategorii: recept přesunutý do jiné kategorie si původní kód
+        nechává (odkazují na něj XML šablony jídelníčků) a jeho číslo
+        nesmí být přiděleno znovu.
+        """
+        prefix = f"{self.category.code}-"
+        numbers = [
+            int(code[len(prefix):])
+            for code in Recipe.objects.filter(
+                code__startswith=prefix
+            ).values_list('code', flat=True)
+            if code[len(prefix):].isdigit()
+        ]
+        return f"{prefix}{max(numbers, default=0) + 1:03d}"
 
     def calculate_portion_price(self, canteen, portions=1, portion_coefficient=1.0, price_date=None, vat_rate=None, return_breakdown=False):
         """
@@ -365,7 +363,15 @@ class Recipe(models.Model):
     class Meta:
         verbose_name = "Recept"
         verbose_name_plural = "Recepty"
-        unique_together = [['category', 'code']]  # Kombinace kategorie a kódu musí být jedinečná
+        constraints = [
+            # Kód se používá jako globální identifikátor (import jídelníčků,
+            # obnova zálohy hledají get(code=...) bez kategorie).
+            models.UniqueConstraint(
+                fields=['code'],
+                condition=~models.Q(code=''),
+                name='unique_recipe_code',
+            ),
+        ]
 
 class RecipeIngredient(models.Model):
     """Norma pro recept (spojovací tabulka) - množství na 1 porci"""
