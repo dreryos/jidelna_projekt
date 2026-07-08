@@ -204,3 +204,61 @@ class PickingListGeneratorTest(TestCase):
             for i in items.filter(ingredient=self.ingredient)
         )
         self.assertEqual(mouka_total, Decimal('15.000'))
+
+
+class PickingListPdfStatusTest(TestCase):
+    """
+    Testy pro AJAX endpoint picking_list_pdf_status — polling loading
+    obrazovky při asynchronním generování PDF.
+    """
+
+    def setUp(self):
+        self.canteen = Canteen.objects.create(name='Test Canteen')
+        self.other_canteen = Canteen.objects.create(name='Other Canteen')
+        self.superuser = User.objects.create_superuser(
+            username='admin', password='testpass123'
+        )
+        self.user = User.objects.create_user(
+            username='kuchar', password='testpass123'
+        )
+        profile, _ = UserProfile.objects.get_or_create(user=self.user)
+        profile.canteens.add(self.other_canteen)
+
+        self.document = PickingListDocument.objects.create(
+            name='výdejka-2004',
+            canteen=self.canteen,
+            date_from=date(2026, 4, 20),
+            date_to=date(2026, 4, 22),
+            created_by=self.superuser,
+        )
+        self.client = Client()
+
+    def _status_url(self, doc_id=None):
+        return f'/production/vydejky/{doc_id or self.document.id}/pdf-status/'
+
+    def test_status_not_ready_without_pdf_file(self):
+        self.client.login(username='admin', password='testpass123')
+        response = self.client.get(self._status_url())
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {'ready': False})
+
+    def test_status_ready_with_pdf_file(self):
+        from django.core.files.base import ContentFile
+        self.document.pdf_file.save('test.pdf', ContentFile(b'%PDF-1.4 test'))
+        self.client.login(username='admin', password='testpass123')
+        try:
+            response = self.client.get(self._status_url())
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.json(), {'ready': True})
+        finally:
+            self.document.pdf_file.delete(save=False)
+
+    def test_status_404_for_missing_document(self):
+        self.client.login(username='admin', password='testpass123')
+        response = self.client.get(self._status_url(doc_id=99999))
+        self.assertEqual(response.status_code, 404)
+
+    def test_status_403_for_foreign_canteen(self):
+        self.client.login(username='kuchar', password='testpass123')
+        response = self.client.get(self._status_url())
+        self.assertEqual(response.status_code, 403)

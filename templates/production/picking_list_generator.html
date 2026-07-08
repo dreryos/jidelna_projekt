@@ -288,6 +288,13 @@
       if (!form.checkValidity()) {
         event.preventDefault()
         event.stopPropagation()
+      } else {
+        // Zablokujeme tlačítko a zobrazíme spinner, aby uživatel viděl, že se pracuje
+        var submitBtn = form.querySelector('button[type="submit"]')
+        if (submitBtn) {
+          submitBtn.disabled = true
+          submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Vytvářím výdejku…'
+        }
       }
       form.classList.add('was-validated')
     }, false)
@@ -358,11 +365,73 @@ document.querySelectorAll('.archive-btn').forEach(function(btn) {
 </script>
 
 {% if download_pdf_id %}
+<div id="pdf-loading-overlay"
+     style="position: fixed; inset: 0; background: rgba(0, 0, 0, 0.5); z-index: 2000;
+            display: flex; align-items: center; justify-content: center;">
+  <div class="card text-center shadow p-4 mx-3" style="max-width: 440px;">
+    <div class="spinner-border text-info mx-auto mb-3" style="width: 3rem; height: 3rem;" role="status">
+      <span class="visually-hidden">Generuji PDF…</span>
+    </div>
+    <h5 class="mb-2">Připravuji PDF výdejky…</h5>
+    <p class="text-muted mb-0">
+      U výdejek na více dní může generování trvat i desítky sekund.
+      Stránku nezavírejte, stažení začne automaticky.
+    </p>
+  </div>
+</div>
 <script>
-  document.addEventListener('DOMContentLoaded', function() {
-    // Automatické stažení PDF po vygenerování
-    window.location.href = "{% url 'production:picking_list_pdf' download_pdf_id %}";
-  });
+(function() {
+  var statusUrl = "{% url 'production:picking_list_pdf_status' download_pdf_id %}";
+  var pdfUrl = "{% url 'production:picking_list_pdf' download_pdf_id %}";
+  var overlay = document.getElementById('pdf-loading-overlay');
+  var startedAt = Date.now();
+  var TIMEOUT_MS = 5 * 60 * 1000;
+
+  function showAlert(type, html) {
+    var alertDiv = document.createElement('div');
+    alertDiv.className = 'alert alert-' + type + ' alert-dismissible fade show';
+    alertDiv.innerHTML = html +
+      '<button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
+    document.querySelector('.row').prepend(alertDiv);
+  }
+
+  function finish() {
+    overlay.remove();
+    showAlert('success', '<i class="fas fa-check-circle me-2"></i>PDF výdejka je připravena, stahování začalo.');
+    window.location.href = pdfUrl;
+  }
+
+  function fail(message) {
+    overlay.remove();
+    showAlert('warning', '<i class="fas fa-exclamation-triangle me-2"></i>' + message +
+      ' <a href="' + pdfUrl + '" class="alert-link">Stáhnout PDF ručně</a>.');
+  }
+
+  function poll() {
+    if (Date.now() - startedAt > TIMEOUT_MS) {
+      fail('Generování PDF trvá neobvykle dlouho.');
+      return;
+    }
+    fetch(statusUrl, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+      .then(function(response) {
+        if (!response.ok) { throw new Error('HTTP ' + response.status); }
+        return response.json();
+      })
+      .then(function(data) {
+        if (data.ready) {
+          finish();
+        } else {
+          setTimeout(poll, 2000);
+        }
+      })
+      .catch(function() {
+        // Dočasná chyba sítě/serveru — zkusíme znovu s delší prodlevou
+        setTimeout(poll, 4000);
+      });
+  }
+
+  poll();
+})();
 </script>
 {% endif %}
 

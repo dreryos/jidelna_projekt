@@ -908,9 +908,6 @@ def picking_list_generator(request):
                     mark_safe("<strong>Varování o zásobách:</strong><br><br>" + "<br><br>".join(warning_msg))
                 )
             
-            # Seřadíme ingredience abecedně
-            sorted_ingredients = sorted(ingredient_totals.values(), key=lambda x: x['ingredient'].name)
-            
             # Vytvoříme dokument výdejky
             document_name = f"výdejka-{date_from_obj.strftime('%d%m')}"
             picking_document = PickingListDocument.objects.create(
@@ -929,75 +926,11 @@ def picking_list_generator(request):
                     item.document = picking_document
                     item.save(update_fields=['status', 'document'])
             
-            # Vygenerujeme PDF soubor a uložíme ho
-            try:
-                from .utils import generate_picking_list_pdf_file
-                generate_picking_list_pdf_file(picking_document, base_url=request.build_absolute_uri('/'))
-                logger.info(f"PDF file generated and saved for picking document {picking_document.id}")
-            except Exception as e:
-                # Pokud generování PDF selže, logujeme ale pokračujeme (PDF se vygeneruje on-demand později)
-                logger.error(f"Failed to generate PDF file for picking document {picking_document.id}: {e}")
-                messages.warning(request, 'Výdejka byla vytvořena, ale nepodařilo se vygenerovat PDF. Bude vygenerováno při prvním stažení.')
-            
-            # Počítáme problematické položky
-            missing_count = len(missing_ingredients)
-            insufficient_count = len(insufficient_ingredients)
-            
-            # Připravíme data strukturovaná podle dnů a jídel pro PDF
-            daily_picking_data = {}
-            
-            for order in orders:
-                if order.date not in daily_picking_data:
-                    daily_picking_data[order.date] = []
-                
-                order_ingredients = []
-                for item in order.picking_list_items.all():
-                    # Získáme info o dostupnosti z agregovaných dat
-                    total_info = ingredient_totals.get(item.ingredient.id)
-                    
-                    order_ingredients.append({
-                        'name': item.ingredient.name,
-                        'quantity': item.quantity_planned,
-                        'unit': item.ingredient.base_unit,
-                        'has_stock': total_info['has_stock'] if total_info else True,
-                        'is_sufficient': total_info['is_sufficient'] if total_info else True,
-                        'warehouses_info': total_info['warehouses_info'] if total_info else [],
-                    })
-                
-                # Seřadíme suroviny abecedně
-                order_ingredients.sort(key=lambda x: x['name'])
-                
-                daily_picking_data[order.date].append({
-                    'recipe_name': order.recipe.name,
-                    'meal_type': order.meal_type,
-                    'portions': order.total_portions,
-                    'ingredients': order_ingredients,
-                    'is_customized': order.has_overrides
-                })
-            
-            # Seřadíme dny a jídla v každém dni podle typu jídla
-            sorted_daily_data = sorted(daily_picking_data.items())
-            sorted_daily_data = [
-                (d, sorted(meals, key=lambda m: MEAL_TYPE_ORDER.get(m.get('meal_type', ''), 99)))
-                for d, meals in sorted_daily_data
-            ]
-            
-            context = {
-                'canteen': canteen,
-                'date_from': date_from_obj,
-                'date_to': date_to_obj,
-                'orders': orders,
-                'ingredient_totals': sorted_ingredients,
-                'daily_picking_data': sorted_daily_data,
-                'total_orders': orders.count(),
-                'generated_at': timezone.now(),
-                'missing_count': missing_count,
-                'insufficient_count': insufficient_count,
-            }
-            
-            # Vygenerujeme PDF - PŮVODNÍ KÓD NAHRAZEN PŘESMĚROVÁNÍM
-            # Místo přímého vrácení PDF přesměrujeme zpět na stránku s parametrem pro stažení
-            messages.success(request, f'Výdejka byla úspěšně vytvořena a suroviny zablokovány.')
+            # Spustíme generování PDF na pozadí — synchronní generování u vícedenních
+            # výdejek překračovalo timeout Gunicorn workeru (chyba 500)
+            _start_picking_pdf_generation(picking_document.id, request.build_absolute_uri('/'))
+
+            messages.success(request, 'Výdejka byla úspěšně vytvořena a suroviny zablokovány. PDF se právě připravuje.')
             
             url = reverse('production:picking_list_generator')
             return redirect(f'{url}?download_pdf={picking_document.id}')
@@ -1548,6 +1481,54 @@ def picking_list_edit(request, document_id):
     except PermissionDenied as e:
         messages.error(request, str(e))
         return redirect('production:picking_list_generator')
+
+
+def _start_picking_pdf_generation(document_id, base_url):
+    """
+    Spustí generování PDF výdejky v samostatném vlákně, aby neblokovalo request.
+    Pokud vlákno selže (např. restart serveru), PDF se vygeneruje on-demand
+    při prvním stažení ve view picking_list_pdf.
+    """
+    import threading
+    from django.db import close_old_connections, connection
+
+    def _worker():
+        from .models import PickingListDocument
+        from .utils import generate_picking_list_pdf_file
+
+        close_old_connections()
+        try:
+            document = PickingListDocument.objects.get(id=document_id)
+            generate_picking_list_pdf_file(document, base_url=base_url)
+            logger.info(f"Background PDF generation finished for picking document {document_id}")
+        except Exception:
+            logger.exception(f"Background PDF generation failed for picking document {document_id}")
+        finally:
+            connection.close()
+
+    threading.Thread(target=_worker, daemon=True, name=f"picking-pdf-{document_id}").start()
+
+
+@login_required
+def picking_list_pdf_status(request, document_id):
+    """
+    AJAX endpoint pro kontrolu, zda je PDF výdejky vygenerované.
+    Používá ho loading obrazovka v generátoru výdejek (polling).
+    """
+    from .models import PickingListDocument
+
+    try:
+        document = PickingListDocument.objects.get(id=document_id)
+    except PickingListDocument.DoesNotExist:
+        return JsonResponse({'error': 'Dokument výdejky neexistuje.'}, status=404)
+
+    if not request.user.is_superuser:
+        profile, _ = UserProfile.objects.get_or_create(user=request.user)
+        if document.canteen not in profile.canteens.all():
+            return JsonResponse({'error': 'Nemáte oprávnění k této jídelně.'}, status=403)
+
+    ready = bool(document.pdf_file and document.pdf_file.storage.exists(document.pdf_file.name))
+    return JsonResponse({'ready': ready})
 
 
 def _picking_pdf_response(document, file_obj, cache=True):

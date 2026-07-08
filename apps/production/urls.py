@@ -62,6 +62,7 @@ urlpatterns = [
     path('vydejky/', views.picking_list_generator, name='picking_list_generator'),
     path('vydejky/<int:document_id>/edit/', views.picking_list_edit, name='picking_list_edit'),
     path('vydejky/<int:document_id>/pdf/', views.picking_list_pdf, name='picking_list_pdf'),
+    path('vydejky/<int:document_id>/pdf-status/', views.picking_list_pdf_status, name='picking_list_pdf_status'),
     path('vydejky/<int:document_id>/archive/', views.archive_picking_list, name='archive_picking_list'),
     path('vydejky/<int:document_id>/smazat/', views.picking_list_delete, name='picking_list_delete'),
     
