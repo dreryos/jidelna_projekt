@@ -1460,48 +1460,44 @@ class StockTransferCreateView(LoginRequiredMixin, CreateView):
         kwargs['user'] = self.request.user
         return kwargs
     
+    def _build_post_formset(self, form, instance=None):
+        """Sestaví formset z POST dat vždy se stejným warehouse_from,
+        aby validace při zobrazení chyb odpovídala validaci při ukládání."""
+        warehouse_from = None
+        if hasattr(form, 'cleaned_data'):
+            warehouse_from = form.cleaned_data.get('warehouse_from')
+        return StockTransferItemFormSet(
+            self.request.POST,
+            instance=instance,
+            form_kwargs={'warehouse_from': warehouse_from},
+        )
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        if self.request.POST:
-            context['formset'] = StockTransferItemFormSet(self.request.POST)
-        else:
-            context['formset'] = StockTransferItemFormSet()
-        return context
-    
-    def form_valid(self, form):
-        with transaction.atomic():
-            # Nastavíme created_by
-            form.instance.created_by = self.request.user
-            self.object = form.save()
-            
-            formset = StockTransferItemFormSet(
-                self.request.POST,
-                instance=self.object,
-                form_kwargs={'warehouse_from': self.object.warehouse_from}
-            )
-            
-            if formset.is_valid():
-                # Pro každou položku nastavíme cenu ze zdrojového skladu
-                for item_form in formset:
-                    if item_form.cleaned_data and not item_form.cleaned_data.get('DELETE', False):
-                        ingredient = item_form.cleaned_data.get('ingredient')
-                        if ingredient:
-                            try:
-                                stock_item = StockItem.objects.get(
-                                    ingredient=ingredient,
-                                    warehouse=self.object.warehouse_from
-                                )
-                                item_form.instance.unit_price_with_vat = stock_item.price
-                            except StockItem.DoesNotExist:
-                                pass
-                
-                formset.save()
-                messages.success(self.request, f'Převodka {self.object.transfer_number} byla vytvořena.')
-                return redirect('inventory:stock_transfer_detail', pk=self.object.pk)
+        if 'formset' not in context:
+            if self.request.POST:
+                context['formset'] = self._build_post_formset(context['form'])
             else:
-                return self.form_invalid(form)
-        
-        return super().form_valid(form)
+                context['formset'] = StockTransferItemFormSet()
+        return context
+
+    def form_valid(self, form):
+        form.instance.created_by = self.request.user
+        # Formset validujeme PŘED uložením hlavičky - jinak by se při
+        # nevalidních položkách ukládaly prázdné převodky.
+        formset = self._build_post_formset(form, instance=form.instance)
+
+        if not formset.is_valid():
+            return self.render_to_response(
+                self.get_context_data(form=form, formset=formset)
+            )
+
+        with transaction.atomic():
+            self.object = form.save()
+            formset.save()
+
+        messages.success(self.request, f'Převodka {self.object.transfer_number} byla vytvořena.')
+        return redirect('inventory:stock_transfer_detail', pk=self.object.pk)
     
     def get_success_url(self):
         return reverse('inventory:stock_transfer_detail', kwargs={'pk': self.object.pk})

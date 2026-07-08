@@ -259,38 +259,49 @@ document.addEventListener('DOMContentLoaded', function() {
     const totalFormsInput = document.getElementById('id_items-TOTAL_FORMS');
     const warehouseFromSelect = document.getElementById('id_warehouse_from');
     
-    let formIndex = parseInt(totalFormsInput.value);
-    
+    // Přečísluje všechny řádky formsetu od nuly a nastaví TOTAL_FORMS.
+    // Django vyžaduje souvislé indexy 0..N-1 - mezera po smazaném řádku
+    // by způsobila tiché zahození položek.
+    function reindexForms() {
+        const rows = formsetBody.querySelectorAll('.formset-row');
+        rows.forEach(function(row, index) {
+            row.setAttribute('data-form-index', index);
+            row.querySelectorAll('input, select, label').forEach(function(el) {
+                ['name', 'id', 'for'].forEach(function(attr) {
+                    const val = el.getAttribute(attr);
+                    if (val) el.setAttribute(attr, val.replace(/items-\d+-/, `items-${index}-`));
+                });
+            });
+        });
+        totalFormsInput.value = rows.length;
+    }
+
     // Přidání nového řádku
     addRowBtn.addEventListener('click', function() {
         const emptyRow = formsetBody.querySelector('.formset-row:last-child');
         if (!emptyRow) return;
-        
+
         const newRow = emptyRow.cloneNode(true);
-        
-        // Aktualizace indexů v nově vytvořeném řádku
-        newRow.innerHTML = newRow.innerHTML.replace(/items-\d+-/g, `items-${formIndex}-`);
-        newRow.setAttribute('data-form-index', formIndex);
-        
-        // Vyčistit hodnoty
+
+        // Odstranit chybové hlášky zkopírované z předlohy
+        newRow.querySelectorAll('.text-danger').forEach(function(el) { el.remove(); });
+
+        // Vyčistit hodnoty (včetně skrytého pole id)
         const inputs = newRow.querySelectorAll('input:not([type="checkbox"]), select');
         inputs.forEach(input => {
-            if (input.type !== 'hidden' || input.name.includes('DELETE')) {
-                input.value = '';
-            }
+            input.value = '';
         });
-        
+
         // Reset checkbox
         const checkbox = newRow.querySelector('input[type="checkbox"]');
         if (checkbox && checkbox.name.includes('DELETE')) {
             checkbox.checked = false;
         }
-        
+
         newRow.classList.remove('row-to-delete');
         formsetBody.appendChild(newRow);
-        
-        formIndex++;
-        totalFormsInput.value = formIndex;
+
+        reindexForms();
 
         // Nejprve inicializujeme Select2, pak přidáme listener (stejné pořadí jako u existujících řádků)
         initRowSelect2(newRow);
@@ -322,11 +333,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 deleteCheckbox.checked = true;
                 row.classList.add('row-to-delete');
             } else {
-                // Pokud je to nový řádek (nemá ID), rovnou ho odstraníme
+                // Nový řádek (bez ID) odstraníme a zbylé řádky přečíslujeme,
+                // aby indexy zůstaly souvislé
                 row.remove();
-                // Přepočítáme počet formulářů
-                formIndex--;
-                totalFormsInput.value = formIndex;
+                reindexForms();
             }
         }
     });

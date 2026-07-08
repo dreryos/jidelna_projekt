@@ -525,7 +525,11 @@ class StockTransferItemForm(forms.ModelForm):
     def __init__(self, *args, warehouse_from=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.warehouse_from = warehouse_from
-        
+
+        # Cenu doplňuje server ze zdrojového skladu - pole je readonly,
+        # takže nesmí být povinné (uživatel by chybu nemohl opravit).
+        self.fields['unit_price_with_vat'].required = False
+
         # Filtrovat pouze aktivní suroviny
         from apps.core.models import Ingredient
         self.fields['ingredient'].queryset = Ingredient.objects.filter(is_active=True)
@@ -562,11 +566,11 @@ class StockTransferItemForm(forms.ModelForm):
                     raise ValidationError({
                         'quantity': f"Nedostatečné množství. Dostupné: {stock_item.quantity_available} {ingredient.base_unit}"
                     })
-                
-                # Automaticky nastavit cenu ze skladu pokud není zadána
-                if not cleaned_data.get('unit_price_with_vat'):
-                    cleaned_data['unit_price_with_vat'] = stock_item.price
-            
+
+                # Cena se vždy přebírá ze zdrojového skladu (server je autoritativní,
+                # hodnota z readonly pole se ignoruje)
+                cleaned_data['unit_price_with_vat'] = stock_item.price
+
             except StockItem.DoesNotExist:
                 raise ValidationError({
                     'ingredient': f"Surovina '{ingredient.name}' není na skladu {self.warehouse_from}."
@@ -581,6 +585,8 @@ StockTransferItemFormSet = inlineformset_factory(
     StockTransferItem,
     form=StockTransferItemForm,
     extra=1,  # 1 prázdný formulář
+    min_num=1,  # Převodka musí mít alespoň jednu položku
+    validate_min=True,
     max_num=100,  # Maximum 100 položek
     can_delete=True,  # Možnost smazání položky
 )
