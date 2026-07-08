@@ -1661,7 +1661,7 @@ def stock_transfer_pdf(request, pk):
         pdf_file.seek(0)
         
         response = HttpResponse(pdf_file.read(), content_type='application/pdf')
-        response['Content-Disposition'] = f'inline; filename="odepsani_{transfer.pk}_{transfer.transfer_number}.pdf"'
+        response['Content-Disposition'] = f'inline; filename="prevodka_{transfer.pk}_{transfer.transfer_number}.pdf"'
         
         return response
     except ImportError:

@@ -1119,15 +1119,15 @@ class StockTransfer(models.Model):
         """Validace před uložením"""
         super().clean()
         
-        # Kontrola že source != target
-        if self.warehouse_from_id == self.warehouse_to_id:
+        # Kontrola že source != target - jen když jsou oba sklady vyplněné,
+        # jinak by prázdný formulář hlásil "sklady musí být různé" (None == None)
+        if self.warehouse_from_id and self.warehouse_to_id and self.warehouse_from_id == self.warehouse_to_id:
             raise ValidationError("Zdrojový a cílový sklad musí být různé.")
-        
+
         # Kontrola že není použit transit warehouse jako source nebo target
-        from apps.canteens.models import Warehouse as WarehouseModel
-        if hasattr(self.warehouse_from, 'is_transit_warehouse') and self.warehouse_from.is_transit_warehouse:
+        if self.warehouse_from_id and self.warehouse_from.is_transit_warehouse:
             raise ValidationError("Nelze převádět z meziskladu.")
-        if hasattr(self.warehouse_to, 'is_transit_warehouse') and self.warehouse_to.is_transit_warehouse:
+        if self.warehouse_to_id and self.warehouse_to.is_transit_warehouse:
             raise ValidationError("Nelze převádět do meziskladu.")
     
     @transaction.atomic
