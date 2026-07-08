@@ -259,6 +259,52 @@ document.addEventListener('DOMContentLoaded', function() {
     const totalFormsInput = document.getElementById('id_items-TOTAL_FORMS');
     const warehouseFromSelect = document.getElementById('id_warehouse_from');
     
+    // --- Dynamické načítání surovin podle zvoleného zdrojového skladu ---
+    // Seznam surovin dostupných ve zvoleném skladu (null = zatím nenačteno)
+    let warehouseIngredients = null;
+
+    function rebuildIngredientOptions(selectEl) {
+        const current = selectEl.value;
+        selectEl.innerHTML = '<option value=""></option>';
+        (warehouseIngredients || []).forEach(function(ing) {
+            const opt = document.createElement('option');
+            opt.value = ing.id;
+            opt.textContent = ing.name;
+            selectEl.appendChild(opt);
+        });
+        // Zachovat výběr, pokud je surovina i v novém skladu
+        if (current && selectEl.querySelector(`option[value="${CSS.escape(current)}"]`)) {
+            selectEl.value = current;
+        } else {
+            selectEl.value = '';
+        }
+        // Překreslit Select2 a spustit change (přenačte cenu/dostupnost řádku)
+        $(selectEl).trigger('change');
+    }
+
+    function loadWarehouseIngredients(warehouseId) {
+        if (!warehouseId) {
+            warehouseIngredients = [];
+            document.querySelectorAll('select[name$="-ingredient"]').forEach(rebuildIngredientOptions);
+            return;
+        }
+        fetch(`/inventory/api/warehouse-ingredients/?warehouse=${encodeURIComponent(warehouseId)}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    warehouseIngredients = data.ingredients;
+                    document.querySelectorAll('select[name$="-ingredient"]').forEach(rebuildIngredientOptions);
+                } else {
+                    console.error('Chyba při načítání surovin skladu:', data.error);
+                }
+            })
+            .catch(error => console.error('Chyba při načítání surovin skladu:', error));
+    }
+
+    warehouseFromSelect.addEventListener('change', function() {
+        loadWarehouseIngredients(this.value);
+    });
+
     // Přečísluje všechny řádky formsetu od nuly a nastaví TOTAL_FORMS.
     // Django vyžaduje souvislé indexy 0..N-1 - mezera po smazaném řádku
     // by způsobila tiché zahození položek.
@@ -377,7 +423,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 .then(data => {
                     if (data.success) {
                         if (priceInput) priceInput.value = data.price;
-                        if (availableSpan) availableSpan.textContent = `${data.available_quantity} ${data.unit}`;
+                        let availableText = `${data.available_quantity} ${data.unit}`;
+                        if (parseFloat(data.quantity_blocked) > 0) {
+                            availableText += ` (blokováno ${data.quantity_blocked})`;
+                        }
+                        if (availableSpan) availableSpan.textContent = availableText;
                         if (unitSpan) unitSpan.textContent = data.unit;
                     } else {
                         if (priceInput) priceInput.value = '';
@@ -399,6 +449,12 @@ document.addEventListener('DOMContentLoaded', function() {
         initRowSelect2(row);
         attachIngredientListener(row);
     });
+
+    // Re-render po chybě validace: sklad už je zvolený, přenačteme seznam
+    // surovin i dostupná množství řádků
+    if (warehouseFromSelect.value) {
+        loadWarehouseIngredients(warehouseFromSelect.value);
+    }
 });
 </script>
 {% endblock %}

@@ -1680,9 +1680,11 @@ def get_stock_item_price(request):
             'success': True,
             'price': str(stock_item.price),
             'available_quantity': str(stock_item.quantity_available),
+            'quantity': str(stock_item.quantity),
+            'quantity_blocked': str(stock_item.quantity_blocked),
             'unit': stock_item.ingredient.base_unit
         })
-    
+
     except StockItem.DoesNotExist:
         return JsonResponse({
             'success': False,
@@ -1694,6 +1696,53 @@ def get_stock_item_price(request):
             'success': False,
             'error': str(e)
         })
+
+
+@login_required
+def get_warehouse_ingredients(request):
+    """AJAX endpoint: seznam surovin, které jsou skladem ve zvoleném skladu.
+
+    Vrací i neaktivní suroviny - pokud jsou fyzicky na skladě, musí jít převést.
+    """
+    warehouse_id = request.GET.get('warehouse')
+    if not warehouse_id:
+        return JsonResponse({
+            'success': False,
+            'error': 'Chybí parametr warehouse'
+        })
+
+    try:
+        warehouse = Warehouse.objects.select_related('canteen').get(pk=warehouse_id)
+    except (Warehouse.DoesNotExist, ValueError):
+        return JsonResponse({
+            'success': False,
+            'error': 'Sklad nenalezen'
+        })
+
+    if not user_can_access_canteen(request.user, warehouse.canteen):
+        return JsonResponse({
+            'success': False,
+            'error': 'Nemáte oprávnění k tomuto skladu'
+        }, status=403)
+
+    stock_items = StockItem.objects.filter(
+        warehouse=warehouse,
+        quantity__gt=0
+    ).select_related('ingredient').order_by('ingredient__name')
+
+    ingredients = [
+        {
+            'id': si.ingredient_id,
+            'name': si.ingredient.name,
+            'unit': si.ingredient.base_unit,
+            'available_quantity': str(si.quantity_available),
+            'quantity_blocked': str(si.quantity_blocked),
+            'price': str(si.price),
+        }
+        for si in stock_items
+    ]
+
+    return JsonResponse({'success': True, 'ingredients': ingredients})
 
 
 @login_required

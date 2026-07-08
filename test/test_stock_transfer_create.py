@@ -136,7 +136,10 @@ def test_ingredient_not_in_warehouse_does_not_create_orphan(logged_client, wareh
 
     assert response.status_code == 200
     assert StockTransfer.objects.count() == 0
-    assert 'není na skladu' in response.content.decode()
+    # Surovina mimo sklad padne už na querysetu pole (není mezi volbami),
+    # případně na kontrole dostupnosti v clean()
+    content = response.content.decode()
+    assert 'Vyberte platnou možnost' in content or 'není na skladu' in content
 
 
 def test_empty_formset_is_rejected(logged_client, warehouses, stock_item):
@@ -162,3 +165,95 @@ def test_same_warehouse_rejected_without_orphan(logged_client, warehouses, ingre
 
     assert response.status_code == 200
     assert StockTransfer.objects.count() == 0
+
+
+# --- Fáze 2: suroviny podle skladu, blokované množství, API ---
+
+def test_inactive_stocked_ingredient_can_be_transferred(logged_client, warehouses):
+    """Neaktivní surovina, která JE fyzicky na skladě, musí jít převést
+    (původní chyba: dropdown nabízel jen is_active=True)."""
+    wh_from, wh_to = warehouses
+    inactive = Ingredient.objects.create(
+        name='Stará mouka', unit='kg', base_unit='kg', recipe_unit='g',
+        conversion_factor=Decimal('1000'), is_active=False,
+    )
+    StockItem.objects.create(
+        ingredient=inactive, warehouse=wh_from,
+        quantity=Decimal('5.000'), price=Decimal('10.00'),
+    )
+    data = _post_data(wh_from, wh_to, [
+        {'ingredient': inactive.pk, 'quantity': '2.000', 'price': ''},
+    ])
+
+    response = logged_client.post(reverse('inventory:stock_transfer_create'), data)
+
+    assert response.status_code == 302
+    item = StockTransferItem.objects.get()
+    assert item.ingredient == inactive
+
+
+def test_blocked_quantity_shown_in_error(logged_client, warehouses, ingredient, stock_item):
+    """Chybová hláška vysvětlí, že část zásoby je blokovaná."""
+    wh_from, wh_to = warehouses
+    stock_item.quantity_blocked = Decimal('8.000')
+    stock_item.save(update_fields=['quantity_blocked'])
+
+    data = _post_data(wh_from, wh_to, [
+        {'ingredient': ingredient.pk, 'quantity': '5.000', 'price': ''},
+    ])
+    response = logged_client.post(reverse('inventory:stock_transfer_create'), data)
+
+    assert response.status_code == 200
+    assert StockTransfer.objects.count() == 0
+    content = response.content.decode()
+    assert 'blokováno' in content
+
+
+def test_warehouse_ingredients_api_lists_stocked_including_inactive(logged_client, warehouses, ingredient, stock_item):
+    wh_from, _ = warehouses
+    inactive = Ingredient.objects.create(
+        name='Stará mouka', unit='kg', base_unit='kg', recipe_unit='g',
+        conversion_factor=Decimal('1000'), is_active=False,
+    )
+    StockItem.objects.create(
+        ingredient=inactive, warehouse=wh_from,
+        quantity=Decimal('5.000'), price=Decimal('10.00'),
+        quantity_blocked=Decimal('1.000'),
+    )
+    # Surovina s nulovým množstvím se nenabízí
+    empty = Ingredient.objects.create(
+        name='Vyprodáno', unit='kg', base_unit='kg', recipe_unit='g',
+        conversion_factor=Decimal('1000'),
+    )
+    StockItem.objects.create(
+        ingredient=empty, warehouse=wh_from,
+        quantity=Decimal('0.000'), price=Decimal('1.00'),
+    )
+
+    response = logged_client.get(
+        reverse('inventory:warehouse_ingredients'), {'warehouse': wh_from.pk}
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload['success'] is True
+    names = [i['name'] for i in payload['ingredients']]
+    assert 'Mouka' in names
+    assert 'Stará mouka' in names
+    assert 'Vyprodáno' not in names
+    by_name = {i['name']: i for i in payload['ingredients']}
+    assert by_name['Stará mouka']['available_quantity'] == '4.000'
+    assert by_name['Stará mouka']['quantity_blocked'] == '1.000'
+
+
+def test_warehouse_ingredients_api_denies_foreign_user(client, warehouses):
+    """Uživatel bez přístupu k jídelně skladu nesmí číst jeho zásoby."""
+    wh_from, _ = warehouses
+    outsider = get_user_model().objects.create_user(username='cizi', password='x')
+    client.force_login(outsider)
+
+    response = client.get(
+        reverse('inventory:warehouse_ingredients'), {'warehouse': wh_from.pk}
+    )
+
+    assert response.status_code == 403

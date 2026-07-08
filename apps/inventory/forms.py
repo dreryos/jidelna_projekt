@@ -530,9 +530,17 @@ class StockTransferItemForm(forms.ModelForm):
         # takže nesmí být povinné (uživatel by chybu nemohl opravit).
         self.fields['unit_price_with_vat'].required = False
 
-        # Filtrovat pouze aktivní suroviny
+        # Nabízíme suroviny podle zdrojového skladu, včetně neaktivních -
+        # co je fyzicky na skladě, musí jít převést. Bez zvoleného skladu
+        # (první GET) necháme všechny; JS seznam přenačte po výběru skladu.
         from apps.core.models import Ingredient
-        self.fields['ingredient'].queryset = Ingredient.objects.filter(is_active=True)
+        if self.warehouse_from:
+            self.fields['ingredient'].queryset = Ingredient.objects.filter(
+                stockitem__warehouse=self.warehouse_from,
+                stockitem__quantity__gt=0,
+            ).distinct()
+        else:
+            self.fields['ingredient'].queryset = Ingredient.objects.all()
         
         # Pokud máme instance a warehouse_from, nastavíme dostupné množství
         if self.instance.pk and self.instance.ingredient and warehouse_from:
@@ -563,9 +571,16 @@ class StockTransferItemForm(forms.ModelForm):
                     warehouse=self.warehouse_from
                 )
                 if stock_item.quantity_available < quantity:
-                    raise ValidationError({
-                        'quantity': f"Nedostatečné množství. Dostupné: {stock_item.quantity_available} {ingredient.base_unit}"
-                    })
+                    message = (
+                        f"Nedostatečné množství. Dostupné: "
+                        f"{stock_item.quantity_available} {ingredient.base_unit}"
+                    )
+                    if stock_item.quantity_blocked:
+                        message += (
+                            f" (celkem {stock_item.quantity}, "
+                            f"blokováno {stock_item.quantity_blocked})"
+                        )
+                    raise ValidationError({'quantity': message})
 
                 # Cena se vždy přebírá ze zdrojového skladu (server je autoritativní,
                 # hodnota z readonly pole se ignoruje)

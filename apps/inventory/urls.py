@@ -76,6 +76,9 @@ urlpatterns = [
     
     # AJAX endpoint pro načtení ceny suroviny ze skladu
     path('api/stock-item-price/', views.get_stock_item_price, name='stock_item_price'),
+
+    # AJAX endpoint pro seznam surovin skladem ve zvoleném skladu
+    path('api/warehouse-ingredients/', views.get_warehouse_ingredients, name='warehouse_ingredients'),
     
     # AJAX endpoint pro načtení šablon dodavatelů
     path('api/supplier-template/<slug:supplier_slug>/', views.get_supplier_template, name='supplier_template'),
