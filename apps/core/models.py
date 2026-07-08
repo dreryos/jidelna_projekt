@@ -1,4 +1,5 @@
 from django.db import models
+from django.db.models.functions import Collate
 from decimal import Decimal
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -182,6 +183,9 @@ class Ingredient(models.Model):
     class Meta:
         verbose_name = "Surovina"
         verbose_name_plural = "Suroviny"
+        # Kolace "czech" je registrovaná na SQLite připojení
+        # v apps/core/apps.py (viz apps/core/collation.py).
+        ordering = [Collate('name', 'czech')]
 
 class Recipe(models.Model):
     """Recept"""

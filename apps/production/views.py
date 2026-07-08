@@ -28,6 +28,7 @@ MEAL_TYPE_ORDER = {
 
 from django.db import models
 from django.db.models import F, Sum, Prefetch, Q
+from django.db.models.functions import Collate
 from django.db.models.query import QuerySet
 from django.http import HttpRequest, HttpResponse, FileResponse
 from django.core.exceptions import PermissionDenied, ObjectDoesNotExist
@@ -1957,7 +1958,7 @@ def search_ingredients(request):
         query_ascii = unidecode(query)
         ingredients = Ingredient.objects.filter(
             Q(name__icontains=query) | Q(name__icontains=query_ascii)
-        ).order_by('name')[:20]
+        ).order_by(Collate('name', 'czech'))[:20]
         
         results = [
             {

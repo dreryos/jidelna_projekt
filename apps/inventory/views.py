@@ -13,6 +13,7 @@ from django.views.decorators.http import require_POST
 from django.views.decorators.cache import cache_page
 from django.core.cache import cache
 from django.db.models import Count, Q
+from django.db.models.functions import Collate
 from apps.core.views import CanteenAccessMixin, user_can_access_canteen
 from decimal import Decimal, InvalidOperation
 import logging
@@ -1743,7 +1744,7 @@ def get_warehouse_ingredients(request):
     stock_items = StockItem.objects.filter(
         warehouse=warehouse,
         quantity__gt=0
-    ).select_related('ingredient').order_by('ingredient__name')
+    ).select_related('ingredient').order_by(Collate('ingredient__name', 'czech'))
 
     ingredients = [
         {
