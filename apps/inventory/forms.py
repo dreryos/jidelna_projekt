@@ -505,7 +505,7 @@ class StockTransferItemForm(forms.ModelForm):
             'quantity': forms.NumberInput(attrs={
                 'class': 'form-control',
                 'step': '0.001',
-                'min': '0',
+                'min': '0.001',
                 'required': True
             }),
             'unit_price_with_vat': forms.NumberInput(attrs={

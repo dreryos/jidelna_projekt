@@ -1508,13 +1508,25 @@ class StockTransferDetailView(LoginRequiredMixin, DetailView):
     model = StockTransfer
     template_name = 'inventory/stock_transfer_detail.html'
     context_object_name = 'transfer'
-    
+
     def get_queryset(self):
-        return StockTransfer.objects.select_related(
+        queryset = StockTransfer.objects.select_related(
             'warehouse_from', 'warehouse_to',
             'warehouse_from__canteen', 'warehouse_to__canteen',
             'created_by'
         ).prefetch_related('items__ingredient')
+
+        # Stejné omezení jako v seznamu - detail cizí převodky nesmí být vidět
+        user = self.request.user
+        if not user.is_superuser:
+            try:
+                user_canteens = user.profile.canteens.all()
+                queryset = queryset.filter(
+                    Q(warehouse_from__canteen__in=user_canteens) | Q(warehouse_to__canteen__in=user_canteens)
+                )
+            except ObjectDoesNotExist:
+                queryset = queryset.none()
+        return queryset
 
 
 @login_required
@@ -1545,8 +1557,9 @@ def stock_transfer_start(request, pk):
 def stock_transfer_complete(request, pk):
     """Dokončit převod - přesun z meziskladu do cílového skladu."""
     transfer = get_object_or_404(StockTransfer, pk=pk)
-    
-    if not user_can_access_canteen(request.user, transfer.warehouse_from.canteen):
+
+    # Dokončení naskladňuje do cílového skladu - vyžaduje přístup k cílové jídelně
+    if not user_can_access_canteen(request.user, transfer.warehouse_to.canteen):
         messages.error(request, 'Nemáte oprávnění k této akci.')
         return redirect('inventory:stock_transfer_detail', pk=pk)
     
@@ -1568,8 +1581,10 @@ def stock_transfer_complete(request, pk):
 def stock_transfer_start_and_complete(request, pk):
     """Zahájit a okamžitě dokončit převod (bez meziskladu)."""
     transfer = get_object_or_404(StockTransfer, pk=pk)
-    
-    if not user_can_access_canteen(request.user, transfer.warehouse_from.canteen):
+
+    # Okamžitý převod hýbe oběma sklady - vyžaduje přístup k oběma jídelnám
+    if not (user_can_access_canteen(request.user, transfer.warehouse_from.canteen)
+            and user_can_access_canteen(request.user, transfer.warehouse_to.canteen)):
         messages.error(request, 'Nemáte oprávnění k této akci.')
         return redirect('inventory:stock_transfer_detail', pk=pk)
     

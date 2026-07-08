@@ -4,6 +4,7 @@ from decimal import Decimal
 from datetime import datetime
 from django.db import transaction
 from django.core.exceptions import ValidationError
+from django.core.validators import MinValueValidator
 from django.db.models.signals import post_save, pre_delete
 from django.dispatch import receiver
 from django.core.cache import cache
@@ -1091,26 +1092,28 @@ class StockTransfer(models.Model):
     def save(self, *args, **kwargs):
         """Automatické generování čísla převodky"""
         if not self.transfer_number:
-            # Generujeme unikátní číslo ve formátu PRE-YYYYMMDD-XXX
-            from datetime import datetime
-            today = datetime.now()
-            prefix = f"PRE-{today.strftime('%Y%m%d')}"
-            
-            # Najdeme nejvyšší číslo dnes
-            last_transfer = StockTransfer.objects.filter(
-                transfer_number__startswith=prefix
-            ).order_by('-transfer_number').first()
-            
-            if last_transfer:
-                # Extrahujeme číslo a zvýšíme o 1
-                last_num = int(last_transfer.transfer_number.split('-')[-1])
-                new_num = last_num + 1
-            else:
-                new_num = 1
-            
-            self.transfer_number = f"{prefix}-{new_num:03d}"
-        
+            self.transfer_number = self._generate_transfer_number()
+
         super().save(*args, **kwargs)
+
+    @staticmethod
+    def _generate_transfer_number():
+        """Vygeneruje další volné číslo ve formátu PRE-YYYYMMDD-XXX.
+
+        Bere maximum ze všech čísel s dnešním prefixem - řazení podle
+        stringu selhává od čísla 1000 ('999' > '1000') a neparsovatelné
+        číslo nesmí resetovat číslování na 1. Kolize při souběhu skončí
+        IntegrityError díky unique na transfer_number.
+        """
+        prefix = f"PRE-{timezone.localdate().strftime('%Y%m%d')}-"
+        numbers = [
+            int(number[len(prefix):])
+            for number in StockTransfer.objects.filter(
+                transfer_number__startswith=prefix
+            ).values_list('transfer_number', flat=True)
+            if number[len(prefix):].isdigit()
+        ]
+        return f"{prefix}{max(numbers, default=0) + 1:03d}"
     
     def clean(self):
         """Validace před uložením"""
@@ -1228,7 +1231,7 @@ class StockTransfer(models.Model):
             # Odečteme z transit
             transit_stock.quantity -= item.quantity
             transit_stock.save(update_fields=['quantity'])
-            
+
             # Přidáme do target
             target_stock, created = StockItem.objects.get_or_create(
                 ingredient=item.ingredient,
@@ -1240,12 +1243,8 @@ class StockTransfer(models.Model):
                 }
             )
             if not created:
-                target_stock.quantity += item.quantity
-                # Aktualizujeme cenu vážený průměrem
-                total_value = (target_stock.quantity - item.quantity) * target_stock.price + item.quantity * item.unit_price_with_vat
-                target_stock.price = (total_value / target_stock.quantity).quantize(Decimal('0.01'))
-                target_stock.save(update_fields=['quantity', 'price'])
-        
+                self._add_to_stock_with_average_price(target_stock, item)
+
         # Aktualizujeme status
         self.status = 'COMPLETED'
         self.completed_at = timezone.now()
@@ -1301,17 +1300,27 @@ class StockTransfer(models.Model):
                 }
             )
             if not created:
-                target_stock.quantity += item.quantity
-                # Aktualizujeme cenu vážený průměrem
-                total_value = (target_stock.quantity - item.quantity) * target_stock.price + item.quantity * item.unit_price_with_vat
-                target_stock.price = (total_value / target_stock.quantity).quantize(Decimal('0.01'))
-                target_stock.save(update_fields=['quantity', 'price'])
-        
+                self._add_to_stock_with_average_price(target_stock, item)
+
         # Aktualizujeme status
         self.status = 'COMPLETED'
         self.started_at = timezone.now()
         self.completed_at = timezone.now()
         self.save(update_fields=['status', 'started_at', 'completed_at'])
+
+    @staticmethod
+    def _add_to_stock_with_average_price(target_stock, item):
+        """Přičte položku do cílové skladové zásoby a přepočítá cenu
+        váženým průměrem. Při nekladném výsledném množství (záporný
+        zůstatek z dřívějška) průměrovat nelze - převezme se cena položky."""
+        old_quantity = target_stock.quantity
+        target_stock.quantity += item.quantity
+        if target_stock.quantity > 0 and old_quantity >= 0:
+            total_value = old_quantity * target_stock.price + item.quantity * item.unit_price_with_vat
+            target_stock.price = (total_value / target_stock.quantity).quantize(Decimal('0.01'))
+        else:
+            target_stock.price = item.unit_price_with_vat
+        target_stock.save(update_fields=['quantity', 'price'])
     
     @transaction.atomic
     def cancel(self):
@@ -1324,33 +1333,43 @@ class StockTransfer(models.Model):
         if self.status == 'IN_TRANSIT':
             # Musíme vrátit zboží z transit warehouse zpět do source
             transit_warehouse = self.warehouse_from.canteen.get_or_create_transit_warehouse()
-            
+
             for item in self.items.all():
-                # Odečteme z transit
+                # Vracíme jen to, co v meziskladu skutečně je - jinak by se
+                # zásoba ve zdrojovém skladu uměle nafoukla
                 try:
                     transit_stock = StockItem.objects.select_for_update().get(
                         ingredient=item.ingredient,
                         warehouse=transit_warehouse
                     )
-                    transit_stock.quantity -= item.quantity
-                    transit_stock.save(update_fields=['quantity'])
                 except StockItem.DoesNotExist:
                     logger.warning(
-                        f"StockItem pro {item.ingredient} v transit warehouse nenalezen při rušení převodu."
+                        f"StockItem pro {item.ingredient} v transit warehouse nenalezen při rušení převodu - položka se nevrací."
                     )
-                
+                    continue
+
+                return_quantity = min(transit_stock.quantity, item.quantity)
+                if return_quantity <= 0:
+                    logger.warning(
+                        f"V meziskladu není co vracet pro {item.ingredient} při rušení převodu."
+                    )
+                    continue
+
+                transit_stock.quantity -= return_quantity
+                transit_stock.save(update_fields=['quantity'])
+
                 # Vrátíme zpět do source
                 source_stock, created = StockItem.objects.get_or_create(
                     ingredient=item.ingredient,
                     warehouse=self.warehouse_from,
                     defaults={
-                        'quantity': item.quantity,
+                        'quantity': return_quantity,
                         'price': item.unit_price_with_vat,
-                        'vat_rate': Decimal('12'),  # default vat rate
+                        'vat_rate': transit_stock.vat_rate,
                     }
                 )
                 if not created:
-                    source_stock.quantity += item.quantity
+                    source_stock.quantity += return_quantity
                     source_stock.save(update_fields=['quantity'])
         
         # Změníme status
@@ -1383,6 +1402,7 @@ class StockTransferItem(models.Model):
     quantity = models.DecimalField(
         max_digits=10,
         decimal_places=3,
+        validators=[MinValueValidator(Decimal('0.001'))],
         verbose_name="Množství"
     )
     unit_price_with_vat = models.DecimalField(
