@@ -405,8 +405,11 @@ def add_meal_to_menu(request, menu_pk, *args, **kwargs):
         meal_type = data.get('meal_type', 'LUNCH')  # Výchozí typ je oběd
         variants = data.get('variants', [])
         
-        recipe = get_object_or_404(Recipe, pk=recipe_id)
-        
+        try:
+            recipe = Recipe.objects.get(pk=recipe_id)
+        except Recipe.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Recept nenalezen.'}, status=404)
+
         with transaction.atomic():
             order = ProductionOrder.objects.create(
                 menu_plan=menu_plan,
@@ -417,14 +420,19 @@ def add_meal_to_menu(request, menu_pk, *args, **kwargs):
             
             if variants:
                 for variant_data in variants:
+                    portions = int(variant_data['portions'])
+                    if portions < 0:
+                        raise ValueError(f'Záporný počet porcí: {portions}')
                     ProductionOrderPortionVariant.objects.create(
                         production_order=order,
                         coefficient=Decimal(str(variant_data['coefficient'])),
-                        portions=int(variant_data['portions']),
+                        portions=portions,
                         order=int(variant_data.get('order', 0))
                     )
             else:
                 total_portions = int(data.get('total_portions', 0))
+                if total_portions < 0:
+                    raise ValueError(f'Záporný počet porcí: {total_portions}')
                 portion_coefficient = Decimal(str(data.get('portion_coefficient', '1.0')))
                 ProductionOrderPortionVariant.objects.create(
                     production_order=order,

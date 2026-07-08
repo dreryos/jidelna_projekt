@@ -20,7 +20,7 @@ class PickingListDecrementTest(TestCase):
             conversion_factor=Decimal('1.0')  # kg->kg bez převodu
         )
         # stock 10 kg at price 1.0
-        StockItem.objects.create(warehouse=self.warehouse, ingredient=self.ingredient, quantity=Decimal('10.000'), price=1.0)
+        StockItem.objects.create(warehouse=self.warehouse, ingredient=self.ingredient, quantity=Decimal('10.000'), price=Decimal('1.0'))
 
         # recipe with 1 kg per portion
         self.recipe = Recipe.objects.create(name='Chleba', base_portions=10)
@@ -404,12 +404,10 @@ class PickingListDecrementTest(TestCase):
         self.assertEqual(pl_new_ingredient.quantity_planned, expected_quantity,
                         "Planned quantity should be calculated correctly")
         
-        # Picking list by měl odkazovat na sklad, kde byla surovina vytvořena
-        # Protože stock_item.quantity je 0 (ne > 0), warehouse by mělo být None
-        # ale teď to změníme - když vytvoříme, měli bychom použít ten sklad
-        # Ne! Logika je správná - warehouse je None, protože quantity není > 0
-        self.assertIsNone(pl_new_ingredient.warehouse,
-                        "Warehouse should be None because quantity is 0, not > 0")
+        # Picking list odkazuje na sklad, kde byla surovina vytvořena (s 0 ks) -
+        # generate_picking_list předvyplňuje sklad bez ohledu na množství
+        self.assertEqual(pl_new_ingredient.warehouse, self.warehouse,
+                        "Warehouse should be prefilled with the warehouse where the ingredient was created")
     
     def test_ingredient_not_duplicated_if_exists_with_zero_stock(self):
         """

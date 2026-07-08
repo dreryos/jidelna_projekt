@@ -40,7 +40,7 @@ class PickingListArchiveTest(TestCase):
             warehouse=self.warehouse, 
             ingredient=self.ingredient, 
             quantity=Decimal('10.000'), 
-            price=1.0
+            price=Decimal('1.0')
         )
 
         # Create recipe
