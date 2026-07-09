@@ -25,7 +25,7 @@
           <th>Soubor</th>
           <th>Sklad</th>
           <th>Položky</th>
-          <th>Tržba s DPH</th>
+          <th>Hodnota odpisu</th>
           <th>Stav</th>
           <th>Nahráno</th>
           <th></th>
@@ -38,7 +38,9 @@
           <td class="text-muted small">{{ imp.filename }}</td>
           <td>{{ imp.warehouse }}</td>
           <td>{{ imp.items.count }}</td>
-          <td class="fw-bold">{{ imp.get_total_revenue|floatformat:0 }} Kč</td>
+          <td class="fw-bold">
+            {% if imp.get_write_off_total_cost is not None %}{{ imp.get_write_off_total_cost|floatformat:0 }} Kč{% else %}–{% endif %}
+          </td>
           <td>
             {% if imp.status == 'CONFIRMED' %}
               <span class="badge bg-success">Potvrzeno</span>

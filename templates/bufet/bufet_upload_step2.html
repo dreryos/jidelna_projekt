@@ -69,14 +69,12 @@
       <thead class="table-dark">
         <tr>
           <th style="width:3%">#</th>
-          <th style="width:18%">Artikl / Název</th>
-          <th style="width:10%">Skupina</th>
-          <th style="width:8%">Množství</th>
-          <th style="width:10%">Tržba s DPH</th>
+          <th style="width:28%">Artikl / Název</th>
+          <th style="width:10%">Množství</th>
           <th style="width:10%">Provozovny</th>
-          <th style="width:28%">Surovina ve skladu</th>
-          <th style="width:8%" class="text-center">Shoda</th>
-          <th style="width:5%" class="text-center">Přeskočit</th>
+          <th style="width:34%">Surovina ve skladu</th>
+          <th style="width:9%" class="text-center">Shoda</th>
+          <th style="width:6%" class="text-center">Přeskočit</th>
         </tr>
       </thead>
       <tbody>
@@ -93,14 +91,9 @@
           <td class="text-muted small">{{ forloop.counter }}</td>
           <td>
             <div class="fw-semibold">{{ item.name }}</div>
-            <div class="text-muted small">
-              Artikl: {{ item.article_code }}
-              {% if item.barcode %} · EAN: {{ item.barcode }}{% endif %}
-            </div>
+            <div class="text-muted small">Artikl: {{ item.article_code }}</div>
           </td>
-          <td class="small">{{ item.group|default:"–" }}</td>
           <td class="fw-bold">{{ item.quantity }} {{ item.unit }}</td>
-          <td>{{ item.total_price_with_vat|floatformat:0 }} Kč</td>
           <td class="small text-muted">{{ item.establishments|default:"–" }}</td>
           <td>
             <select name="ingredient_{{ forloop.counter0 }}"

@@ -43,7 +43,9 @@
           <tr><th style="width:55%">Počet artiklů</th><td>{{ import.items.count }}</td></tr>
           <tr><th>Spárováno se surovinou</th><td>{{ import.get_mapped_count }}</td></tr>
           <tr><th>Přeskočeno</th><td>{{ import.get_skipped_count }}</td></tr>
-          <tr><th>Celková tržba (s DPH)</th><td class="fw-bold">{{ import.get_total_revenue|floatformat:0 }} Kč</td></tr>
+          <tr><th>Hodnota odpisu (nákupní s DPH)</th><td class="fw-bold">
+            {% if import.get_write_off_total_cost is not None %}{{ import.get_write_off_total_cost|floatformat:0 }} Kč{% else %}–{% endif %}
+          </td></tr>
           {% if import.write_off_id %}
           <tr><th>Odepsání ze skladu</th>
             <td><a href="{% url 'inventory:stock_write_off_detail' import.write_off_id %}">Zobrazit odepsání #{{ import.write_off_id }}</a></td>
@@ -67,10 +69,7 @@
           <tr>
             <th>Artikl</th>
             <th>Název</th>
-            <th>Skupina</th>
-            <th>EAN</th>
             <th>Množství</th>
-            <th>Tržba s DPH</th>
             <th>Provozovny</th>
             <th>Surovina</th>
             <th>Stav</th>
@@ -81,10 +80,7 @@
           <tr {% if item.skip %}class="table-light text-muted"{% endif %}>
             <td class="small">{{ item.article_code }}</td>
             <td>{{ item.name }}</td>
-            <td class="small">{{ item.group|default:"–" }}</td>
-            <td class="small text-muted">{{ item.barcode|default:"–" }}</td>
             <td>{{ item.quantity }} {{ item.unit }}</td>
-            <td>{{ item.total_price_with_vat|floatformat:0 }} Kč</td>
             <td class="small text-muted">{{ item.establishments|default:"–" }}</td>
             <td>
               {% if item.ingredient %}

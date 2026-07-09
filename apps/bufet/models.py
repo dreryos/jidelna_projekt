@@ -50,11 +50,15 @@ class BufetImport(models.Model):
     def __str__(self):
         return f"Bufet import {self.filename} – {self.warehouse}"
 
-    def get_total_revenue(self):
-        """Celková tržba vč. DPH za všechny položky."""
-        from django.db.models import Sum
-        result = self.items.aggregate(total=Sum('total_price_with_vat'))
-        return result['total'] or 0
+    def get_write_off_total_cost(self):
+        """Celková nákupní cena odepsaného zboží (z interní DB, ne z exportu)."""
+        if not self.write_off_id:
+            return None
+        from apps.inventory.models import StockWriteOff
+        try:
+            return StockWriteOff.objects.get(id=self.write_off_id).get_total_cost()
+        except StockWriteOff.DoesNotExist:
+            return None
 
     def get_mapped_count(self):
         """Počet položek spárovaných se surovinou."""
@@ -74,19 +78,11 @@ class BufetImportItem(models.Model):
         verbose_name="Import",
     )
     article_code = models.CharField(max_length=50, verbose_name="Kód artiklíku")
-    barcode = models.CharField(max_length=50, blank=True, verbose_name="EAN kód")
     name = models.CharField(max_length=200, verbose_name="Název")
-    group = models.CharField(max_length=100, blank=True, verbose_name="Skupina")
     quantity = models.DecimalField(
         max_digits=10, decimal_places=3, verbose_name="Prodané množství"
     )
     unit = models.CharField(max_length=20, default='ks', verbose_name="MJ")
-    total_price_with_vat = models.DecimalField(
-        max_digits=12, decimal_places=2, verbose_name="Tržba s DPH"
-    )
-    total_price_without_vat = models.DecimalField(
-        max_digits=12, decimal_places=2, verbose_name="Tržba bez DPH"
-    )
     establishments = models.CharField(
         max_length=500, blank=True,
         verbose_name="Provozovny",

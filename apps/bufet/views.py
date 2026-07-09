@@ -17,7 +17,7 @@ from apps.inventory.models import StockWriteOff, StockWriteOffItem
 from .fiskalpro_parser import parse_bufet_file, parse_export_date
 from .models import BufetImport, BufetImportItem
 
-NUMERIC_FIELDS = ('quantity', 'total_price_with_vat', 'total_price_without_vat')
+NUMERIC_FIELDS = ('quantity',)
 MATCH_THRESHOLD = 0.45
 
 
@@ -74,37 +74,22 @@ def _normalize(text: str) -> str:
     return re.sub(r'[^a-z0-9 ]', ' ', text.lower()).strip()
 
 
-def _build_ingredient_barcode_index(ingredients):
-    """Index EAN → Ingredient pro O(1) přesnou shodu podle čárového kódu."""
-    index = {}
-    for ing in ingredients:
-        barcode = getattr(ing, 'barcode', '') or ''
-        if barcode:
-            index[barcode] = ing
-    return index
-
-
 def _build_ingredient_name_index(ingredients):
     """Předpočítá normalizované názvy surovin jednou pro celý import (ne pro každou položku)."""
     return [(ing, _normalize(ing.name)) for ing in ingredients]
 
 
-def _suggest_ingredient(csv_name: str, barcode: str, barcode_index: dict, name_index: list) -> tuple:
+def _suggest_ingredient(csv_name: str, name_index: list) -> tuple:
     """
-    Najde nejlepší shodu suroviny pro CSV položku.
+    Najde nejlepší shodu suroviny pro položku importu podle názvu.
 
     Args:
-        csv_name: název položky z CSV
-        barcode: EAN kód položky z CSV (může být prázdný)
-        barcode_index: dict EAN -> Ingredient (viz _build_ingredient_barcode_index)
+        csv_name: název položky z importu
         name_index: list (Ingredient, normalizovaný_název) (viz _build_ingredient_name_index)
 
     Returns:
         tuple (Ingredient nebo None, skóre shody 0-100)
     """
-    if barcode and barcode in barcode_index:
-        return barcode_index[barcode], 100
-
     norm_csv = _normalize(csv_name)
     best_score = 0.0
     best = None
@@ -128,13 +113,9 @@ def _serialize_bufet_item(raw: dict) -> dict:
     """Připraví agregovanou položku CSV pro uložení do session (JSON-serializovatelné)."""
     return {
         'article_code': raw['article_code'],
-        'barcode': raw['barcode'],
         'name': raw['name'],
-        'group': raw['group'],
         'quantity': str(raw['quantity']),
         'unit': raw['unit'],
-        'total_price_with_vat': str(raw['total_price_with_vat']),
-        'total_price_without_vat': str(raw['total_price_without_vat']),
         'establishments': ', '.join(raw['establishments']),
     }
 
@@ -180,13 +161,9 @@ def _create_bufet_import_items(bufet_import, items, post_data):
         BufetImportItem.objects.create(
             bufet_import=bufet_import,
             article_code=parsed['article_code'],
-            barcode=parsed['barcode'],
             name=parsed['name'],
-            group=parsed['group'],
             quantity=parsed['quantity'],
             unit=parsed['unit'],
-            total_price_with_vat=parsed['total_price_with_vat'],
-            total_price_without_vat=parsed['total_price_without_vat'],
             establishments=parsed['establishments'],
             ingredient=ingredient,
             skip=skip,
@@ -296,11 +273,10 @@ def bufet_upload_step2(request):
     export_date = request.session.get('bufet_export_date')
 
     all_ingredients = list(Ingredient.objects.filter(is_active=True).order_by('name'))
-    barcode_index = _build_ingredient_barcode_index(all_ingredients)
     name_index = _build_ingredient_name_index(all_ingredients)
 
     for item in items:
-        ingredient, score = _suggest_ingredient(item['name'], item['barcode'], barcode_index, name_index)
+        ingredient, score = _suggest_ingredient(item['name'], name_index)
         item['suggested_id'] = ingredient.id if ingredient else None
         item['suggested_name'] = ingredient.name if ingredient else None
         item['match_score'] = score

@@ -2,7 +2,9 @@
 Parser přehledů prodeje z pokladního systému FiskalPRO.
 
 Formát XLSX "Položky dokladů – kumulované …": export bez provozovny,
-s typem dokladu (prodej / storno) a DPH na řádek; agregace po názvu.
+s typem dokladu (prodej / storno) na řádek; agregace po názvu.
+Z exportu se čte jen název, množství, MJ a artikl – ceny, DPH, skupiny
+a čárové kódy se ignorují (ceny se berou z interní DB po spárování).
 """
 import io
 import re
@@ -14,7 +16,7 @@ from datetime import date
 FILENAME_DATE_RE = re.compile(r'(\d{4})-(\d{2})-(\d{2})[ _]\d{2}-\d{2}-\d{2}')
 
 # Sloupce XLSX exportu "Položky dokladů – kumulované"
-XLSX_REQUIRED_COLUMNS = {'Typ', 'Artikl', 'Název', 'Množství', 'Celkem s DPH'}
+XLSX_REQUIRED_COLUMNS = {'Typ', 'Artikl', 'Název', 'Množství'}
 
 
 def parse_export_date(filename: str) -> date | None:
@@ -51,11 +53,13 @@ def parse_fiskalpro_xlsx(xlsx_file) -> list[dict]:
       Platební řádky se ignorují; storno má záporné množství a odečítá se.
     - Artiklové číslo NENÍ jednoznačné (jeden kód = více produktů), proto
       agregujeme podle názvu položky.
+    - Ceny, DPH, skupiny a čárové kódy z exportu se nečtou – ceny se
+      po spárování berou z interní DB (sklad).
 
     Returns:
-        list slovníků s klíči: article_code, barcode, name, group, quantity,
-        unit, total_price_with_vat, total_price_without_vat, establishments.
-        Vrací jen položky s kladným čistým prodaným množstvím (po odečtení storna).
+        list slovníků s klíči: article_code, name, quantity, unit,
+        establishments. Vrací jen položky s kladným čistým prodaným
+        množstvím (po odečtení storna).
 
     Raises:
         ValueError: pokud sešit nelze načíst nebo chybí očekávané sloupce.
@@ -107,11 +111,7 @@ def parse_fiskalpro_xlsx(xlsx_file) -> list[dict]:
             continue
 
         qty = _to_decimal(cell(row, 'Množství', 0))
-        price_with_vat = _to_decimal(cell(row, 'Celkem s DPH', 0))
-        price_without_vat = _to_decimal(cell(row, 'Celkem', 0))
         code = str(cell(row, 'Artikl', '')).strip()
-        barcode = str(cell(row, 'Čárový kód', '')).strip()
-        group = str(cell(row, 'Skupina', '')).strip()
         unit = str(cell(row, 'MJ', '')).strip() or 'ks'
 
         # Agregujeme podle názvu – artiklové číslo není jednoznačné
@@ -119,23 +119,13 @@ def parse_fiskalpro_xlsx(xlsx_file) -> list[dict]:
         if entry is None:
             entry = aggregated[name] = {
                 'article_code': code,
-                'barcode': barcode,
                 'name': name,
-                'group': group,
                 'quantity': Decimal('0'),
                 'unit': unit,
-                'total_price_with_vat': Decimal('0'),
-                'total_price_without_vat': Decimal('0'),
                 'establishments': [],
             }
 
         entry['quantity'] += qty
-        entry['total_price_with_vat'] += price_with_vat
-        entry['total_price_without_vat'] += price_without_vat
-        if barcode and not entry['barcode']:
-            entry['barcode'] = barcode
-        if group and not entry['group']:
-            entry['group'] = group
 
     wb.close()
 
