@@ -1,7 +1,10 @@
 from django.shortcuts import render
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.http import HttpResponse, JsonResponse
+from django.core.exceptions import SuspiciousFileOperation
+from django.http import FileResponse, Http404, HttpResponse, JsonResponse
+from django.utils._os import safe_join
 from django.contrib.auth import logout
 from django.shortcuts import redirect, get_object_or_404
 from django.views.generic import ListView, CreateView, UpdateView, DeleteView
@@ -14,7 +17,9 @@ from django.db.models import Model, ProtectedError
 from django.utils import timezone
 from typing import Type, Any
 from functools import wraps
+from pathlib import Path
 import json
+import mimetypes
 
 from apps.core.models import Recipe, RecipeIngredient, Ingredient
 from apps.core.forms import RecipeIngredientForm, RecipeForm, IngredientForm
@@ -400,3 +405,45 @@ def ajax_add_ingredient(request):
 		
 	except Exception as e:
 		return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+# ---------------------------------------------------------------------------
+# Nápověda (MkDocs dokumentace servírovaná za přihlášením)
+# ---------------------------------------------------------------------------
+
+HELP_SITE_DIR = Path(settings.BASE_DIR) / 'staticdocs'
+
+
+@login_required
+def help_index(request):
+	"""Vstupní bod nápovědy - přesměruje na úvodní stránku příručky."""
+	return redirect('core:help_page', path='index.html')
+
+
+@login_required
+def help_page(request, path):
+	"""
+	Servíruje soubor vygenerované MkDocs dokumentace (staticdocs/).
+
+	Whitenoise záměrně nepoužíváme - servíroval by dokumentaci veřejně,
+	zatímco příručka (se screenshoty interního systému) patří za přihlášení.
+	"""
+	try:
+		full_path = Path(safe_join(HELP_SITE_DIR, path))
+	except SuspiciousFileOperation:
+		raise Http404("Neplatná cesta.")
+
+	if full_path.is_dir():
+		full_path = full_path / 'index.html'
+
+	if not full_path.is_file():
+		if not HELP_SITE_DIR.is_dir():
+			return HttpResponse(
+				"<h1>Nápověda není sestavena</h1>"
+				"<p>Spusťte <code>mkdocs build</code> v kořeni projektu.</p>",
+				status=404,
+			)
+		raise Http404("Stránka nápovědy neexistuje.")
+
+	content_type, _ = mimetypes.guess_type(str(full_path))
+	return FileResponse(full_path.open('rb'), content_type=content_type or 'application/octet-stream')

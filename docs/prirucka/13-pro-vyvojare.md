@@ -82,6 +82,10 @@ Alternativně `docker-compose up` (viz `Dockerfile`, `docker-entrypoint.sh`).
 * **Změna skladové logiky** → nejdřív testy: `test/test_stock_transfer_workflow.py`, `test/test_vat_implementation.py` ukazují očekávané invarianty.
 * Před commitem: `pytest`, u PDF změn ruční kontrola výstupu (černobílý tisk!), CHANGELOG.md záznam česky.
 
+## Nápověda v aplikaci (tato příručka)
+
+Příručka z `docs/prirucka/` se builduje MkDocs (`mkdocs.yml` v kořeni, theme Material) do `staticdocs/` a servíruje se na `/napoveda/` za přihlášením (`help_index`/`help_page` v `apps/core/views.py` — záměrně mimo whitenoise, který je veřejný). Build spouští `docker-entrypoint.sh`; při vývoji `mkdocs build`, živý náhled `mkdocs serve`. Nová kapitola = nový `.md` soubor + řádek v `nav:` v `mkdocs.yml`; obrázky do `docs/prirucka/img/`.
+
 ## Známé zvláštnosti
 
 * `GoodsReceipt.supplier` (text) vedle `supplier_obj` (FK) — postupná migrace na dodavatele s šablonami; při čtení preferujte FK s fallbackem na text.

@@ -119,6 +119,13 @@ Aplikace bude dostupná na adrese [http://127.0.0.1:8000](http://127.0.0.1:8000)
 - **[docs/overview.md](docs/overview.md)** - Přehled modulů a vývojářská dokumentace
 - **CHANGELOG.md** - Historie všech změn v projektu
 
+Příručka je v aplikaci dostupná jako **Nápověda** (`/napoveda/`, za přihlášením). Web nápovědy generuje MkDocs:
+
+```bash
+mkdocs build    # jednorázové sestavení do staticdocs/
+mkdocs serve    # živý náhled při psaní dokumentace (http://127.0.0.1:8000)
+```
+
 ## 🔧 Technologie
 
 - **Backend:** Python 3.14

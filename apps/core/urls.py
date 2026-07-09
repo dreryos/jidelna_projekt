@@ -23,4 +23,8 @@ urlpatterns = [
     path('backup/', views.backup_page, name='backup_page'),
     path('backup/xml/', views.backup_export_xml_view, name='backup_export_xml'),
     path('backup/xml/import/', views.backup_import_xml_view, name='backup_import_xml'),
+
+    # Nápověda (MkDocs příručka za přihlášením)
+    path('napoveda/', views.help_index, name='help_index'),
+    path('napoveda/<path:path>', views.help_page, name='help_page'),
 ]
