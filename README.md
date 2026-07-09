@@ -115,9 +115,9 @@ Aplikace bude dostupná na adrese [http://127.0.0.1:8000](http://127.0.0.1:8000)
 
 ## 📚 Dokumentace
 
+- **[docs/prirucka/](docs/prirucka/README.md)** - Kompletní příručka (uživatelé, správci, vývojáři)
+- **[docs/overview.md](docs/overview.md)** - Přehled modulů a vývojářská dokumentace
 - **CHANGELOG.md** - Historie všech změn v projektu
-- **docs/IMPORT_CSV.md** - Průvodce importem dat z CSV
-- **component_dia.plantuml** - Diagram komponent
 
 ## 🔧 Technologie
 

@@ -10,6 +10,7 @@ Systém je rozdělen do několika logických modulů:
     *   Správa základních číselníků (suroviny, kategorie).
     *   Definice jídelen a jejich skladů.
     *   Správa uživatelů a jejich oprávnění k jídelnám.
+    *   Zálohy a obnova dat (XML export/import s výběrem entit).
 
 2.  **Receptury a Výroba (Production)**
     *   Evidence receptů a norem.
@@ -19,15 +20,22 @@ Systém je rozdělen do několika logických modulů:
 
 3.  **Sklad (Inventory)**
     *   Evidence zásob na skladech (množství, cena).
-    *   Příjem zboží (Goods Receipt).
+    *   Příjem zboží (Goods Receipt) vč. dodavatelů a šablon.
+    *   Převodky mezi sklady (přes mezisklad).
+    *   Inventury se zamykáním skladu.
+    *   Odpisy mimo recepty (úklid, personál…).
     *   Historie cen surovin.
     *   Blokace surovin pro plánovanou výrobu.
 
-4.  **Sestavy (Reports)**
+4.  **Bufet (Bufet)**
+    *   Import prodejů z pokladního systému FiskalPRO (XLSX).
+    *   Párování prodaného zboží na suroviny a odpis ze skladu.
+
+5.  **Sestavy (Reports)**
     *   Tvorba podkladů pro objednávání zboží (Order List).
     *   Exporty do PDF a Excelu.
 
-5.  **Analytika (Analytics)**
+6.  **Analytika (Analytics)**
     *   Výpočet nákladů na jídelníček a jednotlivá jídla.
     *   Sledování vývoje cen receptů v čase.
     *   Kalkulace "food cost".
@@ -43,9 +51,10 @@ Systém je rozdělen do několika logických modulů:
 ## Technické detaily
 
 Projekt je postaven na frameworku **Django**.
-*   Databáze: SQLite (výchozí), PostgreSQL (doporučeno pro produkci).
-*   Front-end: Django Templates + Bootstrap (pravděpodobně, dle standardů).
-*   Generování PDF: ReportLab.
+*   Databáze: SQLite (cesta konfigurovatelná přes env `SQLITE_DB_PATH`).
+*   Front-end: Django Templates + Bootstrap 5.
+*   Generování PDF: WeasyPrint.
 *   Generování Excel: OpenPyXL.
 
-Dokumentace k jednotlivým modulům naleznete v samostatných souborech v této složce.
+Kompletní uživatelská i vývojářská příručka: [prirucka/README.md](prirucka/README.md).
+Vývojářská dokumentace jednotlivých modulů je v samostatných souborech v této složce.
