@@ -1158,7 +1158,27 @@ def picking_list_edit(request, document_id):
             # Zpracování nových položek přidaných uživatelem
             from apps.core.models import Ingredient as IngredientModel
             from apps.canteens.models import Warehouse
-            
+
+            def _default_warehouse(order=None):
+                """Sklad pro přidávanou položku se nevybírá ručně – přebírá se
+                ze skladu, na který je výdejka/jídelníček plánován: nejdřív
+                sklad existujících položek jídla, pak sklad ostatních položek
+                dokumentu, nakonec první běžný sklad jídelny."""
+                if order is not None:
+                    item = PickingList.objects.filter(
+                        production_order=order, warehouse__isnull=False
+                    ).select_related('warehouse').first()
+                    if item:
+                        return item.warehouse
+                item = PickingList.objects.filter(
+                    document=document, warehouse__isnull=False
+                ).select_related('warehouse').first()
+                if item:
+                    return item.warehouse
+                return Warehouse.objects.filter(
+                    canteen=document.canteen, is_transit_warehouse=False
+                ).first()
+
             # Sestáváme skupiny nových položek: new_order__{order_id}__{idx}
             new_order_ids = set()
             for key in request.POST.keys():
@@ -1184,23 +1204,21 @@ def picking_list_edit(request, document_id):
                     continue
                 
                 ingredient_id_str = request.POST.get(f'new_ingredient_order_{order_id_new}_{idx}', '').strip()
-                warehouse_id_str = request.POST.get(f'new_warehouse_order_{order_id_new}_{idx}', '').strip()
                 quantity_str = request.POST.get(f'new_quantity_order_{order_id_new}_{idx}', '').strip()
 
-                if not ingredient_id_str and not warehouse_id_str and not quantity_str:
+                if not ingredient_id_str and not quantity_str:
                     # Zcela prázdný řádek šablony – v pořádku, přeskočíme
                     continue
-                if not ingredient_id_str or not warehouse_id_str or not quantity_str:
+                if not ingredient_id_str or not quantity_str:
                     # Částečně vyplněný řádek nesmí zmizet potichu
                     messages.warning(
                         request,
-                        'Nová surovina u jídla nebyla uložena – vyplňte surovinu, sklad i množství.'
+                        'Nová surovina u jídla nebyla uložena – vyplňte surovinu i množství.'
                     )
                     continue
-                
+
                 try:
                     ingredient_id_new = int(ingredient_id_str)
-                    warehouse_id_new = int(warehouse_id_str)
                     quantity_new = Decimal(quantity_str.replace(',', '.'))
                     if quantity_new <= 0:
                         messages.error(request, 'Množství musí být kladné.')
@@ -1208,13 +1226,17 @@ def picking_list_edit(request, document_id):
                 except (ValueError, InvalidOperation):
                     messages.error(request, 'Neplatné hodnoty pro novou surovinu.')
                     continue
-                
+
                 try:
                     order_obj = ProductionOrder.objects.get(id=order_id_new)
                     ingredient_obj = IngredientModel.objects.get(id=ingredient_id_new, is_active=True)
-                    warehouse_obj = Warehouse.objects.get(id=warehouse_id_new, canteen=document.canteen)
-                except (ProductionOrder.DoesNotExist, IngredientModel.DoesNotExist, Warehouse.DoesNotExist):
-                    messages.error(request, 'Některý ze zadaných údajů (jídlo / surovina / sklad) nebyl nalezen.')
+                except (ProductionOrder.DoesNotExist, IngredientModel.DoesNotExist):
+                    messages.error(request, 'Některý ze zadaných údajů (jídlo / surovina) nebyl nalezen.')
+                    continue
+
+                warehouse_obj = _default_warehouse(order_obj)
+                if warehouse_obj is None:
+                    messages.error(request, 'Jídelna nemá žádný sklad pro přidání položky.')
                     continue
 
                 # Uživatel zadává celkové množství ve skladových jednotkách,
@@ -1292,23 +1314,21 @@ def picking_list_edit(request, document_id):
             
             for idx in sorted(new_without_order_ids):
                 ingredient_id_str = request.POST.get(f'new_ingredient_without_order_{idx}', '').strip()
-                warehouse_id_str = request.POST.get(f'new_warehouse_without_order_{idx}', '').strip()
                 quantity_str = request.POST.get(f'new_quantity_without_order_{idx}', '').strip()
 
-                if not ingredient_id_str and not warehouse_id_str and not quantity_str:
+                if not ingredient_id_str and not quantity_str:
                     # Zcela prázdný řádek šablony – v pořádku, přeskočíme
                     continue
-                if not ingredient_id_str or not warehouse_id_str or not quantity_str:
+                if not ingredient_id_str or not quantity_str:
                     # Částečně vyplněný řádek nesmí zmizet potichu
                     messages.warning(
                         request,
-                        'Položka mimo jídla nebyla uložena – vyplňte surovinu, sklad i množství.'
+                        'Položka mimo jídla nebyla uložena – vyplňte surovinu i množství.'
                     )
                     continue
-                
+
                 try:
                     ingredient_id_new = int(ingredient_id_str)
-                    warehouse_id_new = int(warehouse_id_str)
                     quantity_new = Decimal(quantity_str.replace(',', '.'))
                     if quantity_new <= 0:
                         messages.error(request, 'Množství musí být kladné.')
@@ -1316,14 +1336,18 @@ def picking_list_edit(request, document_id):
                 except (ValueError, InvalidOperation):
                     messages.error(request, 'Neplatné hodnoty pro novou surovinu.')
                     continue
-                
+
                 try:
                     ingredient_obj = IngredientModel.objects.get(id=ingredient_id_new, is_active=True)
-                    warehouse_obj = Warehouse.objects.get(id=warehouse_id_new, canteen=document.canteen)
-                except (IngredientModel.DoesNotExist, Warehouse.DoesNotExist):
-                    messages.error(request, 'Některý ze zadaných údajů (surovina / sklad) nebyl nalezen.')
+                except IngredientModel.DoesNotExist:
+                    messages.error(request, 'Zadaná surovina nebyla nalezena.')
                     continue
-                
+
+                warehouse_obj = _default_warehouse()
+                if warehouse_obj is None:
+                    messages.error(request, 'Jídelna nemá žádný sklad pro přidání položky.')
+                    continue
+
                 PickingList.objects.create(
                     production_order=None,
                     document=document,
@@ -1505,13 +1529,9 @@ def picking_list_edit(request, document_id):
         ).select_related('ingredient', 'warehouse').order_by('ingredient__name')
         
         from apps.core.models import Ingredient as IngredientModel
-        from apps.canteens.models import Warehouse
         from django.contrib.auth import get_user_model
         User = get_user_model()
 
-        canteen_warehouses = Warehouse.objects.filter(
-            canteen=document.canteen, is_locked=False, is_transit_warehouse=False
-        ).order_by('name')
         all_ingredients = IngredientModel.objects.filter(is_active=True).order_by('name')
         available_cooks = User.objects.filter(is_active=True).order_by('last_name', 'first_name', 'username')
 
@@ -1520,7 +1540,6 @@ def picking_list_edit(request, document_id):
             'ingredient_totals': sorted_ingredients,
             'daily_picking_data': sorted_daily_data,
             'items_without_orders': items_without_orders,
-            'canteen_warehouses': canteen_warehouses,
             'all_ingredients': all_ingredients,
             'available_cooks': available_cooks,
             'readonly_mode': readonly_mode,
