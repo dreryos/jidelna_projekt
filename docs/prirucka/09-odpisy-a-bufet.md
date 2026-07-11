@@ -16,7 +16,7 @@ Odpis je jednoduchý doklad: sklad, datum, **kategorie** a položky (surovina + 
 
 Na rozdíl od výdejek nemá odpis schvalovací workflow — **položky se odepisují ze skladu okamžitě** při uložení. Jednotková cena se v okamžiku odpisu automaticky převezme ze skladové karty, takže analytika umí říct, kolik úklid či svačiny personálu stojí.
 
-💡 **Proč bez workflow:** Odpis je operativa („došel jar, vydej nový") — dvoufázové potvrzování by jen zdržovalo. Auditní stopa zůstává: doklad nese kategorii, autora, datum i cenu v okamžiku odpisu.
+💡 **Proč bez workflow:** Odpis je operativa („došel jar, vydej nový“) — dvoufázové potvrzování by jen zdržovalo. Auditní stopa zůstává: doklad nese kategorii, autora, datum i cenu v okamžiku odpisu.
 
 **Smazání položky odpisu vrací zboží na sklad.** Omylem odepsanou položku tedy stačí smazat — množství se vrátí. Mazat smí autor dokladu nebo správce.
 
@@ -32,7 +32,7 @@ Modul Bufet automatizuje odpis zboží prodaného v bufetu: místo ručního př
 
 ### Podklad: export z pokladny
 
-Z FiskalPRO vyexportujte přehled **„Položky dokladů – kumulované"** ve formátu XLSX. Systém z něj čte sloupce **Název** (co se prodalo) a **Množství** (kolik kusů), pomocně Artikl a MJ. Ceny, DPH ani skupiny z exportu nepoužívá — náklad se určuje ze skladových cen po spárování. Datum exportu se přebírá z názvu souboru.
+Z FiskalPRO vyexportujte přehled **„Položky dokladů – kumulované“** ve formátu XLSX. Systém z něj čte sloupce **Název** (co se prodalo) a **Množství** (kolik kusů), pomocně Artikl a MJ. Ceny, DPH ani skupiny z exportu nepoužívá — náklad se určuje ze skladových cen po spárování. Datum exportu se přebírá z názvu souboru.
 
 ### Krok 1: Nahrání souboru
 
@@ -46,7 +46,7 @@ Při načtení systém:
 * **storna odečte** — vrácené zboží snižuje prodané množství; položky s nulovým čistým prodejem vypadnou,
 * **sečte prodeje podle názvu zboží**.
 
-💡 **Proč agregace podle názvu, a ne podle artiklu:** V praxi pokladna přiděluje jeden artiklový kód více různým produktům (kód 1 = „Pegas Almond" i „Kinder Bueno"). Název je jediný spolehlivý identifikátor v exportu; tentýž název se navíc v souboru opakuje kvůli různým sazbám DPH a systém řádky správně sloučí.
+💡 **Proč agregace podle názvu, a ne podle artiklu:** V praxi pokladna přiděluje jeden artiklový kód více různým produktům (kód 1 = „Pegas Almond“ i „Kinder Bueno“). Název je jediný spolehlivý identifikátor v exportu; tentýž název se navíc v souboru opakuje kvůli různým sazbám DPH a systém řádky správně sloučí.
 
 ### Krok 2: Párování se surovinami
 

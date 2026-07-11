@@ -22,9 +22,9 @@ Jedno jídlo se často vaří pro více kategorií strávníků s různě velkou
 | Děti | 0,75 | 80 | 60 |
 | **Celkem k vaření** | | 200 | **180** |
 
-Potřeba surovin se počítá z **efektivních porcí** (porce × koeficient): norma 150 g brambor na porci × 180 efektivních porcí = 27 kg. Vaří se tedy „180 dospělých porcí" rozdělených na 200 talířů.
+Potřeba surovin se počítá z **efektivních porcí** (porce × koeficient): norma 150 g brambor na porci × 180 efektivních porcí = 27 kg. Vaří se tedy „180 dospělých porcí“ rozdělených na 200 talířů.
 
-💡 **Proč koeficienty místo dvou receptů:** Dětská porce je totéž jídlo, jen menší. Kdyby existoval zvláštní recept „guláš dětský", každá úprava receptury by se dělala dvakrát a dřív nebo později by se verze rozešly. Koeficient škáluje jeden recept — a nastavuje se na úrovni jídelníčku (výchozí varianty), takže je u všech jídel konzistentní.
+💡 **Proč koeficienty místo dvou receptů:** Dětská porce je totéž jídlo, jen menší. Kdyby existoval zvláštní recept „guláš dětský“, každá úprava receptury by se dělala dvakrát a dřív nebo později by se verze rozešly. Koeficient škáluje jeden recept — a nastavuje se na úrovni jídelníčku (výchozí varianty), takže je u všech jídel konzistentní.
 
 Výchozí varianty (názvy, koeficienty, počty porcí) nastavíte u jídelního plánu; každé jídlo je zdědí a lze je u něj individuálně upravit (např. bufet vaří jen pro dospělé).
 
@@ -53,7 +53,7 @@ Opakující se cykly (14denní jídelníček ŠVP…) uložte jako **šablonu** 
 
 ![Import jídelníčku ze šablony](img/07-import-jidelnicku.png)
 
-⚠️ **Pozor:** Pokud šablona odkazuje na recept, který mezitím někdo smazal, náhled na to upozorní — jídlo přeskočte nebo recept obnovte. Proto recepty raději needitujte „mazáním a zakládáním znovu" — nový recept dostane nový kód a vazba ze šablon se ztratí.
+⚠️ **Pozor:** Pokud šablona odkazuje na recept, který mezitím někdo smazal, náhled na to upozorní — jídlo přeskočte nebo recept obnovte. Proto recepty raději needitujte „mazáním a zakládáním znovu“ — nový recept dostane nový kód a vazba ze šablon se ztratí.
 
 ## Úpravy ingrediencí na den (overrides)
 

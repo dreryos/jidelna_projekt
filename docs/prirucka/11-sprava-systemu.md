@@ -59,7 +59,7 @@ Import téhož XML na stejné stránce. Chová se **doplňkově**: existující 
 
 * **Denně**: automatická kopie databázového souboru (zajišťuje hosting/OS — mimo aplikaci).
 * **Týdně**: XML export kompletní zálohy (uchovávejte mimo server).
-* **Průběžně**: sledovat záporné skladové karty (kapitola [8](08-vydejky.md)) a „visící" doklady — převodky V PŘEVOZU a inventury PROBÍHÁ starší než pár dní.
+* **Průběžně**: sledovat záporné skladové karty (kapitola [8](08-vydejky.md)) a „visící“ doklady — převodky V PŘEVOZU a inventury PROBÍHÁ starší než pár dní.
 * **Po aktualizaci systému**: projít CHANGELOG a ověřit kritické workflow (příjemka → výdejka) na zkušebním dokladu.
 
 ## Bezpečnost dat

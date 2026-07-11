@@ -4,7 +4,7 @@ Inventura srovnává systémový stav skladu s fyzickou realitou. Ve SPÍŽi je 
 
 ## Workflow
 
-```
+```text
 NÁVRH (DRAFT) ──[Zahájit]──► PROBÍHÁ (IN_PROGRESS) ──[Dokončit]──► DOKONČENO (COMPLETED)
                                    │
                                    └────[Zrušit]────► ZRUŠENO (CANCELLED)
@@ -16,7 +16,7 @@ Inventury najdete v **Sklady → Inventury** (`/inventory/inventory-verification
 
 ### 1. Založení (návrh)
 
-Vyberete sklad a založíte inventuru. Návrh ještě nic nezamyká — jen říká „chystáme se počítat".
+Vyberete sklad a založíte inventuru. Návrh ještě nic nezamyká — jen říká „chystáme se počítat“.
 
 ### 2. Zahájení
 
@@ -32,7 +32,7 @@ Kliknutím na **Zahájit** systém:
 
 Do řádků zapisujete **spočtené množství**. Systém průběžně ukazuje rozdíl (spočteno − systém). Najdete-li na skladě zboží, které systém vůbec neeviduje, přidáte ho jako **nově nalezenou položku**.
 
-⚠️ **Pozor:** Dokončit nelze, dokud má některý řádek prázdné spočtené množství. „Nic jsme nenašli" se zapisuje jako **0**, ne jako prázdné pole — prázdné pole znamená „ještě nespočteno" a systém dokončení odmítne.
+⚠️ **Pozor:** Dokončit nelze, dokud má některý řádek prázdné spočtené množství. „Nic jsme nenašli“ se zapisuje jako **0**, ne jako prázdné pole — prázdné pole znamená „ještě nespočteno“ a systém dokončení odmítne.
 
 ### 4. Dokončení
 
@@ -43,15 +43,15 @@ Kliknutím na **Dokončit** systém v jedné transakci:
 3. **odemkne sklad**,
 4. zaznamená, kdo a kdy dokončil.
 
-💡 **Proč zámek po celou dobu:** Inventura má smysl, jen pokud se během počítání stav nemění. Jediný příjem nebo výdej „pod rukama" znehodnotí všechny rozdíly — nešlo by rozlišit skutečné manko od legitimního pohybu. Proto zámek drží od zahájení do dokončení a nejde obejít žádnou operací.
+💡 **Proč zámek po celou dobu:** Inventura má smysl, jen pokud se během počítání stav nemění. Jediný příjem nebo výdej „pod rukama“ znehodnotí všechny rozdíly — nešlo by rozlišit skutečné manko od legitimního pohybu. Proto zámek drží od zahájení do dokončení a nejde obejít žádnou operací.
 
 ### Zrušení
 
 Probíhající inventuru lze **zrušit** — sklad se odemkne a stavy zůstanou beze změny (spočtené hodnoty se nikam nepropíší). Zrušit ji smí **jen ten, kdo ji zahájil, nebo správce**.
 
-💡 **Proč to omezení:** Zrušení zahazuje rozpracované počítání. Omezení na autora brání tomu, aby kdokoli „odblokoval sklad" a tím kolegovi zahodil hodinu práce ve skladu.
+💡 **Proč to omezení:** Zrušení zahazuje rozpracované počítání. Omezení na autora brání tomu, aby kdokoli „odblokoval sklad“ a tím kolegovi zahodil hodinu práce ve skladu.
 
-## Co dělat, když inventura „visí"
+## Co dělat, když inventura „visí“
 
 Typický scénář: kolega zahájil inventuru, odešel a sklad zůstal zamčený.
 
@@ -64,11 +64,11 @@ Typický scénář: kolega zahájil inventuru, odešel a sklad zůstal zamčený
 ## Doporučený postup pro hladkou inventuru
 
 1. Dokončete či zrušte rozpracované doklady na skladu (koncepty příjemek počkají — jen je nepůjde potvrdit).
-2. Dokončete převodky „v převozu", které se skladu týkají — zboží v meziskladu byste jinak počítali dvakrát nebo vůbec.
+2. Dokončete převodky „v převozu“, které se skladu týkají — zboží v meziskladu byste jinak počítali dvakrát nebo vůbec.
 3. Zahajte inventuru, počítejte, zapisujte průběžně.
 4. Před dokončením zkontrolujte řádky s velkými rozdíly — nejčastěji jde o překlep nebo záměnu jednotek (kg vs. ks).
 5. Dokončete. Rozdíly zůstávají uloženy v inventuře pro pozdější analýzu.
 
 ---
 
-*Technická poznámka pro vývojáře: `InventoryVerification.start()/complete()/cancel()` v `apps/inventory/models.py`, atomicky se `select_for_update()`. Zámek: `Warehouse.is_locked` + `locked_by_inventory`. Řádky: `InventoryVerificationItem` (unikátní na dvojici inventura × surovina, `is_newly_found` pro dodatečně nalezené zboží). Validace „všechna pole spočtena" běží v `complete()`.*
+*Technická poznámka pro vývojáře: `InventoryVerification.start()/complete()/cancel()` v `apps/inventory/models.py`, atomicky se `select_for_update()`. Zámek: `Warehouse.is_locked` + `locked_by_inventory`. Řádky: `InventoryVerificationItem` (unikátní na dvojici inventura × surovina, `is_newly_found` pro dodatečně nalezené zboží). Validace „všechna pole spočtena“ běží v `complete()`.*

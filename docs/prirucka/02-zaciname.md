@@ -16,7 +16,7 @@ Po přihlášení se zobrazí **dashboard** — rozcestník do všech modulů s 
 
 Nastavení nové jídelny probíhá v tomto pořadí — každý krok staví na předchozím:
 
-```
+```text
 1. jídelna  →  2. sklady  →  3. uživatelé  →  4. suroviny a receptury  →  5. první příjemka
 ```
 
@@ -46,7 +46,7 @@ Uživatele zakládá správce v **Django adminu** (Administrace → Django Admin
 
 Podrobný postup i se screenshoty je v kapitole [11. Správa systému](11-sprava-systemu.md).
 
-⚠️ **Pozor — nejčastější chyba při zakládání uživatele:** uživatel bez profilu (nebo s profilem bez zaškrtnutých jídelen) se přihlásí, ale systém pro něj bude „prázdný" a nahrávání dokladů skončí chybou oprávnění. Profil je povinný pro každého běžného uživatele.
+⚠️ **Pozor — nejčastější chyba při zakládání uživatele:** uživatel bez profilu (nebo s profilem bez zaškrtnutých jídelen) se přihlásí, ale systém pro něj bude „prázdný“ a nahrávání dokladů skončí chybou oprávnění. Profil je povinný pro každého běžného uživatele.
 
 ### Krok 4: Suroviny a receptury
 
@@ -61,7 +61,7 @@ Sklad naplníte první příjemkou (kapitola [4](04-prijem-zbozi.md)). Tím se z
 Se zamčeným skladem se potká každý uživatel, proto ho vysvětlujeme hned na začátku:
 
 * Sklad se zamyká **automaticky zahájením inventury** a odemyká jejím dokončením či zrušením.
-* Zamčený sklad odmítne: potvrzení příjemky, zahájení i dokončení převodky, výdej výdejkou, odpis i import bufetu. Aplikace vždy vypíše srozumitelnou hlášku typu *„Sklad Hlavní sklad je uzamčen inventurou."*
+* Zamčený sklad odmítne: potvrzení příjemky, zahájení i dokončení převodky, výdej výdejkou, odpis i import bufetu. Aplikace vždy vypíše srozumitelnou hlášku typu *„Sklad Hlavní sklad je uzamčen inventurou.“*
 
 💡 **Proč to tak je:** Inventura porovnává fyzický stav se systémovým. Kdyby někdo během počítání přijal nebo vydal zboží, spočtené rozdíly by neodpovídaly ničemu. Zámek je tedy ochrana správnosti inventury, ne šikana — plánujte inventury na dobu mimo příjem a výdej.
 

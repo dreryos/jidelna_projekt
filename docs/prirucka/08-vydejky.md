@@ -12,7 +12,7 @@ Výdejka je doklad o výdeji surovin ze skladu do kuchyně na konkrétní vařen
 
 ## Životní cyklus položky výdejky
 
-```
+```text
 vygenerováno (ČEKÁ / PENDING)
       │  zařazení do výdejkového dokumentu
       ▼
@@ -31,7 +31,7 @@ Každé jídlo v jídelníčku má vygenerované položky výdejky: surovina, **
 
 ### 2. Blokace
 
-Zařazením položek do výdejkového dokumentu se plánované množství **zablokuje** na skladové kartě. Zboží je stále fyzicky na skladě, ale jiná výdejka ani převodka ho už „nevidí" jako dostupné.
+Zařazením položek do výdejkového dokumentu se plánované množství **zablokuje** na skladové kartě. Zboží je stále fyzicky na skladě, ale jiná výdejka ani převodka ho už „nevidí“ jako dostupné.
 
 💡 **Proč blokace, a ne rovnou odečtení:** Výdejka se připravuje dopředu (třeba v pátek na pondělí), ale zboží fyzicky opustí sklad až při vaření. Kdyby se sklad odečetl hned, inventura přes víkend by nevyšla; kdyby se neblokovalo nic, dvě výdejky by si mohly slíbit totéž kilo masa. Blokace odděluje **rezervováno** od **vydáno**.
 
@@ -47,9 +47,9 @@ Dokončenou položku lze vrátit do stavu ČEKÁ — skutečné množství se vr
 
 Pokud při dokončení není na skladě dost zboží, systém výdej **nezablokuje** — provede ho a skladová karta jde do minusu. Záporné stavy jsou zvýrazněny v přehledech i na PDF výdejky.
 
-💡 **Proč je minus dovolen:** Kuchyně musí uvařit — realita má přednost před evidencí. Zákaz by vedl jen k obcházení systému („vydáme bokem a doklad uděláme potom", tedy nikdy). Minus je signál, že evidence neodpovídá: buď chybí příjemka/převodka, nebo je špatně norma. Řešte ho co nejdřív — doplněním chybějícího dokladu nebo inventurou.
+💡 **Proč je minus dovolen:** Kuchyně musí uvařit — realita má přednost před evidencí. Zákaz by vedl jen k obcházení systému („vydáme bokem a doklad uděláme potom“, tedy nikdy). Minus je signál, že evidence neodpovídá: buď chybí příjemka/převodka, nebo je špatně norma. Řešte ho co nejdřív — doplněním chybějícího dokladu nebo inventurou.
 
-⚠️ **Pozor:** Opakované minusy u stejné suroviny = systémový problém (špatný převodní koeficient, zapomenutý závoz). Nenechávejte je „vyhnít" — pokřivují kalkulace cen.
+⚠️ **Pozor:** Opakované minusy u stejné suroviny = systémový problém (špatný převodní koeficient, zapomenutý závoz). Nenechávejte je „vyhnít“ — pokřivují kalkulace cen.
 
 ## Výdejkové dokumenty a PDF
 
@@ -61,7 +61,7 @@ Výdejky se seskupují do **dokumentů** (den nebo více dní), které lze:
 
 U dokumentu se eviduje i **kuchař** — kdo vaření zajišťoval (využívá analytika kuchařů, kapitola [10](10-analytika-a-reporty.md)).
 
-💡 **Proč se velká PDF generují „po dnech":** Vícedenní dokument s desítkami jídel by se renderoval celý naráz a spotřeboval příliš mnoho paměti serveru. Nad ~60 jídel proto systém vykreslí každý den zvlášť a stránky spojí — výsledek je stejný, jen se nezahltí server.
+💡 **Proč se velká PDF generují „po dnech“:** Vícedenní dokument s desítkami jídel by se renderoval celý naráz a spotřeboval příliš mnoho paměti serveru. Nad ~60 jídel proto systém vykreslí každý den zvlášť a stránky spojí — výsledek je stejný, jen se nezahltí server.
 
 ## Časté situace
 

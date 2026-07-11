@@ -4,7 +4,7 @@
 
 SPÍŽ (Systém Pro Inventuru Žvance) je webová aplikace pro kompletní správu provozu školní nebo firemní jídelny. Pokrývá celý životní cyklus surovin:
 
-```
+```text
 NÁKUP → SKLAD → PLÁNOVÁNÍ → VÝROBA → VÝDEJ → ANALÝZA
 (příjemka) (zásoby,    (jídelníček,  (výrobní   (výdejka,   (náklady,
             převodky,   šablony)      příkazy)   odpisy,     ceny,
@@ -23,7 +23,7 @@ Vše je postaveno na jednoduché zásadě: **sklad je vždy pravda**. Každý po
 
 | Pojem | Význam |
 |---|---|
-| **Jídelna** | Provozní jednotka (např. „ZŠ Lipová"). Má vlastní sklady, jídelníčky a uživatele. Data jídelen jsou od sebe oddělena. |
+| **Jídelna** | Provozní jednotka (např. „ZŠ Lipová“). Má vlastní sklady, jídelníčky a uživatele. Data jídelen jsou od sebe oddělena. |
 | **Sklad** | Fyzické místo uskladnění v rámci jídelny (hlavní sklad, mrazák…). Jídelna může mít skladů více. |
 | **Mezisklad** | Zvláštní technický sklad (jeden na jídelnu), přes který prochází zboží při převodu mezi sklady. Uživatel s ním přímo nepracuje. |
 | **Surovina** | Položka skladové evidence (mouka, brambory…). Má skladovou jednotku (kg, l, ks) a receptovou jednotku (g, ml, ks) s pevným převodem. |
@@ -61,7 +61,7 @@ SPÍŽ rozlišuje tři úrovně přístupu:
 
 💡 **Proč to tak je:** Oddělení dat podle jídelen je vynuceno přímo v aplikaci (každý pohled filtruje podle profilu uživatele), ne jen skrytím odkazů. I kdyby uživatel znal adresu cizího záznamu, systém přístup odmítne.
 
-⚠️ **Pozor:** Uživatel bez vyplněného profilu (bez přiřazených jídelen) neuvidí žádná data a nemůže nahrávat žádné doklady. Pokud si nový kolega stěžuje na „prázdný systém", zkontrolujte jeho profil — viz kapitola [2. Začínáme](02-zaciname.md) a [11. Správa systému](11-sprava-systemu.md).
+⚠️ **Pozor:** Uživatel bez vyplněného profilu (bez přiřazených jídelen) neuvidí žádná data a nemůže nahrávat žádné doklady. Pokud si nový kolega stěžuje na „prázdný systém“, zkontrolujte jeho profil — viz kapitola [2. Začínáme](02-zaciname.md) a [11. Správa systému](11-sprava-systemu.md).
 
 Některé operace mají navíc vlastní pravidla bez ohledu na roli:
 

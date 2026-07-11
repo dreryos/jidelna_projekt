@@ -431,7 +431,7 @@ def help_page(request, path):
 	try:
 		full_path = Path(safe_join(HELP_SITE_DIR, path))
 	except SuspiciousFileOperation:
-		raise Http404("Neplatná cesta.")
+		raise Http404("Neplatná cesta.") from None
 
 	if full_path.is_dir():
 		full_path = full_path / 'index.html'

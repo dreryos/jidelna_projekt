@@ -6,7 +6,7 @@ Příjemka je jediná cesta, jak do systému dostat zboží **s cenou**. Vše os
 
 Příjemka prochází dvěma stavy:
 
-```
+```text
 KONCEPT (DRAFT) ──[Potvrdit]──► POTVRZENO (CONFIRMED)
    volně editovatelná             už nelze měnit
    sklad nezměněn                 sklad navýšen, ceny zapsány
@@ -37,7 +37,7 @@ Dokud je příjemka koncept, můžete položky přidávat, mazat i opravovat —
 ![Seznam příjemek](img/04-prijemky-seznam.png)
 ![Detail příjemky](img/04-prijemka-detail.png)
 
-⚠️ **Pozor na jednotky:** Množství je vždy ve **skladové** jednotce suroviny (kg, l, ks). Dodák uvádí „10 × 5 kg mouka" → zadáváte 50 (kg), ne 10 (balení).
+⚠️ **Pozor na jednotky:** Množství je vždy ve **skladové** jednotce suroviny (kg, l, ks). Dodák uvádí „10 × 5 kg mouka“ → zadáváte 50 (kg), ne 10 (balení).
 
 ⚠️ **Pozor na ceny:** Překlep v ceně se potvrzením propíše do skladu a do všech kalkulací. Před potvrzením porovnejte celkovou hodnotu příjemky s fakturou — je vidět v detailu dokladu.
 
@@ -65,14 +65,14 @@ Každá změna skladové ceny (potvrzením příjemky, inventurou, převodkou) v
 * kalkulace ceny porce k datu (kapitola [3](03-suroviny-a-receptury.md)),
 * analytika vývoje cen receptů (kapitola [10](10-analytika-a-reporty.md)).
 
-💡 **Proč to tak je:** Bez historie by šlo říct jen „kolik stojí porce dnes". S historií systém odpoví i „kolik stála v lednu" a „o kolik zdražil guláš za půl roku" — což je přesně to, co vedoucí jídelny potřebuje při úpravě cen obědů.
+💡 **Proč to tak je:** Bez historie by šlo říct jen „kolik stojí porce dnes“. S historií systém odpoví i „kolik stála v lednu“ a „o kolik zdražil guláš za půl roku“ — což je přesně to, co vedoucí jídelny potřebuje při úpravě cen obědů.
 
 ## Časté chyby a jak se jim vyhnout
 
 | Situace | Příčina | Řešení |
 |---|---|---|
-| *„Sklad je uzamčen kvůli probíhající inventuře"* při potvrzení | Na skladu běží inventura | Počkat na dokončení inventury, pak potvrdit (koncept zůstává uložen) |
-| Potvrzená příjemka má chybnou cenu | Překlep, pozdě odhalený | Neopravovat „nasilu" — vytvořit novou příjemku/odpis dle povahy chyby; cena se srovná dalším závozem |
+| *„Sklad je uzamčen kvůli probíhající inventuře“* při potvrzení | Na skladu běží inventura | Počkat na dokončení inventury, pak potvrdit (koncept zůstává uložen) |
+| Potvrzená příjemka má chybnou cenu | Překlep, pozdě odhalený | Neopravovat „nasilu“ — vytvořit novou příjemku/odpis dle povahy chyby; cena se srovná dalším závozem |
 | Po importu chybí surovina | Nový artikl dodavatele | Import ji nabídne založit; zkontrolujte jednotky a převodní koeficient |
 | Kalkulace porce vychází nulová | Surovina ještě neprošla příjemkou | Naskladnit první příjemkou — do té doby má cena hodnotu 0 |
 
