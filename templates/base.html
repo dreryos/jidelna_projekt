@@ -200,6 +200,11 @@
         </ul>
         <ul class="navbar-nav">
           {% if request.user.is_authenticated %}
+            <li class="nav-item">
+              <a class="nav-link text-secondary" href="{% url 'core:help_index' %}" title="Nápověda">
+                <i class="fas fa-question-circle me-1"></i>Nápověda
+              </a>
+            </li>
             <li class="nav-item dropdown">
               <a class="nav-link dropdown-toggle text-dark" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown">
                 <i class="fas fa-user me-1"></i>{{ user.get_full_name|default:user.username }}

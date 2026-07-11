@@ -1,0 +1,32 @@
+site_name: SPÍŽ – Nápověda
+docs_dir: docs/prirucka
+site_dir: staticdocs
+use_directory_urls: false
+
+theme:
+  name: material
+  language: cs
+  palette:
+    primary: green
+  features:
+    - navigation.footer
+    - toc.integrate
+
+plugins:
+  - search
+
+nav:
+  - Úvodní rozcestník: README.md
+  - 1. Úvod a pojmy: 01-uvod-a-pojmy.md
+  - 2. Začínáme: 02-zaciname.md
+  - 3. Suroviny a receptury: 03-suroviny-a-receptury.md
+  - 4. Příjem zboží: 04-prijem-zbozi.md
+  - 5. Sklady a převodky: 05-sklady-a-prevodky.md
+  - 6. Inventura: 06-inventura.md
+  - 7. Jídelníčky a výroba: 07-jidelnicky-a-vyroba.md
+  - 8. Výdejky: 08-vydejky.md
+  - 9. Odpisy a bufet: 09-odpisy-a-bufet.md
+  - 10. Analytika a reporty: 10-analytika-a-reporty.md
+  - 11. Správa systému: 11-sprava-systemu.md
+  - 12. Řešení problémů: 12-reseni-problemu.md
+  - 13. Pro vývojáře: 13-pro-vyvojare.md

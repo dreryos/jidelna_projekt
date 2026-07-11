@@ -33,7 +33,7 @@ from django.db.models.query import QuerySet
 from django.http import HttpRequest, HttpResponse, FileResponse
 from django.core.exceptions import PermissionDenied, ObjectDoesNotExist
 from django.http import JsonResponse, Http404
-from django.db import transaction
+from django.db import IntegrityError, transaction
 
 from .models import ProductionOrder, PickingList, MenuPlan
 from .forms import MenuPlanForm, MenuPlanCoefficientFormSet, MenuPlanCoefficientFormSetNoExtra
@@ -1158,7 +1158,27 @@ def picking_list_edit(request, document_id):
             # Zpracování nových položek přidaných uživatelem
             from apps.core.models import Ingredient as IngredientModel
             from apps.canteens.models import Warehouse
-            
+
+            def _default_warehouse(order=None):
+                """Sklad pro přidávanou položku se nevybírá ručně – přebírá se
+                ze skladu, na který je výdejka/jídelníček plánován: nejdřív
+                sklad existujících položek jídla, pak sklad ostatních položek
+                dokumentu, nakonec první běžný sklad jídelny."""
+                if order is not None:
+                    item = PickingList.objects.filter(
+                        production_order=order, warehouse__isnull=False
+                    ).select_related('warehouse').first()
+                    if item:
+                        return item.warehouse
+                item = PickingList.objects.filter(
+                    document=document, warehouse__isnull=False
+                ).select_related('warehouse').first()
+                if item:
+                    return item.warehouse
+                return Warehouse.objects.filter(
+                    canteen=document.canteen, is_transit_warehouse=False
+                ).first()
+
             # Sestáváme skupiny nových položek: new_order__{order_id}__{idx}
             new_order_ids = set()
             for key in request.POST.keys():
@@ -1184,15 +1204,21 @@ def picking_list_edit(request, document_id):
                     continue
                 
                 ingredient_id_str = request.POST.get(f'new_ingredient_order_{order_id_new}_{idx}', '').strip()
-                warehouse_id_str = request.POST.get(f'new_warehouse_order_{order_id_new}_{idx}', '').strip()
                 quantity_str = request.POST.get(f'new_quantity_order_{order_id_new}_{idx}', '').strip()
-                
-                if not ingredient_id_str or not warehouse_id_str or not quantity_str:
+
+                if not ingredient_id_str and not quantity_str:
+                    # Zcela prázdný řádek šablony – v pořádku, přeskočíme
                     continue
-                
+                if not ingredient_id_str or not quantity_str:
+                    # Částečně vyplněný řádek nesmí zmizet potichu
+                    messages.warning(
+                        request,
+                        'Nová surovina u jídla nebyla uložena – vyplňte surovinu i množství.'
+                    )
+                    continue
+
                 try:
                     ingredient_id_new = int(ingredient_id_str)
-                    warehouse_id_new = int(warehouse_id_str)
                     quantity_new = Decimal(quantity_str.replace(',', '.'))
                     if quantity_new <= 0:
                         messages.error(request, 'Množství musí být kladné.')
@@ -1200,36 +1226,78 @@ def picking_list_edit(request, document_id):
                 except (ValueError, InvalidOperation):
                     messages.error(request, 'Neplatné hodnoty pro novou surovinu.')
                     continue
-                
+
                 try:
                     order_obj = ProductionOrder.objects.get(id=order_id_new)
                     ingredient_obj = IngredientModel.objects.get(id=ingredient_id_new, is_active=True)
-                    warehouse_obj = Warehouse.objects.get(id=warehouse_id_new, canteen=document.canteen)
-                except (ProductionOrder.DoesNotExist, IngredientModel.DoesNotExist, Warehouse.DoesNotExist):
-                    messages.error(request, 'Některý ze zadaných údajů (jídlo / surovina / sklad) nebyl nalezen.')
+                except (ProductionOrder.DoesNotExist, IngredientModel.DoesNotExist):
+                    messages.error(request, 'Některý ze zadaných údajů (jídlo / surovina) nebyl nalezen.')
                     continue
-                
+
+                warehouse_obj = _default_warehouse(order_obj)
+                if warehouse_obj is None:
+                    messages.error(request, 'Jídelna nemá žádný sklad pro přidání položky.')
+                    continue
+
+                # Uživatel zadává celkové množství ve skladových jednotkách,
+                # override ale ukládá množství na 1 porci v receptových
+                # jednotkách – z něj generate_picking_list() při přegenerování
+                # výdejky počítá celkové množství zpět. None by při rebuildu
+                # znamenalo množství 0.
+                quantity_per_portion = None
+                effective_portions = order_obj.total_effective_portions
+                if effective_portions:
+                    quantity_per_portion = (
+                        ingredient_obj.convert_to_recipe_unit(quantity_new)
+                        / Decimal(effective_portions)
+                    ).quantize(Decimal('0.001'))
+
                 # Vytvoření override pro trvalé uložení přidané suroviny
                 from .models import ProductionOrderIngredientOverride
-                ProductionOrderIngredientOverride.objects.create(
-                    production_order=order_obj,
-                    ingredient=ingredient_obj,
-                    quantity_per_portion=None,  # pro přidané suroviny je None
-                    original_quantity=Decimal('0'),
-                    is_added=True,
-                    is_removed=False,
-                    notes=''
-                )
-                
-                PickingList.objects.create(
-                    production_order=order_obj,
-                    document=document,
-                    warehouse=warehouse_obj,
-                    ingredient=ingredient_obj,
-                    quantity_planned=quantity_new,
-                    quantity_actual=quantity_new,
-                    status=PickingList.Status.COMPLETED,
-                )
+                try:
+                    with transaction.atomic():
+                        # get_or_create: surovina už může mít override (dřívější
+                        # přidání nebo úprava receptu) – unique_together
+                        # (production_order, ingredient)
+                        override, override_created = ProductionOrderIngredientOverride.objects.get_or_create(
+                            production_order=order_obj,
+                            ingredient=ingredient_obj,
+                            defaults={
+                                'quantity_per_portion': quantity_per_portion,
+                                'original_quantity': Decimal('0'),
+                                'is_added': True,
+                                'is_removed': False,
+                                'notes': '',
+                            }
+                        )
+                        # Surovina dříve odebraná z jídla: přidáním ji vracíme
+                        # do hry s nově zadaným množstvím
+                        if not override_created:
+                            override.is_removed = False
+                            override.is_added = True
+                            override.quantity_per_portion = quantity_per_portion
+                            override.save(update_fields=[
+                                'is_removed', 'is_added', 'quantity_per_portion',
+                            ])
+
+                        PickingList.objects.create(
+                            production_order=order_obj,
+                            document=document,
+                            warehouse=warehouse_obj,
+                            ingredient=ingredient_obj,
+                            quantity_planned=quantity_new,
+                            quantity_actual=quantity_new,
+                            status=PickingList.Status.COMPLETED,
+                        )
+                except IntegrityError:
+                    # PickingList má unique_together(production_order, ingredient)
+                    # – surovina už ve výdejce jídla je, atomic vrátil i override
+                    messages.warning(
+                        request,
+                        f'Surovina {ingredient_obj.name} už je ve výdejce jídla '
+                        f'{order_obj.recipe.name} – upravte množství u existující položky.'
+                    )
+                    continue
                 added_count += 1
             
             # Zpracování nových položek bez ProductionOrder (mimo jídla)
@@ -1246,15 +1314,21 @@ def picking_list_edit(request, document_id):
             
             for idx in sorted(new_without_order_ids):
                 ingredient_id_str = request.POST.get(f'new_ingredient_without_order_{idx}', '').strip()
-                warehouse_id_str = request.POST.get(f'new_warehouse_without_order_{idx}', '').strip()
                 quantity_str = request.POST.get(f'new_quantity_without_order_{idx}', '').strip()
-                
-                if not ingredient_id_str or not warehouse_id_str or not quantity_str:
+
+                if not ingredient_id_str and not quantity_str:
+                    # Zcela prázdný řádek šablony – v pořádku, přeskočíme
                     continue
-                
+                if not ingredient_id_str or not quantity_str:
+                    # Částečně vyplněný řádek nesmí zmizet potichu
+                    messages.warning(
+                        request,
+                        'Položka mimo jídla nebyla uložena – vyplňte surovinu i množství.'
+                    )
+                    continue
+
                 try:
                     ingredient_id_new = int(ingredient_id_str)
-                    warehouse_id_new = int(warehouse_id_str)
                     quantity_new = Decimal(quantity_str.replace(',', '.'))
                     if quantity_new <= 0:
                         messages.error(request, 'Množství musí být kladné.')
@@ -1262,14 +1336,18 @@ def picking_list_edit(request, document_id):
                 except (ValueError, InvalidOperation):
                     messages.error(request, 'Neplatné hodnoty pro novou surovinu.')
                     continue
-                
+
                 try:
                     ingredient_obj = IngredientModel.objects.get(id=ingredient_id_new, is_active=True)
-                    warehouse_obj = Warehouse.objects.get(id=warehouse_id_new, canteen=document.canteen)
-                except (IngredientModel.DoesNotExist, Warehouse.DoesNotExist):
-                    messages.error(request, 'Některý ze zadaných údajů (surovina / sklad) nebyl nalezen.')
+                except IngredientModel.DoesNotExist:
+                    messages.error(request, 'Zadaná surovina nebyla nalezena.')
                     continue
-                
+
+                warehouse_obj = _default_warehouse()
+                if warehouse_obj is None:
+                    messages.error(request, 'Jídelna nemá žádný sklad pro přidání položky.')
+                    continue
+
                 PickingList.objects.create(
                     production_order=None,
                     document=document,
@@ -1451,13 +1529,9 @@ def picking_list_edit(request, document_id):
         ).select_related('ingredient', 'warehouse').order_by('ingredient__name')
         
         from apps.core.models import Ingredient as IngredientModel
-        from apps.canteens.models import Warehouse
         from django.contrib.auth import get_user_model
         User = get_user_model()
 
-        canteen_warehouses = Warehouse.objects.filter(
-            canteen=document.canteen, is_locked=False, is_transit_warehouse=False
-        ).order_by('name')
         all_ingredients = IngredientModel.objects.filter(is_active=True).order_by('name')
         available_cooks = User.objects.filter(is_active=True).order_by('last_name', 'first_name', 'username')
 
@@ -1466,7 +1540,6 @@ def picking_list_edit(request, document_id):
             'ingredient_totals': sorted_ingredients,
             'daily_picking_data': sorted_daily_data,
             'items_without_orders': items_without_orders,
-            'canteen_warehouses': canteen_warehouses,
             'all_ingredients': all_ingredients,
             'available_cooks': available_cooks,
             'readonly_mode': readonly_mode,

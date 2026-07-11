@@ -6,6 +6,9 @@ set -e
 echo "Running database migrations..."
 python manage.py migrate --noinput
 
+echo "Building help documentation (MkDocs)..."
+mkdocs build
+
 echo "Collecting static files..."
 python manage.py collectstatic --noinput
 
