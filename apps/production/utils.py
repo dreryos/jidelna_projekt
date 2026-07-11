@@ -24,6 +24,7 @@ MEAL_TYPE_ORDER = {
     'LUNCH': 2,
     'SNACK_AFTERNOON': 3,
     'DINNER': 4,
+    'DINNER_SECOND': 5,
 }
 
 
