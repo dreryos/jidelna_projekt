@@ -244,7 +244,8 @@ class ProductionOrder(models.Model):
         LUNCH = 'LUNCH', 'Oběd'
         SNACK_AFTERNOON = 'SNACK_AFTERNOON', 'Svačina odpolední'
         DINNER = 'DINNER', 'Večeře'
-    
+        DINNER_SECOND = 'DINNER_SECOND', 'Druhá večeře'
+
     menu_plan = models.ForeignKey(MenuPlan, on_delete=models.CASCADE, related_name='production_orders', verbose_name="Jídelníček", null=False, blank=False)
     recipe = models.ForeignKey(Recipe, on_delete=models.PROTECT, verbose_name="Recept")
     canteen = models.ForeignKey(Canteen, on_delete=models.PROTECT, verbose_name="Jídelna", null=True, blank=True)

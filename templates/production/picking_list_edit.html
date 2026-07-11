@@ -163,6 +163,7 @@
     </div>
 
     {% for meal in meals %}
+    {% if not meal.is_placeholder or not readonly_mode %}
     <div class="card meal-card mb-3 shadow-sm">
       <div class="card-header d-flex justify-content-between align-items-center">
         <span>
@@ -171,11 +172,16 @@
           {% elif meal.meal_type == 'LUNCH' %}<span class="badge bg-primary meal-badge me-2">Oběd</span>
           {% elif meal.meal_type == 'SNACK_AFTERNOON' %}<span class="badge bg-secondary meal-badge me-2">Svačina odp.</span>
           {% elif meal.meal_type == 'DINNER' %}<span class="badge bg-dark meal-badge me-2">Večeře</span>
+          {% elif meal.meal_type == 'DINNER_SECOND' %}<span class="badge bg-info text-dark meal-badge me-2">Druhá večeře</span>
           {% else %}<span class="badge bg-light text-dark meal-badge me-2">{{ meal.meal_type }}</span>{% endif %}
           {{ meal.recipe_name }}
+          {% if meal.is_placeholder %}
+          <small class="text-muted ms-2">z plánu prázdné – doplňte suroviny</small>
+          {% else %}
           <small class="text-muted ms-2">{{ meal.portions }} porcí{% if meal.is_customized %} <i class="fas fa-star text-warning ms-1" title="Upravené jídlo"></i>{% endif %}</small>
+          {% endif %}
         </span>
-        {% if not readonly_mode %}
+        {% if not readonly_mode and meal.ingredients %}
         <div class="d-flex gap-2">
           <button type="button" class="btn btn-outline-success btn-sm meal-issue-all-btn" data-meal-id="{{ forloop.parentloop.counter }}_{{ forloop.counter }}">
             <i class="fas fa-check-double me-1"></i>Vydat vše v jídle
@@ -183,6 +189,7 @@
         </div>
         {% endif %}
       </div>
+      {% if meal.ingredients %}
       <div class="card-body p-0">
         <div class="table-responsive">
           <table class="table table-sm table-hover table-ingredients mb-0">
@@ -248,21 +255,22 @@
           </table>
         </div>
       </div>
+      {% endif %}
       <!-- Panel pro přidání nové suroviny -->
       {% if not readonly_mode %}
       <div class="add-ingredient-panel p-2">
         <button type="button"
                 class="btn btn-outline-primary btn-sm w-100 btn-toggle-add-ingredient"
-                data-order-id="{{ meal.order_id|unlocalize }}"
+                data-order-id="{{ meal.add_key }}"
                 data-meal-key="{{ forloop.parentloop.counter }}_{{ forloop.counter }}">
           <i class="fas fa-plus me-1"></i>Přidat surovinu do tohoto jídla
         </button>
-        <div class="add-ingredient-rows mt-2" id="add-rows-{{ meal.order_id|unlocalize }}" style="display:none;">
-          <div class="add-ingredient-row row g-2 align-items-end mb-2" data-order-id="{{ meal.order_id|unlocalize }}" data-idx="0">
+        <div class="add-ingredient-rows mt-2" id="add-rows-{{ meal.add_key }}" style="display:none;">
+          <div class="add-ingredient-row row g-2 align-items-end mb-2" data-order-id="{{ meal.add_key }}" data-idx="0">
             <div class="col-md-7">
               <label class="form-label mb-0 small">Surovina</label>
               <select class="form-select form-select-sm ingredient-select"
-                      name="new_ingredient_order_{{ meal.order_id|unlocalize }}_0">
+                      name="new_ingredient_{{ meal.add_name }}_0">
                 <option value="">-- vyberte surovinu --</option>
                 {% for ing in all_ingredients %}
                 <option value="{{ ing.id|unlocalize }}">{{ ing.name }} ({{ ing.base_unit }})</option>
@@ -273,12 +281,12 @@
               <label class="form-label mb-0 small">Množství</label>
               <input type="number" step="0.001" min="0.001"
                      class="form-control form-control-sm"
-                     name="new_quantity_order_{{ meal.order_id|unlocalize }}_0"
+                     name="new_quantity_{{ meal.add_name }}_0"
                      placeholder="0.000">
             </div>
             <div class="col-md-2 d-flex gap-1">
               <button type="button" class="btn btn-success btn-sm btn-add-ingredient-row flex-fill"
-                      data-order-id="{{ meal.order_id|unlocalize }}">
+                      data-order-id="{{ meal.add_key }}">
                 <i class="fas fa-plus"></i>
               </button>
             </div>
@@ -287,6 +295,7 @@
       </div>
       {% endif %}
     </div>
+    {% endif %}
     {% endfor %}
   </div>
   {% endfor %}

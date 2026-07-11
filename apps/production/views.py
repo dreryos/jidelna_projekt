@@ -24,6 +24,7 @@ MEAL_TYPE_ORDER = {
     'LUNCH': 2,
     'SNACK_AFTERNOON': 3,
     'DINNER': 4,
+    'DINNER_SECOND': 5,
 }
 
 from django.db import models
@@ -1179,6 +1180,74 @@ def picking_list_edit(request, document_id):
                     canteen=document.canteen, is_transit_warehouse=False
                 ).first()
 
+            def _store_added_ingredient(order_obj, ingredient_obj, quantity_new):
+                """Uloží surovinu přidanou k jídlu: override (trvalé uložení)
+                + položka výdejky v jedné transakci. Vrací True při úspěchu."""
+                warehouse_obj = _default_warehouse(order_obj)
+                if warehouse_obj is None:
+                    messages.error(request, 'Jídelna nemá žádný sklad pro přidání položky.')
+                    return False
+
+                # Uživatel zadává celkové množství ve skladových jednotkách,
+                # override ale ukládá množství na 1 porci v receptových
+                # jednotkách – z něj generate_picking_list() při přegenerování
+                # výdejky počítá celkové množství zpět. None by při rebuildu
+                # znamenalo množství 0.
+                quantity_per_portion = None
+                effective_portions = order_obj.total_effective_portions
+                if effective_portions:
+                    quantity_per_portion = (
+                        ingredient_obj.convert_to_recipe_unit(quantity_new)
+                        / Decimal(effective_portions)
+                    ).quantize(Decimal('0.001'))
+
+                from .models import ProductionOrderIngredientOverride
+                try:
+                    with transaction.atomic():
+                        # get_or_create: surovina už může mít override (dřívější
+                        # přidání nebo úprava receptu) – unique_together
+                        # (production_order, ingredient)
+                        override, override_created = ProductionOrderIngredientOverride.objects.get_or_create(
+                            production_order=order_obj,
+                            ingredient=ingredient_obj,
+                            defaults={
+                                'quantity_per_portion': quantity_per_portion,
+                                'original_quantity': Decimal('0'),
+                                'is_added': True,
+                                'is_removed': False,
+                                'notes': '',
+                            }
+                        )
+                        # Surovina dříve odebraná z jídla: přidáním ji vracíme
+                        # do hry s nově zadaným množstvím
+                        if not override_created:
+                            override.is_removed = False
+                            override.is_added = True
+                            override.quantity_per_portion = quantity_per_portion
+                            override.save(update_fields=[
+                                'is_removed', 'is_added', 'quantity_per_portion',
+                            ])
+
+                        PickingList.objects.create(
+                            production_order=order_obj,
+                            document=document,
+                            warehouse=warehouse_obj,
+                            ingredient=ingredient_obj,
+                            quantity_planned=quantity_new,
+                            quantity_actual=quantity_new,
+                            status=PickingList.Status.COMPLETED,
+                        )
+                except IntegrityError:
+                    # PickingList má unique_together(production_order, ingredient)
+                    # – surovina už ve výdejce jídla je, atomic vrátil i override
+                    messages.warning(
+                        request,
+                        f'Surovina {ingredient_obj.name} už je ve výdejce jídla '
+                        f'{order_obj.recipe.name} – upravte množství u existující položky.'
+                    )
+                    return False
+                return True
+
             # Sestáváme skupiny nových položek: new_order__{order_id}__{idx}
             new_order_ids = set()
             for key in request.POST.keys():
@@ -1234,72 +1303,90 @@ def picking_list_edit(request, document_id):
                     messages.error(request, 'Některý ze zadaných údajů (jídlo / surovina) nebyl nalezen.')
                     continue
 
-                warehouse_obj = _default_warehouse(order_obj)
-                if warehouse_obj is None:
-                    messages.error(request, 'Jídelna nemá žádný sklad pro přidání položky.')
+                if _store_added_ingredient(order_obj, ingredient_obj, quantity_new):
+                    added_count += 1
+
+            # Zpracování nových položek pro druhou večeři (jídlo „Výdej" –
+            # v jídelníčku není, vzniká až přidáním surovin ve výdejce)
+            new_dinner2_keys = set()
+            for key in request.POST.keys():
+                if key.startswith('new_ingredient_dinner2_'):
+                    parts = key.split('_')  # new, ingredient, dinner2, {YYYY-MM-DD}, {idx}
+                    if len(parts) >= 5:
+                        try:
+                            new_dinner2_keys.add((parts[3], int(parts[4])))
+                        except ValueError:
+                            pass
+
+            for date_str, idx in sorted(new_dinner2_keys):
+                ingredient_id_str = request.POST.get(f'new_ingredient_dinner2_{date_str}_{idx}', '').strip()
+                quantity_str = request.POST.get(f'new_quantity_dinner2_{date_str}_{idx}', '').strip()
+
+                if not ingredient_id_str and not quantity_str:
+                    # Zcela prázdný řádek šablony – v pořádku, přeskočíme
                     continue
-
-                # Uživatel zadává celkové množství ve skladových jednotkách,
-                # override ale ukládá množství na 1 porci v receptových
-                # jednotkách – z něj generate_picking_list() při přegenerování
-                # výdejky počítá celkové množství zpět. None by při rebuildu
-                # znamenalo množství 0.
-                quantity_per_portion = None
-                effective_portions = order_obj.total_effective_portions
-                if effective_portions:
-                    quantity_per_portion = (
-                        ingredient_obj.convert_to_recipe_unit(quantity_new)
-                        / Decimal(effective_portions)
-                    ).quantize(Decimal('0.001'))
-
-                # Vytvoření override pro trvalé uložení přidané suroviny
-                from .models import ProductionOrderIngredientOverride
-                try:
-                    with transaction.atomic():
-                        # get_or_create: surovina už může mít override (dřívější
-                        # přidání nebo úprava receptu) – unique_together
-                        # (production_order, ingredient)
-                        override, override_created = ProductionOrderIngredientOverride.objects.get_or_create(
-                            production_order=order_obj,
-                            ingredient=ingredient_obj,
-                            defaults={
-                                'quantity_per_portion': quantity_per_portion,
-                                'original_quantity': Decimal('0'),
-                                'is_added': True,
-                                'is_removed': False,
-                                'notes': '',
-                            }
-                        )
-                        # Surovina dříve odebraná z jídla: přidáním ji vracíme
-                        # do hry s nově zadaným množstvím
-                        if not override_created:
-                            override.is_removed = False
-                            override.is_added = True
-                            override.quantity_per_portion = quantity_per_portion
-                            override.save(update_fields=[
-                                'is_removed', 'is_added', 'quantity_per_portion',
-                            ])
-
-                        PickingList.objects.create(
-                            production_order=order_obj,
-                            document=document,
-                            warehouse=warehouse_obj,
-                            ingredient=ingredient_obj,
-                            quantity_planned=quantity_new,
-                            quantity_actual=quantity_new,
-                            status=PickingList.Status.COMPLETED,
-                        )
-                except IntegrityError:
-                    # PickingList má unique_together(production_order, ingredient)
-                    # – surovina už ve výdejce jídla je, atomic vrátil i override
+                if not ingredient_id_str or not quantity_str:
+                    # Částečně vyplněný řádek nesmí zmizet potichu
                     messages.warning(
                         request,
-                        f'Surovina {ingredient_obj.name} už je ve výdejce jídla '
-                        f'{order_obj.recipe.name} – upravte množství u existující položky.'
+                        'Surovina u druhé večeře nebyla uložena – vyplňte surovinu i množství.'
                     )
                     continue
-                added_count += 1
-            
+
+                try:
+                    day_date = date.fromisoformat(date_str)
+                    ingredient_id_new = int(ingredient_id_str)
+                    quantity_new = Decimal(quantity_str.replace(',', '.'))
+                    if quantity_new <= 0:
+                        messages.error(request, 'Množství musí být kladné.')
+                        continue
+                except (ValueError, InvalidOperation):
+                    messages.error(request, 'Neplatné hodnoty pro novou surovinu.')
+                    continue
+
+                if not (document.date_from <= day_date <= document.date_to):
+                    messages.error(request, 'Datum druhé večeře je mimo období výdejky.')
+                    continue
+
+                try:
+                    ingredient_obj = IngredientModel.objects.get(id=ingredient_id_new, is_active=True)
+                except IngredientModel.DoesNotExist:
+                    messages.error(request, 'Zadaná surovina nebyla nalezena.')
+                    continue
+
+                # Jídlo „Výdej" pro druhou večeři vzniká při prvním přidání
+                order_obj = ProductionOrder.objects.filter(
+                    canteen=document.canteen,
+                    date=day_date,
+                    meal_type=ProductionOrder.MealType.DINNER_SECOND,
+                ).first()
+                if order_obj is None:
+                    sibling = ProductionOrder.objects.filter(
+                        picking_list_items__document=document, date=day_date
+                    ).first()
+                    if sibling is None:
+                        messages.error(
+                            request,
+                            f'Pro den {day_date.strftime("%d.%m.%Y")} nelze založit druhou večeři – den nemá žádné jídlo.'
+                        )
+                        continue
+                    # Explicitní kód: save() bez kategorie kód negeneruje a
+                    # zálohy (backup.py) párují recepty právě podle kódu
+                    recipe_obj, _ = Recipe.objects.get_or_create(
+                        name='Výdej', defaults={'code': 'VYDEJ'}
+                    )
+                    order_obj = ProductionOrder.objects.create(
+                        recipe=recipe_obj,
+                        canteen=document.canteen,
+                        menu_plan=sibling.menu_plan,
+                        date=day_date,
+                        meal_type=ProductionOrder.MealType.DINNER_SECOND,
+                    )
+
+                if _store_added_ingredient(order_obj, ingredient_obj, quantity_new):
+                    added_count += 1
+
+
             # Zpracování nových položek bez ProductionOrder (mimo jídla)
             new_without_order_ids = set()
             for key in request.POST.keys():
@@ -1514,6 +1601,25 @@ def picking_list_edit(request, document_id):
             (d, sorted(meals, key=lambda m: MEAL_TYPE_ORDER.get(m.get('meal_type', ''), 99)))
             for d, meals in sorted_daily_data
         ]
+
+        # Klíče pro formulář přidávání surovin + prázdná karta druhé večeře
+        # (jídlo „Výdej" mimo jídelníček, vzniká až přidáním surovin)
+        for d, meals in sorted_daily_data:
+            for m in meals:
+                m['add_name'] = f'order_{m["order_id"]}'
+                m['add_key'] = str(m['order_id'])
+            if not any(m['meal_type'] == 'DINNER_SECOND' for m in meals):
+                meals.append({
+                    'order_id': None,
+                    'recipe_name': 'Výdej',
+                    'meal_type': 'DINNER_SECOND',
+                    'portions': 0,
+                    'ingredients': [],
+                    'is_customized': False,
+                    'is_placeholder': True,
+                    'add_name': f'dinner2_{d.isoformat()}',
+                    'add_key': f'dinner2-{d.isoformat()}',
+                })
         
         # Seřadíme ingredience abecedně
         sorted_ingredients = sorted(ingredient_totals.values(), key=lambda x: x['ingredient'].name)
@@ -1787,6 +1893,16 @@ def picking_list_delete(request, document_id):
         # Odblokování PENDING položek zajišťuje post_delete signál na PickingList
         with transaction.atomic():
             document.delete()
+            # Druhá večeře (jídlo „Výdej") existuje jen skrze výdejku – po
+            # smazání dokumentu by prázdný příkaz strašil v příštích
+            # generovaných výdejkách s nulovými množstvími
+            ProductionOrder.objects.filter(
+                canteen=document.canteen,
+                date__gte=document.date_from,
+                date__lte=document.date_to,
+                meal_type=ProductionOrder.MealType.DINNER_SECOND,
+                picking_list_items__isnull=True,
+            ).delete()
         messages.success(request, f'Výdejka "{doc_name}" byla smazána a blokované suroviny byly odblokovány.')
         return redirect('production:picking_list_generator')
 
