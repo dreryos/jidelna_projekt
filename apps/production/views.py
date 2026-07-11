@@ -1186,8 +1186,16 @@ def picking_list_edit(request, document_id):
                 ingredient_id_str = request.POST.get(f'new_ingredient_order_{order_id_new}_{idx}', '').strip()
                 warehouse_id_str = request.POST.get(f'new_warehouse_order_{order_id_new}_{idx}', '').strip()
                 quantity_str = request.POST.get(f'new_quantity_order_{order_id_new}_{idx}', '').strip()
-                
+
+                if not ingredient_id_str and not warehouse_id_str and not quantity_str:
+                    # Zcela prázdný řádek šablony – v pořádku, přeskočíme
+                    continue
                 if not ingredient_id_str or not warehouse_id_str or not quantity_str:
+                    # Částečně vyplněný řádek nesmí zmizet potichu
+                    messages.warning(
+                        request,
+                        'Nová surovina u jídla nebyla uložena – vyplňte surovinu, sklad i množství.'
+                    )
                     continue
                 
                 try:
@@ -1208,18 +1216,41 @@ def picking_list_edit(request, document_id):
                 except (ProductionOrder.DoesNotExist, IngredientModel.DoesNotExist, Warehouse.DoesNotExist):
                     messages.error(request, 'Některý ze zadaných údajů (jídlo / surovina / sklad) nebyl nalezen.')
                     continue
-                
+
+                # Surovina už ve výdejce jídla je: PickingList má
+                # unique_together(production_order, ingredient), create() by
+                # spadl na IntegrityError 500. Uživatel má upravit existující řádek.
+                if PickingList.objects.filter(
+                    production_order=order_obj, ingredient=ingredient_obj
+                ).exists():
+                    messages.warning(
+                        request,
+                        f'Surovina {ingredient_obj.name} už je ve výdejce jídla '
+                        f'{order_obj.recipe.name} – upravte množství u existující položky.'
+                    )
+                    continue
+
                 # Vytvoření override pro trvalé uložení přidané suroviny
                 from .models import ProductionOrderIngredientOverride
-                ProductionOrderIngredientOverride.objects.create(
+                # get_or_create: surovina už může mít override (dřívější přidání
+                # nebo úprava receptu) – unique_together(production_order, ingredient)
+                # by při create() shodilo celý požadavek IntegrityError 500
+                override, override_created = ProductionOrderIngredientOverride.objects.get_or_create(
                     production_order=order_obj,
                     ingredient=ingredient_obj,
-                    quantity_per_portion=None,  # pro přidané suroviny je None
-                    original_quantity=Decimal('0'),
-                    is_added=True,
-                    is_removed=False,
-                    notes=''
+                    defaults={
+                        'quantity_per_portion': None,  # pro přidané suroviny je None
+                        'original_quantity': Decimal('0'),
+                        'is_added': True,
+                        'is_removed': False,
+                        'notes': '',
+                    }
                 )
+                # Surovina dříve odebraná z jídla: přidáním ji vracíme do hry
+                if not override_created and override.is_removed:
+                    override.is_removed = False
+                    override.is_added = True
+                    override.save(update_fields=['is_removed', 'is_added'])
                 
                 PickingList.objects.create(
                     production_order=order_obj,
@@ -1248,8 +1279,16 @@ def picking_list_edit(request, document_id):
                 ingredient_id_str = request.POST.get(f'new_ingredient_without_order_{idx}', '').strip()
                 warehouse_id_str = request.POST.get(f'new_warehouse_without_order_{idx}', '').strip()
                 quantity_str = request.POST.get(f'new_quantity_without_order_{idx}', '').strip()
-                
+
+                if not ingredient_id_str and not warehouse_id_str and not quantity_str:
+                    # Zcela prázdný řádek šablony – v pořádku, přeskočíme
+                    continue
                 if not ingredient_id_str or not warehouse_id_str or not quantity_str:
+                    # Částečně vyplněný řádek nesmí zmizet potichu
+                    messages.warning(
+                        request,
+                        'Položka mimo jídla nebyla uložena – vyplňte surovinu, sklad i množství.'
+                    )
                     continue
                 
                 try:

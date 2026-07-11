@@ -140,7 +140,7 @@
           <select class="form-select form-select-sm" name="cook" id="id_cook" {% if readonly_mode %}disabled{% endif %}>
             <option value="">— nepřiřazen —</option>
             {% for u in available_cooks %}
-            <option value="{{ u.id }}"
+            <option value="{{ u.id|unlocalize }}"
               {% if document.cook_id == u.id %}selected{% endif %}>
               {% if u.get_full_name %}{{ u.get_full_name }} ({{ u.username }}){% else %}{{ u.username }}{% endif %}
             </option>
@@ -265,17 +265,17 @@
                       name="new_ingredient_order_{{ meal.order_id|unlocalize }}_0">
                 <option value="">-- vyberte surovinu --</option>
                 {% for ing in all_ingredients %}
-                <option value="{{ ing.id }}">{{ ing.name }} ({{ ing.base_unit }})</option>
+                <option value="{{ ing.id|unlocalize }}">{{ ing.name }} ({{ ing.base_unit }})</option>
                 {% endfor %}
               </select>
             </div>
             <div class="col-md-3">
               <label class="form-label mb-0 small">Sklad</label>
               <select class="form-select form-select-sm"
-                      name="new_warehouse_order_{{ meal.order_id }}_0">
+                      name="new_warehouse_order_{{ meal.order_id|unlocalize }}_0">
                 <option value="">-- vyberte sklad --</option>
                 {% for wh in canteen_warehouses %}
-                <option value="{{ wh.id }}">{{ wh.name }}</option>
+                <option value="{{ wh.id|unlocalize }}">{{ wh.name }}</option>
                 {% endfor %}
               </select>
             </div>
@@ -360,7 +360,7 @@
                         name="new_ingredient_without_order_0">
                   <option value="">-- vyberte surovinu --</option>
                   {% for ing in all_ingredients %}
-                  <option value="{{ ing.id }}">{{ ing.name }} ({{ ing.base_unit }})</option>
+                  <option value="{{ ing.id|unlocalize }}">{{ ing.name }} ({{ ing.base_unit }})</option>
                   {% endfor %}
                 </select>
               </div>
@@ -370,7 +370,7 @@
                         name="new_warehouse_without_order_0">
                   <option value="">-- vyberte sklad --</option>
                   {% for wh in canteen_warehouses %}
-                  <option value="{{ wh.id }}">{{ wh.name }}</option>
+                  <option value="{{ wh.id|unlocalize }}">{{ wh.name }}</option>
                   {% endfor %}
                 </select>
               </div>
