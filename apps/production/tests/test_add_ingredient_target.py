@@ -212,3 +212,29 @@ class AddIngredientTargetsCorrectOrderTest(TestCase):
         self.assertFalse(ProductionOrder.objects.filter(meal_type='DINNER_SECOND').exists())
         # běžná jídla z plánu zůstávají
         self.assertEqual(ProductionOrder.objects.count(), 2)
+
+    def test_second_dinner_survives_regeneration(self):
+        """Příkaz druhé večeře má variantu 1 porce, override ukládá množství
+        na porci a přegenerování výdejky množství nevynuluje."""
+        day = date(2025, 9, 10)
+        existing = {
+            f'quantity_actual_item_{item.id}': str(item.quantity_planned)
+            for item in PickingList.objects.filter(document=self.document)
+        }
+        self.client.post(
+            f'/production/vydejky/{self.document.id}/edit/',
+            data={
+                **existing,
+                f'new_ingredient_dinner2_{day.isoformat()}_0': str(self.salt.id),
+                f'new_quantity_dinner2_{day.isoformat()}_0': '2.5',
+            },
+        )
+        order = ProductionOrder.objects.get(meal_type='DINNER_SECOND')
+        self.assertEqual(order.total_effective_portions, Decimal('1.0'))
+
+        override = order.ingredient_overrides.get(ingredient=self.salt)
+        self.assertEqual(override.quantity_per_portion, Decimal('2.500'))
+
+        order.generate_picking_list()
+        item = PickingList.objects.get(production_order=order, ingredient=self.salt)
+        self.assertEqual(item.quantity_planned, Decimal('2.500'))

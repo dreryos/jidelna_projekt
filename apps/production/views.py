@@ -17,16 +17,6 @@ from functools import wraps
 from typing import Any, Dict, Type, TYPE_CHECKING, cast
 from collections import defaultdict
 
-# Pořadí typů jídel pro řazení ve výdejkách
-MEAL_TYPE_ORDER = {
-    'BREAKFAST': 0,
-    'SNACK_MORNING': 1,
-    'LUNCH': 2,
-    'SNACK_AFTERNOON': 3,
-    'DINNER': 4,
-    'DINNER_SECOND': 5,
-}
-
 from django.db import models
 from django.db.models import F, Sum, Prefetch, Q
 from django.db.models.functions import Collate
@@ -38,6 +28,7 @@ from django.db import IntegrityError, transaction
 
 from .models import ProductionOrder, PickingList, MenuPlan
 from .forms import MenuPlanForm, MenuPlanCoefficientFormSet, MenuPlanCoefficientFormSetNoExtra
+from .utils import MEAL_TYPE_ORDER
 from apps.core.models import Recipe, UserProfile
 from apps.canteens.models import Canteen
 
@@ -1375,13 +1366,36 @@ def picking_list_edit(request, document_id):
                     recipe_obj, _ = Recipe.objects.get_or_create(
                         name='Výdej', defaults={'code': 'VYDEJ'}
                     )
-                    order_obj = ProductionOrder.objects.create(
-                        recipe=recipe_obj,
-                        canteen=document.canteen,
-                        menu_plan=sibling.menu_plan,
-                        date=day_date,
-                        meal_type=ProductionOrder.MealType.DINNER_SECOND,
-                    )
+                    from .models import ProductionOrderPortionVariant
+                    try:
+                        with transaction.atomic():
+                            order_obj = ProductionOrder.objects.create(
+                                recipe=recipe_obj,
+                                canteen=document.canteen,
+                                menu_plan=sibling.menu_plan,
+                                date=day_date,
+                                meal_type=ProductionOrder.MealType.DINNER_SECOND,
+                            )
+                            # 1 porce × koeficient 1: bez varianty by
+                            # effective_portions bylo 0, override by neuložil
+                            # množství na porci a přegenerování výdejky by
+                            # množství vynulovalo
+                            ProductionOrderPortionVariant.objects.create(
+                                production_order=order_obj,
+                                portions=1,
+                                coefficient=Decimal('1.0'),
+                            )
+                    except IntegrityError:
+                        # Souběžný požadavek příkaz právě založil – unikátní
+                        # constraint (canteen, date, meal_type) drží jediný
+                        order_obj = ProductionOrder.objects.filter(
+                            canteen=document.canteen,
+                            date=day_date,
+                            meal_type=ProductionOrder.MealType.DINNER_SECOND,
+                        ).first()
+                        if order_obj is None:
+                            messages.error(request, 'Druhou večeři se nepodařilo založit, zkuste to znovu.')
+                            continue
 
                 if _store_added_ingredient(order_obj, ingredient_obj, quantity_new):
                     added_count += 1

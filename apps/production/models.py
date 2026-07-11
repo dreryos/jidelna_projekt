@@ -661,6 +661,16 @@ class ProductionOrder(models.Model):
     class Meta:
         verbose_name = "Výrobní příkaz"
         verbose_name_plural = "Výrobní příkazy"
+        constraints = [
+            # Druhá večeře (jídlo „Výdej") smí být pro jídelnu a den jen
+            # jedna – výdejka ji zakládá lazy a souběžné POSTy by jinak
+            # vytvořily duplicitní příkazy
+            models.UniqueConstraint(
+                fields=['canteen', 'date', 'meal_type'],
+                condition=models.Q(meal_type='DINNER_SECOND'),
+                name='unique_second_dinner_per_canteen_day',
+            ),
+        ]
 
 
 class ProductionOrderPortionVariant(models.Model):
