@@ -259,6 +259,15 @@ class ProductionOrder(models.Model):
         help_text="Kategorie jídla (snídaně, oběd, večeře, svačina)",
         db_index=True
     )
+    replacement_of = models.ForeignKey(
+        'self',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='replacements',
+        verbose_name="Záměna za jídlo",
+        help_text="Původní plánované jídlo, které tento příkaz ve výdejce nahrazuje"
+    )
     selling_vat_rate = models.DecimalField(
         max_digits=5,
         decimal_places=2,

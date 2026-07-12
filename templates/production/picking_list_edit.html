@@ -163,7 +163,20 @@
     </div>
 
     {% for meal in meals %}
-    {% if not meal.is_placeholder or not readonly_mode %}
+    {% if meal.replaced_by_name %}
+    <div class="alert alert-secondary d-flex justify-content-between align-items-center py-2 mb-3">
+      <span>
+        <i class="fas fa-exchange-alt me-2"></i>
+        Původně: <strong>{{ meal.recipe_name }}</strong> — zaměněno za <strong>{{ meal.replaced_by_name }}</strong>
+      </span>
+      {% if not readonly_mode %}
+      <button type="submit" class="btn btn-outline-secondary btn-sm"
+              name="unreplace_order_{{ meal.order_id|unlocalize }}" value="1">
+        <i class="fas fa-undo me-1"></i>Zrušit záměnu
+      </button>
+      {% endif %}
+    </div>
+    {% elif not meal.is_placeholder or not readonly_mode %}
     <div class="card meal-card mb-3 shadow-sm">
       <div class="card-header d-flex justify-content-between align-items-center">
         <span>
@@ -175,6 +188,11 @@
           {% elif meal.meal_type == 'DINNER_SECOND' %}<span class="badge bg-info text-dark meal-badge me-2">Druhá večeře</span>
           {% else %}<span class="badge bg-light text-dark meal-badge me-2">{{ meal.meal_type }}</span>{% endif %}
           {{ meal.recipe_name }}
+          {% if meal.replaces_name %}
+          <span class="badge bg-warning text-dark ms-2" title="Původně plánované jídlo">
+            <i class="fas fa-exchange-alt me-1"></i>záměna za: {{ meal.replaces_name }}
+          </span>
+          {% endif %}
           {% if meal.is_placeholder %}
           <small class="text-muted ms-2">z plánu prázdné – doplňte suroviny</small>
           {% else %}
@@ -293,6 +311,35 @@
           </div>
         </div>
       </div>
+      {% if not meal.is_placeholder and not meal.replaces_name %}
+      <!-- Panel pro záměnu plánovaného jídla -->
+      <div class="add-ingredient-panel p-2 pt-0">
+        <button type="button"
+                class="btn btn-outline-warning btn-sm w-100 btn-toggle-replace-meal"
+                data-order-id="{{ meal.order_id|unlocalize }}">
+          <i class="fas fa-exchange-alt me-1"></i>Zaměnit jídlo
+        </button>
+        <div class="mt-2" id="replace-panel-{{ meal.order_id|unlocalize }}" style="display:none;">
+          <div class="row g-2 align-items-end">
+            <div class="col-md-9">
+              <label class="form-label mb-0 small">Nové jídlo (normy receptu na stejné porce, původní jídlo dostane odběr 0)</label>
+              <select class="form-select form-select-sm"
+                      name="replace_order_{{ meal.order_id|unlocalize }}">
+                <option value="">-- vyberte recept --</option>
+                {% for r in all_recipes %}
+                <option value="{{ r.id|unlocalize }}">{{ r.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-3">
+              <button type="submit" class="btn btn-warning btn-sm w-100">
+                <i class="fas fa-exchange-alt me-1"></i>Zaměnit
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      {% endif %}
       {% endif %}
     </div>
     {% endif %}
@@ -561,6 +608,15 @@ document.addEventListener('DOMContentLoaded', function () {
         btn.closest('.add-ingredient-row').remove();
     });
     
+    // --- Toggle panelu pro záměnu jídla ---
+    document.querySelectorAll('.btn-toggle-replace-meal').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            const panel = document.getElementById('replace-panel-' + this.dataset.orderId);
+            if (!panel) return;
+            panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+        });
+    });
+
     // --- Toggle panelu pro přidávání surovin mimo jídla ---
     document.querySelectorAll('.btn-toggle-add-ingredient-no-order').forEach(function (btn) {
         btn.addEventListener('click', function () {

@@ -94,10 +94,13 @@ class AddIngredientTargetsCorrectOrderTest(TestCase):
             assert f'new_ingredient_order_{order.id}_0' in html, order.id
             assert f'id="add-rows-{order.id}"' in html, order.id
         # panel druhého jídla musí být uvnitř karty s jeho receptem
+        # (název hledáme jen v hlavičce karty – select záměny obsahuje
+        # všechny recepty)
         import re
         cards = re.split(r'meal-card', html)
         for chunk in cards:
-            if 'Večeře jídlo' in chunk and 'new_ingredient_order_' in chunk:
+            header = chunk.split('add-ingredient-panel')[0]
+            if 'Večeře jídlo' in header and 'new_ingredient_order_' in chunk:
                 m = re.search(r'new_ingredient_order_(\d+)_0', chunk)
                 assert m and int(m.group(1)) == self.orders[1].id, m and m.group(1)
 
@@ -129,11 +132,13 @@ class AddIngredientTargetsCorrectOrderTest(TestCase):
         added = PickingList.objects.get(document=self.document, ingredient=self.salt)
         self.assertEqual(added.production_order_id, breakfast.id)
 
-        # A v HTML musí být panel snídaně uvnitř karty snídaně
+        # A v HTML musí být panel snídaně uvnitř karty snídaně (název jen
+        # z hlavičky – select záměny obsahuje všechny recepty)
         html = self.client.get(f'/production/vydejky/{self.document.id}/edit/').content.decode()
         import re
         for chunk in re.split(r'meal-card', html):
-            if 'Snídaně II' in chunk and 'new_ingredient_order_' in chunk:
+            header = chunk.split('add-ingredient-panel')[0]
+            if 'Snídaně II' in header and 'new_ingredient_order_' in chunk:
                 m = re.search(r'new_ingredient_order_(\d+)_0', chunk)
                 self.assertEqual(int(m.group(1)), breakfast.id)
 

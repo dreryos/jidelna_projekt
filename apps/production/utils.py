@@ -101,10 +101,19 @@ def generate_picking_list_pdf_file(document, base_url='/', save=True):
         gen_start = time.monotonic()
         
         # Načteme orders s Prefetch filtrovaným na tento dokument
+        # Zaměněná (originální) jídla se do PDF nedávají – mají odběr 0,
+        # vydává se náhrada
+        replaced_ids = set(
+            ProductionOrder.objects.filter(
+                replacement_of__isnull=False,
+                picking_list_items__document=document,
+            ).values_list('replacement_of_id', flat=True)
+        )
+
         orders = ProductionOrder.objects.filter(
             picking_list_items__document=document
         ).distinct().select_related(
-            'recipe', 'canteen', 'menu_plan'
+            'recipe', 'canteen', 'menu_plan', 'replacement_of__recipe'
         ).prefetch_related(
             'portion_variants',
             Prefetch(
@@ -152,6 +161,9 @@ def generate_picking_list_pdf_file(document, base_url='/', save=True):
         daily_picking_data = {}
 
         for order in orders:
+            if order.id in replaced_ids:
+                continue
+
             order_ingredients = []
 
             for item in order.document_items:
@@ -210,7 +222,11 @@ def generate_picking_list_pdf_file(document, base_url='/', save=True):
                 'meal_type': order.meal_type,
                 'portions': order.total_portions,
                 'ingredients': order_ingredients,
-                'is_customized': order.has_overrides
+                'is_customized': order.has_overrides,
+                'replaces_name': (
+                    order.replacement_of.recipe.name
+                    if order.replacement_of_id and order.replacement_of else None
+                ),
             })
 
         # Aktualizace is_sufficient po finální agregaci

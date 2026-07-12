@@ -132,7 +132,7 @@
         {% for meal in meals %}
         <div class="meal-item">
             <div class="meal-header">
-                {{ meal.recipe_name }} ({{ meal.portions }} porcí)
+                {{ meal.recipe_name }} ({{ meal.portions }} porcí){% if meal.replaces_name %} — záměna za {{ meal.replaces_name }}{% endif %}
             </div>
             
             <table class="picking-list">

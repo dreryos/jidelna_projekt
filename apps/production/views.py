@@ -261,7 +261,9 @@ class MenuPlanDetailView(CanteenOwnerMixin, UpdateView):
         date_range = self.get_date_range()
         orders_by_date_and_type = defaultdict(lambda: defaultdict(list))
         
-        for order in self.object.production_orders.all().select_related('recipe', 'recipe__category').prefetch_related('portion_variants'):
+        # Náhrady ze záměn ve výdejce se v plánu nezobrazují – plán ukazuje,
+        # co bylo plánováno
+        for order in self.object.production_orders.filter(replacement_of__isnull=True).select_related('recipe', 'recipe__category').prefetch_related('portion_variants'):
             orders_by_date_and_type[order.date][order.meal_type].append(order)
         
         # Seřadíme meal_types podle definovaného pořadí
@@ -768,7 +770,9 @@ def picking_list_generator(request):
             orders = ProductionOrder.objects.filter(
                 canteen=canteen,
                 date__gte=date_from_obj,
-                date__lte=date_to_obj
+                date__lte=date_to_obj,
+                # Osiřelé náhrady ze záměn nepatří do nově generované výdejky
+                replacement_of__isnull=True,
             ).exclude(
                 picking_list_items__document__isnull=False
             ).select_related('recipe', 'canteen', 'menu_plan').prefetch_related(
@@ -1147,6 +1151,137 @@ def picking_list_edit(request, document_id):
                     )
                     messages.error(request, f'Chyba validace pro {item.ingredient.name}: {"; ".join(e.messages)}')
             
+            # Záměna plánovaného jídla: originál dostane reálný odběr 0,
+            # místo něj se vygenerují normy jiného receptu na stejné porce
+            from django.core.exceptions import ValidationError as ReplaceValidationError
+            from .models import ProductionOrderPortionVariant
+
+            for key in list(request.POST.keys()):
+                if not key.startswith('replace_order_'):
+                    continue
+                recipe_id_str = request.POST.get(key, '').strip()
+                if not recipe_id_str:
+                    # Nevyplněný panel záměny – v pořádku, přeskočíme
+                    continue
+                try:
+                    orig_id = int(key.rsplit('_', 1)[1])
+                    new_recipe = Recipe.objects.get(id=int(recipe_id_str))
+                    original = ProductionOrder.objects.get(id=orig_id)
+                except (ValueError, Recipe.DoesNotExist, ProductionOrder.DoesNotExist):
+                    messages.error(request, 'Jídlo nebo recept pro záměnu nebyl nalezen.')
+                    continue
+
+                if not original.picking_list_items.filter(document=document).exists():
+                    messages.error(request, 'Neplatný výrobní příkaz pro záměnu.')
+                    continue
+                if original.replacement_of_id is not None:
+                    messages.error(request, 'Náhradní jídlo nelze dále zaměňovat – nejdřív zrušte záměnu.')
+                    continue
+                if new_recipe.id == original.recipe_id:
+                    messages.warning(request, 'Záměna za stejný recept nemá smysl.')
+                    continue
+                if ProductionOrder.objects.filter(
+                    replacement_of=original, picking_list_items__document=document
+                ).exists():
+                    messages.warning(request, f'Jídlo {original.recipe.name} už je zaměněno.')
+                    continue
+                if original.picking_list_items.filter(
+                    document=document, status=PickingList.Status.COMPLETED
+                ).exists():
+                    messages.error(
+                        request,
+                        f'Z jídla {original.recipe.name} už byly suroviny vydány – záměna není možná.'
+                    )
+                    continue
+
+                try:
+                    with transaction.atomic():
+                        # Originál: reálný odběr 0, blokace se uvolní
+                        for item in original.picking_list_items.filter(document=document):
+                            item.quantity_actual = Decimal('0')
+                            item.status = PickingList.Status.COMPLETED
+                            item.save()
+
+                        replacement = ProductionOrder.objects.create(
+                            recipe=new_recipe,
+                            canteen=original.canteen,
+                            menu_plan=original.menu_plan,
+                            date=original.date,
+                            meal_type=original.meal_type,
+                            replacement_of=original,
+                        )
+                        for variant in original.portion_variants.all():
+                            ProductionOrderPortionVariant.objects.create(
+                                production_order=replacement,
+                                name=variant.name,
+                                coefficient=variant.coefficient,
+                                portions=variant.portions,
+                                order=variant.order,
+                            )
+                        replacement.generate_picking_list()
+                        # Připojení k dokumentu přes save() – zablokuje
+                        # plánovaná množství na skladu (models.PickingList.save)
+                        for item in replacement.picking_list_items.all():
+                            item.document = document
+                            item.save()
+                except ReplaceValidationError as e:
+                    messages.error(
+                        request,
+                        f'Záměnu se nepodařilo provést: {"; ".join(e.messages)}'
+                    )
+                    continue
+                messages.success(
+                    request,
+                    f'Jídlo {original.recipe.name} zaměněno za {new_recipe.name}.'
+                )
+
+            # Zrušení záměny: náhrada se smaže, originál se vrátí do hry
+            for key in list(request.POST.keys()):
+                if not key.startswith('unreplace_order_'):
+                    continue
+                try:
+                    orig_id = int(key.rsplit('_', 1)[1])
+                    original = ProductionOrder.objects.get(id=orig_id)
+                except (ValueError, ProductionOrder.DoesNotExist):
+                    messages.error(request, 'Jídlo pro zrušení záměny nebylo nalezeno.')
+                    continue
+                replacement = ProductionOrder.objects.filter(
+                    replacement_of=original, picking_list_items__document=document
+                ).first()
+                if replacement is None:
+                    messages.error(request, 'Záměna ke zrušení nebyla nalezena.')
+                    continue
+                if replacement.picking_list_items.filter(
+                    status=PickingList.Status.COMPLETED
+                ).exists():
+                    messages.error(
+                        request,
+                        f'Z náhradního jídla {replacement.recipe.name} už bylo vydáno – záměnu nelze zrušit.'
+                    )
+                    continue
+                try:
+                    with transaction.atomic():
+                        # Kaskáda smaže položky náhrady, post_delete signál
+                        # odblokuje sklad
+                        replacement_name = replacement.recipe.name
+                        replacement.delete()
+                        # Originál zpět: COMPLETED→PENDING vrátí odběr (0)
+                        # a obnoví blokaci plánovaného množství
+                        for item in original.picking_list_items.filter(document=document):
+                            item.status = PickingList.Status.PENDING
+                            item.quantity_actual = None
+                            item.save()
+                except ReplaceValidationError as e:
+                    messages.error(
+                        request,
+                        f'Záměnu se nepodařilo zrušit: {"; ".join(e.messages)}'
+                    )
+                    continue
+                messages.success(
+                    request,
+                    f'Záměna zrušena – jídlo {original.recipe.name} je zpět ve výdejce.'
+                )
+
             # Zpracování nových položek přidaných uživatelem
             from apps.core.models import Ingredient as IngredientModel
             from apps.canteens.models import Warehouse
@@ -1634,7 +1769,26 @@ def picking_list_edit(request, document_id):
                     'add_name': f'dinner2_{d.isoformat()}',
                     'add_key': f'dinner2-{d.isoformat()}',
                 })
-        
+
+        # Záměny jídel: originál se sbalí do proužku, náhrada nese badge
+        replacements = ProductionOrder.objects.filter(
+            replacement_of__isnull=False,
+            picking_list_items__document=document,
+        ).select_related('recipe', 'replacement_of__recipe').distinct()
+        replaced_by_names = {
+            r.replacement_of_id: r.recipe.name for r in replacements
+        }
+        replaces_names = {
+            r.id: r.replacement_of.recipe.name
+            for r in replacements if r.replacement_of is not None
+        }
+        for d, meals in sorted_daily_data:
+            for m in meals:
+                if m['order_id'] in replaced_by_names:
+                    m['replaced_by_name'] = replaced_by_names[m['order_id']]
+                if m['order_id'] in replaces_names:
+                    m['replaces_name'] = replaces_names[m['order_id']]
+
         # Seřadíme ingredience abecedně
         sorted_ingredients = sorted(ingredient_totals.values(), key=lambda x: x['ingredient'].name)
         
@@ -1653,6 +1807,7 @@ def picking_list_edit(request, document_id):
         User = get_user_model()
 
         all_ingredients = IngredientModel.objects.filter(is_active=True).order_by('name')
+        all_recipes = Recipe.objects.order_by('name')
         available_cooks = User.objects.filter(is_active=True).order_by('last_name', 'first_name', 'username')
 
         context = {
@@ -1661,6 +1816,7 @@ def picking_list_edit(request, document_id):
             'daily_picking_data': sorted_daily_data,
             'items_without_orders': items_without_orders,
             'all_ingredients': all_ingredients,
+            'all_recipes': all_recipes,
             'available_cooks': available_cooks,
             'readonly_mode': readonly_mode,
             'readonly_reason': readonly_reason,
@@ -1907,14 +2063,15 @@ def picking_list_delete(request, document_id):
         # Odblokování PENDING položek zajišťuje post_delete signál na PickingList
         with transaction.atomic():
             document.delete()
-            # Druhá večeře (jídlo „Výdej") existuje jen skrze výdejku – po
-            # smazání dokumentu by prázdný příkaz strašil v příštích
-            # generovaných výdejkách s nulovými množstvími
+            # Druhá večeře (jídlo „Výdej") a náhrady ze záměn existují jen
+            # skrze výdejku – po smazání dokumentu by prázdné příkazy strašily
+            # v příštích generovaných výdejkách s nulovými množstvími
             ProductionOrder.objects.filter(
+                Q(meal_type=ProductionOrder.MealType.DINNER_SECOND)
+                | Q(replacement_of__isnull=False),
                 canteen=document.canteen,
                 date__gte=document.date_from,
                 date__lte=document.date_to,
-                meal_type=ProductionOrder.MealType.DINNER_SECOND,
                 picking_list_items__isnull=True,
             ).delete()
         messages.success(request, f'Výdejka "{doc_name}" byla smazána a blokované suroviny byly odblokovány.')
