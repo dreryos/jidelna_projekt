@@ -1134,8 +1134,8 @@ def picking_list_edit(request, document_id):
 
                 try:
                     quantity = Decimal(quantity_str.replace(',', '.'))
-                    if quantity < 0:
-                        raise ValueError('negative quantity')
+                    if quantity <= 0:
+                        raise ValueError('non-positive quantity')
 
                     # Vyplněné množství = vydat: přechod na COMPLETED v
                     # PickingList.save() odblokuje a odečte quantity_actual ze skladu.
