@@ -6,7 +6,8 @@ import time
 
 from apps.canteens.models import Canteen, Warehouse
 from apps.core.models import Ingredient, Recipe, RecipeIngredient, Category
-from apps.inventory.models import StockItem, IngredientPriceHistory
+from apps.inventory.models import StockItem, IngredientPriceHistory, StockTransfer
+from django.urls import reverse
 
 
 class IngredientPriceHistoryTest(TestCase):
@@ -400,6 +401,7 @@ class GoodsReceiptTest(TestCase):
         )
         
         item1 = GoodsReceiptItem.objects.create(
+            warehouse=self.warehouse,
             goods_receipt=goods_receipt,
             ingredient=self.ingredient1,
             quantity=Decimal('10.000'),
@@ -407,6 +409,7 @@ class GoodsReceiptTest(TestCase):
         )
         
         item2 = GoodsReceiptItem.objects.create(
+            warehouse=self.warehouse,
             goods_receipt=goods_receipt,
             ingredient=self.ingredient2,
             quantity=Decimal('5.000'),
@@ -429,6 +432,7 @@ class GoodsReceiptTest(TestCase):
         )
         
         GoodsReceiptItem.objects.create(
+            warehouse=self.warehouse,
             goods_receipt=goods_receipt,
             ingredient=self.ingredient1,
             quantity=Decimal('10.000'),
@@ -436,6 +440,7 @@ class GoodsReceiptTest(TestCase):
         )
         
         GoodsReceiptItem.objects.create(
+            warehouse=self.warehouse,
             goods_receipt=goods_receipt,
             ingredient=self.ingredient2,
             quantity=Decimal('5.000'),
@@ -466,6 +471,7 @@ class GoodsReceiptTest(TestCase):
         )
         
         GoodsReceiptItem.objects.create(
+            warehouse=self.warehouse,
             goods_receipt=goods_receipt,
             ingredient=self.ingredient1,
             quantity=Decimal('10.000'),
@@ -473,6 +479,7 @@ class GoodsReceiptTest(TestCase):
         )
         
         GoodsReceiptItem.objects.create(
+            warehouse=self.warehouse,
             goods_receipt=goods_receipt,
             ingredient=self.ingredient2,
             quantity=Decimal('5.000'),
@@ -508,6 +515,7 @@ class GoodsReceiptTest(TestCase):
         )
         
         GoodsReceiptItem.objects.create(
+            warehouse=self.warehouse,
             goods_receipt=goods_receipt,
             ingredient=self.ingredient1,
             quantity=Decimal('10.000'),
@@ -538,6 +546,7 @@ class GoodsReceiptTest(TestCase):
         )
         
         GoodsReceiptItem.objects.create(
+            warehouse=self.warehouse,
             goods_receipt=goods_receipt,
             ingredient=self.ingredient1,
             quantity=Decimal('10.000'),
@@ -564,6 +573,7 @@ class GoodsReceiptTest(TestCase):
         )
         
         GoodsReceiptItem.objects.create(
+            warehouse=self.warehouse,
             goods_receipt=receipt1,
             ingredient=self.ingredient1,
             quantity=Decimal('10.000'),
@@ -582,6 +592,7 @@ class GoodsReceiptTest(TestCase):
         )
         
         GoodsReceiptItem.objects.create(
+            warehouse=self.warehouse,
             goods_receipt=receipt2,
             ingredient=self.ingredient1,
             quantity=Decimal('5.000'),
@@ -706,4 +717,74 @@ class StockItemAdminTestCase(TestCase):
         # Ověření že nejsou required
         self.assertFalse(form.fields['vat_rate'].required)
         self.assertFalse(form.fields['price_without_vat'].required)
+
+
+class StockTransferFormErrorTest(TestCase):
+    """Regrese: cross-field validace převodky musí být viditelná uživateli.
+
+    Bug z produkce: formulář s neplatnou kombinací skladů se tiše znovu
+    vykreslil bez uložení a bez chybové hlášky, protože šablona
+    nezobrazovala form.non_field_errors.
+    """
+
+    def setUp(self):
+        from django.contrib.auth.models import User
+
+        self.canteen = Canteen.objects.create(name='Test Canteen')
+        self.warehouse_from = Warehouse.objects.create(
+            name='Sklad A', canteen=self.canteen
+        )
+        self.warehouse_to = Warehouse.objects.create(
+            name='Sklad B', canteen=self.canteen
+        )
+        self.user = User.objects.create_user(
+            username='transfer_user', password='testpass'
+        )
+        from apps.core.models import UserProfile
+        profile, _ = UserProfile.objects.get_or_create(user=self.user)
+        profile.canteens.add(self.canteen)
+
+    def test_same_warehouse_produces_non_field_error(self):
+        """Stejný zdrojový a cílový sklad → chyba mimo pole (__all__)."""
+        from apps.inventory.forms import StockTransferForm
+
+        form = StockTransferForm(
+            data={
+                'warehouse_from': self.warehouse_from.pk,
+                'warehouse_to': self.warehouse_from.pk,
+                'transfer_date': timezone.now().date().isoformat(),
+                'notes': '',
+            },
+            user=self.user,
+        )
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('__all__', form.errors)
+        self.assertIn(
+            'Zdrojový a cílový sklad musí být různé.',
+            form.non_field_errors(),
+        )
+
+    def test_create_view_renders_non_field_error(self):
+        """POST s neplatnou kombinací → stránka zobrazí chybovou hlášku."""
+        self.client.force_login(self.user)
+        url = reverse('inventory:stock_transfer_create')
+
+        response = self.client.post(
+            url,
+            data={
+                'warehouse_from': self.warehouse_from.pk,
+                'warehouse_to': self.warehouse_from.pk,
+                'transfer_date': timezone.now().date().isoformat(),
+                'notes': '',
+                'items-TOTAL_FORMS': '0',
+                'items-INITIAL_FORMS': '0',
+                'items-MIN_NUM_FORMS': '0',
+                'items-MAX_NUM_FORMS': '100',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Zdrojový a cílový sklad musí být různé.')
+        self.assertEqual(StockTransfer.objects.count(), 0)
 

@@ -1,14 +1,17 @@
+import logging
 from decimal import Decimal
 from django import forms
 from django.forms import inlineformset_factory, BaseInlineFormSet
-from django.core.exceptions import ValidationError
+from django.core.exceptions import ValidationError, ObjectDoesNotExist
 from django.db.models import Q
 from .models import (
-    GoodsReceipt, GoodsReceiptItem, Warehouse, Ingredient, 
+    GoodsReceipt, GoodsReceiptItem, Warehouse, Ingredient,
     InventoryVerification, InventoryVerificationItem,
     StockTransfer, StockTransferItem, StockItem,
     StockWriteOff, StockWriteOffItem
 )
+
+logger = logging.getLogger(__name__)
 
 # České DPH sazby platné v roce 2026
 VAT_RATE_CHOICES = [
@@ -448,7 +451,11 @@ class StockTransferForm(forms.ModelForm):
             try:
                 user_canteens = user.profile.canteens.all()
                 base_qs = base_qs.filter(canteen__in=user_canteens)
-            except Exception:
+            except ObjectDoesNotExist:
+                logger.warning(
+                    'User %s has no profile; hiding all warehouses in StockTransferForm.',
+                    getattr(user, 'pk', user),
+                )
                 base_qs = Warehouse.objects.none()
         self.fields['warehouse_from'].queryset = base_qs
         self.fields['warehouse_to'].queryset = base_qs

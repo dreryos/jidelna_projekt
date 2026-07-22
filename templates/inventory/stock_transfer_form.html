@@ -82,7 +82,13 @@ label.required::after {
   <div class="card-body">
     <form method="post" id="stockTransferForm">
       {% csrf_token %}
-      
+
+      {% if form.non_field_errors %}
+        <div class="alert alert-danger">
+          {{ form.non_field_errors }}
+        </div>
+      {% endif %}
+
       <!-- Základní údaje -->
       <div class="main-form-section bg-light">
         <h5 class="mb-3">Základní údaje</h5>
