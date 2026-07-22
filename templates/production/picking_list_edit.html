@@ -247,7 +247,7 @@
                          name="quantity_actual_item_{{ ing.item_id|unlocalize }}"
                          value=""
                          placeholder="{% if ing.status == 'COMPLETED' %}vydáno {{ ing.quantity_actual|floatformat:3 }}{% else %}plán {{ ing.quantity|floatformat:3 }}{% endif %}"
-                         {% if readonly_mode %}readonly{% endif %}>
+                         {% if readonly_mode or ing.status == 'COMPLETED' %}readonly{% endif %}>
                 </td>
                 <td class="text-center no-strike">
                   {% if ing.status == 'COMPLETED' %}
