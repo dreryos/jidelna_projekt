@@ -75,8 +75,10 @@ class MealReplacementTest(TestCase):
         return f'/production/vydejky/{self.document.id}/edit/'
 
     def _existing_qty_fields(self):
+        # Nová UX: pole skutečného množství jsou defaultně prázdná. Prázdné =
+        # beze změny (položka zůstane PENDING), takže záměnu jídla nezablokují.
         return {
-            f'quantity_actual_item_{item.id}': str(item.quantity_planned)
+            f'quantity_actual_item_{item.id}': ''
             for item in PickingList.objects.filter(document=self.document)
         }
 
