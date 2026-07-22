@@ -121,7 +121,7 @@
 
 <div class="alert alert-info mb-3">
   <i class="fas fa-info-circle me-2"></i>
-  <strong>Instrukce:</strong> Zadejte skutečně vydaná množství a zaškrtněte „Vydáno". Vydaný řádek se automaticky odečte ze skladu.
+  <strong>Instrukce:</strong> Zadejte skutečně vydaná množství. Vyplněný řádek se při uložení automaticky vydá a odečte ze skladu. Prázdné pole zůstane beze změny. Nepoužitou surovinu odeberte košem.
 </div>
 {% endif %}
 
@@ -199,13 +199,6 @@
           <small class="text-muted ms-2">{{ meal.portions }} porcí{% if meal.is_customized %} <i class="fas fa-star text-warning ms-1" title="Upravené jídlo"></i>{% endif %}</small>
           {% endif %}
         </span>
-        {% if not readonly_mode and meal.ingredients %}
-        <div class="d-flex gap-2">
-          <button type="button" class="btn btn-outline-success btn-sm meal-issue-all-btn" data-meal-id="{{ forloop.parentloop.counter }}_{{ forloop.counter }}">
-            <i class="fas fa-check-double me-1"></i>Vydat vše v jídle
-          </button>
-        </div>
-        {% endif %}
       </div>
       {% if meal.ingredients %}
       <div class="card-body p-0">
@@ -218,7 +211,7 @@
                 <th style="width:13%; text-align:center;">Plánováno</th>
                 <th style="width:7%; text-align:center;">Jedn.</th>
                 <th style="width:20%; text-align:center;">Skutečně vydáno</th>
-                <th style="width:25%; text-align:center;">Vydáno</th>
+                <th style="width:25%; text-align:center;">Akce</th>
               </tr>
             </thead>
             <tbody data-meal="{{ forloop.parentloop.counter }}_{{ forloop.counter }}">
@@ -252,20 +245,22 @@
                         inputmode="decimal"
                         class="form-control form-control-sm qty-actual"
                          name="quantity_actual_item_{{ ing.item_id|unlocalize }}"
-                         data-planned="{{ ing.quantity|unlocalize }}"
-                         value="{% if ing.quantity_actual is not None %}{{ ing.quantity_actual|unlocalize }}{% else %}{{ ing.quantity|unlocalize }}{% endif %}"
-                         placeholder="0.000"
-                         {% if readonly_mode %}readonly{% endif %}>
+                         value=""
+                         placeholder="{% if ing.status == 'COMPLETED' %}vydáno {{ ing.quantity_actual|floatformat:3 }}{% else %}plán {{ ing.quantity|floatformat:3 }}{% endif %}"
+                         {% if readonly_mode or ing.status == 'COMPLETED' %}readonly{% endif %}>
                 </td>
                 <td class="text-center no-strike">
-                  <input type="checkbox"
-                         class="issued-checkbox issued-check"
-                         name="status_item_{{ ing.item_id|unlocalize }}"
-                         value="COMPLETED"
-                         id="issued_item_{{ ing.item_id|unlocalize }}"
-                         {% if ing.status == 'COMPLETED' %}checked{% endif %}
-                         {% if readonly_mode %}disabled{% endif %}>
-                  <label class="issued-label ms-1" for="issued_item_{{ ing.item_id|unlocalize }}">Vydáno</label>
+                  {% if ing.status == 'COMPLETED' %}
+                  <span class="badge bg-success me-2" title="Skutečně vydáno {{ ing.quantity_actual|floatformat:3 }} {{ ing.unit }}">Vydáno {{ ing.quantity_actual|floatformat:3 }}</span>
+                  {% endif %}
+                  {% if not readonly_mode and ing.status != 'COMPLETED' %}
+                  <button type="submit" class="btn btn-sm btn-outline-danger btn-delete-item"
+                          name="delete_item_{{ ing.item_id|unlocalize }}" value="1"
+                          data-ingredient="{{ ing.name }}"
+                          title="Odebrat surovinu z výdejky">
+                    <i class="fas fa-trash"></i>
+                  </button>
+                  {% endif %}
                 </td>
               </tr>
               {% endfor %}
@@ -367,6 +362,7 @@
                 <th>Plánované množství</th>
                 <th>Skutečné množství</th>
                 <th>Stav</th>
+                <th class="text-center">Akce</th>
               </tr>
             </thead>
             <tbody>
@@ -381,6 +377,16 @@
                   <span class="badge bg-success">Vydáno</span>
                   {% else %}
                   <span class="badge bg-warning text-dark">Čeká</span>
+                  {% endif %}
+                </td>
+                <td class="text-center">
+                  {% if not readonly_mode and item.status != 'COMPLETED' %}
+                  <button type="submit" class="btn btn-sm btn-outline-danger btn-delete-item"
+                          name="delete_item_{{ item.id|unlocalize }}" value="1"
+                          data-ingredient="{{ item.ingredient.name }}"
+                          title="Odebrat surovinu z výdejky">
+                    <i class="fas fa-trash"></i>
+                  </button>
                   {% endif %}
                 </td>
               </tr>
@@ -439,13 +445,6 @@
     </a>
     {% if not readonly_mode %}
     <div class="d-flex align-items-center gap-2 flex-wrap">
-      <span class="text-muted small" id="issued-counter"></span>
-      <button type="button" class="btn btn-outline-secondary" id="btn-unissue-all">
-        <i class="fas fa-times me-2"></i>Odebrat vydání
-      </button>
-      <button type="button" class="btn btn-success" id="btn-issue-all">
-        <i class="fas fa-check-double me-2"></i>Vydat vše
-      </button>
       <button type="submit" class="btn btn-primary btn-lg">
         <i class="fas fa-save me-2"></i>Uložit změny
       </button>
@@ -462,9 +461,9 @@
           <i class="fas fa-question-circle me-2"></i>Co se stane po uložení?
         </h6>
         <ul class="mb-0">
-          <li>Položky se stavem <strong>"Čeká na vydání"</strong> – suroviny zůstanou zablokovány</li>
-          <li>Položky se stavem <strong>"Vydáno"</strong> – skutečné množství se automaticky odečte ze skladu</li>
-          <li>Ujistěte se, že máte vyplněno skutečné množství před změnou statusu na „Vydáno"</li>
+          <li><strong>Vyplněné</strong> skutečné množství – řádek se vydá a automaticky odečte ze skladu</li>
+          <li><strong>Prázdné</strong> pole – řádek zůstane beze změny, surovina zůstane zablokována</li>
+          <li>Nepoužitou surovinu odeberte <strong>košem</strong> – uvolní se blokace na skladu</li>
         </ul>
       </div>
     </div>
@@ -476,84 +475,25 @@
 <script>
 document.addEventListener('DOMContentLoaded', function () {
 
-    function setRowIssued(row, checked) {
-        const cb = row.querySelector('.issued-check');
-      if (!cb) return;
-        cb.checked = checked;
-        row.classList.toggle('row-issued', checked);
-    }
-
-    function updateCounter() {
-        const total = document.querySelectorAll('.issued-check').length;
-        const issued = document.querySelectorAll('.issued-check:checked').length;
-        const el = document.getElementById('issued-counter');
-        if (el) el.textContent = `Vydáno ${issued} / ${total} položek`;
-    }
-
-    // Checkbox → aktualizuje hidden field a styl řádku
-    document.querySelectorAll('.issued-check').forEach(function (cb) {
-        cb.addEventListener('change', function () {
-            const row = this.closest('tr');
-            setRowIssued(row, this.checked);
-            updateCounter();
-        });
-    });
-
-    // Změna množství → auto-zaškrtne (nebo odškrtne při 0)
+    // Normalizace množství (čárka → tečka) při psaní
     document.querySelectorAll('.qty-actual').forEach(function (input) {
         input.addEventListener('change', function () {
-            const row = this.closest('tr');
-        const normalized = (this.value || '').replace(',', '.').trim();
-        if (normalized !== this.value) {
-          this.value = normalized;
-        }
-        const val = Number(normalized);
-            if (!isNaN(val) && val > 0) {
-                setRowIssued(row, true);
-            } else if (!isNaN(val) && val === 0) {
-                setRowIssued(row, false);
+            const normalized = (this.value || '').replace(',', '.').trim();
+            if (normalized !== this.value) {
+                this.value = normalized;
             }
-            updateCounter();
         });
     });
 
-    // Tlačítko „Vydat vše v jídle" – per-meal
-    document.querySelectorAll('.meal-issue-all-btn').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-            const mealId = this.dataset.mealId;
-            const tbody = document.querySelector(`tbody[data-meal="${mealId}"]`);
-            if (!tbody) return;
-            tbody.querySelectorAll('tr[data-item-id]').forEach(function (row) {
-                setRowIssued(row, true);
-            });
-            updateCounter();
+    // Potvrzení před odebráním suroviny košem
+    document.querySelectorAll('.btn-delete-item').forEach(function (btn) {
+        btn.addEventListener('click', function (e) {
+            const name = this.dataset.ingredient || 'tuto surovinu';
+            if (!window.confirm(`Odebrat „${name}" z výdejky? Blokace na skladu se uvolní.`)) {
+                e.preventDefault();
+            }
         });
     });
-
-    // Tlačítko „Vydat vše"
-    const btnIssueAll = document.getElementById('btn-issue-all');
-    if (btnIssueAll) {
-        btnIssueAll.addEventListener('click', function () {
-            document.querySelectorAll('tr[data-item-id]').forEach(function (row) {
-                setRowIssued(row, true);
-            });
-            updateCounter();
-        });
-    }
-
-    // Tlačítko „Odebrat vydání"
-    const btnUnissueAll = document.getElementById('btn-unissue-all');
-    if (btnUnissueAll) {
-        btnUnissueAll.addEventListener('click', function () {
-            document.querySelectorAll('tr[data-item-id]').forEach(function (row) {
-                setRowIssued(row, false);
-            });
-            updateCounter();
-        });
-    }
-
-    // Počáteční stav counteru
-    updateCounter();
 
     // --- Toggle panelu pro přidávání surovin ---
     document.querySelectorAll('.btn-toggle-add-ingredient').forEach(function (btn) {
@@ -662,29 +602,13 @@ document.addEventListener('DOMContentLoaded', function () {
         container.appendChild(firstRow);
     });
 
-    // --- Submit handler: zaruč odeslání všech qty hodnot ---
+    // --- Submit handler: normalizace čárek na tečky před odesláním ---
     var form = document.getElementById('vydejka-form');
     if (form) {
         form.addEventListener('submit', function () {
-            var qtyInputs = form.querySelectorAll('.qty-actual');
-            qtyInputs.forEach(function (input) {
-                // Normalizuj čárku na tečku
-                var val = (input.value || '').replace(',', '.').trim();
-                // Pokud prázdné, doplň z data-planned
-                if (!val || isNaN(Number(val))) {
-                    val = (input.dataset.planned || '0').replace(',', '.');
-                }
-                input.value = val;
+            form.querySelectorAll('.qty-actual').forEach(function (input) {
+                input.value = (input.value || '').replace(',', '.').trim();
             });
-            // Přidej debug pole s počtem qty inputů (pro server log)
-            var dbg = form.querySelector('input[name="debug_qty_count"]');
-            if (!dbg) {
-                dbg = document.createElement('input');
-                dbg.type = 'hidden';
-                dbg.name = 'debug_qty_count';
-                form.appendChild(dbg);
-            }
-            dbg.value = qtyInputs.length;
         });
     }
 });

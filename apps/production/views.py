@@ -1039,10 +1039,37 @@ def picking_list_edit(request, document_id):
             updated_count = 0
             processed_count = 0
             added_count = 0
-            missing_quantity_fields = 0
+            deleted_count = 0
             item_validation_errors = 0
             completed_count_after_save = 0
             pending_count_after_save = 0
+
+            # Odebrání surovin košem: nepoužitá surovina se odstraní z výdejky.
+            # Musí proběhnout PŘED sestavením mapy položek níže, jinak by
+            # následné item.save() smazanou položku znovu vložilo.
+            # post_delete signál uvolní blokaci na skladu u PENDING položek.
+            for key in list(request.POST.keys()):
+                if not key.startswith('delete_item_'):
+                    continue
+                try:
+                    del_item_id = int(key.rsplit('_', 1)[1])
+                except (ValueError, IndexError):
+                    continue
+                item = PickingList.objects.filter(
+                    id=del_item_id,
+                    document=document,
+                    status=PickingList.Status.PENDING,
+                ).select_related('ingredient').first()
+                if item is None:
+                    continue
+                ingredient_name = item.ingredient.name
+                item.delete()
+                deleted_count += 1
+                messages.success(
+                    request,
+                    f'Surovina {ingredient_name} byla odebrána z výdejky.'
+                )
+
             # Re-fetch picking items fresh (nekombinujeme s pre-evaluovaným QS z locked check)
             # Načteme pouze položky s production_order (položky mimo jídla se needitují v této smyčce)
             picking_items_fresh = list(
@@ -1062,19 +1089,14 @@ def picking_list_edit(request, document_id):
                     )
 
             qty_keys_in_post = [k for k in request.POST.keys() if k.startswith('quantity_actual_item_')]
-            status_keys_in_post = [k for k in request.POST.keys() if k.startswith('status_item_')]
-            debug_qty_count = request.POST.get('debug_qty_count', 'missing')
             logger.info(
                 "picking_list_edit POST start: document_id=%s user_id=%s post_keys=%s item_count=%s "
-                "qty_fields_in_post=%s status_fields_in_post=%s debug_qty_count=%s "
-                "sample_post_keys=%s",
+                "qty_fields_in_post=%s sample_post_keys=%s",
                 document_id,
                 request.user.id,
                 len(request.POST.keys()),
                 len(picking_items_map),
                 len(qty_keys_in_post),
-                len(status_keys_in_post),
-                debug_qty_count,
                 list(request.POST.keys())[:10],
             )
 
@@ -1094,42 +1116,34 @@ def picking_list_edit(request, document_id):
                 document.cook = None
                 document.save(update_fields=['cook'])
             
+            from django.core.exceptions import ValidationError as DjangoValidationError
             for item_id, item in picking_items_map.items():
                 quantity_key = f'quantity_actual_item_{item_id}'
-                status_key = f'status_item_{item_id}'
-                had_quantity_in_post = quantity_key in request.POST
-
                 quantity_str = request.POST.get(quantity_key, '').strip()
-                # Prohlížeč může poslat prázdný řetězec pro pre-filled <input type="number">
-                # pokud hodnota selže HTML5 validaci (step/min) nebo pole vůbec neodešle.
+
+                # Prázdné pole = beze změny: položka zůstane PENDING a její
+                # plánované množství dál blokuje sklad. Z provozu se vyplňují
+                # jen skutečně vydané suroviny, ostatní se nechají prázdné.
                 if not quantity_str:
-                    if not had_quantity_in_post:
-                        missing_quantity_fields += 1
-                    if item.quantity_actual is not None:
-                        quantity_str = str(item.quantity_actual)
-                    else:
-                        quantity_str = str(item.quantity_planned)
+                    continue
+                # Již vydané položky se přes množství needitují – tok je
+                # jednosměrný (vyplnění = vydání). Oprava vydaného řádku se
+                # dělá odebráním košem a novým zadáním.
+                if item.status == PickingList.Status.COMPLETED:
+                    continue
 
                 try:
-                    from django.core.exceptions import ValidationError as DjangoValidationError
                     quantity = Decimal(quantity_str.replace(',', '.'))
-                    status = request.POST.get(status_key, PickingList.Status.PENDING)
-                    old_quantity_actual = item.quantity_actual
-                    old_status = item.status
+                    if quantity <= 0:
+                        raise ValueError('non-positive quantity')
 
+                    # Vyplněné množství = vydat: přechod na COMPLETED v
+                    # PickingList.save() odblokuje a odečte quantity_actual ze skladu.
                     item.quantity_actual = quantity
-                    item.status = status
-
-                    has_changed = (old_quantity_actual != item.quantity_actual) or (old_status != item.status)
-                    if has_changed:
-                        item.save()
-                        updated_count += 1
-
+                    item.status = PickingList.Status.COMPLETED
+                    item.save()
+                    updated_count += 1
                     processed_count += 1
-                    if item.status == PickingList.Status.COMPLETED:
-                        completed_count_after_save += 1
-                    elif item.status == PickingList.Status.PENDING:
-                        pending_count_after_save += 1
                 except (ValueError, InvalidOperation):
                     item_validation_errors += 1
                     logger.warning(
@@ -1616,21 +1630,21 @@ def picking_list_edit(request, document_id):
             pending_count_after_save = sum(1 for s in all_items_stats if s == PickingList.Status.PENDING)
 
             logger.info(
-                "picking_list_edit POST summary: document_id=%s user_id=%s processed=%s updated=%s added=%s completed=%s pending=%s missing_quantity_fields=%s item_validation_errors=%s",
+                "picking_list_edit POST summary: document_id=%s user_id=%s processed=%s updated=%s added=%s deleted=%s completed=%s pending=%s item_validation_errors=%s",
                 document_id,
                 request.user.id,
                 processed_count,
                 updated_count,
                 added_count,
+                deleted_count,
                 completed_count_after_save,
                 pending_count_after_save,
-                missing_quantity_fields,
                 item_validation_errors,
             )
 
             messages.success(
                 request,
-                f'Aktualizováno {updated_count} položek. Vydáno: {completed_count_after_save}, čeká na vydání: {pending_count_after_save}.'
+                f'Vydáno {updated_count} položek. Celkem vydáno: {completed_count_after_save}, čeká na vydání: {pending_count_after_save}.'
             )
             return redirect('production:picking_list_edit', document_id=document_id)
         
