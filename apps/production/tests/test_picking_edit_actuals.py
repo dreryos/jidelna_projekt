@@ -115,6 +115,20 @@ class PickingEditActualsTest(TestCase):
         self.assertEqual(self.stock.quantity, Decimal('100.000'))
         self.assertEqual(self.stock.quantity_blocked, Decimal('3.000'))
 
+    def test_zero_quantity_is_rejected(self):
+        """0 není platné vydané množství – položka zůstane PENDING."""
+        response = self.client.post(self._url(), data={
+            f'quantity_actual_item_{self.item.id}': '0',
+        })
+        self.assertEqual(response.status_code, 302)
+
+        self.item.refresh_from_db()
+        self.assertEqual(self.item.status, PickingList.Status.PENDING)
+        self.assertIsNone(self.item.quantity_actual)
+        self.stock.refresh_from_db()
+        self.assertEqual(self.stock.quantity, Decimal('100.000'))
+        self.assertEqual(self.stock.quantity_blocked, Decimal('3.000'))
+
     def test_missing_field_leaves_item_unchanged(self):
         """Pole vůbec neodeslané (jiná akce) → položka beze změny."""
         response = self.client.post(self._url(), data={'cook': ''})
@@ -125,7 +139,6 @@ class PickingEditActualsTest(TestCase):
         self.assertIsNone(self.item.quantity_actual)
         self.stock.refresh_from_db()
         self.assertEqual(self.stock.quantity_blocked, Decimal('3.000'))
-
     def test_delete_item_removes_and_unblocks(self):
         """Koš → smaže položku a uvolní blokaci na skladu."""
         item_id = self.item.id
