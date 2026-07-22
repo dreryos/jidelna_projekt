@@ -253,7 +253,7 @@
                   {% if ing.status == 'COMPLETED' %}
                   <span class="badge bg-success me-2" title="Skutečně vydáno {{ ing.quantity_actual|floatformat:3 }} {{ ing.unit }}">Vydáno {{ ing.quantity_actual|floatformat:3 }}</span>
                   {% endif %}
-                  {% if not readonly_mode %}
+                  {% if not readonly_mode and ing.status != 'COMPLETED' %}
                   <button type="submit" class="btn btn-sm btn-outline-danger btn-delete-item"
                           name="delete_item_{{ ing.item_id|unlocalize }}" value="1"
                           data-ingredient="{{ ing.name }}"
