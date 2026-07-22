@@ -1056,7 +1056,9 @@ def picking_list_edit(request, document_id):
                 except (ValueError, IndexError):
                     continue
                 item = PickingList.objects.filter(
-                    id=del_item_id, document=document
+                    id=del_item_id,
+                    document=document,
+                    status=PickingList.Status.PENDING,
                 ).select_related('ingredient').first()
                 if item is None:
                     continue
