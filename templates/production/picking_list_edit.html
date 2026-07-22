@@ -380,7 +380,7 @@
                   {% endif %}
                 </td>
                 <td class="text-center">
-                  {% if not readonly_mode %}
+                  {% if not readonly_mode and item.status != 'COMPLETED' %}
                   <button type="submit" class="btn btn-sm btn-outline-danger btn-delete-item"
                           name="delete_item_{{ item.id|unlocalize }}" value="1"
                           data-ingredient="{{ item.ingredient.name }}"
