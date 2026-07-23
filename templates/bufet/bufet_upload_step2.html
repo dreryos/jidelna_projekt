@@ -131,7 +131,9 @@
        (chyba 520). Sdílený <datalist> to srazí na jeden seznam. -->
   <datalist id="ingredient-options">
     {% for ing in all_ingredients %}
-    <option data-id="{{ ing.id }}" value="{{ ing.name }} ({{ ing.unit }})"></option>
+    {# #id v popisku odliší suroviny se shodným name+unit (jinak by se
+       namapovaly na tu nesprávnou) #}
+    <option data-id="{{ ing.id }}" value="{{ ing.name }} ({{ ing.unit }}) #{{ ing.id }}"></option>
     {% endfor %}
   </datalist>
 
@@ -157,11 +159,11 @@ document.addEventListener('DOMContentLoaded', function () {
     labelToId[opt.value] = opt.dataset.id;
   });
 
-  // Při změně textu dohledáme id; neznámý/prázdný text = surovina nevybrána
+  // Při změně textu dohledáme id; neznámý/prázdný text = surovina nevybrána.
+  // Skryté pole je ve stejné buňce (stabilní vztah v DOM, ne lookup přes idx).
   document.querySelectorAll('.ingredient-input').forEach(function (input) {
+    const hidden = input.closest('td').querySelector('.ingredient-field');
     input.addEventListener('input', function () {
-      const idx = this.dataset.idx;
-      const hidden = document.querySelector('.ingredient-field[data-idx="' + idx + '"]');
       hidden.value = labelToId[this.value.trim()] || '';
       updateCounters();
     });

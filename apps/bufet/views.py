@@ -293,9 +293,12 @@ def bufet_upload_step2(request):
         item['suggested_id'] = ingredient.id if ingredient else None
         item['suggested_name'] = ingredient.name if ingredient else None
         # Popisek musí být totožný s value volby v <datalist> (viz šablona),
-        # aby JS podle napsaného textu dohledal id suroviny
+        # aby JS podle napsaného textu dohledal id suroviny. Součástí je i id
+        # (#N), protože samotné name+unit nemusí být globálně jedinečné a jinak
+        # by se dvě stejně pojmenované suroviny namapovaly na tu nesprávnou.
         item['suggested_label'] = (
-            f'{ingredient.name} ({ingredient.unit})' if ingredient else ''
+            f'{ingredient.name} ({ingredient.unit}) #{ingredient.id}'
+            if ingredient else ''
         )
         item['match_score'] = score
 
