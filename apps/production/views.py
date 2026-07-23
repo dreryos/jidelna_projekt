@@ -992,15 +992,17 @@ def _handle_unissued_items(request, document):
     return unissued_count
 
 
-def _get_or_create_soup_order(document, day_date):
-    """Vrátí (a případně lazy založí) výrobní příkaz „Polévka" pro daný den.
-    Polévka v jídelníčku není, vzniká až přidáním suroviny ve výdejce – obdoba
-    jídla „Výdej" u druhé večeře. Vrací None, pokud den nemá žádné jiné jídlo
-    (volající zobrazí chybu)."""
+def _get_or_create_lazy_meal_order(document, day_date, meal_type,
+                                    recipe_name, recipe_code):
+    """Vrátí (a případně lazy založí) výrobní příkaz pro jídlo, které v
+    jídelníčku není a vzniká až přidáním suroviny ve výdejce – druhá večeře
+    („Výdej") a polévka („Polévka"). Vrací None, pokud den nemá žádné jiné
+    jídlo (volající zobrazí chybu). Ošetřuje souběh přes unikátní constraint
+    (canteen, date, meal_type)."""
     order_obj = ProductionOrder.objects.filter(
         canteen=document.canteen,
         date=day_date,
-        meal_type=ProductionOrder.MealType.SOUP,
+        meal_type=meal_type,
     ).first()
     if order_obj is not None:
         return order_obj
@@ -1015,7 +1017,7 @@ def _get_or_create_soup_order(document, day_date):
     # Explicitní kód: save() bez kategorie kód negeneruje a zálohy (backup.py)
     # párují recepty právě podle kódu
     recipe_obj, _ = Recipe.objects.get_or_create(
-        name='Polévka', defaults={'code': 'POLEVKA'}
+        name=recipe_name, defaults={'code': recipe_code}
     )
     try:
         with transaction.atomic():
@@ -1024,7 +1026,7 @@ def _get_or_create_soup_order(document, day_date):
                 canteen=document.canteen,
                 menu_plan=sibling.menu_plan,
                 date=day_date,
-                meal_type=ProductionOrder.MealType.SOUP,
+                meal_type=meal_type,
             )
             # 1 porce × koeficient 1: bez varianty by effective_portions bylo 0,
             # override by neuložil množství na porci a přegenerování výdejky by
@@ -1041,7 +1043,7 @@ def _get_or_create_soup_order(document, day_date):
         return ProductionOrder.objects.filter(
             canteen=document.canteen,
             date=day_date,
-            meal_type=ProductionOrder.MealType.SOUP,
+            meal_type=meal_type,
         ).first()
 
 
@@ -1620,57 +1622,17 @@ def picking_list_edit(request, document_id):
                     messages.error(request, 'Zadaná surovina nebyla nalezena.')
                     continue
 
-                # Jídlo „Výdej" pro druhou večeři vzniká při prvním přidání
-                order_obj = ProductionOrder.objects.filter(
-                    canteen=document.canteen,
-                    date=day_date,
-                    meal_type=ProductionOrder.MealType.DINNER_SECOND,
-                ).first()
+                # Jídlo „Výdej" pro druhou večeři vzniká lazy při prvním přidání
+                order_obj = _get_or_create_lazy_meal_order(
+                    document, day_date, ProductionOrder.MealType.DINNER_SECOND,
+                    'Výdej', 'VYDEJ',
+                )
                 if order_obj is None:
-                    sibling = ProductionOrder.objects.filter(
-                        picking_list_items__document=document, date=day_date
-                    ).first()
-                    if sibling is None:
-                        messages.error(
-                            request,
-                            f'Pro den {day_date.strftime("%d.%m.%Y")} nelze založit druhou večeři – den nemá žádné jídlo.'
-                        )
-                        continue
-                    # Explicitní kód: save() bez kategorie kód negeneruje a
-                    # zálohy (backup.py) párují recepty právě podle kódu
-                    recipe_obj, _ = Recipe.objects.get_or_create(
-                        name='Výdej', defaults={'code': 'VYDEJ'}
+                    messages.error(
+                        request,
+                        f'Pro den {day_date.strftime("%d.%m.%Y")} nelze založit druhou večeři – den nemá žádné jídlo.'
                     )
-                    from .models import ProductionOrderPortionVariant
-                    try:
-                        with transaction.atomic():
-                            order_obj = ProductionOrder.objects.create(
-                                recipe=recipe_obj,
-                                canteen=document.canteen,
-                                menu_plan=sibling.menu_plan,
-                                date=day_date,
-                                meal_type=ProductionOrder.MealType.DINNER_SECOND,
-                            )
-                            # 1 porce × koeficient 1: bez varianty by
-                            # effective_portions bylo 0, override by neuložil
-                            # množství na porci a přegenerování výdejky by
-                            # množství vynulovalo
-                            ProductionOrderPortionVariant.objects.create(
-                                production_order=order_obj,
-                                portions=1,
-                                coefficient=Decimal('1.0'),
-                            )
-                    except IntegrityError:
-                        # Souběžný požadavek příkaz právě založil – unikátní
-                        # constraint (canteen, date, meal_type) drží jediný
-                        order_obj = ProductionOrder.objects.filter(
-                            canteen=document.canteen,
-                            date=day_date,
-                            meal_type=ProductionOrder.MealType.DINNER_SECOND,
-                        ).first()
-                        if order_obj is None:
-                            messages.error(request, 'Druhou večeři se nepodařilo založit, zkuste to znovu.')
-                            continue
+                    continue
 
                 if _store_added_ingredient(order_obj, ingredient_obj, quantity_new):
                     added_count += 1
@@ -1724,7 +1686,10 @@ def picking_list_edit(request, document_id):
                     continue
 
                 # Jídlo „Polévka" vzniká lazy při prvním přidání suroviny
-                order_obj = _get_or_create_soup_order(document, day_date)
+                order_obj = _get_or_create_lazy_meal_order(
+                    document, day_date, ProductionOrder.MealType.SOUP,
+                    'Polévka', 'POLEVKA',
+                )
                 if order_obj is None:
                     messages.error(
                         request,

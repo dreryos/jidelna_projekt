@@ -257,7 +257,7 @@ class ProductionOrder(models.Model):
         default=MealType.LUNCH,
         blank=True,
         verbose_name="Typ jídla",
-        help_text="Kategorie jídla (snídaně, oběd, večeře, svačina)",
+        help_text="Kategorie jídla (snídaně, svačina, polévka, oběd, večeře)",
         db_index=True
     )
     replacement_of = models.ForeignKey(

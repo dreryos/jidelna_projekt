@@ -157,6 +157,47 @@ class PickingSoupTest(TestCase):
         self.assertNotIn('SOUP', meal_types)
         self.assertIn('LUNCH', meal_types)
 
+    def test_soup_date_out_of_range_rejected(self):
+        """Datum polévky mimo období výdejky → chyba, žádný příkaz nevznikne."""
+        out = date(2025, 9, 11)  # dokument je jen na 2025-09-10
+        response = self.client.post(self._url(), data={
+            f'new_ingredient_soup_{out.isoformat()}_0': str(self.rice.id),
+            f'new_quantity_soup_{out.isoformat()}_0': '2',
+        }, follow=True)
+        self.assertContains(response, 'Datum polévky je mimo období výdejky.')
+        self.assertFalse(
+            ProductionOrder.objects.filter(
+                meal_type=ProductionOrder.MealType.SOUP).exists())
+
+    def test_soup_creation_integrity_race_uses_existing(self):
+        """Souběh: create narazí na unique constraint → helper vrátí příkaz,
+        který mezitím založil druhý request (větev IntegrityError)."""
+        from django.db import IntegrityError
+        from apps.production import views
+
+        existing = MagicMock(name='existing_soup_order')
+        sibling = MagicMock(name='sibling')
+        # filter().first() v pořadí: initial soup → None, sibling → sibling,
+        # fallback po IntegrityError → existing
+        firsts = [None, sibling, existing]
+
+        def filter_side(*args, **kwargs):
+            m = MagicMock()
+            m.first.return_value = firsts.pop(0)
+            return m
+
+        with patch.object(views.ProductionOrder, 'objects') as objs, \
+                patch.object(views.Recipe, 'objects') as recipe_objs:
+            objs.filter.side_effect = filter_side
+            objs.create.side_effect = IntegrityError('duplicate')
+            recipe_objs.get_or_create.return_value = (MagicMock(), True)
+            result = views._get_or_create_lazy_meal_order(
+                self.document, self.day,
+                ProductionOrder.MealType.SOUP, 'Polévka', 'POLEVKA',
+            )
+
+        self.assertIs(result, existing)
+
     def test_soup_removed_when_document_deleted(self):
         """Smazání výdejky uklidí i prázdný/naplněný příkaz polévky."""
         self.client.post(self._url(), data={

@@ -111,8 +111,13 @@ def generate_picking_list_pdf_file(document, base_url='/', save=True):
             ).values_list('replacement_of_id', flat=True)
         )
 
+        # Polévka se na papírovou výdejku netiskne (kuchař ji zapisuje až po
+        # uvaření) – vyloučíme ji už v querysetu, aby ji nezapočítal total_orders,
+        # batch skladu ani context orders
         orders = ProductionOrder.objects.filter(
             picking_list_items__document=document
+        ).exclude(
+            meal_type=ProductionOrder.MealType.SOUP
         ).distinct().select_related(
             'recipe', 'canteen', 'menu_plan', 'replacement_of__recipe'
         ).prefetch_related(
@@ -163,10 +168,6 @@ def generate_picking_list_pdf_file(document, base_url='/', save=True):
 
         for order in orders:
             if order.id in replaced_ids:
-                continue
-            # Polévka se na papírovou výdejku netiskne – kuchař ji zapisuje až
-            # po uvaření podle toho, co se rozhodl uvařit
-            if order.meal_type == ProductionOrder.MealType.SOUP:
                 continue
 
             order_ingredients = []
