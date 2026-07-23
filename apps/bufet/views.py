@@ -1,4 +1,5 @@
 import difflib
+import logging
 from datetime import date
 from decimal import Decimal, InvalidOperation
 
@@ -16,6 +17,8 @@ from apps.inventory.models import StockWriteOff, StockWriteOffItem
 
 from .fiskalpro_parser import parse_bufet_file, parse_export_date
 from .models import BufetImport, BufetImportItem
+
+logger = logging.getLogger(__name__)
 
 NUMERIC_FIELDS = ('quantity',)
 MATCH_THRESHOLD = 0.45
@@ -241,6 +244,16 @@ def bufet_upload_step1(request):
         except ValueError as e:
             messages.error(request, f'Chyba při načítání souboru: {e}')
             return render(request, 'bufet/bufet_upload_step1.html', {'warehouses': warehouses})
+        except Exception:
+            # Neočekávaná chyba parseru nesmí shodit worker (jinak Cloudflare
+            # vrátí 520 místo hlášky). Zalogujeme a ukážeme uživateli chybu.
+            logger.exception('Neočekávaná chyba při parsování bufet souboru %s', upload.name)
+            messages.error(
+                request,
+                'Soubor se nepodařilo zpracovat. Ověřte, že jde o XLSX export '
+                'z FiskalPRO ("Položky dokladů – kumulované").'
+            )
+            return render(request, 'bufet/bufet_upload_step1.html', {'warehouses': warehouses})
 
         if not items:
             messages.error(request, 'Soubor neobsahuje žádné prodané položky.')
@@ -279,6 +292,11 @@ def bufet_upload_step2(request):
         ingredient, score = _suggest_ingredient(item['name'], name_index)
         item['suggested_id'] = ingredient.id if ingredient else None
         item['suggested_name'] = ingredient.name if ingredient else None
+        # Popisek musí být totožný s value volby v <datalist> (viz šablona),
+        # aby JS podle napsaného textu dohledal id suroviny
+        item['suggested_label'] = (
+            f'{ingredient.name} ({ingredient.unit})' if ingredient else ''
+        )
         item['match_score'] = score
 
     try:
