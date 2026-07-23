@@ -182,6 +182,7 @@
         <span>
           {% if meal.meal_type == 'BREAKFAST' %}<span class="badge bg-warning text-dark meal-badge me-2">Snídaně</span>
           {% elif meal.meal_type == 'SNACK_MORNING' %}<span class="badge bg-secondary meal-badge me-2">Svačina dop.</span>
+          {% elif meal.meal_type == 'SOUP' %}<span class="badge bg-info text-dark meal-badge me-2">Polévka</span>
           {% elif meal.meal_type == 'LUNCH' %}<span class="badge bg-primary meal-badge me-2">Oběd</span>
           {% elif meal.meal_type == 'SNACK_AFTERNOON' %}<span class="badge bg-secondary meal-badge me-2">Svačina odp.</span>
           {% elif meal.meal_type == 'DINNER' %}<span class="badge bg-dark meal-badge me-2">Večeře</span>

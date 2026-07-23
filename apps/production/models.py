@@ -241,6 +241,7 @@ class ProductionOrder(models.Model):
     class MealType(models.TextChoices):
         BREAKFAST = 'BREAKFAST', 'Snídaně'
         SNACK_MORNING = 'SNACK_MORNING', 'Svačina dopolední'
+        SOUP = 'SOUP', 'Polévka'
         LUNCH = 'LUNCH', 'Oběd'
         SNACK_AFTERNOON = 'SNACK_AFTERNOON', 'Svačina odpolední'
         DINNER = 'DINNER', 'Večeře'
@@ -678,6 +679,14 @@ class ProductionOrder(models.Model):
                 fields=['canteen', 'date', 'meal_type'],
                 condition=models.Q(meal_type='DINNER_SECOND'),
                 name='unique_second_dinner_per_canteen_day',
+            ),
+            # Polévka (jídlo „Polévka") smí být pro jídelnu a den jen jedna –
+            # výdejka ji zakládá lazy stejně jako druhou večeři, souběžné POSTy
+            # by jinak vytvořily duplicitní příkazy
+            models.UniqueConstraint(
+                fields=['canteen', 'date', 'meal_type'],
+                condition=models.Q(meal_type='SOUP'),
+                name='unique_soup_per_canteen_day',
             ),
         ]
 

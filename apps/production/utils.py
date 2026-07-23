@@ -21,10 +21,11 @@ logger = logging.getLogger(__name__)
 MEAL_TYPE_ORDER = {
     'BREAKFAST': 0,
     'SNACK_MORNING': 1,
-    'LUNCH': 2,
-    'SNACK_AFTERNOON': 3,
-    'DINNER': 4,
-    'DINNER_SECOND': 5,
+    'SOUP': 2,
+    'LUNCH': 3,
+    'SNACK_AFTERNOON': 4,
+    'DINNER': 5,
+    'DINNER_SECOND': 6,
 }
 
 
@@ -162,6 +163,10 @@ def generate_picking_list_pdf_file(document, base_url='/', save=True):
 
         for order in orders:
             if order.id in replaced_ids:
+                continue
+            # Polévka se na papírovou výdejku netiskne – kuchař ji zapisuje až
+            # po uvaření podle toho, co se rozhodl uvařit
+            if order.meal_type == ProductionOrder.MealType.SOUP:
                 continue
 
             order_ingredients = []
