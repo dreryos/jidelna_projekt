@@ -96,17 +96,14 @@
           <td class="fw-bold">{{ item.quantity }} {{ item.unit }}</td>
           <td class="small text-muted">{{ item.establishments|default:"–" }}</td>
           <td>
-            <select name="ingredient_{{ forloop.counter0 }}"
-                    class="form-select form-select-sm ingredient-select ingredient-field"
-                    data-idx="{{ forloop.counter0 }}">
-              <option value="">– nevybráno –</option>
-              {% for ing in all_ingredients %}
-              <option value="{{ ing.id }}"
-                {% if ing.id == item.suggested_id %}selected{% endif %}>
-                {{ ing.name }} ({{ ing.unit }})
-              </option>
-              {% endfor %}
-            </select>
+            <input type="text" list="ingredient-options"
+                   class="form-control form-control-sm ingredient-select ingredient-input"
+                   data-idx="{{ forloop.counter0 }}"
+                   value="{{ item.suggested_label }}"
+                   placeholder="– nevybráno –" autocomplete="off">
+            <input type="hidden" name="ingredient_{{ forloop.counter0 }}"
+                   class="ingredient-field" data-idx="{{ forloop.counter0 }}"
+                   value="{{ item.suggested_id|default:'' }}">
           </td>
           <td class="text-center">
             {% if item.match_score >= 70 %}
@@ -128,6 +125,18 @@
     </table>
   </div>
 
+  <!-- Seznam surovin renderovaný JEN JEDNOU pro všechny řádky. Dřív měl každý
+       řádek vlastní <select> se všemi surovinami (položky × suroviny options),
+       což u velkých importů nafouklo HTML na desítky MB a shazovalo worker
+       (chyba 520). Sdílený <datalist> to srazí na jeden seznam. -->
+  <datalist id="ingredient-options">
+    {% for ing in all_ingredients %}
+    {# #id v popisku odliší suroviny se shodným name+unit (jinak by se
+       namapovaly na tu nesprávnou) #}
+    <option data-id="{{ ing.id }}" value="{{ ing.name }} ({{ ing.unit }}) #{{ ing.id }}"></option>
+    {% endfor %}
+  </datalist>
+
   <div class="d-flex justify-content-end mt-3">
     <button type="submit" class="btn btn-success btn-lg">
       <i class="fas fa-check me-2"></i>Potvrdit import a odepsat ze skladu
@@ -142,6 +151,23 @@ document.addEventListener('DOMContentLoaded', function () {
   const rows = document.querySelectorAll('.item-row');
   const mappedEl = document.getElementById('mapped-count');
   const skippedEl = document.getElementById('skipped-count');
+
+  // Mapa napsaný text (value volby) -> id suroviny, sestavená ze sdíleného
+  // <datalist>. Umožní z textového inputu dohledat id do skrytého pole.
+  const labelToId = {};
+  document.querySelectorAll('#ingredient-options option').forEach(function (opt) {
+    labelToId[opt.value] = opt.dataset.id;
+  });
+
+  // Při změně textu dohledáme id; neznámý/prázdný text = surovina nevybrána.
+  // Skryté pole je ve stejné buňce (stabilní vztah v DOM, ne lookup přes idx).
+  document.querySelectorAll('.ingredient-input').forEach(function (input) {
+    const hidden = input.closest('td').querySelector('.ingredient-field');
+    input.addEventListener('input', function () {
+      hidden.value = labelToId[this.value.trim()] || '';
+      updateCounters();
+    });
+  });
 
   function updateCounters() {
     let mapped = 0, skipped = 0;
