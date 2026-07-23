@@ -959,6 +959,129 @@ def picking_list_generator(request):
     return render(request, 'production/picking_list_generator.html', context)
 
 
+def _handle_unissued_items(request, document):
+    """Zrušení výdeje: vydaná (COMPLETED) položka se vrátí na PENDING, aby šla
+    oprava špatně zadaného množství. PickingList.save() přitom vrátí
+    quantity_actual na sklad a znovu zablokuje quantity_planned. Volá se PŘED
+    quantity-loop; po revertu je pole řádku prázdné, takže ho quantity-loop
+    přeskočí (žádné dvojité zpracování). Vrací počet zrušených výdejů."""
+    unissued_count = 0
+    for key in request.POST.keys():
+        if not key.startswith('unissue_item_'):
+            continue
+        try:
+            unissue_item_id = int(key.rsplit('_', 1)[1])
+        except (ValueError, IndexError):
+            continue
+        item = PickingList.objects.filter(
+            id=unissue_item_id,
+            document=document,
+            status=PickingList.Status.COMPLETED,
+        ).select_related('ingredient').first()
+        if item is None:
+            continue
+        ingredient_name = item.ingredient.name
+        item.status = PickingList.Status.PENDING
+        item.quantity_actual = None
+        item.save()
+        unissued_count += 1
+        messages.success(
+            request,
+            f'Výdej suroviny {ingredient_name} byl zrušen, můžete zadat znovu.'
+        )
+    return unissued_count
+
+
+def _get_or_create_lazy_meal_order(document, day_date, meal_type,
+                                    recipe_name, recipe_code):
+    """Vrátí (a případně lazy založí) výrobní příkaz pro jídlo, které v
+    jídelníčku není a vzniká až přidáním suroviny ve výdejce – druhá večeře
+    („Výdej") a polévka („Polévka"). Vrací None, pokud den nemá žádné jiné
+    jídlo (volající zobrazí chybu). Ošetřuje souběh přes unikátní constraint
+    (canteen, date, meal_type)."""
+    order_obj = ProductionOrder.objects.filter(
+        canteen=document.canteen,
+        date=day_date,
+        meal_type=meal_type,
+    ).first()
+    if order_obj is not None:
+        return order_obj
+
+    sibling = ProductionOrder.objects.filter(
+        picking_list_items__document=document, date=day_date
+    ).first()
+    if sibling is None:
+        return None
+
+    from .models import ProductionOrderPortionVariant
+    # Explicitní kód: save() bez kategorie kód negeneruje a zálohy (backup.py)
+    # párují recepty právě podle kódu
+    recipe_obj, _ = Recipe.objects.get_or_create(
+        name=recipe_name, defaults={'code': recipe_code}
+    )
+    try:
+        with transaction.atomic():
+            order_obj = ProductionOrder.objects.create(
+                recipe=recipe_obj,
+                canteen=document.canteen,
+                menu_plan=sibling.menu_plan,
+                date=day_date,
+                meal_type=meal_type,
+            )
+            # 1 porce × koeficient 1: bez varianty by effective_portions bylo 0,
+            # override by neuložil množství na porci a přegenerování výdejky by
+            # množství vynulovalo
+            ProductionOrderPortionVariant.objects.create(
+                production_order=order_obj,
+                portions=1,
+                coefficient=Decimal('1.0'),
+            )
+        return order_obj
+    except IntegrityError:
+        # Souběžný požadavek příkaz právě založil – unikátní constraint
+        # (canteen, date, meal_type) drží jediný
+        return ProductionOrder.objects.filter(
+            canteen=document.canteen,
+            date=day_date,
+            meal_type=meal_type,
+        ).first()
+
+
+def _append_meal_placeholders(meals, day_date):
+    """Doplní do denního seznamu jídel prázdné karty pro druhou večeři a
+    polévku (obě v jídelníčku nejsou, vznikají lazy až přidáním suroviny ve
+    výdejce) a přeřadí jídla podle typu – polévka patří před oběd, druhá
+    večeře na konec. Placeholder se nevkládá, pokud pro daný den už příkaz
+    existuje (nahoře se přidal do meals)."""
+    if not any(m['meal_type'] == 'DINNER_SECOND' for m in meals):
+        meals.append({
+            'order_id': None,
+            'recipe_name': 'Výdej',
+            'meal_type': 'DINNER_SECOND',
+            'portions': 0,
+            'ingredients': [],
+            'is_customized': False,
+            'is_placeholder': True,
+            'add_name': f'dinner2_{day_date.isoformat()}',
+            'add_key': f'dinner2-{day_date.isoformat()}',
+        })
+    if not any(m['meal_type'] == 'SOUP' for m in meals):
+        meals.append({
+            'order_id': None,
+            'recipe_name': 'Polévka',
+            'meal_type': 'SOUP',
+            'portions': 0,
+            'ingredients': [],
+            'is_customized': False,
+            'is_placeholder': True,
+            'add_name': f'soup_{day_date.isoformat()}',
+            'add_key': f'soup-{day_date.isoformat()}',
+        })
+    # Placeholdery se připojily na konec – přeřadíme podle typu jídla, aby
+    # polévka byla před obědem a druhá večeře na konci
+    meals.sort(key=lambda m: MEAL_TYPE_ORDER.get(m.get('meal_type', ''), 99))
+
+
 @login_required
 def picking_list_edit(request, document_id):
     """
@@ -1040,6 +1163,7 @@ def picking_list_edit(request, document_id):
             processed_count = 0
             added_count = 0
             deleted_count = 0
+            unissued_count = 0
             item_validation_errors = 0
             completed_count_after_save = 0
             pending_count_after_save = 0
@@ -1069,6 +1193,10 @@ def picking_list_edit(request, document_id):
                     request,
                     f'Surovina {ingredient_name} byla odebrána z výdejky.'
                 )
+
+            # Zrušení výdeje (COMPLETED→PENDING) musí proběhnout PŘED
+            # quantity-loop – viz _handle_unissued_items
+            unissued_count = _handle_unissued_items(request, document)
 
             # Re-fetch picking items fresh (nekombinujeme s pre-evaluovaným QS z locked check)
             # Načteme pouze položky s production_order (položky mimo jídla se needitují v této smyčce)
@@ -1494,61 +1622,83 @@ def picking_list_edit(request, document_id):
                     messages.error(request, 'Zadaná surovina nebyla nalezena.')
                     continue
 
-                # Jídlo „Výdej" pro druhou večeři vzniká při prvním přidání
-                order_obj = ProductionOrder.objects.filter(
-                    canteen=document.canteen,
-                    date=day_date,
-                    meal_type=ProductionOrder.MealType.DINNER_SECOND,
-                ).first()
+                # Jídlo „Výdej" pro druhou večeři vzniká lazy při prvním přidání
+                order_obj = _get_or_create_lazy_meal_order(
+                    document, day_date, ProductionOrder.MealType.DINNER_SECOND,
+                    'Výdej', 'VYDEJ',
+                )
                 if order_obj is None:
-                    sibling = ProductionOrder.objects.filter(
-                        picking_list_items__document=document, date=day_date
-                    ).first()
-                    if sibling is None:
-                        messages.error(
-                            request,
-                            f'Pro den {day_date.strftime("%d.%m.%Y")} nelze založit druhou večeři – den nemá žádné jídlo.'
-                        )
-                        continue
-                    # Explicitní kód: save() bez kategorie kód negeneruje a
-                    # zálohy (backup.py) párují recepty právě podle kódu
-                    recipe_obj, _ = Recipe.objects.get_or_create(
-                        name='Výdej', defaults={'code': 'VYDEJ'}
+                    messages.error(
+                        request,
+                        f'Pro den {day_date.strftime("%d.%m.%Y")} nelze založit druhou večeři – den nemá žádné jídlo.'
                     )
-                    from .models import ProductionOrderPortionVariant
-                    try:
-                        with transaction.atomic():
-                            order_obj = ProductionOrder.objects.create(
-                                recipe=recipe_obj,
-                                canteen=document.canteen,
-                                menu_plan=sibling.menu_plan,
-                                date=day_date,
-                                meal_type=ProductionOrder.MealType.DINNER_SECOND,
-                            )
-                            # 1 porce × koeficient 1: bez varianty by
-                            # effective_portions bylo 0, override by neuložil
-                            # množství na porci a přegenerování výdejky by
-                            # množství vynulovalo
-                            ProductionOrderPortionVariant.objects.create(
-                                production_order=order_obj,
-                                portions=1,
-                                coefficient=Decimal('1.0'),
-                            )
-                    except IntegrityError:
-                        # Souběžný požadavek příkaz právě založil – unikátní
-                        # constraint (canteen, date, meal_type) drží jediný
-                        order_obj = ProductionOrder.objects.filter(
-                            canteen=document.canteen,
-                            date=day_date,
-                            meal_type=ProductionOrder.MealType.DINNER_SECOND,
-                        ).first()
-                        if order_obj is None:
-                            messages.error(request, 'Druhou večeři se nepodařilo založit, zkuste to znovu.')
-                            continue
+                    continue
 
                 if _store_added_ingredient(order_obj, ingredient_obj, quantity_new):
                     added_count += 1
 
+            # Zpracování nových položek pro polévku (jídlo „Polévka" – v
+            # jídelníčku ani na PDF není, kuchař ji zapisuje po uvaření)
+            new_soup_keys = set()
+            for key in request.POST.keys():
+                if key.startswith('new_ingredient_soup_'):
+                    parts = key.split('_')  # new, ingredient, soup, {YYYY-MM-DD}, {idx}
+                    if len(parts) >= 5:
+                        try:
+                            new_soup_keys.add((parts[3], int(parts[4])))
+                        except ValueError:
+                            pass
+
+            for date_str, idx in sorted(new_soup_keys):
+                ingredient_id_str = request.POST.get(f'new_ingredient_soup_{date_str}_{idx}', '').strip()
+                quantity_str = request.POST.get(f'new_quantity_soup_{date_str}_{idx}', '').strip()
+
+                if not ingredient_id_str and not quantity_str:
+                    # Zcela prázdný řádek šablony – v pořádku, přeskočíme
+                    continue
+                if not ingredient_id_str or not quantity_str:
+                    # Částečně vyplněný řádek nesmí zmizet potichu
+                    messages.warning(
+                        request,
+                        'Surovina u polévky nebyla uložena – vyplňte surovinu i množství.'
+                    )
+                    continue
+
+                try:
+                    day_date = date.fromisoformat(date_str)
+                    ingredient_id_new = int(ingredient_id_str)
+                    quantity_new = Decimal(quantity_str.replace(',', '.'))
+                    if quantity_new <= 0:
+                        messages.error(request, 'Množství musí být kladné.')
+                        continue
+                except (ValueError, InvalidOperation):
+                    messages.error(request, 'Neplatné hodnoty pro novou surovinu.')
+                    continue
+
+                if not (document.date_from <= day_date <= document.date_to):
+                    messages.error(request, 'Datum polévky je mimo období výdejky.')
+                    continue
+
+                try:
+                    ingredient_obj = IngredientModel.objects.get(id=ingredient_id_new, is_active=True)
+                except IngredientModel.DoesNotExist:
+                    messages.error(request, 'Zadaná surovina nebyla nalezena.')
+                    continue
+
+                # Jídlo „Polévka" vzniká lazy při prvním přidání suroviny
+                order_obj = _get_or_create_lazy_meal_order(
+                    document, day_date, ProductionOrder.MealType.SOUP,
+                    'Polévka', 'POLEVKA',
+                )
+                if order_obj is None:
+                    messages.error(
+                        request,
+                        f'Pro den {day_date.strftime("%d.%m.%Y")} nelze založit polévku – den nemá žádné jídlo.'
+                    )
+                    continue
+
+                if _store_added_ingredient(order_obj, ingredient_obj, quantity_new):
+                    added_count += 1
 
             # Zpracování nových položek bez ProductionOrder (mimo jídla)
             new_without_order_ids = set()
@@ -1630,13 +1780,14 @@ def picking_list_edit(request, document_id):
             pending_count_after_save = sum(1 for s in all_items_stats if s == PickingList.Status.PENDING)
 
             logger.info(
-                "picking_list_edit POST summary: document_id=%s user_id=%s processed=%s updated=%s added=%s deleted=%s completed=%s pending=%s item_validation_errors=%s",
+                "picking_list_edit POST summary: document_id=%s user_id=%s processed=%s updated=%s added=%s deleted=%s unissued=%s completed=%s pending=%s item_validation_errors=%s",
                 document_id,
                 request.user.id,
                 processed_count,
                 updated_count,
                 added_count,
                 deleted_count,
+                unissued_count,
                 completed_count_after_save,
                 pending_count_after_save,
                 item_validation_errors,
@@ -1771,18 +1922,9 @@ def picking_list_edit(request, document_id):
             for m in meals:
                 m['add_name'] = f'order_{m["order_id"]}'
                 m['add_key'] = str(m['order_id'])
-            if not any(m['meal_type'] == 'DINNER_SECOND' for m in meals):
-                meals.append({
-                    'order_id': None,
-                    'recipe_name': 'Výdej',
-                    'meal_type': 'DINNER_SECOND',
-                    'portions': 0,
-                    'ingredients': [],
-                    'is_customized': False,
-                    'is_placeholder': True,
-                    'add_name': f'dinner2_{d.isoformat()}',
-                    'add_key': f'dinner2-{d.isoformat()}',
-                })
+            # Prázdné karty druhé večeře a polévky (v jídelníčku nejsou, na PDF
+            # se netisknou, kuchař je vyplní až po uvaření) + přeřazení
+            _append_meal_placeholders(meals, d)
 
         # Záměny jídel: originál se sbalí do proužku, náhrada nese badge
         replacements = ProductionOrder.objects.filter(
@@ -2077,11 +2219,12 @@ def picking_list_delete(request, document_id):
         # Odblokování PENDING položek zajišťuje post_delete signál na PickingList
         with transaction.atomic():
             document.delete()
-            # Druhá večeře (jídlo „Výdej") a náhrady ze záměn existují jen
-            # skrze výdejku – po smazání dokumentu by prázdné příkazy strašily
-            # v příštích generovaných výdejkách s nulovými množstvími
+            # Druhá večeře (jídlo „Výdej"), polévka a náhrady ze záměn existují
+            # jen skrze výdejku – po smazání dokumentu by prázdné příkazy
+            # strašily v příštích generovaných výdejkách s nulovými množstvími
             ProductionOrder.objects.filter(
                 Q(meal_type=ProductionOrder.MealType.DINNER_SECOND)
+                | Q(meal_type=ProductionOrder.MealType.SOUP)
                 | Q(replacement_of__isnull=False),
                 canteen=document.canteen,
                 date__gte=document.date_from,

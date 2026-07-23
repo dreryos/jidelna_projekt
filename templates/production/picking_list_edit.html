@@ -121,7 +121,7 @@
 
 <div class="alert alert-info mb-3">
   <i class="fas fa-info-circle me-2"></i>
-  <strong>Instrukce:</strong> Zadejte skutečně vydaná množství. Vyplněný řádek se při uložení automaticky vydá a odečte ze skladu. Prázdné pole zůstane beze změny. Nepoužitou surovinu odeberte košem.
+  <strong>Instrukce:</strong> Zadejte skutečně vydaná množství. Vyplněný řádek se při uložení automaticky vydá a odečte ze skladu. Prázdné pole zůstane beze změny. Nepoužitou surovinu odeberte košem. Špatně vydané množství opravíte tlačítkem <strong>Zrušit výdej</strong>.
 </div>
 {% endif %}
 
@@ -182,6 +182,7 @@
         <span>
           {% if meal.meal_type == 'BREAKFAST' %}<span class="badge bg-warning text-dark meal-badge me-2">Snídaně</span>
           {% elif meal.meal_type == 'SNACK_MORNING' %}<span class="badge bg-secondary meal-badge me-2">Svačina dop.</span>
+          {% elif meal.meal_type == 'SOUP' %}<span class="badge bg-info text-dark meal-badge me-2">Polévka</span>
           {% elif meal.meal_type == 'LUNCH' %}<span class="badge bg-primary meal-badge me-2">Oběd</span>
           {% elif meal.meal_type == 'SNACK_AFTERNOON' %}<span class="badge bg-secondary meal-badge me-2">Svačina odp.</span>
           {% elif meal.meal_type == 'DINNER' %}<span class="badge bg-dark meal-badge me-2">Večeře</span>
@@ -252,6 +253,14 @@
                 <td class="text-center no-strike">
                   {% if ing.status == 'COMPLETED' %}
                   <span class="badge bg-success me-2" title="Skutečně vydáno {{ ing.quantity_actual|floatformat:3 }} {{ ing.unit }}">Vydáno {{ ing.quantity_actual|floatformat:3 }}</span>
+                  {% if not readonly_mode %}
+                  <button type="submit" class="btn btn-sm btn-outline-warning btn-unissue-item"
+                          name="unissue_item_{{ ing.item_id|unlocalize }}" value="1"
+                          data-ingredient="{{ ing.name }}"
+                          title="Zrušit výdej a umožnit opravu">
+                    <i class="fas fa-undo"></i>
+                  </button>
+                  {% endif %}
                   {% endif %}
                   {% if not readonly_mode and ing.status != 'COMPLETED' %}
                   <button type="submit" class="btn btn-sm btn-outline-danger btn-delete-item"
@@ -380,6 +389,14 @@
                   {% endif %}
                 </td>
                 <td class="text-center">
+                  {% if not readonly_mode and item.status == 'COMPLETED' %}
+                  <button type="submit" class="btn btn-sm btn-outline-warning btn-unissue-item"
+                          name="unissue_item_{{ item.id|unlocalize }}" value="1"
+                          data-ingredient="{{ item.ingredient.name }}"
+                          title="Zrušit výdej a umožnit opravu">
+                    <i class="fas fa-undo"></i>
+                  </button>
+                  {% endif %}
                   {% if not readonly_mode and item.status != 'COMPLETED' %}
                   <button type="submit" class="btn btn-sm btn-outline-danger btn-delete-item"
                           name="delete_item_{{ item.id|unlocalize }}" value="1"
@@ -464,6 +481,7 @@
           <li><strong>Vyplněné</strong> skutečné množství – řádek se vydá a automaticky odečte ze skladu</li>
           <li><strong>Prázdné</strong> pole – řádek zůstane beze změny, surovina zůstane zablokována</li>
           <li>Nepoužitou surovinu odeberte <strong>košem</strong> – uvolní se blokace na skladu</li>
+          <li>Špatně vydané množství opravíte tlačítkem <strong>Zrušit výdej</strong> – řádek se vrátí na sklad a zadáte znovu</li>
         </ul>
       </div>
     </div>
@@ -490,6 +508,16 @@ document.addEventListener('DOMContentLoaded', function () {
         btn.addEventListener('click', function (e) {
             const name = this.dataset.ingredient || 'tuto surovinu';
             if (!window.confirm(`Odebrat „${name}" z výdejky? Blokace na skladu se uvolní.`)) {
+                e.preventDefault();
+            }
+        });
+    });
+
+    // Potvrzení před zrušením výdeje (vrácení na sklad kvůli opravě)
+    document.querySelectorAll('.btn-unissue-item').forEach(function (btn) {
+        btn.addEventListener('click', function (e) {
+            const name = this.dataset.ingredient || 'této suroviny';
+            if (!window.confirm(`Zrušit výdej „${name}"? Množství se vrátí na sklad a řádek půjde zadat znovu.`)) {
                 e.preventDefault();
             }
         });

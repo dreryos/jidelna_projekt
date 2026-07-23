@@ -21,10 +21,11 @@ logger = logging.getLogger(__name__)
 MEAL_TYPE_ORDER = {
     'BREAKFAST': 0,
     'SNACK_MORNING': 1,
-    'LUNCH': 2,
-    'SNACK_AFTERNOON': 3,
-    'DINNER': 4,
-    'DINNER_SECOND': 5,
+    'SOUP': 2,
+    'LUNCH': 3,
+    'SNACK_AFTERNOON': 4,
+    'DINNER': 5,
+    'DINNER_SECOND': 6,
 }
 
 
@@ -110,8 +111,13 @@ def generate_picking_list_pdf_file(document, base_url='/', save=True):
             ).values_list('replacement_of_id', flat=True)
         )
 
+        # Polévka se na papírovou výdejku netiskne (kuchař ji zapisuje až po
+        # uvaření) – vyloučíme ji už v querysetu, aby ji nezapočítal total_orders,
+        # batch skladu ani context orders
         orders = ProductionOrder.objects.filter(
             picking_list_items__document=document
+        ).exclude(
+            meal_type=ProductionOrder.MealType.SOUP
         ).distinct().select_related(
             'recipe', 'canteen', 'menu_plan', 'replacement_of__recipe'
         ).prefetch_related(
