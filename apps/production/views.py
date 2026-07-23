@@ -1040,6 +1040,7 @@ def picking_list_edit(request, document_id):
             processed_count = 0
             added_count = 0
             deleted_count = 0
+            unissued_count = 0
             item_validation_errors = 0
             completed_count_after_save = 0
             pending_count_after_save = 0
@@ -1068,6 +1069,35 @@ def picking_list_edit(request, document_id):
                 messages.success(
                     request,
                     f'Surovina {ingredient_name} byla odebrána z výdejky.'
+                )
+
+            # Zrušení výdeje: vydaná (COMPLETED) položka se vrátí na PENDING,
+            # aby šla oprava špatně zadaného množství. PickingList.save() přitom
+            # vrátí quantity_actual na sklad a znovu zablokuje quantity_planned.
+            # Musí proběhnout PŘED quantity-loop; po revertu je pole řádku prázdné,
+            # takže ho quantity-loop přeskočí (žádné dvojité zpracování).
+            for key in list(request.POST.keys()):
+                if not key.startswith('unissue_item_'):
+                    continue
+                try:
+                    unissue_item_id = int(key.rsplit('_', 1)[1])
+                except (ValueError, IndexError):
+                    continue
+                item = PickingList.objects.filter(
+                    id=unissue_item_id,
+                    document=document,
+                    status=PickingList.Status.COMPLETED,
+                ).select_related('ingredient').first()
+                if item is None:
+                    continue
+                ingredient_name = item.ingredient.name
+                item.status = PickingList.Status.PENDING
+                item.quantity_actual = None
+                item.save()
+                unissued_count += 1
+                messages.success(
+                    request,
+                    f'Výdej suroviny {ingredient_name} byl zrušen, můžete zadat znovu.'
                 )
 
             # Re-fetch picking items fresh (nekombinujeme s pre-evaluovaným QS z locked check)
@@ -1630,13 +1660,14 @@ def picking_list_edit(request, document_id):
             pending_count_after_save = sum(1 for s in all_items_stats if s == PickingList.Status.PENDING)
 
             logger.info(
-                "picking_list_edit POST summary: document_id=%s user_id=%s processed=%s updated=%s added=%s deleted=%s completed=%s pending=%s item_validation_errors=%s",
+                "picking_list_edit POST summary: document_id=%s user_id=%s processed=%s updated=%s added=%s deleted=%s unissued=%s completed=%s pending=%s item_validation_errors=%s",
                 document_id,
                 request.user.id,
                 processed_count,
                 updated_count,
                 added_count,
                 deleted_count,
+                unissued_count,
                 completed_count_after_save,
                 pending_count_after_save,
                 item_validation_errors,

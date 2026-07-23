@@ -152,6 +152,62 @@ class PickingEditActualsTest(TestCase):
         self.assertEqual(self.stock.quantity, Decimal('100.000'))
         self.assertEqual(self.stock.quantity_blocked, Decimal('0.000'))
 
+    def test_unissue_reverts_to_pending_and_restores_stock(self):
+        """Zrušit výdej → COMPLETED zpět na PENDING, sklad i blokace obnoveny."""
+        # nejdřív vydáme
+        self.client.post(self._url(), data={
+            f'quantity_actual_item_{self.item.id}': '3',
+        })
+        self.stock.refresh_from_db()
+        self.assertEqual(self.stock.quantity, Decimal('97.000'))
+        self.assertEqual(self.stock.quantity_blocked, Decimal('0.000'))
+
+        # zrušíme výdej
+        response = self.client.post(self._url(), data={
+            f'unissue_item_{self.item.id}': '1',
+        })
+        self.assertEqual(response.status_code, 302)
+
+        self.item.refresh_from_db()
+        self.assertEqual(self.item.status, PickingList.Status.PENDING)
+        self.assertIsNone(self.item.quantity_actual)
+        self.stock.refresh_from_db()
+        self.assertEqual(self.stock.quantity, Decimal('100.000'))
+        self.assertEqual(self.stock.quantity_blocked, Decimal('3.000'))
+
+    def test_correction_flow_unissue_then_reissue(self):
+        """Oprava: vydat 3 → zrušit výdej → vydat 2. Sklad 98, blokace 0."""
+        self.client.post(self._url(), data={
+            f'quantity_actual_item_{self.item.id}': '3',
+        })
+        self.client.post(self._url(), data={
+            f'unissue_item_{self.item.id}': '1',
+        })
+        self.client.post(self._url(), data={
+            f'quantity_actual_item_{self.item.id}': '2',
+        })
+
+        self.item.refresh_from_db()
+        self.assertEqual(self.item.status, PickingList.Status.COMPLETED)
+        self.assertEqual(self.item.quantity_actual, Decimal('2.000'))
+        self.stock.refresh_from_db()
+        self.assertEqual(self.stock.quantity, Decimal('98.000'))
+        self.assertEqual(self.stock.quantity_blocked, Decimal('0.000'))
+
+    def test_unissue_pending_item_is_noop(self):
+        """Zrušit výdej na nevydané (PENDING) položce nic nezmění."""
+        response = self.client.post(self._url(), data={
+            f'unissue_item_{self.item.id}': '1',
+        })
+        self.assertEqual(response.status_code, 302)
+
+        self.item.refresh_from_db()
+        self.assertEqual(self.item.status, PickingList.Status.PENDING)
+        self.assertIsNone(self.item.quantity_actual)
+        self.stock.refresh_from_db()
+        self.assertEqual(self.stock.quantity, Decimal('100.000'))
+        self.assertEqual(self.stock.quantity_blocked, Decimal('3.000'))
+
     def test_completed_item_not_reissued_on_resave(self):
         """Vydaná položka se prázdným polem znovu neodečte (jednosměrný tok)."""
         # vydáme
