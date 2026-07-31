@@ -8,7 +8,7 @@ import xml.etree.ElementTree as ET
 from django.core.exceptions import ValidationError
 from decimal import Decimal, InvalidOperation
 from typing import Dict, List, Any, Tuple, Optional
-from rapidfuzz import fuzz
+from rapidfuzz import process, fuzz
 
 
 # Mapování XML type atributů na MealType choices
@@ -263,39 +263,51 @@ def validate_units(unit: str) -> bool:
     return unit.lower() in VALID_UNITS
 
 
-def fuzzy_match_ingredients(ingredient_name: str, threshold: int = 70) -> List[Tuple[Any, float]]:
+def fuzzy_match_ingredients(
+    ingredient_name: str,
+    threshold: int = 70,
+    ingredients: Optional[List[Any]] = None,
+) -> List[Tuple[Any, float]]:
     """
     Najde existující ingredience v databázi pomocí fuzzy matchingu.
-    
+
     Args:
         ingredient_name: Název ingredience k vyhledání
         threshold: Minimální procento podobnosti (výchozí 70)
-        
+        ingredients: Volitelně předem načtený seznam Ingredient objektů (kvůli
+            hromadnému matchování, kdy by opakované dotazy do DB a čistě
+            pythonový cyklus přes fuzz.ratio byly u větších XML příliš pomalé).
+            Pokud není zadán, načtou se všechny ingredience z DB (původní chování).
+
     Returns:
         Seznam tuple (ingredient_obj, similarity_score) seřazených podle skóre
-        
+
     Note:
         Importuje Ingredient model dynamicky, aby se předešlo circular imports.
     """
-    from apps.core.models import Ingredient
-    
-    # Získat všechny ingredience z databáze
-    all_ingredients = Ingredient.objects.all()
-    
-    matches = []
-    for ingredient in all_ingredients:
-        # Vypočítat podobnost (case-insensitive)
-        similarity = fuzz.ratio(
-            ingredient_name.lower().strip(),
-            ingredient.name.lower().strip()
-        )
-        
-        if similarity >= threshold:
-            matches.append((ingredient, similarity))
-    
-    # Seřadit podle skóre (nejvyšší první)
+    if ingredients is None:
+        from apps.core.models import Ingredient
+        ingredients = list(Ingredient.objects.all())
+
+    if not ingredients:
+        return []
+
+    name_normalized = ingredient_name.lower().strip()
+    choices = [ingredient.name.lower().strip() for ingredient in ingredients]
+
+    # rapidfuzz.process.extract běží v C a je řádově rychlejší než pythonový
+    # cyklus přes fuzz.ratio pro každou ingredienci zvlášť.
+    results = process.extract(
+        name_normalized,
+        choices,
+        scorer=fuzz.ratio,
+        score_cutoff=threshold,
+        limit=None,
+    )
+
+    matches = [(ingredients[idx], score) for _, score, idx in results]
     matches.sort(key=lambda x: x[1], reverse=True)
-    
+
     return matches
 
 

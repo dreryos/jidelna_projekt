@@ -919,18 +919,23 @@ def template_preview_xml_ajax(request):
         # Najdeme ambiguózní ingredience (více matchů s 70%+)
         ambiguous_ingredients = []
         seen_ingredients = set()
-        
+
+        # Načteme ingredience jednou předem - opakovaný dotaz do DB a plný
+        # Python cyklus pro každou ingredienci v XML způsoboval u větších
+        # šablon timeout (10s) na produkčním serveru.
+        all_ingredients = list(Ingredient.objects.all())
+
         for recipe_data in parsed_data.get('recipes', []):
             for ingredient_data in recipe_data.get('ingredients', []):
                 ing_name = ingredient_data['name']
-                
+
                 # Přeskočíme pokud jsme už tuto ingredienci zpracovali
                 if ing_name in seen_ingredients:
                     continue
                 seen_ingredients.add(ing_name)
-                
+
                 # Fuzzy matching
-                matches = fuzzy_match_ingredients(ing_name, threshold=70)
+                matches = fuzzy_match_ingredients(ing_name, threshold=70, ingredients=all_ingredients)
                 
                 # Pokud jsou 2+ matche, je to ambiguózní
                 if len(matches) >= 2:
@@ -1035,7 +1040,8 @@ def template_create_ajax(request):
                     recipes_to_create = []
                     ingredients_to_create = []
                     recipe_ingredients_to_create = []
-                    
+                    all_ingredients = list(Ingredient.objects.all())
+
                     for recipe_data in parsed_data.get('recipes', []):
                         if recipe_data['code'] not in existing_recipe_codes:
                             # Získat kategorii
@@ -1081,7 +1087,7 @@ def template_create_ajax(request):
                                 
                                 # 2. Jinak zkusíme fuzzy matching
                                 if not ingredient:
-                                    matches = fuzzy_match_ingredients(ing_name, threshold=70)
+                                    matches = fuzzy_match_ingredients(ing_name, threshold=70, ingredients=all_ingredients)
                                     if matches:
                                         # Použijeme nejlepší match
                                         ingredient = matches[0][0]
