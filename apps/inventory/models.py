@@ -826,10 +826,14 @@ class InventoryVerification(models.Model):
             )
         
         with transaction.atomic():
+            locked = InventoryVerification.objects.select_for_update().get(pk=self.pk)
+            if locked.status != self.Status.IN_PROGRESS:
+                raise ValidationError("Dokončit lze pouze probíhající inventuru")
+
             items_updated = 0
             items_created = 0
             total_discrepancies = 0
-            
+
             for item in self.items.all():
                 if item.counted_quantity is None:
                     continue
@@ -910,7 +914,29 @@ class InventoryVerification(models.Model):
                 f"Items updated: {items_updated}, Items created: {items_created}, "
                 f"Discrepancies: {total_discrepancies}"
             )
-    
+
+    def zero_out_and_complete(self, user):
+        """
+        Vynuluje všechny položky inventury a rovnou ji dokončí.
+        Určeno pro provozy, které na konci turnusu vyprodají celý sklad na nulu.
+
+        Args:
+            user: User objekt, který akci provádí
+
+        Raises:
+            ValidationError: Pokud inventura není ve stavu IN_PROGRESS
+        """
+        if self.status != self.Status.IN_PROGRESS:
+            raise ValidationError("Vynulovat lze pouze probíhající inventuru")
+
+        with transaction.atomic():
+            self.items.update(counted_quantity=Decimal('0'))
+            self.complete(user)
+            transaction.on_commit(lambda: logger.info(
+                f"Inventory verification {self.id} ZEROED OUT by user {user.id} ({user.username}) "
+                f"for warehouse {self.warehouse.name}"
+            ))
+
     def cancel(self, user):
         """
         Zruší probíhající inventuru - odemkne sklad bez aktualizace množství.

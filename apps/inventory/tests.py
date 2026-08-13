@@ -4,9 +4,14 @@ from decimal import Decimal
 from datetime import datetime, timedelta
 import time
 
+from django.core.exceptions import ValidationError
+
 from apps.canteens.models import Canteen, Warehouse
 from apps.core.models import Ingredient, Recipe, RecipeIngredient, Category
-from apps.inventory.models import StockItem, IngredientPriceHistory, StockTransfer
+from apps.inventory.models import (
+    StockItem, IngredientPriceHistory, StockTransfer,
+    InventoryVerification, InventoryVerificationItem,
+)
 from django.urls import reverse
 
 
@@ -787,4 +792,70 @@ class StockTransferFormErrorTest(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Zdrojový a cílový sklad musí být různé.')
         self.assertEqual(StockTransfer.objects.count(), 0)
+
+
+class InventoryVerificationZeroOutTest(TestCase):
+    """Testy pro vynulování skladu při inventuře (zero_out_and_complete)."""
+
+    def setUp(self):
+        from django.contrib.auth.models import User
+
+        self.canteen = Canteen.objects.create(name='Test Canteen')
+        self.warehouse = Warehouse.objects.create(name='Sklad', canteen=self.canteen)
+        self.ingredient = Ingredient.objects.create(
+            name='Test Ingredient',
+            unit='kg',
+            base_unit='kg',
+            recipe_unit='g',
+            conversion_factor=Decimal('1000')
+        )
+        self.user = User.objects.create_user(username='inv_user', password='testpass')
+
+        self.stock_item = StockItem.objects.create(
+            ingredient=self.ingredient,
+            warehouse=self.warehouse,
+            quantity=Decimal('10.000'),
+            price=Decimal('50.00')
+        )
+
+    def _start_verification(self):
+        verification = InventoryVerification.objects.create(
+            warehouse=self.warehouse,
+            created_by=self.user
+        )
+        verification.start(self.user)
+        return verification
+
+    def test_zero_out_and_complete_zeroes_stock_and_completes(self):
+        verification = self._start_verification()
+        item = verification.items.get(ingredient=self.ingredient)
+        item.counted_quantity = Decimal('7.500')
+        item.save(update_fields=['counted_quantity'])
+
+        verification.zero_out_and_complete(self.user)
+
+        item.refresh_from_db()
+        self.stock_item.refresh_from_db()
+        self.warehouse.refresh_from_db()
+        verification.refresh_from_db()
+
+        self.assertEqual(item.counted_quantity, Decimal('0'))
+        self.assertEqual(self.stock_item.quantity, Decimal('0.000'))
+        self.assertFalse(self.warehouse.is_locked)
+        self.assertEqual(verification.status, InventoryVerification.Status.COMPLETED)
+
+    def test_zero_out_and_complete_raises_when_not_in_progress(self):
+        verification = InventoryVerification.objects.create(
+            warehouse=self.warehouse,
+            created_by=self.user
+        )
+        # Ve stavu DRAFT
+
+        with self.assertRaises(ValidationError):
+            verification.zero_out_and_complete(self.user)
+
+        verification.refresh_from_db()
+        self.assertEqual(verification.status, InventoryVerification.Status.DRAFT)
+        self.stock_item.refresh_from_db()
+        self.assertEqual(self.stock_item.quantity, Decimal('10.000'))
 

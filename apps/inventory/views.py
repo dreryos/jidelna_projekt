@@ -1294,6 +1294,34 @@ def inventory_verification_complete(request, pk):
 
 
 @login_required
+def inventory_verification_zero_out(request, pk):
+    """Vynuluje všechny položky inventury a rovnou ji dokončí (sklad na nulu)."""
+    verification = get_object_or_404(InventoryVerification, pk=pk)
+
+    if not user_can_access_canteen(request.user, verification.warehouse.canteen):
+        messages.error(request, 'Nemáte oprávnění k této akci.')
+        return redirect('inventory:inventory_verification_detail', pk=pk)
+
+    if request.method == 'POST':
+        try:
+            verification.zero_out_and_complete(request.user)
+            messages.success(
+                request,
+                f'Sklad "{verification.warehouse.name}" byl vynulován a inventura dokončena.'
+            )
+        except ValidationError as e:
+            messages.error(request, str(e))
+
+        return redirect('inventory:inventory_verification_detail', pk=pk)
+
+    context = {
+        'verification': verification,
+        'items_count': verification.items.count(),
+    }
+    return render(request, 'inventory/inventory_verification_zero_out_confirm.html', context)
+
+
+@login_required
 def inventory_verification_cancel(request, pk):
     """Zrušení probíhající inventury - odemkne sklad bez aktualizace."""
     verification = get_object_or_404(InventoryVerification, pk=pk)
