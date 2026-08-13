@@ -910,7 +910,29 @@ class InventoryVerification(models.Model):
                 f"Items updated: {items_updated}, Items created: {items_created}, "
                 f"Discrepancies: {total_discrepancies}"
             )
-    
+
+    def zero_out_and_complete(self, user):
+        """
+        Vynuluje všechny položky inventury a rovnou ji dokončí.
+        Určeno pro provozy, které na konci turnusu vyprodají celý sklad na nulu.
+
+        Args:
+            user: User objekt, který akci provádí
+
+        Raises:
+            ValidationError: Pokud inventura není ve stavu IN_PROGRESS
+        """
+        if self.status != self.Status.IN_PROGRESS:
+            raise ValidationError("Vynulovat lze pouze probíhající inventuru")
+
+        with transaction.atomic():
+            self.items.update(counted_quantity=Decimal('0'))
+            logger.info(
+                f"Inventory verification {self.id} ZEROED OUT by user {user.id} ({user.username}) "
+                f"for warehouse {self.warehouse.name}"
+            )
+            self.complete(user)
+
     def cancel(self, user):
         """
         Zruší probíhající inventuru - odemkne sklad bez aktualizace množství.

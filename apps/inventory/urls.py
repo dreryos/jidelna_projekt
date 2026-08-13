@@ -61,6 +61,7 @@ urlpatterns = [
     path('inventory-verifications/<int:pk>/start/', views.inventory_verification_start, name='inventory_verification_start'),
     path('inventory-verifications/<int:pk>/started/', views.inventory_verification_started, name='inventory_verification_started'),
     path('inventory-verifications/<int:pk>/complete/', views.inventory_verification_complete, name='inventory_verification_complete'),
+    path('inventory-verifications/<int:pk>/zero-out/', views.inventory_verification_zero_out, name='inventory_verification_zero_out'),
     path('inventory-verifications/<int:pk>/cancel/', views.inventory_verification_cancel, name='inventory_verification_cancel'),
     path('inventory-verifications/<int:pk>/pdf/', views.inventory_verification_pdf, name='inventory_verification_pdf'),
     
