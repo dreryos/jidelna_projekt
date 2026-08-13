@@ -826,10 +826,14 @@ class InventoryVerification(models.Model):
             )
         
         with transaction.atomic():
+            locked = InventoryVerification.objects.select_for_update().get(pk=self.pk)
+            if locked.status != self.Status.IN_PROGRESS:
+                raise ValidationError("Dokončit lze pouze probíhající inventuru")
+
             items_updated = 0
             items_created = 0
             total_discrepancies = 0
-            
+
             for item in self.items.all():
                 if item.counted_quantity is None:
                     continue
@@ -927,11 +931,11 @@ class InventoryVerification(models.Model):
 
         with transaction.atomic():
             self.items.update(counted_quantity=Decimal('0'))
-            logger.info(
+            self.complete(user)
+            transaction.on_commit(lambda: logger.info(
                 f"Inventory verification {self.id} ZEROED OUT by user {user.id} ({user.username}) "
                 f"for warehouse {self.warehouse.name}"
-            )
-            self.complete(user)
+            ))
 
     def cancel(self, user):
         """

@@ -1302,10 +1302,6 @@ def inventory_verification_zero_out(request, pk):
         messages.error(request, 'Nemáte oprávnění k této akci.')
         return redirect('inventory:inventory_verification_detail', pk=pk)
 
-    if verification.status != InventoryVerification.Status.IN_PROGRESS:
-        messages.error(request, 'Inventura není v probíhajícím stavu.')
-        return redirect('inventory:inventory_verification_detail', pk=pk)
-
     if request.method == 'POST':
         try:
             verification.zero_out_and_complete(request.user)
@@ -1318,10 +1314,9 @@ def inventory_verification_zero_out(request, pk):
 
         return redirect('inventory:inventory_verification_detail', pk=pk)
 
-    items = verification.items.select_related('ingredient').order_by('ingredient__name')
     context = {
         'verification': verification,
-        'items': items,
+        'items_count': verification.items.count(),
     }
     return render(request, 'inventory/inventory_verification_zero_out_confirm.html', context)
 
