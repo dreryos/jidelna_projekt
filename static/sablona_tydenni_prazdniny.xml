@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<MenuImportDescription>
+  <!--
+    Šablona pro import jídelníčku: JÍDELNÍČEK – prázdniny týdenní 2026
+    Rozsah: sobota - pátek (7 dní)
+
+    Recepty, které už v DB existují (přesná nebo blízká shoda), jsou v MenuSchedule
+    odkazovány přímo jejich existujícím kódem a v <Recipes> nejsou znovu definovány -
+    import tak nezaloží duplicity.
+
+    V <Recipes> jsou definovány jen recepty, které v DB chybí nebo se liší
+    v podstatné složce (jiná příloha/surovina), aby se nesmíchaly s podobným
+    existujícím receptem:
+      - Zapečené těstoviny, okurka (DB má variantu s červenou řepou)
+      - Kuřecí řízek s bramborami, salát (DB má variantu s kyselou okurkou)
+      - Párky, kečup, chléb (DB má špekáčky, ne párky)
+      - Vývar se zeleninou a drobením (DB má variantu s nudlemi)
+      - Cornflakes/čokokoule s mlékem (DB má jen čokoládové kuličky)
+  -->
+
+  <!-- ČÁST 1: Definice nových receptů (Norem), které v DB chybí -->
+  <Recipes>
+    <Recipe code="HL-TESTOVINY-OKURKA" name="Zapečené těstoviny, okurka" category="HLJ" basePortions="10">
+      <Ingredients>
+        <Ingredient name="Těstoviny" quantity="1.2" unit="kg"/>
+        <Ingredient name="Šunka" quantity="0.4" unit="kg"/>
+        <Ingredient name="Vejce" quantity="4" unit="ks"/>
+        <Ingredient name="Mléko" quantity="0.5" unit="l"/>
+        <Ingredient name="Sýr Eidam strouhaný" quantity="0.3" unit="kg"/>
+        <Ingredient name="Okurka kyselá" quantity="0.5" unit="kg"/>
+      </Ingredients>
+    </Recipe>
+
+    <Recipe code="HL-RIZEK-SALAT" name="Kuřecí řízek s bramborami, salát" category="HLJ" basePortions="10">
+      <Ingredients>
+        <Ingredient name="Kuřecí prsa" quantity="1.5" unit="kg"/>
+        <Ingredient name="Vejce" quantity="3" unit="ks"/>
+        <Ingredient name="Mléko" quantity="0.2" unit="l"/>
+        <Ingredient name="Hladká mouka" quantity="0.3" unit="kg"/>
+        <Ingredient name="Strouhanka" quantity="0.5" unit="kg"/>
+        <Ingredient name="Olej na smažení" quantity="0.5" unit="l"/>
+        <Ingredient name="Brambory" quantity="2.5" unit="kg"/>
+        <Ingredient name="Salát ledový" quantity="0.4" unit="kg"/>
+      </Ingredients>
+    </Recipe>
+
+    <Recipe code="HL-PARKY-KECUP" name="Párky, kečup, chléb" category="HLJ" basePortions="10">
+      <Ingredients>
+        <Ingredient name="Párky" quantity="2.0" unit="kg"/>
+        <Ingredient name="Kečup" quantity="0.3" unit="kg"/>
+        <Ingredient name="Chléb" quantity="1.5" unit="kg"/>
+      </Ingredients>
+    </Recipe>
+
+    <Recipe code="POL-VYVAR-DROBENI" name="Vývar se zeleninou a drobením" category="POL" basePortions="10">
+      <Ingredients>
+        <Ingredient name="Hovězí kosti" quantity="2.0" unit="kg"/>
+        <Ingredient name="Mrkev" quantity="0.3" unit="kg"/>
+        <Ingredient name="Celer" quantity="0.2" unit="kg"/>
+        <Ingredient name="Petržel" quantity="0.1" unit="kg"/>
+        <Ingredient name="Vejce (drobení)" quantity="4" unit="ks"/>
+        <Ingredient name="Hladká mouka" quantity="0.15" unit="kg"/>
+      </Ingredients>
+    </Recipe>
+
+    <Recipe code="SVA-CORNFLAKES" name="Cornflakes/čokokoule s mlékem" category="SVA" basePortions="10">
+      <Ingredients>
+        <Ingredient name="Cornflakes/čokokoule" quantity="0.8" unit="kg"/>
+        <Ingredient name="Mléko" quantity="3.0" unit="l"/>
+      </Ingredients>
+    </Recipe>
+  </Recipes>
+
+  <!-- ČÁST 2: Soupis jídelníčku (Harmonogram) -->
+  <MenuSchedule>
+    <Day name="Sobota" dateOffset="0">
+      <Meal type="snidane" recipeCode="SNI-001" note="Snídaňový mix" />
+      <Meal type="vecere" recipeCode="HL-101" note="Chilli con carne" />
+    </Day>
+
+    <Day name="Neděle" dateOffset="1">
+      <Meal type="snidane" recipeCode="SNI-001" note="Snídaňový mix" />
+      <Meal type="svacina_dopoledni" recipeCode="SVA-OVOCE" note="Jablko červené" />
+      <Meal type="polevka" recipeCode="POL-001" note="Vývar se zeleninou a nudlemi" />
+      <Meal type="obed" recipeCode="HL-002" note="Svíčková na smetaně, houskový knedlík" />
+      <Meal type="svacina_odpoledni" recipeCode="SVA-001" note="Cereální kaiserka, tavený sýr" />
+      <Meal type="vecere" recipeCode="HL-TESTOVINY-OKURKA" note="Zapečené těstoviny, okurka" />
+    </Day>
+
+    <Day name="Pondělí" dateOffset="2">
+      <Meal type="snidane" recipeCode="SNI-001" note="Snídaňový mix" />
+      <Meal type="svacina_dopoledni" recipeCode="SVA-OVOCE" note="Banán" />
+      <Meal type="polevka" recipeCode="POL-002" note="Krupicová s vejcem" />
+      <Meal type="obed" recipeCode="HL-RIZEK-SALAT" note="Kuřecí řízek s bramborami, salát" />
+      <Meal type="svacina_odpoledni" recipeCode="SVA-002" note="Ovocný jogurt, rohlík" />
+      <Meal type="vecere" recipeCode="HL-007" note="Špagety s boloňskou omáčkou a sýrem" />
+    </Day>
+
+    <Day name="Úterý" dateOffset="3">
+      <Meal type="snidane" recipeCode="SNI-001" note="Snídaňový mix" />
+      <Meal type="svacina_dopoledni" recipeCode="SVA-OVOCE" note="Pomeranč" />
+      <Meal type="polevka" recipeCode="PO-008" note="Gulášová polívka" />
+      <Meal type="obed" recipeCode="HL-118" note="Buchtičky s vanilkovým šodó" />
+      <Meal type="svacina_odpoledni" recipeCode="SVA-003" note="Rohlík se šunkovým salámem" />
+      <Meal type="vecere" recipeCode="HL-008" note="Rizoto se sýrem a červenou řepou" />
+    </Day>
+
+    <Day name="Středa" dateOffset="4">
+      <Meal type="snidane" recipeCode="SNI-001" note="Snídaňový mix" />
+      <Meal type="svacina_dopoledni" recipeCode="SVA-OVOCE" note="Jablko zelené" />
+      <Meal type="polevka" recipeCode="POL-003" note="Brokolicový krém s krutony" />
+      <Meal type="obed" recipeCode="HL-125" note="Kuře na paprice, těstoviny" />
+      <Meal type="svacina_odpoledni" recipeCode="SVA-004" note="Domácí perník" />
+      <Meal type="vecere" recipeCode="HL-PARKY-KECUP" note="Párky, kečup, chléb" />
+    </Day>
+
+    <Day name="Čtvrtek" dateOffset="5">
+      <Meal type="snidane" recipeCode="SNI-001" note="Snídaňový mix" />
+      <Meal type="svacina_dopoledni" recipeCode="SVA-OVOCE" note="Meloun" />
+      <Meal type="polevka" recipeCode="PO-007" note="Čočková polívka" />
+      <Meal type="obed" recipeCode="HL-108" note="Zelí s bramborovým knedlíkem, výpečky" />
+      <Meal type="svacina_odpoledni" recipeCode="SVA-106" note="Rohlík, salám" />
+      <Meal type="vecere" recipeCode="HL-113" note="Krupice s kakaem" />
+    </Day>
+
+    <Day name="Pátek" dateOffset="6">
+      <Meal type="snidane" recipeCode="SNI-001" note="Snídaňový mix" />
+      <Meal type="svacina_dopoledni" recipeCode="SVA-OVOCE" note="Jablko" />
+      <Meal type="polevka" recipeCode="POL-VYVAR-DROBENI" note="Vývar se zeleninou a drobením" />
+      <Meal type="obed" recipeCode="HL-120" note="Trhané vepřové maso, brambory, zelenina" />
+      <Meal type="svacina_odpoledni" recipeCode="SVA-CORNFLAKES" note="Cornflakes/čokokoule s mlékem" />
+      <Meal type="vecere" recipeCode="HL-121" note="Španělská omáčka s rýží" />
+    </Day>
+  </MenuSchedule>
+</MenuImportDescription>

@@ -276,7 +276,6 @@ class MenuImportForm(forms.Form):
         widget=forms.DateInput(attrs={
             'type': 'date',
             'class': 'form-control',
-            'min': date.today().strftime('%Y-%m-%d')
         }),
         initial=lambda: date.today() + timedelta(days=1),
         label='Datum zahájení',
