@@ -769,11 +769,16 @@ class InventoryVerification(models.Model):
             # Kontrola zda sklad není již zamčen
             if warehouse.is_locked:
                 locked_by = warehouse.locked_by_inventory
-                raise ValidationError(
-                    f"Sklad je již uzamčen inventurou zahájenou "
-                    f"{locked_by.started_by.get_full_name() or locked_by.started_by.username} "
-                    f"dne {locked_by.started_at.strftime('%d.%m.%Y %H:%M')}"
-                )
+                if locked_by is None:
+                    # Osiřelý zámek (inventura byla smazána bez odemčení skladu) - odemknout a pokračovat
+                    warehouse.is_locked = False
+                    warehouse.save(update_fields=['is_locked'])
+                else:
+                    raise ValidationError(
+                        f"Sklad je již uzamčen inventurou zahájenou "
+                        f"{locked_by.started_by.get_full_name() or locked_by.started_by.username} "
+                        f"dne {locked_by.started_at.strftime('%d.%m.%Y %H:%M')}"
+                    )
             
             # Zamknout sklad
             warehouse.is_locked = True

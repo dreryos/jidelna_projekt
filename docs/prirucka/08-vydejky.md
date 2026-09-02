@@ -37,11 +37,42 @@ Zařazením položek do výdejkového dokumentu se plánované množství **zabl
 
 ### 3. Dokončení (výdej)
 
-Při výdeji zapíšete **skutečně vydané množství** (může se od plánu lišit — vážení, zaokrouhlení balení) a položku dokončíte. Systém uvolní blokaci a odečte ze skladu skutečné množství.
+V editaci výdejky (`picking_list_edit`) má každá surovina pole **Skutečně vydáno**. Pole je vždy prázdné, placeholder jen ukazuje plán (nebo už vydané množství). Po uložení:
 
-### Vratky
+* **vyplněné** pole = vydat — řádek se dokončí a skutečné množství se rovnou odečte ze skladu,
+* **prázdné** pole = beze změny — položka zůstává ČEKÁ, blokace na skladu drží dál.
 
-Dokončenou položku lze vrátit do stavu ČEKÁ — skutečné množství se vrátí na sklad a plánované se znovu zablokuje. Slouží k opravě omylů (překlep ve vydaném množství, výdej z nesprávného skladu).
+Desetinná čísla lze psát s čárkou i tečkou.
+
+💡 **Proč se pole nepředvyplňuje plánem:** V praxi se stejně skoro každé číslo přepisuje podle skutečně navážené suroviny. Předvyplněný plán svádí k omylu — kuchař ho nechá být a systém pak tiše vydá plán místo skutečnosti.
+
+### Odebrání nepoužité suroviny
+
+Surovinu, kterou nakonec nepoužijete, odeberete z výdejky **košem** u řádku (jen dokud není vydaná). Blokace na skladu se tím uvolní, jako by položka ve výdejce nikdy nebyla.
+
+### Oprava omylem vydaného množství
+
+Už vydanou (dokončenou) položku nejde přepsat přímo — pole je needitovatelné. Opravu řešíte tlačítkem **Zrušit výdej** u daného řádku:
+
+1. Systém vrátí skutečné množství zpět na sklad a řádek přepne zpátky na ČEKÁ se zablokovaným plánovaným množstvím.
+2. Zadáte správné množství znovu a uložíte.
+
+Platí to stejně pro položky u jídel i pro položky vydané mimo plánovaná jídla.
+
+## Záměna jídla
+
+Když se plánované jídlo nakonec vaří jinak (chybí surovina, změna na poslední chvíli), lze ho v editaci výdejky **zaměnit** za jiný recept tlačítkem **Zaměnit jídlo**: vyberete náhradní recept a systém přepočte suroviny podle jeho normy na stejný počet porcí. Původní jídlo zůstane u dokumentu vidět (přeškrtnuté, s odkazem „zaměněno za…“), jeho odběr surovin je nulový. Záměnu lze tlačítkem **Zrušit záměnu** vrátit zpět.
+
+💡 **Proč se původní jídlo neschovává:** V jídelníčku i na PDF pro kuchyni musí zůstat dohledatelné, co se mělo vařit a co se vařilo skutečně — kvůli alergenům, evidenci a případné reklamaci.
+
+## Druhá večeře a polévka
+
+Kromě jídel z jídelníčku obsahuje výdejka dne u každého dne navíc dvě volitelné karty, které se v jídelníčku vůbec neplánují:
+
+* **Druhá večeře** — pro strávníky s režimem druhé večeře,
+* **Polévka** — prázdná karta zařazená před obědem, pro polévku, kterou kuchař uvaří „navíc“.
+
+Obě karty jsou zpočátku prázdné a objeví se, až do nich přidáte první surovinu (tlačítko **Přidat surovinu do tohoto jídla**). Nepoužitá prázdná karta se z dokumentu při dalším otevření/generování ztratí sama — nezůstávají po ní žádné nulové položky. Na papírovou PDF výdejku se polévka netiskne (jde o pracovní pomůcku pro kuchyni, ne o položku jídelníčku); druhá večeře se tiskne jako běžné jídlo.
 
 ## Záporný sklad
 
@@ -72,7 +103,10 @@ U dokumentu se eviduje i **kuchař** — kdo vaření zajišťoval (využívá a
 | Vydáno z nesprávného skladu | — | Vratka → změna skladu → znovu dokončit |
 | Karta suroviny v minusu | Výdej přes nulu | Dohledat chybějící příjemku/převodku, případně srovnat inventurou |
 | Nelze archivovat dokument | Některá položka není dokončená | Dokončit či odebrat zbývající položky |
+| Vydáno špatné množství | Překlep, špatná surovina | **Zrušit výdej** u řádku → zadat znovu |
+| Surovina se nakonec nepoužila | Plán se nenaplnil | Odebrat řádek **košem** (jen dokud není vydaný) |
+| Jídlo se vařilo jinak, než plánoval jídelníček | Chybějící surovina, změna na poslední chvíli | **Zaměnit jídlo** — vybrat náhradní recept |
 
 ---
 
-*Technická poznámka pro vývojáře: `PickingList.save()` (`apps/production/models.py`) řídí blokace: přiřazení k dokumentu → `block_quantity(quantity_planned)`; přechod na COMPLETED → `unblock` + odečet `quantity_actual`; revert vrací zásobu a znovu blokuje. Dokument: `PickingListDocument` (`can_be_archived()` vyžaduje vše COMPLETED). PDF: `apps/production/utils.py`, `PDF_CHUNK_MEAL_THRESHOLD = 60`, spojování stránek přes pypdf. Validace ve `clean()`: sklad patří jídelně, není zamčen, `quantity_actual` povinné pro COMPLETED.*
+*Technická poznámka pro vývojáře: `PickingList.save()` (`apps/production/models.py`) řídí blokace: přiřazení k dokumentu → `block_quantity(quantity_planned)`; přechod na COMPLETED → `unblock` + odečet `quantity_actual`; revert (`unissue_item_<id>` handler v `picking_list_edit`, běží před quantity-loopem) vrací zásobu a znovu blokuje. Dokument: `PickingListDocument` (`can_be_archived()` vyžaduje vše COMPLETED). Záměna jídla: `ProductionOrder.replacement_of`, normy se přepočtou na recept náhrady při stejném počtu porcí. Druhá večeře / polévka: `MealType.DINNER_SECOND` / `MealType.SOUP`, recept „Výdej“ (code=VYDEJ) resp. lazy příkaz „Polévka“ vzniká až prvním přidáním suroviny (`_store_added_ingredient()`); prázdné příkazy se uklízí při smazání výdejky, jinak by je generátor zabalil do příští výdejky s nulovými množstvími. `MEAL_TYPE_ORDER` v `apps/production/utils.py` řadí SOUP před LUNCH a `generate_picking_list_pdf_file` položky typu SOUP z PDF vynechává. PDF: `PDF_CHUNK_MEAL_THRESHOLD = 60`, spojování stránek přes pypdf. Validace ve `clean()`: sklad patří jídelně, není zamčen, `quantity_actual` povinné pro COMPLETED.*

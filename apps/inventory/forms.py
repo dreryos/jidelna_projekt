@@ -286,10 +286,16 @@ class InventoryVerificationForm(forms.ModelForm):
         warehouse = self.cleaned_data.get('warehouse')
         
         if warehouse and warehouse.is_locked:
+            locked_by = warehouse.locked_by_inventory
+            if locked_by is None:
+                # Osiřelý zámek (inventura byla smazána bez odemčení skladu) - odemknout
+                warehouse.is_locked = False
+                warehouse.save(update_fields=['is_locked'])
+                return warehouse
             raise ValidationError(
                 f"Sklad '{warehouse.name}' je již uzamčen kvůli probíhající inventuře "
-                f"zahájené {warehouse.locked_by_inventory.started_by.get_full_name() or warehouse.locked_by_inventory.started_by.username} "
-                f"dne {warehouse.locked_by_inventory.started_at.strftime('%d.%m.%Y %H:%M')}."
+                f"zahájené {locked_by.started_by.get_full_name() or locked_by.started_by.username} "
+                f"dne {locked_by.started_at.strftime('%d.%m.%Y %H:%M')}."
             )
         
         return warehouse
