@@ -48,7 +48,7 @@ def test_prepocet_radku_zachova_celkovou_cenu():
     mnozstvi, cena = convert_line(Decimal('2'), Decimal('30'), Decimal('1000'))
 
     assert mnozstvi == Decimal('2000')
-    assert cena == Decimal('0.0300')
+    assert cena == Decimal('0.030000')
     # Celková cena řádku se převodem změnit nesmí.
     assert mnozstvi * cena == Decimal('2') * Decimal('30')
 
@@ -64,7 +64,7 @@ def test_prepocet_kartonu_na_kusy():
 
 def test_prepocet_beze_zmeny():
     assert convert_line(Decimal('6.7'), Decimal('54.9'), Decimal('1')) == (
-        Decimal('6.7'), Decimal('54.9000'),
+        Decimal('6.7'), Decimal('54.900000'),
     )
 
 

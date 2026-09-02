@@ -84,7 +84,7 @@ def convert_line(quantity, unit_price, factor):
     stejná, jinak by příjemka přestala sedět s dokladem.
 
     >>> convert_line(Decimal('2'), Decimal('30'), Decimal('1000'))
-    (Decimal('2000'), Decimal('0.03'))
+    (Decimal('2000'), Decimal('0.030000'))
 
     Returns:
         (množství ve skladové jednotce, cena za skladovou jednotku)
@@ -94,5 +94,7 @@ def convert_line(quantity, unit_price, factor):
         raise ValueError('Přepočet jednotek musí být kladné číslo.')
 
     converted_quantity = Decimal(str(quantity)) * factor
-    converted_price = (Decimal(str(unit_price)) / factor).quantize(Decimal('0.0001'))
+    # Šest desetinných míst odpovídá tomu, co unesou cenová pole ve skladu.
+    # Míň by u surovin vedených v gramech ukrojilo procenta hodnoty.
+    converted_price = (Decimal(str(unit_price)) / factor).quantize(Decimal('0.000001'))
     return converted_quantity, converted_price

@@ -212,20 +212,38 @@ Při převodu se množství násobí a jednotková cena dělí, takže **celkov�
 Naučený poměr z aliasu platí jen pro jednotku, ve které se učil. Dodavatel
 může přejít z kartonů na kusy a starý poměr by naskladnil dvanáctinásobek.
 
-#### Známé omezení: přesnost ceny
+#### Přesnost ceny
 
-Cenová pole v celém skladu (`GoodsReceiptItem`, `StockItem`,
-`IngredientPriceHistory`) mají dvě desetinná místa. U suroviny vedené
-v gramech vyjde 54,90 Kč/kg jako 0,0549 Kč/g a uloží se 0,05 Kč – ocenění
-skladu je pak o 9 % vedle. Na množství to vliv nemá.
+Cenová pole měla dvě desetinná místa. U suroviny vedené v gramech vyšlo
+54,90 Kč/kg jako 0,0549 Kč/g a uložilo se 0,05 – ocenění skladu o 9 % vedle.
+Nezpůsobil to přepočet jednotek, jen ho zviditelnil: stejnou nepřesnost mělo
+i ruční zadání ceny za gram.
 
-Není to způsobené přepočtem, jen se tím zviditelnilo: stejnou nepřesnost má
-i ruční zadání ceny za gram. `check_price_precision()` na to upozorní v kroku 2.
+Devět peněžních polí je proto rozšířeno na `max_digits=12, decimal_places=6`.
+Relativní chyba zaokrouhlení je `0,5 · 10⁻ᴺ / cena`, takže:
 
-Trvale to jde vyřešit dvěma způsoby a **oba jsou rozhodnutí pro zadavatele**:
-buď rozšířit desetinná místa u cen napříč skladem (zásah do oceňování),
-nebo tyhle suroviny nevést v gramech. V ostré databázi je takto vedená
-jedna surovina.
+| Kč/kg | Kč/g | N=2 | N=4 | N=6 |
+|---:|---:|---:|---:|---:|
+| 5 | 0,005 | >100 % | 1 % | 0,01 % |
+| 20 | 0,02 | 25 % | 0,25 % | 0,002 % |
+| 55 | 0,055 | 9,1 % | 0,091 % | 0,001 % |
+
+Čtyři místa by na levné sypké zboží (mouka, brambory kolem 5–10 Kč/kg)
+nestačila, šest má řádovou rezervu. `max_digits` muselo nahoru zároveň –
+s `10,6` by strop spadl na 9 999,99 a nejdražší položka ve skladu stojí
+3 140 Kč.
+
+Rozšiřují se jen **jednotkové** ceny. Součty (`get_total_value`,
+`total_price`) jsou počítané properties, nikde se neukládají, takže změna
+nezkresluje žádnou uloženou agregaci a nepotřebuje přepočet historie.
+
+Uživateli se dál ukazují dvě desetinná místa – 53 míst v šablonách už
+používalo `floatformat:2` a existující filtr `format_price`. Skutečná past
+nebyla ve zobrazení, ale ve **formulářích**: kdyby edit formulář ukázal
+zaokrouhlenou cenu, stačilo by příjemku otevřít a uložit beze změny
+a přesnost by byla pryč. Widget `PriceInput` proto zobrazuje plnou hodnotu
+s useknutými koncovými nulami (`0,0549`, ne `0,054900`) a má `step="any"`,
+protože pevný krok 0,01 by prohlížeč u takové hodnoty odmítl.
 
 #### Pojistky v kroku 2
 

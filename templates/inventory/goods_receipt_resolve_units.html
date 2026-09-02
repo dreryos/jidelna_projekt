@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load core_filters %}
 
 {% block title %}Srovnání měrných jednotek – Spíž{% endblock %}
 
@@ -33,7 +34,7 @@
                 <strong>{{ item.source_name|default:item.ingredient.name }}</strong><br>
                 <span class="text-muted">
                   {{ item.source_quantity }} {{ item.source_unit }}
-                  à {{ item.price }} Kč
+                  à {{ item.price|format_price }} Kč
                 </span>
               </td>
               <td>

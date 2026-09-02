@@ -133,8 +133,8 @@ class SupplierIngredientTemplate(models.Model):
         verbose_name="Surovina"
     )
     default_price_without_vat = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
+        max_digits=12,
+        decimal_places=6,
         null=True,
         blank=True,
         verbose_name="Výchozí cena bez DPH",
@@ -348,7 +348,7 @@ class StockItem(models.Model):
     warehouse = models.ForeignKey(Warehouse, on_delete=models.CASCADE, related_name='stock_items', verbose_name="Sklad")
     quantity = models.DecimalField(max_digits=10, decimal_places=3, default=0, verbose_name="Množství na skladě")
     quantity_blocked = models.DecimalField(max_digits=10, decimal_places=3, default=0, verbose_name="Blokované množství")
-    price = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Nákupní cena za jednotku")
+    price = models.DecimalField(max_digits=12, decimal_places=6, verbose_name="Nákupní cena za jednotku")
     vat_rate = models.DecimalField(
         max_digits=5,
         decimal_places=2,
@@ -357,8 +357,8 @@ class StockItem(models.Model):
         verbose_name="Sazba DPH"
     )
     price_without_vat = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
+        max_digits=12,
+        decimal_places=6,
         null=True,
         blank=True,
         verbose_name="Cena bez DPH"
@@ -481,8 +481,8 @@ class IngredientPriceHistory(models.Model):
         verbose_name="Sklad"
     )
     price = models.DecimalField(
-        max_digits=10, 
-        decimal_places=2, 
+        max_digits=12, 
+        decimal_places=6, 
         verbose_name="Nákupní cena za jednotku"
     )
     valid_from = models.DateTimeField(
@@ -790,8 +790,8 @@ class GoodsReceiptItem(models.Model):
         help_text="Množství v základní jednotce suroviny"
     )
     price_without_vat = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
+        max_digits=12,
+        decimal_places=6,
         null=True,
         blank=True,
         verbose_name="Cena bez DPH za jednotku"
@@ -803,15 +803,15 @@ class GoodsReceiptItem(models.Model):
         verbose_name="Sazba DPH (%)"
     )
     vat_amount = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
+        max_digits=12,
+        decimal_places=6,
         null=True,
         blank=True,
         verbose_name="Částka DPH za jednotku"
     )
     price = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
+        max_digits=12,
+        decimal_places=6,
         verbose_name="Nákupní cena za jednotku (vč. DPH)"
     )
     notes = models.CharField(
@@ -1817,8 +1817,8 @@ class StockTransferItem(models.Model):
         verbose_name="Množství"
     )
     unit_price_with_vat = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
+        max_digits=12,
+        decimal_places=6,
         verbose_name="Jednotková cena s DPH",
         help_text="Automaticky převzato ze zdrojového skladu"
     )
@@ -1937,8 +1937,8 @@ class StockWriteOffItem(models.Model):
         verbose_name="Množství"
     )
     unit_cost = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
+        max_digits=12,
+        decimal_places=6,
         verbose_name="Jednotková nákupní cena s DPH",
         help_text="Automaticky převzato ze skladu v okamžiku odepisování"
     )
