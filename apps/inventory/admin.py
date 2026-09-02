@@ -4,7 +4,8 @@ from decimal import Decimal
 from .models import (
     StockItem, IngredientPriceHistory, GoodsReceipt, GoodsReceiptItem,
     InventoryVerification, InventoryVerificationItem, StockTransfer, StockTransferItem,
-    Supplier, SupplierIngredientTemplate, StockWriteOff, StockWriteOffItem
+    Supplier, SupplierIngredientTemplate, StockWriteOff, StockWriteOffItem,
+    SupplierItemAlias, GoodsReceiptScan
 )
 from .forms import VAT_RATE_CHOICES, StockItemForm
 
@@ -247,16 +248,17 @@ class SupplierIngredientTemplateInline(admin.TabularInline):
 
 @admin.register(Supplier)
 class SupplierAdmin(admin.ModelAdmin):
-    list_display = ('name', 'slug', 'is_active', 'display_icon', 'button_color', 'template_count', 'template_cache_key')
+    list_display = ('name', 'slug', 'ico', 'is_active', 'display_icon', 'button_color', 'template_count', 'template_cache_key')
     list_filter = ('is_active', 'button_color')
-    search_fields = ('name', 'slug')
+    search_fields = ('name', 'slug', 'ico')
     prepopulated_fields = {'slug': ('name',)}
     readonly_fields = ('template_cache_key',)
     inlines = [SupplierIngredientTemplateInline]
 
     fieldsets = (
         ('Základní údaje', {
-            'fields': ('name', 'slug', 'is_active')
+            'fields': ('name', 'slug', 'ico', 'is_active'),
+            'description': 'IČO slouží k rozpoznání dodavatele na naskenovaném dokladu.'
         }),
         ('Vzhled tlačítka v šablonách', {
             'fields': ('icon_class', 'button_color'),
@@ -366,3 +368,73 @@ class StockWriteOffItemAdmin(admin.ModelAdmin):
         """Zobrazí celkové náklady položky"""
         return obj.get_total_cost()
     get_total_cost.short_description = 'Celkové náklady'
+
+
+@admin.register(SupplierItemAlias)
+class SupplierItemAliasAdmin(admin.ModelAdmin):
+    """
+    Revize naučených mapování názvů.
+
+    Aliasy vznikají samy při potvrzení importu, takže špatně potvrzený alias
+    se tiše propíše do všech dalších dodáků od téhož dodavatele. Tenhle seznam
+    je místo, kde se to dá najít a opravit – řadí se podle četnosti použití,
+    aby byly nejdřív vidět ty, na kterých nejvíc záleží.
+    """
+    list_display = (
+        'raw_name', 'supplier', 'target', 'unit', 'unit_factor',
+        'times_used', 'last_used_at', 'created_by',
+    )
+    list_filter = ('is_ignored', 'supplier', 'created_at')
+    search_fields = ('raw_name', 'raw_key', 'core_key', 'ingredient__name')
+    autocomplete_fields = ('ingredient',)
+    readonly_fields = ('raw_key', 'core_key', 'times_used', 'last_used_at', 'created_at')
+    ordering = ('-times_used', 'raw_name')
+    list_select_related = ('supplier', 'ingredient', 'created_by')
+
+    fieldsets = (
+        ('Co přišlo na dokladu', {
+            'fields': ('supplier', 'raw_name', 'raw_key', 'core_key'),
+            'description': 'Klíče se dopočítávají z názvu, ručně se needitují.'
+        }),
+        ('Na co se to mapuje', {
+            'fields': ('ingredient', 'is_ignored', 'unit', 'unit_factor'),
+            'description': 'Buď surovina, nebo příznak nezbožního řádku – ne obojí.'
+        }),
+        ('Použití', {
+            'fields': ('times_used', 'last_used_at', 'created_by', 'created_at'),
+            'classes': ('collapse',)
+        }),
+    )
+
+    @admin.display(description='Mapuje se na')
+    def target(self, obj):
+        if obj.is_ignored:
+            return format_html('<em>nezbožní řádek</em>')
+        return obj.ingredient.name if obj.ingredient else '—'
+
+
+@admin.register(GoodsReceiptScan)
+class GoodsReceiptScanAdmin(admin.ModelAdmin):
+    """
+    Skeny dokladů. Fotky jsou dočasné, anotace zůstává kvůli dohledatelnosti.
+    """
+    list_display = (
+        '__str__', 'goods_receipt', 'uploaded_at', 'uploaded_by',
+        'file_state', 'ocr_model',
+    )
+    list_filter = ('ocr_model', 'uploaded_at', 'file_deleted_at')
+    search_fields = ('original_filename', 'goods_receipt__receipt_number')
+    readonly_fields = (
+        'goods_receipt', 'file_path', 'original_filename', 'annotation',
+        'markdown', 'ocr_model', 'uploaded_at', 'uploaded_by', 'file_deleted_at',
+    )
+    ordering = ('-uploaded_at',)
+    list_select_related = ('goods_receipt', 'uploaded_by')
+
+    @admin.display(description='Fotka', boolean=True)
+    def file_state(self, obj):
+        return obj.has_file
+
+    def has_add_permission(self, request):
+        # Skeny vznikají jedině importem dokladu, ne ručním zadáním v adminu.
+        return False

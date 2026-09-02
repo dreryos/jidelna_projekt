@@ -11,6 +11,7 @@ from django.core.cache import cache
 from apps.core.models import Ingredient
 from apps.core.constants import VAT_RATE_CHOICES
 from apps.canteens.models import Warehouse
+from apps.inventory.naming import core_name, normalize_name
 import logging
 
 logger = logging.getLogger(__name__)
@@ -62,6 +63,17 @@ class Supplier(models.Model):
         verbose_name="Barva tlačítka",
         help_text="Barva tlačítka v rychlých šablonách"
     )
+    ico = models.CharField(
+        max_length=8,
+        null=True,
+        blank=True,
+        unique=True,
+        verbose_name="IČO",
+        help_text=(
+            "Slouží k rozpoznání dodavatele na naskenovaném dokladu. "
+            "Název se na dokladech píše pokaždé jinak, IČO ne."
+        )
+    )
     template_cache_key = models.CharField(
         max_length=100,
         blank=True,
@@ -72,10 +84,26 @@ class Supplier(models.Model):
     def __str__(self):
         return self.name
     
+    def clean(self):
+        super().clean()
+        if self.ico and not (self.ico.isdigit() and len(self.ico) == 8):
+            raise ValidationError({'ico': 'IČO musí mít přesně 8 číslic.'})
+    
     def save(self, *args, **kwargs):
         if not self.template_cache_key:
             self.template_cache_key = f"supplier_template_{self.slug}"
+        # Prázdné IČO ukládáme jako NULL. Prázdné řetězce by si navzájem
+        # kolidovaly v unikátním indexu, NULL ne.
+        self.ico = ''.join(char for char in (self.ico or '') if char.isdigit()) or None
         super().save(*args, **kwargs)
+    
+    @classmethod
+    def find_by_ico(cls, ico):
+        """Najde dodavatele podle IČO z dokladu. Vrací None, když IČO nesedí."""
+        digits = ''.join(char for char in (ico or '') if char.isdigit())
+        if not digits:
+            return None
+        return cls.objects.filter(ico=digits).first()
     
     def get_template_ingredients(self):
         """Vrátí všechny suroviny pro šablonu dodavatele"""
@@ -141,6 +169,154 @@ class SupplierIngredientTemplate(models.Model):
         verbose_name_plural = "Šablony surovin"
         unique_together = ('supplier', 'ingredient')
         ordering = ['sort_order', 'ingredient__name']
+
+
+
+class SupplierItemAlias(models.Model):
+    """
+    Naučené mapování dodavatelského názvu položky na surovinu v systému.
+
+    Každý dodavatel si zboží pojmenovává po svém a stejnou surovinu píše
+    pokaždé trochu jinak – s jinou zemí původu, gramáží nebo promo poznámkou.
+    Fuzzy porovnání názvů tohle neuhádne spolehlivě, a hlavně se nic nenaučí.
+    Proto se při potvrzení importu ukládá, co uživatel vybral, a příště se
+    stejný název namapuje sám.
+
+    Klíče se počítají v `apps.inventory.naming`:
+
+    - `raw_key` je název bez diakritiky a interpunkce, na přesnou shodu,
+    - `core_key` je totéž bez země, gramáže a obalu, na shodu v přihrádce
+      (`Jablko Gala IT` a `Jablko Gala PL` mají stejný `core_key`).
+
+    Alias bez suroviny a s `is_ignored` znamená „tenhle řádek na sklad nepatří"
+    – takhle se doučí zaokrouhlení, doprava nebo obalový materiál, které
+    obecné pravidlo v `ocr.quirks` nepozná.
+    """
+    supplier = models.ForeignKey(
+        Supplier,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='item_aliases',
+        verbose_name="Dodavatel",
+        help_text="Prázdné = alias platí pro všechny dodavatele"
+    )
+    raw_name = models.CharField(
+        max_length=255,
+        verbose_name="Název na dokladu",
+        help_text="Přesně tak, jak název přišel z dokladu"
+    )
+    raw_key = models.CharField(
+        max_length=255,
+        db_index=True,
+        verbose_name="Klíč pro přesnou shodu"
+    )
+    core_key = models.CharField(
+        max_length=255,
+        db_index=True,
+        verbose_name="Klíč pro přihrádku"
+    )
+    ingredient = models.ForeignKey(
+        Ingredient,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='supplier_aliases',
+        verbose_name="Surovina"
+    )
+    is_ignored = models.BooleanField(
+        default=False,
+        verbose_name="Nezbožní řádek",
+        help_text="Řádek se při importu přeskočí (zaokrouhlení, doprava, obaly)"
+    )
+    unit = models.CharField(
+        max_length=10,
+        blank=True,
+        verbose_name="Jednotka na dokladu",
+        help_text="Jednotka, ve které dodavatel položku fakturuje"
+    )
+    unit_factor = models.DecimalField(
+        max_digits=10,
+        decimal_places=4,
+        default=Decimal('1'),
+        validators=[MinValueValidator(Decimal('0.0001'))],
+        verbose_name="Přepočet na skladovou jednotku",
+        help_text=(
+            "Kolika skladovými jednotkami je jedna jednotka z dokladu. "
+            "Karton dvanácti kusů = 12, jinak 1."
+        )
+    )
+    times_used = models.PositiveIntegerField(
+        default=0,
+        verbose_name="Počet použití"
+    )
+    last_used_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Naposledy použito"
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Vytvořeno"
+    )
+    created_by = models.ForeignKey(
+        'auth.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        verbose_name="Vytvořil"
+    )
+    
+    def __str__(self):
+        supplier = self.supplier.name if self.supplier else 'všichni dodavatelé'
+        target = self.ingredient.name if self.ingredient else 'nezbožní řádek'
+        return f"{supplier}: {self.raw_name} → {target}"
+    
+    def clean(self):
+        super().clean()
+        if self.is_ignored and self.ingredient_id:
+            raise ValidationError(
+                'Nezbožní řádek nemůže mít přiřazenou surovinu.'
+            )
+        if not self.is_ignored and not self.ingredient_id:
+            raise ValidationError(
+                'Alias musí mít surovinu, nebo být označen jako nezbožní řádek.'
+            )
+    
+    def save(self, *args, **kwargs):
+        # Klíče se počítají vždy z raw_name, aby nešly rozejít s názvem.
+        self.raw_key = normalize_name(self.raw_name)
+        self.core_key = core_name(self.raw_name)
+        super().save(*args, **kwargs)
+    
+    def register_use(self):
+        """Zaznamená, že se alias použil při importu."""
+        self.times_used = models.F('times_used') + 1
+        self.last_used_at = timezone.now()
+        self.save(update_fields=['times_used', 'last_used_at'])
+    
+    def convert_quantity(self, quantity):
+        """Přepočte množství z dokladu na skladovou jednotku."""
+        return Decimal(str(quantity)) * self.unit_factor
+    
+    class Meta:
+        verbose_name = "Alias položky dodavatele"
+        verbose_name_plural = "Aliasy položek dodavatelů"
+        ordering = ['supplier__name', 'raw_name']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['supplier', 'raw_key'],
+                name='unique_alias_per_supplier',
+            ),
+            models.UniqueConstraint(
+                fields=['raw_key'],
+                condition=models.Q(supplier__isnull=True),
+                name='unique_global_alias',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['supplier', 'core_key']),
+        ]
 
 
 # Signály pro automatické cache invalidation
@@ -504,6 +680,18 @@ class GoodsReceipt(models.Model):
     def __str__(self):
         return f"Příjem {self.receipt_number} - {self.warehouse.name}"
     
+    @property
+    def unit_conflicts(self):
+        """
+        Položky, u kterých se jednotka z dokladu neshoduje se skladovou.
+
+        Dokud je příjemka má, `confirm()` ji na sklad nepustí.
+        """
+        return [
+            item for item in self.items.select_related('ingredient')
+            if item.has_unit_conflict
+        ]
+    
     def get_total_value(self):
         """Vrátí celkovou hodnotu příjmu"""
         total = Decimal('0')
@@ -524,6 +712,19 @@ class GoodsReceipt(models.Model):
             raise ValidationError(
                 f"Sklad '{self.warehouse.name}' je uzamčen kvůli probíhající inventuře. "
                 f"Nelze potvrdit příjem zboží na uzamčený sklad."
+            )
+        
+        # Potvrzení je jediné místo, kde se mění stav skladu, takže se tu
+        # hlídá i to, že jsou všechny položky ve skladové jednotce. Kdyby
+        # kontrola seděla jen v importech, obešlo by ji ruční založení
+        # položky i import, který někdo přidá později.
+        conflicts = [item for item in self.items.select_related('ingredient')
+                     if item.has_unit_conflict]
+        if conflicts:
+            raise ValidationError(
+                'Příjemku nelze potvrdit, dokud se nesrovnají měrné jednotky. '
+                'U těchto položek není jasné, kolik se má naskladnit: '
+                + '; '.join(item.unit_conflict_label for item in conflicts) + '.'
             )
         
         with transaction.atomic():
@@ -619,9 +820,89 @@ class GoodsReceiptItem(models.Model):
         verbose_name="Poznámka",
         help_text="Např. šarže, expirace"
     )
+    source_name = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name="Název na dokladu",
+        help_text="Název položky tak, jak stál na dokladu – podle něj se učí aliasy"
+    )
+    source_unit = models.CharField(
+        max_length=10,
+        blank=True,
+        verbose_name="Jednotka na dokladu",
+        help_text="Prázdné u ručně zadaných položek – ty jsou rovnou ve skladové jednotce"
+    )
+    source_quantity = models.DecimalField(
+        max_digits=10,
+        decimal_places=3,
+        null=True,
+        blank=True,
+        verbose_name="Množství na dokladu",
+        help_text="Množství tak, jak stálo na dokladu, před přepočtem"
+    )
+    unit_factor = models.DecimalField(
+        max_digits=10,
+        decimal_places=4,
+        default=Decimal('1'),
+        verbose_name="Použitý přepočet",
+        help_text="Kolika skladovými jednotkami je jedna jednotka z dokladu"
+    )
     
     def __str__(self):
         return f"{self.ingredient.name}: {self.quantity} {self.ingredient.unit} @ {self.price} Kč"
+    
+    @property
+    def has_unit_conflict(self):
+        """
+        Sedí jednotka z dokladu se skladovou jednotkou suroviny?
+
+        `quantity` se při potvrzení přičítá rovnou do skladu, takže musí být
+        ve skladové jednotce. Konflikt znamená, že doklad fakturoval v něčem
+        jiném a nikdo neřekl, jak to přepočítat – například kusy na kilogramy.
+
+        Ručně zadané položky konflikt mít nemohou; ty se zadávají rovnou
+        ve skladové jednotce a `source_unit` nemají vyplněné.
+        """
+        from apps.inventory.units import conversion_factor
+
+        if not self.source_unit:
+            return False
+        if self.unit_factor != Decimal('1'):
+            # Někdo poměr určil, ať už ručně nebo naučeným aliasem.
+            return False
+        return conversion_factor(self.source_unit, self.ingredient.base_unit) is None
+    
+    @property
+    def unit_conflict_label(self):
+        return (
+            f"{self.ingredient.name}: doklad uvádí {self.source_quantity} "
+            f"{self.source_unit}, sklad vede {self.ingredient.base_unit}"
+        )
+    
+    def apply_unit_factor(self, factor):
+        """
+        Přepočte položku na skladovou jednotku daným poměrem.
+
+        Množství se násobí a jednotkové ceny dělí, takže celková cena řádku
+        zůstává stejná – jinak by příjemka přestala sedět s dokladem.
+        """
+        from apps.inventory.units import convert_line
+
+        factor = Decimal(str(factor))
+        if factor <= 0:
+            raise ValidationError('Přepočet jednotek musí být kladné číslo.')
+
+        source_quantity = self.source_quantity if self.source_quantity is not None else self.quantity
+
+        self.quantity, self.price_without_vat = convert_line(
+            source_quantity, self.price_without_vat or Decimal('0'), factor,
+        )
+        _unused, self.price = convert_line(Decimal('1'), self.price, factor)
+        if self.vat_amount is not None:
+            self.vat_amount = (self.price - (self.price_without_vat or Decimal('0')))
+        self.source_quantity = source_quantity
+        self.unit_factor = factor
+        self.save()
     
     @property
     def total_price(self):
@@ -667,6 +948,105 @@ class GoodsReceiptItem(models.Model):
         verbose_name = "Položka příjmu zboží"
         verbose_name_plural = "Položky příjmu zboží"
         ordering = ['ingredient__name']
+
+
+class GoodsReceiptScan(models.Model):
+    """
+    Naskenovaný doklad, ze kterého příjemka vznikla.
+
+    Fotka je pracovní materiál – slouží jen ke kontrole položek proti
+    originálu při zadávání. Po potvrzení příjemky se maže, rozdělané importy
+    vyprší po `OCR_SCAN_RETENTION_DAYS` (viz `apps.inventory.ocr.storage`).
+
+    Rozpoznaná anotace v `annotation` zůstává natrvalo. Je malá, čitelná
+    a když se za měsíc nesejde sklad, jde z ní zjistit, co systém z dokladu
+    přečetl – na rozdíl od fotky, kterou už nikdo neuvidí.
+    """
+    goods_receipt = models.OneToOneField(
+        GoodsReceipt,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='scan',
+        verbose_name="Příjemka",
+        help_text="Prázdné, dokud uživatel import nedokončil"
+    )
+    file_path = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name="Cesta k souboru",
+        help_text="Relativně k MEDIA_ROOT. Prázdné, když už byl sken smazán."
+    )
+    original_filename = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name="Původní název souboru"
+    )
+    annotation = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Rozpoznaná data",
+        help_text="Syrový výstup OCR, uchováváme kvůli dohledatelnosti"
+    )
+    markdown = models.TextField(
+        blank=True,
+        verbose_name="Přepis dokladu",
+        help_text="Text dokladu tak, jak ho OCR přečetlo"
+    )
+    ocr_model = models.CharField(
+        max_length=100,
+        blank=True,
+        verbose_name="Model OCR"
+    )
+    uploaded_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Nahráno"
+    )
+    uploaded_by = models.ForeignKey(
+        'auth.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        verbose_name="Nahrál"
+    )
+    file_deleted_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Soubor smazán",
+        help_text="Kdy byla fotka smazána. Anotace zůstává."
+    )
+    
+    def __str__(self):
+        if self.goods_receipt_id:
+            return f"Sken příjemky {self.goods_receipt.receipt_number}"
+        return f"Nedokončený sken z {self.uploaded_at:%d.%m.%Y}"
+    
+    @property
+    def has_file(self):
+        return bool(self.file_path) and self.file_deleted_at is None
+    
+    def delete_file(self):
+        """
+        Smaže fotku, anotaci ponechá.
+
+        Volá se po potvrzení příjemky. Opakované volání nic nerozbije,
+        potvrzení se může zopakovat.
+        """
+        from apps.inventory.ocr.storage import delete_scan
+        
+        if not self.file_path:
+            return False
+        
+        deleted = delete_scan(self.file_path)
+        self.file_path = ''
+        self.file_deleted_at = timezone.now()
+        self.save(update_fields=['file_path', 'file_deleted_at'])
+        return deleted
+    
+    class Meta:
+        verbose_name = "Sken dokladu"
+        verbose_name_plural = "Skeny dokladů"
+        ordering = ['-uploaded_at']
 
 
 class InventoryVerification(models.Model):
