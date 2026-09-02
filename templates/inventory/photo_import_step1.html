@@ -1,0 +1,66 @@
+{% extends 'base.html' %}
+
+{% block title %}Příjemka z fotky – krok 1{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+  <h2>Příjemka z fotky – krok 1</h2>
+  <p class="text-muted">
+    Vyfoťte dodací list, prodejku nebo fakturu. Doklad musí být na fotce celý
+    a rovně. Rozpoznaná data zkontrolujete v dalším kroku.
+  </p>
+
+  {% if not ocr_available %}
+    <div class="alert alert-warning">
+      <strong>Rozpoznávání dokladů není nastavené.</strong>
+      Chybí klíč <code>MISTRAL_API_KEY</code>. Doklad zatím zadejte ručně
+      přes <a href="{% url 'inventory:goods_receipt_create' %}">Příjem zboží</a>.
+    </div>
+  {% endif %}
+
+  <div class="card">
+    <div class="card-body">
+      <form method="post" enctype="multipart/form-data" id="photo-import-form">
+        {% csrf_token %}
+
+        <div class="mb-3">
+          <label for="scan_file" class="form-label">Fotka dokladu</label>
+          {# capture nabídne na mobilu rovnou fotoaparát; na počítači je to běžný výběr souboru #}
+          <input type="file" class="form-control" id="scan_file" name="scan_file"
+                 accept="image/*,application/pdf" capture="environment" required
+                 {% if not ocr_available %}disabled{% endif %}>
+          <div class="form-text">JPEG, PNG, HEIC nebo PDF, maximálně 25 MB.</div>
+        </div>
+
+        <div class="mb-3">
+          <label for="warehouse" class="form-label">Sklad</label>
+          <select class="form-select" id="warehouse" name="warehouse" required
+                  {% if not ocr_available %}disabled{% endif %}>
+            <option value="" selected disabled>Vyberte sklad</option>
+            {% for warehouse in warehouses %}
+              <option value="{{ warehouse.id }}">{{ warehouse.name }} ({{ warehouse.canteen.name }})</option>
+            {% endfor %}
+          </select>
+          <div class="form-text">U jednotlivých položek ho půjde ještě změnit.</div>
+        </div>
+
+        <button type="submit" class="btn btn-primary" id="submit-button"
+                {% if not ocr_available %}disabled{% endif %}>
+          Načíst doklad
+        </button>
+        <a href="{% url 'inventory:goods_receipt_list' %}" class="btn btn-outline-secondary">Zpět</a>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Rozpoznání trvá několik sekund a stránka se mezitím tváří, že se nic
+  // neděje. Bez tohohle lidé odesílají formulář dvakrát.
+  document.getElementById('photo-import-form').addEventListener('submit', function () {
+    const button = document.getElementById('submit-button');
+    button.disabled = true;
+    button.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Rozpoznávám doklad…';
+  });
+</script>
+{% endblock %}

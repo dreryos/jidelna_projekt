@@ -1,0 +1,207 @@
+{% extends 'base.html' %}
+
+{% block title %}Příjemka z fotky – krok 2{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+  <h2>Příjemka z fotky – krok 2</h2>
+  <p class="text-muted">
+    Porovnejte rozpoznané řádky s dokladem. Odškrtnutý řádek na sklad nepůjde
+    a systém si zapamatuje, že tenhle text není zboží.
+  </p>
+
+  {% for warning in receipt_data.warnings %}
+    <div class="alert alert-warning py-2">{{ warning }}</div>
+  {% endfor %}
+
+  {% if duplicate_receipt %}
+    <div class="alert alert-danger">
+      <strong>Tenhle doklad už v systému je.</strong>
+      Příjemka <a href="{% url 'inventory:goods_receipt_detail' duplicate_receipt.pk %}"
+                  target="_blank">{{ duplicate_receipt.receipt_number }}</a>
+      ({{ duplicate_receipt.warehouse.name }}, {{ duplicate_receipt.receipt_date|date:"d.m.Y" }})
+      má stejné číslo od stejného dodavatele. Než budete pokračovat, ověřte,
+      že nenaskladňujete jeden dodák podruhé.
+    </div>
+  {% endif %}
+
+  {% for warning in unit_warnings %}
+    <div class="alert alert-danger py-2">{{ warning }}</div>
+  {% endfor %}
+
+  {% for warning in price_warnings %}
+    <div class="alert alert-warning py-2">{{ warning }}</div>
+  {% endfor %}
+
+  <form method="post" action="{% url 'inventory:photo_import_step3' %}">
+    {% csrf_token %}
+
+    <div class="row">
+      {# Náhled skenu vedle tabulky, aby šlo kontrolovat bez přepínání oken #}
+      <div class="col-lg-4 mb-3">
+        <div class="card sticky-top" style="top: 1rem;">
+          <div class="card-header py-2">Doklad</div>
+          {% if scan_id %}
+            <a href="{% url 'inventory:photo_import_scan' scan_id %}" target="_blank">
+              <img src="{% url 'inventory:photo_import_scan' scan_id %}"
+                   class="card-img-bottom" alt="Naskenovaný doklad">
+            </a>
+          {% else %}
+            <div class="card-body text-muted">Náhled není k dispozici.</div>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="col-lg-8">
+        <div class="card mb-3">
+          <div class="card-body row g-3">
+            <div class="col-md-4">
+              <label for="receipt_number" class="form-label">Číslo dokladu</label>
+              <input type="text" class="form-control" id="receipt_number"
+                     name="receipt_number" value="{{ receipt_data.receipt_number }}" required>
+            </div>
+            <div class="col-md-4">
+              <label for="receipt_date" class="form-label">Datum příjmu</label>
+              <input type="date" class="form-control" id="receipt_date"
+                     name="receipt_date" value="{{ receipt_data.receipt_date }}" required>
+            </div>
+            <div class="col-md-4">
+              <label for="supplier_obj" class="form-label">Dodavatel</label>
+              <select class="form-select" id="supplier_obj" name="supplier_obj">
+                <option value="">— nepřiřazeno —</option>
+                {% for supplier in suppliers %}
+                  <option value="{{ supplier.id }}"
+                          {% if supplier.id == receipt_data.supplier_id %}selected{% endif %}>
+                    {{ supplier.name }}
+                  </option>
+                {% endfor %}
+              </select>
+              <div class="form-text">
+                Na dokladu: {{ receipt_data.supplier|default:"—" }}
+                {% if receipt_data.supplier_ico %}(IČO {{ receipt_data.supplier_ico }}){% endif %}
+                {% if not receipt_data.supplier_id %}
+                  <br><strong>Bez dodavatele se mapování názvů nezapamatuje.</strong>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table table-sm align-middle">
+            <thead>
+              <tr>
+                <th style="width: 3rem;">Na sklad</th>
+                <th>Položka na dokladu</th>
+                <th style="width: 8rem;">Množství</th>
+                <th style="width: 10rem;">Přepočet</th>
+                <th>Surovina</th>
+                <th style="width: 12rem;">Sklad</th>
+                <th style="width: 9rem;">Cena bez DPH</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in receipt_data.items %}
+                <tr {% if item.is_ignored %}class="table-secondary"{% endif %}>
+                  <td>
+                    <input type="checkbox" class="form-check-input" name="include_{{ forloop.counter0 }}"
+                           {% if not item.is_ignored %}checked{% endif %}>
+                  </td>
+                  <td>
+                    {{ item.item_name }}
+                    {% if item.is_ignored %}
+                      <span class="badge bg-secondary">{{ item.ignore_reason }}</span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    <div class="input-group input-group-sm">
+                      <input type="text" class="form-control" name="quantity_{{ forloop.counter0 }}"
+                             value="{{ item.quantity }}">
+                      <span class="input-group-text">{{ item.unit_mapped }}</span>
+                    </div>
+                  </td>
+                  <td>
+                    {% if item.target_unit and item.source_unit != item.target_unit %}
+                      <div class="input-group input-group-sm">
+                        <span class="input-group-text">×</span>
+                        <input type="text"
+                               class="form-control {% if item.needs_unit_check %}border-danger{% endif %}"
+                               name="unit_factor_{{ forloop.counter0 }}"
+                               value="{{ item.unit_factor }}">
+                        <span class="input-group-text">{{ item.target_unit }}</span>
+                      </div>
+                      <small class="{% if item.needs_unit_check %}text-danger{% else %}text-muted{% endif %}">
+                        {% if item.needs_unit_check %}
+                          Kolik {{ item.target_unit }} je jedna {{ item.source_unit }}?
+                        {% else %}
+                          {{ item.source_unit }} → {{ item.target_unit }}
+                        {% endif %}
+                      </small>
+                    {% else %}
+                      <input type="hidden" name="unit_factor_{{ forloop.counter0 }}" value="1">
+                      <small class="text-muted">—</small>
+                    {% endif %}
+                  </td>
+                  <td>
+                    <select class="form-select form-select-sm" name="ingredient_{{ forloop.counter0 }}">
+                      <option value="">— vyberte —</option>
+                      {% for ingredient in all_ingredients %}
+                        <option value="{{ ingredient.id }}"
+                                {% if ingredient.id == item.ingredient_id %}selected{% endif %}>
+                          {{ ingredient.name }} ({{ ingredient.unit }})
+                        </option>
+                      {% endfor %}
+                    </select>
+                    {% if item.match_source and item.match_source != 'none' %}
+                      <small class="{% if item.is_automatic %}text-success{% else %}text-muted{% endif %}">
+                        {{ item.match_label }}{% if not item.is_automatic and item.match_ratio %} ({{ item.match_ratio }} %){% endif %}
+                      </small>
+                    {% endif %}
+                    <div class="form-check form-check-inline ms-2">
+                      <input type="checkbox" class="form-check-input" id="new_{{ forloop.counter0 }}"
+                             name="create_new_{{ forloop.counter0 }}">
+                      <label class="form-check-label small" for="new_{{ forloop.counter0 }}">
+                        založit novou
+                      </label>
+                    </div>
+                    <input type="text" class="form-control form-control-sm mt-1"
+                           name="ingredient_name_{{ forloop.counter0 }}"
+                           value="{{ item.item_name }}" placeholder="Název nové suroviny">
+                  </td>
+                  <td>
+                    <select class="form-select form-select-sm" name="warehouse_{{ forloop.counter0 }}">
+                      {% for warehouse in warehouses %}
+                        <option value="{{ warehouse.id }}"
+                                {% if warehouse.id == default_warehouse_id %}selected{% endif %}>
+                          {{ warehouse.name }}
+                        </option>
+                      {% endfor %}
+                    </select>
+                  </td>
+                  <td class="text-end">
+                    {{ item.price_per_unit_net }} Kč
+                    <br><small class="text-muted">DPH {{ item.vat_rate }} %</small>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+            {% if receipt_data.totals.total %}
+              <tfoot>
+                <tr>
+                  <th colspan="6" class="text-end">Doklad celkem podle OCR</th>
+                  <th class="text-end">{{ receipt_data.totals.total }} Kč</th>
+                </tr>
+              </tfoot>
+            {% endif %}
+          </table>
+        </div>
+
+        <button type="submit" class="btn btn-primary">Vytvořit příjemku</button>
+        <a href="{% url 'inventory:photo_import_step1' %}" class="btn btn-outline-secondary">
+          Načíst jiný doklad
+        </a>
+      </div>
+    </div>
+  </form>
+</div>
+{% endblock %}

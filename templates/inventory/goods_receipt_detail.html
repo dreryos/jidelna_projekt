@@ -33,9 +33,15 @@
       <a href="{% url 'inventory:goods_receipt_edit' goods_receipt.pk %}" class="btn btn-primary">
         <i class="fas fa-edit me-2"></i>Upravit
       </a>
-      <a href="{% url 'inventory:goods_receipt_confirm' goods_receipt.pk %}" class="btn btn-success">
-        <i class="fas fa-check me-2"></i>Potvrdit příjem
-      </a>
+      {% if goods_receipt.unit_conflicts %}
+        <a href="{% url 'inventory:goods_receipt_resolve_units' goods_receipt.pk %}" class="btn btn-warning">
+          <i class="fas fa-balance-scale me-2"></i>Srovnat měrné jednotky
+        </a>
+      {% else %}
+        <a href="{% url 'inventory:goods_receipt_confirm' goods_receipt.pk %}" class="btn btn-success">
+          <i class="fas fa-check me-2"></i>Potvrdit příjem
+        </a>
+      {% endif %}
       <a href="{% url 'inventory:goods_receipt_delete' goods_receipt.pk %}" class="btn btn-danger">
         <i class="fas fa-trash me-2"></i>Smazat
       </a>
@@ -43,6 +49,25 @@
     {% endif %}
   </div>
 </div>
+
+{% if goods_receipt.unit_conflicts %}
+  <div class="alert alert-warning">
+    <h5 class="alert-heading">
+      <i class="fas fa-balance-scale me-2"></i>Nesedí měrné jednotky
+    </h5>
+    <p class="mb-2">
+      Dodavatel tyhle položky fakturuje v jiné jednotce, než v jaké je vede sklad.
+      Dokud nebude jasné, kolik se má naskladnit, příjemka se nepotvrdí:
+    </p>
+    <ul class="mb-2">
+      {% for item in goods_receipt.unit_conflicts %}
+        <li>{{ item.unit_conflict_label }}</li>
+      {% endfor %}
+    </ul>
+    <a href="{% url 'inventory:goods_receipt_resolve_units' goods_receipt.pk %}"
+       class="btn btn-sm btn-warning">Doplnit přepočet</a>
+  </div>
+{% endif %}
 
 <!-- Základní informace -->
 <div class="card mb-4">
