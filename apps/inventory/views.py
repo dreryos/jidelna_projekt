@@ -14,17 +14,20 @@ from django.views.decorators.cache import cache_page
 from django.core.cache import cache
 from django.db.models import Count, Q
 from django.db.models.functions import Collate
+from django.conf import settings
 from apps.core.views import CanteenAccessMixin, user_can_access_canteen
 from decimal import Decimal, InvalidOperation
 import logging
 import json
+from pathlib import Path
 
 from .models import (
     StockItem, GoodsReceipt, GoodsReceiptItem, 
     InventoryVerification, InventoryVerificationItem,
     StockTransfer, StockTransferItem,
     Supplier, SupplierIngredientTemplate,
-    StockWriteOff, StockWriteOffItem
+    StockWriteOff, StockWriteOffItem,
+    GoodsReceiptScan
 )
 from .forms import (
     GoodsReceiptForm, GoodsReceiptItemFormSet,
@@ -769,9 +772,23 @@ def goods_receipt_confirm(request, pk):
         messages.warning(request, 'Tento příjem již byl potvrzen.')
         return redirect('inventory:goods_receipt_detail', pk=pk)
     
+    # Nesrovnané měrné jednotky posíláme rovnou tam, kde se dají doplnit,
+    # ať uživatel nekouká na chybu bez cesty ven.
+    if goods_receipt.unit_conflicts:
+        messages.warning(
+            request,
+            'Než příjemku potvrdíte, doplňte přepočet měrných jednotek.'
+        )
+        return redirect('inventory:goods_receipt_resolve_units', pk=pk)
+    
     if request.method == 'POST':
         try:
             goods_receipt.confirm()
+            # Fotka dokladu už není k ničemu – rozpoznaná data jsou v příjemce
+            # a anotace zůstává u skenu kvůli dohledatelnosti.
+            scan = getattr(goods_receipt, 'scan', None)
+            if scan is not None:
+                scan.delete_file()
             messages.success(
                 request, 
                 f'Příjem zboží "{goods_receipt.receipt_number}" byl potvrzen. '
@@ -819,7 +836,8 @@ def goods_receipt_delete(request, pk):
 
 from .bidfood_parser import parse_bidfood_xml
 from .supplier_csv_parser import parse_supplier_csv
-from difflib import SequenceMatcher
+from .matching import IngredientResolver, find_supplier
+from .units import conversion_factor, convert_line, units_are_compatible
 
 
 @login_required
@@ -878,6 +896,106 @@ def bidfood_xml_import_step1(request):
     })
 
 
+def _apply_ingredient_matching(receipt_data, all_ingredients):
+    """
+    Doplní k položkám dokladu navrženou surovinu.
+
+    Hledání dělá `IngredientResolver` – nejdřív mapování, která už někdo
+    potvrdil, teprve pak odhad podle podobnosti názvu. Do položek zapisuje
+    i klíče, které používaly starší šablony (`suggested_ingredient_*`,
+    `match_ratio`), aby se nemusely přepisovat naráz.
+
+    Returns:
+        IngredientResolver – tentýž, který se použije při dokončení importu,
+        aby se rozhodnutí uživatele uložila ke správnému dodavateli.
+    """
+    supplier = find_supplier(
+        name=receipt_data.get('supplier'),
+        ico=receipt_data.get('supplier_ico'),
+    )
+    resolver = IngredientResolver(supplier=supplier, ingredients=all_ingredients)
+
+    for item in receipt_data['items']:
+        match = resolver.resolve(item['item_name'], unit=item.get('unit_mapped'))
+        item.update(match.as_dict())
+        # Klíče pro stávající šablony.
+        item['suggested_ingredient_id'] = item['ingredient_id']
+        item['suggested_ingredient_name'] = item['ingredient_name']
+        item['suggested_ingredient_unit'] = item['ingredient_unit']
+
+    receipt_data['supplier_id'] = supplier.id if supplier else None
+    return resolver
+
+
+def _convert_to_stock_unit(item, ingredient, quantity, price_net, price_gross):
+    """
+    Přepočte řádek dokladu na skladovou jednotku suroviny.
+
+    `GoodsReceiptItem.quantity` se při potvrzení přičítá rovnou do skladu,
+    takže musí být ve skladové jednotce. Dodavatel ale fakturuje v tom,
+    co se mu hodí.
+
+    Jednoznačný převod (kg ↔ g, l ↔ ml) se udělá sám. U nejednoznačného
+    (ks → kg) se množství nechá tak, jak přišlo, a poměr zůstane 1 –
+    položka se tím označí jako nedořešená a `GoodsReceipt.confirm()` ji
+    na sklad nepustí, dokud poměr někdo nedoplní.
+
+    Returns:
+        dict s hodnotami pro `GoodsReceiptItem`.
+    """
+    source_unit = item.get('unit_mapped') or item.get('unit') or ''
+    factor = conversion_factor(source_unit, ingredient.base_unit) or Decimal('1')
+
+    converted_quantity, converted_net = convert_line(quantity, price_net, factor)
+    _unused, converted_gross = convert_line(Decimal('1'), price_gross, factor)
+
+    return {
+        'quantity': converted_quantity,
+        'price_without_vat': converted_net,
+        'price': converted_gross,
+        'vat_amount': converted_gross - converted_net,
+        'source_name': item.get('item_name', '')[:255],
+        'source_unit': source_unit,
+        'source_quantity': quantity,
+        'unit_factor': factor,
+    }
+
+
+def _remember_ingredient_mapping(receipt_data, mappings, user):
+    """
+    Uloží, jak uživatel namapoval položky dokladu, aby to příště sedlo samo.
+
+    Volá se po vytvoření příjemky. Když se doklad nepodařilo přiřadit ke
+    konkrétnímu dodavateli, resolver si nic neuloží – globální alias platí
+    pro všechny dodavatele a nemá vznikat jen proto, že jsme nevěděli,
+    od koho doklad je.
+
+    Args:
+        receipt_data: data dokladu ze session
+        mappings: seznam dvojic (položka dokladu, surovina)
+        user: kdo mapování potvrdil
+    """
+    supplier = find_supplier(
+        name=receipt_data.get('supplier'),
+        ico=receipt_data.get('supplier_ico'),
+    )
+    if supplier is None:
+        return 0
+
+    resolver = IngredientResolver(supplier=supplier, ingredients=[])
+    remembered = 0
+    for item, ingredient in mappings:
+        alias = resolver.remember(
+            item['item_name'],
+            ingredient=ingredient,
+            unit=item.get('unit', ''),
+            user=user,
+        )
+        if alias is not None:
+            remembered += 1
+    return remembered
+
+
 @login_required
 def bidfood_xml_import_step2(request):
     """Krok 2: Preview, mapování surovin, editace jednotek a skladů"""
@@ -895,45 +1013,9 @@ def bidfood_xml_import_step2(request):
         except ObjectDoesNotExist:
             warehouses = Warehouse.objects.none()
     all_ingredients = list(Ingredient.objects.all())
-    
-    # Automatické mapování surovin pomocí pokročilého fuzzy matching
-    for item in receipt_data['items']:
-        best_match = None
-        best_ratio = 0
-        
-        # Normalizovaný název z XML (odstraníme čísla a speciální znaky pro lepší matching)
-        xml_name_normalized = _normalize_ingredient_name(item['item_name'])
-        
-        for ingredient in all_ingredients:
-            # Normalizovaný název suroviny z DB
-            db_name_normalized = _normalize_ingredient_name(ingredient.name)
-            
-            # Nejprve zkusíme přesnou shodu normalizovaných názvů
-            if xml_name_normalized == db_name_normalized:
-                ratio = 1.0
-            else:
-                # Použijeme pokročilý matching s kontrolou společných slov
-                ratio = _calculate_ingredient_similarity(
-                    xml_name_normalized,
-                    db_name_normalized
-                )
-            
-            if ratio > best_ratio:
-                best_ratio = ratio
-                best_match = ingredient
-        
-        # Pokud je shoda > 40%, navrhne me surovinu
-        if best_ratio > 0.4:
-            item['suggested_ingredient_id'] = best_match.id
-            item['suggested_ingredient_name'] = best_match.name
-            item['suggested_ingredient_unit'] = best_match.unit
-            item['match_ratio'] = round(best_ratio * 100)
-        else:
-            item['suggested_ingredient_id'] = None
-            item['suggested_ingredient_name'] = None
-            item['suggested_ingredient_unit'] = None
-            item['match_ratio'] = 0
-    
+
+    _apply_ingredient_matching(receipt_data, all_ingredients)
+
     context = {
         'receipt_data': receipt_data,
         'warehouses': warehouses,
@@ -977,6 +1059,7 @@ def bidfood_xml_import_step3(request):
     
     # Zpracování položek
     created_ingredients_count = 0
+    mappings = []
     
     for idx, item in enumerate(receipt_data['items']):
         # Načtení dat z formuláře
@@ -1039,18 +1122,27 @@ def bidfood_xml_import_step3(request):
             )
             continue
         
+        # Přepočet na skladovou jednotku. Co se přepočítat nedá, projde
+        # s poměrem 1 a příjemka se bez doplnění poměru nepotvrdí.
+        converted = _convert_to_stock_unit(
+            item, ingredient, quantity,
+            Decimal(item['price_per_unit_net']),
+            Decimal(item['price_per_unit_gross']),
+        )
+        
         # Vytvoření položky příjmu s DPH
         GoodsReceiptItem.objects.create(
             goods_receipt=goods_receipt,
             ingredient=ingredient,
             warehouse=warehouse,
-            quantity=quantity,
-            price_without_vat=Decimal(item['price_per_unit_net']),
             vat_rate=vat_rate,
-            vat_amount=Decimal(item['vat_amount']),
-            price=Decimal(item['price_per_unit_gross']),
-            notes=f"Kód: {item['item_id']}"
+            notes=f"Kód: {item['item_id']}",
+            **converted,
         )
+        mappings.append((item, ingredient))
+    
+    # Zapamatování mapování pro příští doklad od téhož dodavatele
+    _remember_ingredient_mapping(receipt_data, mappings, request.user)
     
     # Vyčištění session
     del request.session['bidfood_receipt_data']
@@ -2185,96 +2277,6 @@ def supplier_csv_import_step1(request):
     })
 
 
-def _normalize_ingredient_name(name):
-    """
-    Normalizuje název suroviny pro lepší matching.
-    
-    Odstraní čísla, velikost balení (např. 40x, 24x), speciální znaky
-    a převede na malá písmena.
-    
-    Args:
-        name: Původní název suroviny
-    
-    Returns:
-        Normalizovaný název
-    """
-    import re
-    
-    # Převod na malá písmena
-    name = name.lower().strip()
-    
-    # Odstranění velikosti balení (40x, 24x, atd.)
-    name = re.sub(r'\s*\d+x\s*', ' ', name)
-    
-    # Odstranění číselných hodnot (51g, 80g, atd.)
-    name = re.sub(r'\s*\d+\s*(g|kg|ml|l|ks)?\s*', ' ', name)
-    
-    # Odstranění speciálních znaků a přebytečných mezer
-    name = re.sub(r'[^\w\s]', ' ', name)
-    name = re.sub(r'\s+', ' ', name).strip()
-    
-    return name
-
-
-def _calculate_ingredient_similarity(name1, name2):
-    """
-    Vypočítá podobnost mezi dvěma názvy surovin s pokročilou logikou.
-    
-    Kombinuje:
-    - Token-based matching (společná celá slova)
-    - Character-based matching (SequenceMatcher)
-    - Kontrolu prvního slova (klíčová kategorie)
-    
-    Args:
-        name1: První název (normalizovaný)
-        name2: Druhý název (normalizovaný)
-    
-    Returns:
-        float: Skóre podobnosti 0.0 - 1.0
-    """
-    # Rozdělení na slova
-    tokens1 = set(name1.split())
-    tokens2 = set(name2.split())
-    
-    # Kontrola minimální délky slov (ignorovat "a", "s", "z", atd.)
-    tokens1 = {t for t in tokens1 if len(t) >= 3}
-    tokens2 = {t for t in tokens2 if len(t) >= 3}
-    
-    # Pokud nemáme dostatečně dlouhá slova, fallback na character matching
-    if not tokens1 or not tokens2:
-        return SequenceMatcher(None, name1, name2).ratio()
-    
-    # Token-based similarity (Jaccard index)
-    common_tokens = tokens1 & tokens2
-    all_tokens = tokens1 | tokens2
-    token_similarity = len(common_tokens) / len(all_tokens) if all_tokens else 0
-    
-    # KRITICKÁ KONTROLA: Musí existovat alespoň jedno společné slovo
-    if not common_tokens:
-        # Žádné společné slovo = maximálně 40% (nikdy nenašeptá)
-        return min(0.4, SequenceMatcher(None, name1, name2).ratio())
-    
-    # Bonus pokud jeden název je podmnožina druhého (např. "halali" v "hamé halali")
-    subset_bonus = 0
-    if tokens1.issubset(tokens2) or tokens2.issubset(tokens1):
-        subset_bonus = 0.15
-    
-    # Character-based similarity
-    char_similarity = SequenceMatcher(None, name1, name2).ratio()
-    
-    # Bonus za shodu prvního slova (hlavní kategorie)
-    first_word_bonus = 0
-    words1 = name1.split()
-    words2 = name2.split()
-    if words1 and words2 and words1[0] == words2[0]:
-        first_word_bonus = 0.15
-    
-    # Kombinované skóre: 45% token + 35% character + 15% first word + 15% subset
-    final_score = (0.45 * token_similarity) + (0.35 * char_similarity) + first_word_bonus + subset_bonus
-    
-    return min(1.0, final_score)
-
-
 @login_required
 def supplier_csv_import_step2(request):
     """Krok 2: Preview, mapování surovin, editace jednotek a skladů"""
@@ -2292,45 +2294,9 @@ def supplier_csv_import_step2(request):
         except ObjectDoesNotExist:
             warehouses = Warehouse.objects.none()
     all_ingredients = list(Ingredient.objects.all())
-    
-    # Automatické mapování surovin pomocí pokročilého fuzzy matching
-    for item in receipt_data['items']:
-        best_match = None
-        best_ratio = 0
-        
-        # Normalizovaný název z CSV (odstraníme čísla a speciální znaky pro lepší matching)
-        csv_name_normalized = _normalize_ingredient_name(item['item_name'])
-        
-        for ingredient in all_ingredients:
-            # Normalizovaný název suroviny z DB
-            db_name_normalized = _normalize_ingredient_name(ingredient.name)
-            
-            # Nejprve zkusíme přesnou shodu normalizovaných názvů
-            if csv_name_normalized == db_name_normalized:
-                ratio = 1.0
-            else:
-                # Použijeme pokročilý matching s kontrolou společných slov
-                ratio = _calculate_ingredient_similarity(
-                    csv_name_normalized,
-                    db_name_normalized
-                )
-            
-            if ratio > best_ratio:
-                best_ratio = ratio
-                best_match = ingredient
-        
-        # Pokud je shoda > 40%, navrhne me surovinu
-        if best_ratio > 0.4:
-            item['suggested_ingredient_id'] = best_match.id
-            item['suggested_ingredient_name'] = best_match.name
-            item['suggested_ingredient_unit'] = best_match.unit
-            item['match_ratio'] = round(best_ratio * 100)
-        else:
-            item['suggested_ingredient_id'] = None
-            item['suggested_ingredient_name'] = None
-            item['suggested_ingredient_unit'] = None
-            item['match_ratio'] = 0
-    
+
+    _apply_ingredient_matching(receipt_data, all_ingredients)
+
     context = {
         'receipt_data': receipt_data,
         'warehouses': warehouses,
@@ -2374,6 +2340,7 @@ def supplier_csv_import_step3(request):
     
     # Zpracování položek
     created_ingredients_count = 0
+    mappings = []
     
     for idx, item in enumerate(receipt_data['items']):
         # Načtení dat z formuláře
@@ -2397,6 +2364,9 @@ def supplier_csv_import_step3(request):
             ingredient_id = request.POST.get(f'ingredient_{idx}')
             if not ingredient_id:
                 messages.error(request, f'Položka {idx + 1}: Musíte vybrat surovinu nebo vytvořit novou.')
+                # Příjemka je už založená a `transaction.atomic` na `return`
+                # nereaguje – bez tohohle by v databázi zůstala rozdělaná.
+                transaction.set_rollback(True)
                 return redirect('inventory:supplier_csv_import_step2')
             ingredient = Ingredient.objects.get(id=ingredient_id)
         
@@ -2404,16 +2374,592 @@ def supplier_csv_import_step3(request):
         warehouse_id = request.POST.get(f'warehouse_{idx}', default_warehouse_id)
         warehouse = Warehouse.objects.get(id=warehouse_id)
         
+        # Přepočet na skladovou jednotku. Co se přepočítat nedá, projde
+        # s poměrem 1 a příjemka se bez doplnění poměru nepotvrdí.
+        converted = _convert_to_stock_unit(
+            item, ingredient,
+            Decimal(str(item['quantity'])),
+            Decimal(str(item['price_per_unit_net'])),
+            Decimal(str(item['price_per_unit_gross'])),
+        )
+        
         # Vytvoření položky příjmu
         GoodsReceiptItem.objects.create(
             goods_receipt=goods_receipt,
             ingredient=ingredient,
-            quantity=item['quantity'],
-            price_without_vat=item['price_per_unit_net'],
-            vat_rate=item['vat_rate'],
-            price=item['price_per_unit_gross'],
             warehouse=warehouse,
+            vat_rate=item['vat_rate'],
+            **converted,
         )
+        mappings.append((item, ingredient))
+    
+    # Zapamatování mapování pro příští doklad od téhož dodavatele
+    _remember_ingredient_mapping(receipt_data, mappings, request.user)
     
     messages.success(request, f'Příjem vytvořen: {len(receipt_data["items"])} položek, {created_ingredients_count} nových surovin.')
     return redirect('inventory:goods_receipt_detail', pk=goods_receipt.pk)
+
+
+# ============================================================================
+# Import příjemky z fotky dokladu (Mistral OCR)
+# ============================================================================
+
+# Nad tuhle velikost soubor odmítneme dřív, než se začne zpracovávat.
+# Fotka z mobilu má i ve vysokém rozlišení jednotky megabajtů.
+MAX_SCAN_UPLOAD_BYTES = 25 * 1024 * 1024
+
+# Skeny ukládá `ocr.storage` podle typu, takže přípona určuje, čím se mají
+# poslat zpátky. PDF poslané jako obrázek prohlížeč nezobrazí.
+SCAN_CONTENT_TYPES = {
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.png': 'image/png',
+    '.pdf': 'application/pdf',
+}
+
+
+def _serialize_receipt_data(receipt_data):
+    """
+    Převede `receipt_data` do podoby, kterou snese session.
+
+    Session se serializuje do JSONu, takže `date` a `Decimal` musí ven.
+    Zpátky se nepřevádí – šablona i krok 3 si s řetězci vystačí, stejně jako
+    u importu z CSV a XML.
+    """
+    serialized = dict(receipt_data)
+    serialized['receipt_date'] = receipt_data['receipt_date'].isoformat()
+    serialized['totals'] = {
+        key: (str(value) if value is not None else None)
+        for key, value in receipt_data['totals'].items()
+    }
+    serialized['items'] = [
+        {
+            key: (str(value) if isinstance(value, Decimal) else value)
+            for key, value in item.items()
+        }
+        for item in receipt_data['items']
+    ]
+    return serialized
+
+
+@login_required
+def photo_import_step1(request):
+    """
+    Krok 1: nahrání fotky dokladu a spuštění OCR.
+
+    Fotka se zmenší, uloží do dočasného úložiště a pošle do Mistral OCR.
+    Rozpoznaná data putují do session, sken zůstává na disku kvůli náhledu
+    v kroku 2 – po potvrzení příjemky se maže.
+    """
+    from .ocr.client import OcrError, prepare_image, run_ocr
+    from .ocr.normalize import to_receipt_data
+    from .ocr.storage import maybe_purge, save_scan
+
+    warehouses = Warehouse.objects.select_related('canteen').all()
+    if not request.user.is_superuser:
+        try:
+            user_canteens = request.user.profile.canteens.all()
+            warehouses = warehouses.filter(canteen__in=user_canteens)
+        except ObjectDoesNotExist:
+            warehouses = Warehouse.objects.none()
+
+    if request.method == 'POST':
+        scan_file = request.FILES.get('scan_file')
+        warehouse_id = request.POST.get('warehouse')
+
+        if not scan_file or not warehouse_id:
+            messages.error(request, 'Vyberte fotku dokladu a sklad.')
+            return redirect('inventory:photo_import_step1')
+
+        if scan_file.size > MAX_SCAN_UPLOAD_BYTES:
+            messages.error(
+                request,
+                f'Soubor je příliš velký ({scan_file.size // (1024 * 1024)} MB). '
+                f'Maximum je {MAX_SCAN_UPLOAD_BYTES // (1024 * 1024)} MB.'
+            )
+            return redirect('inventory:photo_import_step1')
+
+        warehouse = get_object_or_404(warehouses, id=warehouse_id)
+        if not user_can_access_canteen(request.user, warehouse.canteen):
+            messages.error(request, 'Nemáte oprávnění zapisovat do tohoto skladu.')
+            return redirect('inventory:photo_import_step1')
+
+        try:
+            image_bytes, mime = prepare_image(scan_file.read(), scan_file.name)
+            # Ukládáme zmenšenou podobu, ne originál – na náhled stačí
+            # a na disku se drží jen do potvrzení příjemky.
+            scan_path = save_scan(image_bytes, mime)
+            # Posíláme už zmenšenou podobu, ať se JPEG nekóduje podruhé.
+            result = run_ocr(image_bytes, scan_file.name, mime_type=mime)
+            receipt_data = to_receipt_data(result['annotation'])
+        except OcrError as exc:
+            messages.error(request, str(exc))
+            return redirect('inventory:photo_import_step1')
+        except Exception as exc:
+            logger.exception('Neočekávaná chyba při zpracování skenu dokladu')
+            messages.error(request, f'Doklad se nepodařilo zpracovat: {exc}')
+            return redirect('inventory:photo_import_step1')
+
+        supplier = find_supplier(
+            name=receipt_data['supplier'], ico=receipt_data['supplier_ico'],
+        )
+        receipt_data['supplier_id'] = supplier.id if supplier else None
+
+        scan = GoodsReceiptScan.objects.create(
+            file_path=scan_path,
+            original_filename=scan_file.name[:255],
+            annotation=result['annotation'],
+            markdown=result['markdown'],
+            ocr_model=settings.MISTRAL_OCR_MODEL,
+            uploaded_by=request.user,
+        )
+
+        request.session['photo_receipt_data'] = _serialize_receipt_data(receipt_data)
+        request.session['photo_default_warehouse'] = str(warehouse.id)
+        request.session['photo_scan_id'] = scan.id
+
+        # Úklid prošlých skenů se veze na nahrávání – projekt nemá plánovač.
+        maybe_purge()
+
+        pocet = len([i for i in receipt_data['items'] if not i['is_ignored']])
+        messages.success(request, f'Doklad načten: {pocet} položek zboží.')
+        return redirect('inventory:photo_import_step2')
+
+    return render(request, 'inventory/photo_import_step1.html', {
+        'warehouses': warehouses,
+        'ocr_available': bool(settings.MISTRAL_API_KEY),
+    })
+
+
+def _collect_import_warnings(receipt_data, warehouse):
+    """
+    Pojistky, které se ukážou v kroku 2.
+
+    Nic neblokují – každá má legitimní výjimku. Jen upozorní na to, co
+    ostatní kontroly nezachytí, protože doklad si sedí sám se sebou:
+    dvakrát naskladněný dodák a překlep OCR v ceně.
+    """
+    from .receipt_checks import (
+        check_duplicate_receipt, check_price_deviation, check_price_precision,
+    )
+
+    supplier = Supplier.objects.filter(id=receipt_data.get('supplier_id')).first()
+    duplicate = check_duplicate_receipt(
+        receipt_data.get('receipt_number'),
+        supplier=supplier,
+        supplier_name=receipt_data.get('supplier', ''),
+    )
+
+    price_warnings = []
+    unit_warnings = []
+    ingredients = {
+        ingredient.id: ingredient
+        for ingredient in Ingredient.objects.filter(
+            id__in=[i['ingredient_id'] for i in receipt_data['items'] if i.get('ingredient_id')]
+        )
+    }
+
+    for item in receipt_data['items']:
+        if item['is_ignored'] or not item.get('ingredient_id'):
+            continue
+        ingredient = ingredients.get(item['ingredient_id'])
+
+        if item.get('needs_unit_check'):
+            unit_warnings.append(
+                f'„{item["item_name"]}": doklad je v jednotce {item["source_unit"]}, '
+                f'sklad vede {item["ingredient_name"]} v {item["target_unit"]}. '
+                f'Doplňte, kolik {item["target_unit"]} je jedna {item["source_unit"]}.'
+            )
+            # Dokud se jednotky nesrovnají, cenu porovnávat nemá smysl.
+            continue
+
+        precision = check_price_precision(
+            Decimal(item['price_per_unit_gross']), item.get('unit_factor', '1'),
+        )
+        if precision:
+            price_warnings.append(
+                f'„{item["item_name"]}": po přepočtu na {item["target_unit"]} '
+                f'vychází cena {precision["exact"]} Kč, ale sklad ji umí uložit '
+                f'jen jako {precision["stored"]} Kč. Ocenění skladu bude '
+                f'o {precision["error"] * 100:.0f} % vedle. Zvažte, jestli má '
+                f'{item["ingredient_name"]} zůstat v {item["target_unit"]}.'
+            )
+
+        deviation = check_price_deviation(
+            ingredient, warehouse, Decimal(item['price_per_unit_gross']),
+        )
+        if deviation:
+            price_warnings.append(
+                f'„{item["item_name"]}": cena {deviation["current"]} Kč je proti '
+                f'poslední známé ({deviation["previous"]} Kč) {deviation["direction"]} '
+                f'o {abs(deviation["ratio"]) * 100:.0f} %. Ověřte ji na dokladu.'
+            )
+
+    return {'duplicate': duplicate, 'prices': price_warnings, 'units': unit_warnings}
+
+
+@login_required
+def photo_import_step2(request):
+    """Krok 2: kontrola rozpoznaných dat proti fotce a mapování surovin."""
+    receipt_data = request.session.get('photo_receipt_data')
+    if not receipt_data:
+        messages.error(request, 'Session vypršela. Začněte znovu.')
+        return redirect('inventory:photo_import_step1')
+
+    default_warehouse_id = int(request.session['photo_default_warehouse'])
+    warehouses = Warehouse.objects.select_related('canteen').all()
+    if not request.user.is_superuser:
+        try:
+            user_canteens = request.user.profile.canteens.all()
+            warehouses = warehouses.filter(canteen__in=user_canteens)
+        except ObjectDoesNotExist:
+            warehouses = Warehouse.objects.none()
+
+    all_ingredients = list(Ingredient.objects.filter(is_active=True))
+    _apply_ingredient_matching(receipt_data, all_ingredients)
+    request.session['photo_receipt_data'] = receipt_data
+
+    default_warehouse = Warehouse.objects.filter(id=default_warehouse_id).first()
+    checks = _collect_import_warnings(receipt_data, default_warehouse)
+
+    return render(request, 'inventory/photo_import_step2.html', {
+        'receipt_data': receipt_data,
+        'warehouses': warehouses,
+        'default_warehouse_id': default_warehouse_id,
+        'all_ingredients': all_ingredients,
+        'scan_id': request.session.get('photo_scan_id'),
+        'suppliers': Supplier.objects.filter(is_active=True),
+        'duplicate_receipt': checks['duplicate'],
+        'price_warnings': checks['prices'],
+        'unit_warnings': checks['units'],
+    })
+
+
+@login_required
+@transaction.atomic
+def photo_import_step3(request):
+    """Krok 3: vytvoření příjemky z potvrzených řádků."""
+    if request.method != 'POST':
+        return redirect('inventory:photo_import_step1')
+
+    receipt_data = request.session.get('photo_receipt_data')
+    if not receipt_data:
+        messages.error(request, 'Session vypršela. Začněte znovu.')
+        return redirect('inventory:photo_import_step1')
+
+    default_warehouse_id = request.session['photo_default_warehouse']
+    default_warehouse = get_object_or_404(Warehouse, id=default_warehouse_id)
+    if not user_can_access_canteen(request.user, default_warehouse.canteen):
+        messages.error(request, 'Nemáte oprávnění zapisovat do tohoto skladu.')
+        return redirect('inventory:photo_import_step1')
+
+    supplier_id = request.POST.get('supplier_obj') or receipt_data.get('supplier_id')
+    supplier_obj = Supplier.objects.filter(id=supplier_id).first() if supplier_id else None
+
+    # Nejdřív se ověří všechny řádky, teprve pak se zapisuje. Kdyby se
+    # příjemka založila dopředu a některý řádek pak neprošel, zůstala by
+    # v databázi rozdělaná – `transaction.atomic` na `return` nereaguje,
+    # roluje zpět jen výjimku.
+    planned = []
+    skipped = []
+    new_ingredient_names = []
+
+    for idx, item in enumerate(receipt_data['items']):
+        # Nezaškrtnutý řádek na sklad nejde. Uživatel takhle odmítá
+        # zaokrouhlení, dopravu a obaly – a my si to zapamatujeme.
+        if request.POST.get(f'include_{idx}') != 'on':
+            skipped.append(item)
+            continue
+
+        if request.POST.get(f'create_new_{idx}') == 'on':
+            new_ingredient_names.append(
+                (idx, request.POST.get(f'ingredient_name_{idx}') or item['item_name'])
+            )
+            ingredient = None
+        else:
+            ingredient = Ingredient.objects.filter(
+                id=request.POST.get(f'ingredient_{idx}')
+            ).first()
+            if ingredient is None:
+                messages.error(
+                    request,
+                    f'Řádek {idx + 1} „{item["item_name"]}": vyberte surovinu, '
+                    f'založte novou, nebo řádek odškrtněte.'
+                )
+                return redirect('inventory:photo_import_step2')
+
+        warehouse = Warehouse.objects.filter(
+            id=request.POST.get(f'warehouse_{idx}', default_warehouse_id)
+        ).first()
+        if warehouse is None:
+            messages.error(request, f'Řádek {idx + 1}: vybraný sklad neexistuje.')
+            return redirect('inventory:photo_import_step2')
+
+        # Přepočet na skladovou jednotku. Bez něj by se do skladu, který
+        # vede gramy, přičetlo množství v kilech.
+        factor = _decimal_from_post(
+            request.POST.get(f'unit_factor_{idx}'), item.get('unit_factor', '1')
+        )
+        if factor <= 0:
+            messages.error(
+                request,
+                f'Řádek {idx + 1} „{item["item_name"]}": přepočet jednotek '
+                f'musí být kladné číslo.'
+            )
+            return redirect('inventory:photo_import_step2')
+
+        if ingredient is not None and factor == Decimal('1'):
+            # Nová surovina teprve vznikne, ta dostane jednotku z dokladu
+            # a přepočítávat se nemusí.
+            if not units_are_compatible(item['unit_mapped'], ingredient.base_unit):
+                messages.error(
+                    request,
+                    f'Řádek {idx + 1} „{item["item_name"]}": doklad je '
+                    f'v jednotce {item["unit_mapped"]}, sklad vede '
+                    f'{ingredient.name} v {ingredient.base_unit}. Doplňte přepočet.'
+                )
+                return redirect('inventory:photo_import_step2')
+
+        source_quantity = _decimal_from_post(
+            request.POST.get(f'quantity_{idx}'), item['quantity']
+        )
+        quantity, unit_price_net = convert_line(
+            source_quantity, Decimal(item['price_per_unit_net']), factor,
+        )
+        _quantity_gross, unit_price_gross = convert_line(
+            Decimal('1'), Decimal(item['price_per_unit_gross']), factor,
+        )
+
+        planned.append({
+            'index': idx,
+            'item': item,
+            'ingredient': ingredient,
+            'warehouse': warehouse,
+            'quantity': quantity,
+            'source_quantity': source_quantity,
+            'unit_factor': factor,
+            'price_net': unit_price_net,
+            'price_gross': unit_price_gross,
+        })
+
+    if not planned:
+        messages.error(request, 'Není co naskladnit – všechny řádky jsou odškrtnuté.')
+        return redirect('inventory:photo_import_step2')
+
+    # Od téhle chvíle se jen zapisuje a nic nemůže poslat uživatele zpátky.
+    created_ingredients_count = 0
+    for idx, name in new_ingredient_names:
+        row = next(row for row in planned if row['index'] == idx)
+        ingredient, created = Ingredient.objects.get_or_create(
+            name=name,
+            defaults={
+                'unit': row['item']['unit_mapped'],
+                'base_unit': row['item']['unit_mapped'],
+            },
+        )
+        row['ingredient'] = ingredient
+        created_ingredients_count += int(created)
+
+    goods_receipt = GoodsReceipt.objects.create(
+        warehouse=default_warehouse,
+        receipt_number=request.POST.get('receipt_number') or receipt_data['receipt_number'],
+        receipt_date=request.POST.get('receipt_date') or receipt_data['receipt_date'],
+        supplier=receipt_data['supplier'],
+        supplier_obj=supplier_obj,
+        status=GoodsReceipt.Status.DRAFT,
+        created_by=request.user,
+        notes='Načteno z fotky dokladu',
+    )
+
+    mappings = []
+    for row in planned:
+        item = row['item']
+        GoodsReceiptItem.objects.create(
+            goods_receipt=goods_receipt,
+            ingredient=row['ingredient'],
+            warehouse=row['warehouse'],
+            quantity=row['quantity'],
+            price_without_vat=row['price_net'],
+            vat_rate=Decimal(item['vat_rate']),
+            vat_amount=row['price_gross'] - row['price_net'],
+            price=row['price_gross'],
+            notes=f"Z dokladu: {item['item_name']}"[:100],
+            source_name=item['item_name'][:255],
+            source_unit=item['unit_mapped'],
+            source_quantity=row['source_quantity'],
+            unit_factor=row['unit_factor'],
+        )
+        mappings.append((item, row['ingredient'], row['unit_factor']))
+
+    _remember_photo_mapping(supplier_obj, mappings, skipped, request.user)
+
+    scan_id = request.session.get('photo_scan_id')
+    if scan_id:
+        GoodsReceiptScan.objects.filter(id=scan_id).update(goods_receipt=goods_receipt)
+
+    for key in ('photo_receipt_data', 'photo_default_warehouse', 'photo_scan_id'):
+        request.session.pop(key, None)
+
+    messages.success(
+        request,
+        f'Příjemka vytvořena: {len(mappings)} položek'
+        + (f', {created_ingredients_count} nových surovin' if created_ingredients_count else '')
+        + (f', {len(skipped)} řádků přeskočeno' if skipped else '')
+        + '.'
+    )
+    return redirect('inventory:goods_receipt_detail', pk=goods_receipt.pk)
+
+
+def _decimal_from_post(value, fallback):
+    """Načte množství z formuláře; při nesmyslné hodnotě vezme to z dokladu."""
+    try:
+        return Decimal(str(value).replace(',', '.'))
+    except (InvalidOperation, ValueError, TypeError, AttributeError):
+        return Decimal(str(fallback))
+
+
+def _remember_photo_mapping(supplier, mappings, skipped, user):
+    """
+    Uloží rozhodnutí uživatele – jak namapoval položky i které řádky odmítl.
+
+    Odmítnuté řádky se ukládají jako nezbožní aliasy, takže se doučí obalový
+    materiál a služby, které obecné pravidlo v `ocr.quirks` schválně nechytá.
+    """
+    if supplier is None:
+        return 0
+
+    resolver = IngredientResolver(supplier=supplier, ingredients=[])
+    remembered = 0
+
+    for item, ingredient, unit_factor in mappings:
+        if resolver.remember(item['item_name'], ingredient=ingredient,
+                             unit=item.get('unit_mapped') or item.get('unit', ''),
+                             unit_factor=unit_factor, user=user):
+            remembered += 1
+
+    for item in skipped:
+        if resolver.remember(item['item_name'], is_ignored=True,
+                             unit=item.get('unit', ''), user=user):
+            remembered += 1
+
+    return remembered
+
+
+@login_required
+def photo_import_scan(request, pk):
+    """
+    Vrátí naskenovaný doklad k náhledu.
+
+    Skeny jdou přes view, ne přes MEDIA_URL – jsou to dodavatelské doklady
+    s cenami, takže se nemají válet na veřejné adrese. Vidí je ten, kdo je
+    nahrál, a kdo má přístup k jídelně příslušné příjemky.
+    """
+    from django.http import FileResponse, Http404
+    from django.core.files.storage import default_storage
+
+    scan = get_object_or_404(GoodsReceiptScan, pk=pk)
+
+    allowed = request.user.is_superuser or scan.uploaded_by_id == request.user.id
+    if not allowed and scan.goods_receipt_id:
+        allowed = user_can_access_canteen(
+            request.user, scan.goods_receipt.warehouse.canteen
+        )
+    if not allowed:
+        raise Http404
+
+    if not scan.has_file or not default_storage.exists(scan.file_path):
+        raise Http404
+
+    # PDF se nesmí poslat jako obrázek – prohlížeč by ho nezobrazil.
+    content_type = SCAN_CONTENT_TYPES.get(
+        Path(scan.file_path).suffix.lower(), 'application/octet-stream',
+    )
+    return FileResponse(default_storage.open(scan.file_path), content_type=content_type)
+
+
+@login_required
+def goods_receipt_resolve_units(request, pk):
+    """
+    Doplnění přepočtu u položek, kde se jednotka z dokladu neshoduje
+    se skladovou jednotkou suroviny.
+
+    Sem vede cesta z potvrzení příjemky, které takové položky odmítne.
+    Zadaný poměr se uloží k položce a zároveň do aliasu dodavatele, takže
+    se na totéž zboží podruhé neptáme.
+    """
+    goods_receipt = get_object_or_404(
+        GoodsReceipt.objects.select_related('warehouse__canteen', 'supplier_obj'), pk=pk,
+    )
+
+    if not user_can_access_canteen(request.user, goods_receipt.warehouse.canteen):
+        messages.error(request, 'Nemáte oprávnění k této akci.')
+        return redirect('inventory:goods_receipt_list')
+
+    if goods_receipt.status != GoodsReceipt.Status.DRAFT:
+        messages.warning(request, 'Potvrzenou příjemku už upravovat nelze.')
+        return redirect('inventory:goods_receipt_detail', pk=pk)
+
+    conflicts = [
+        item for item in goods_receipt.items.select_related('ingredient', 'warehouse')
+        if item.has_unit_conflict
+    ]
+
+    if not conflicts:
+        messages.success(request, 'Všechny položky mají srovnané měrné jednotky.')
+        return redirect('inventory:goods_receipt_detail', pk=pk)
+
+    if request.method == 'POST':
+        resolver = (
+            IngredientResolver(supplier=goods_receipt.supplier_obj, ingredients=[])
+            if goods_receipt.supplier_obj else None
+        )
+
+        # Nejdřív se ověří všechny zadané poměry a teprve pak se zapisuje.
+        # `return` uvnitř `transaction.atomic()` transakci potvrdí, ne zruší,
+        # takže při opačném pořadí by se změny u dřívějších položek uložily
+        # a příjemka by zůstala v půli přepočtená.
+        factors = {}
+        for item in conflicts:
+            raw = request.POST.get(f'factor_{item.pk}', '').strip().replace(',', '.')
+            try:
+                factor = Decimal(raw)
+            except (InvalidOperation, ValueError):
+                messages.error(
+                    request,
+                    f'„{item.ingredient.name}": zadejte přepočet jako číslo.'
+                )
+                return redirect('inventory:goods_receipt_resolve_units', pk=pk)
+
+            if factor <= 0:
+                messages.error(
+                    request,
+                    f'„{item.ingredient.name}": přepočet jednotek musí být '
+                    f'kladné číslo.'
+                )
+                return redirect('inventory:goods_receipt_resolve_units', pk=pk)
+
+            factors[item.pk] = factor
+
+        with transaction.atomic():
+            for item in conflicts:
+                factor = factors[item.pk]
+                item.apply_unit_factor(factor)
+
+                # Ať se na totéž zboží podruhé neptáme.
+                if resolver and item.source_name:
+                    resolver.remember(
+                        item.source_name, ingredient=item.ingredient,
+                        unit=item.source_unit, unit_factor=factor, user=request.user,
+                    )
+
+        messages.success(
+            request,
+            f'Měrné jednotky srovnány u {len(conflicts)} položek. '
+            f'Příjemku teď jde potvrdit.'
+        )
+        return redirect('inventory:goods_receipt_detail', pk=pk)
+
+    return render(request, 'inventory/goods_receipt_resolve_units.html', {
+        'goods_receipt': goods_receipt,
+        'conflicts': conflicts,
+    })

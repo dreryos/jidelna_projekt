@@ -1,10 +1,11 @@
 import logging
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from django import forms
 from django.forms import inlineformset_factory, BaseInlineFormSet
 from django.core.exceptions import ValidationError, ObjectDoesNotExist
 from django.db.models import Q
 from .models import (
+    MONEY,
     GoodsReceipt, GoodsReceiptItem, Warehouse, Ingredient,
     InventoryVerification, InventoryVerificationItem,
     StockTransfer, StockTransferItem, StockItem,
@@ -19,6 +20,39 @@ VAT_RATE_CHOICES = [
     (Decimal('12'), '12%'),
     (Decimal('0'), '0%'),
 ]
+
+
+class PriceInput(forms.NumberInput):
+    """
+    Vstupní pole pro jednotkovou cenu.
+
+    Ceny se ukládají na šest desetinných míst, aby surovina vedená v gramech
+    nepřišla zaokrouhlením o procenta hodnoty. Formulář ale musí zobrazit
+    **plnou** hodnotu, ne zaokrouhlenou: kdyby ukazoval 0,05 místo 0,0549,
+    stačilo by příjemku otevřít a uložit beze změny a přesnost by byla pryč.
+
+    Koncové nuly se ořezávají, ať pole neukazuje „0,054900". Uživatel, který
+    zadává haléře, tak vidí „54,9" a ne „54,900000".
+
+    `step` je „any“, protože pevný krok 0,01 by prohlížeč u hodnot jako
+    0,0549 označil za neplatné.
+    """
+
+    def format_value(self, value):
+        if value in (None, ''):
+            return ''
+
+        try:
+            number = Decimal(str(value))
+        except (InvalidOperation, ValueError, TypeError):
+            return super().format_value(value)
+
+        # normalize() umí vyrobit exponenciální zápis (1E+2), quantize to vrátí
+        # zpět na běžné číslo.
+        trimmed = number.normalize()
+        if trimmed == trimmed.to_integral_value():
+            trimmed = trimmed.quantize(Decimal('1'))
+        return str(trimmed)
 
 
 class GoodsReceiptForm(forms.ModelForm):
@@ -94,7 +128,7 @@ class StockItemForm(forms.ModelForm):
             'warehouse': forms.Select(attrs={'class': 'form-select'}),
             'quantity': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.001', 'min': '0'}),
             'quantity_blocked': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.001', 'min': '0'}),
-            'price': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'min': '0'}),
+            'price': PriceInput(attrs={'class': 'form-control', 'min': '0'}),
         }
     
     def __init__(self, *args, **kwargs):
@@ -149,15 +183,13 @@ class GoodsReceiptItemForm(forms.ModelForm):
             'ingredient': forms.Select(attrs={'class': 'form-select', 'required': True}),
             'warehouse': forms.Select(attrs={'class': 'form-select warehouse-select', 'required': True}),
             'quantity': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.001', 'min': '0', 'required': True}),
-            'price_without_vat': forms.NumberInput(attrs={
-                'class': 'form-control price-without-vat', 
-                'step': '0.01', 
-                'min': '0', 
+            'price_without_vat': PriceInput(attrs={
+                'class': 'form-control price-without-vat',
+                'min': '0',
                 'onchange': 'calculateVAT(this)'
             }),
-            'price': forms.NumberInput(attrs={
+            'price': PriceInput(attrs={
                 'class': 'form-control price-with-vat',
-                'step': '0.01',
                 'min': '0',
                 'onchange': 'calculateVAT(this)'
             }),
@@ -234,11 +266,14 @@ class GoodsReceiptItemForm(forms.ModelForm):
 
         vat_multiplier = Decimal('1') + (vat_rate / Decimal('100'))
 
+        # Dopočtená cena si drží šest desetinných míst stejně jako pole
+        # v databázi. Zaokrouhlení na haléře by u surovin vedených v gramech
+        # ukrojilo procenta hodnoty.
         if price_without_vat is not None:
-            computed_price_with_vat = (price_without_vat * vat_multiplier).quantize(Decimal('0.01'))
+            computed_price_with_vat = (price_without_vat * vat_multiplier).quantize(MONEY)
             cleaned_data['price'] = computed_price_with_vat
         elif price_with_vat is not None:
-            computed_price_without_vat = (price_with_vat / vat_multiplier).quantize(Decimal('0.01'))
+            computed_price_without_vat = (price_with_vat / vat_multiplier).quantize(MONEY)
             cleaned_data['price_without_vat'] = computed_price_without_vat
 
         return cleaned_data
@@ -521,9 +556,8 @@ class StockTransferItemForm(forms.ModelForm):
                 'min': '0.001',
                 'required': True
             }),
-            'unit_price_with_vat': forms.NumberInput(attrs={
+            'unit_price_with_vat': PriceInput(attrs={
                 'class': 'form-control unit-price',
-                'step': '0.01',
                 'min': '0',
                 'required': True,
                 'readonly': True  # Cena se vyplní automaticky

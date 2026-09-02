@@ -15,6 +15,9 @@ python manage.py collectstatic --noinput
 echo "Creating superuser if needed..."
 python create_superuser.py || true
 
+echo "Purging expired receipt scans..."
+python manage.py purge_receipt_scans || true
+
 echo "Starting Gunicorn..."
 exec gunicorn --bind 0.0.0.0:8000 \
     --workers 2 \

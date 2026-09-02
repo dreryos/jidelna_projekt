@@ -1,0 +1,34 @@
+{
+  "dodavatel": {
+    "nazev": "Zelenina Ukázka s.r.o.",
+    "adresa": "Testovací 1, 100 00 Praha 1, Česká republika",
+    "ico": "11122233",
+    "dic": "CZ11122233"
+  },
+  "odberatel": {
+    "nazev": "Ukázková jídelna, s.r.o.",
+    "adresa": "Vzorová 2, 110 00 Praha 1, Česká republika",
+    "ico": "44455566",
+    "dic": "CZ44455566"
+  },
+  "doklad": {
+    "cislo_dokladu": "PR20260001",
+    "cislo_objednavky": "",
+    "typ_dokladu": "prodejka",
+    "datum_vystaveni": "2026-08-24",
+    "poznamka_rukou": ""
+  },
+  "polozky": [
+    {"nazev": "Rajče keř TUR", "mnozstvi": 6.7, "jednotka": "kg", "cena_za_mj": 54.9, "dph_procenta": 12, "cena_bez_dph": 367.83, "dph_castka": 44.14, "cena_celkem": 411.97},
+    {"nazev": "Paprika červená NL", "mnozstvi": 3.1, "jednotka": "kg", "cena_za_mj": 64.9, "dph_procenta": 12, "cena_bez_dph": 201.19, "dph_castka": 24.14, "cena_celkem": 225.33},
+    {"nazev": "Paprika žlutá NL", "mnozstvi": 2.9, "jednotka": "kg", "cena_za_mj": 69.9, "dph_procenta": 12, "cena_bez_dph": 202.71, "dph_castka": 24.33, "cena_celkem": 227.04},
+    {"nazev": "Zelí bílé nové PL", "mnozstvi": 15.9, "jednotka": "kg", "cena_za_mj": 19.9, "dph_procenta": 12, "cena_bez_dph": 316.41, "dph_castka": 37.97, "cena_celkem": 354.38},
+    {"nazev": "Zaokrouhlení", "mnozstvi": 1, "jednotka": "ks", "cena_za_mj": 0.28, "dph_procenta": 0, "cena_bez_dph": 0.28, "dph_castka": 0, "cena_celkem": 0.28}
+  ],
+  "souhrn_dph": [
+    {"sazba": "0", "zaklad": 0.28, "vyse_dph": 0, "celkem": 0.28},
+    {"sazba": "12", "zaklad": 1088.14, "vyse_dph": 130.58, "celkem": 1218.72}
+  ],
+  "celkem": {"zaklad": 1088.42, "dph": 130.58, "celkem_kc": 1219},
+  "platba": {"zpusob": "hotove", "castka": 1219}
+}

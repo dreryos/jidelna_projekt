@@ -1,0 +1,97 @@
+{% extends 'base.html' %}
+{% load core_filters l10n %}
+
+{% block title %}Srovnání měrných jednotek – Spíž{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+  <h1 class="h3">
+    <i class="fas fa-balance-scale me-2"></i>Srovnání měrných jednotek
+  </h1>
+  <p class="text-muted">
+    Příjemka <strong>{{ goods_receipt.receipt_number }}</strong> obsahuje položky,
+    které dodavatel fakturuje v jiné jednotce, než v jaké je vede sklad.
+    Kolik váží jeden kus nebo kolik kusů je v balení, systém neuhádne –
+    dokud to nedoplníte, příjemku nepotvrdí.
+  </p>
+
+  <form method="post">
+    {% csrf_token %}
+    <div class="table-responsive">
+      <table class="table align-middle">
+        <thead>
+          <tr>
+            <th>Na dokladu</th>
+            <th>Surovina</th>
+            <th style="width: 18rem;">Přepočet</th>
+            <th class="text-end">Naskladní se</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in conflicts %}
+            <tr>
+              <td>
+                <strong>{{ item.source_name|default:item.ingredient.name }}</strong><br>
+                <span class="text-muted">
+                  {{ item.source_quantity }} {{ item.source_unit }}
+                  à {{ item.price|format_price }} Kč
+                </span>
+              </td>
+              <td>
+                {{ item.ingredient.name }}<br>
+                <span class="text-muted">sklad vede v {{ item.ingredient.base_unit }}</span>
+              </td>
+              <td>
+                <div class="input-group">
+                  <span class="input-group-text">1 {{ item.source_unit }} =</span>
+                  <input type="text" class="form-control" required
+                         name="factor_{{ item.pk }}"
+                         data-quantity="{{ item.source_quantity|unlocalize }}"
+                         data-row="{{ item.pk }}"
+                         placeholder="např. 0,25">
+                  <span class="input-group-text">{{ item.ingredient.base_unit }}</span>
+                </div>
+              </td>
+              <td class="text-end">
+                <span id="preview-{{ item.pk }}" class="text-muted">—</span>
+                {{ item.ingredient.base_unit }}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <button type="submit" class="btn btn-primary">
+      <i class="fas fa-check me-2"></i>Uložit přepočty
+    </button>
+    <a href="{% url 'inventory:goods_receipt_detail' goods_receipt.pk %}"
+       class="btn btn-outline-secondary">Zpět na příjemku</a>
+
+    {% if goods_receipt.supplier_obj %}
+      <p class="form-text mt-2">
+        Zadané přepočty se uloží k dodavateli {{ goods_receipt.supplier_obj.name }},
+        takže se na totéž zboží příště ptát nebudeme.
+      </p>
+    {% else %}
+      <p class="form-text mt-2">
+        Příjemka nemá přiřazeného dodavatele, takže se přepočty nezapamatují.
+      </p>
+    {% endif %}
+  </form>
+</div>
+
+<script>
+  // Náhled výsledku, ať je hned vidět, jestli číslo dává smysl.
+  document.querySelectorAll('input[name^="factor_"]').forEach(function (input) {
+    input.addEventListener('input', function () {
+      const preview = document.getElementById('preview-' + input.dataset.row);
+      const factor = parseFloat(input.value.replace(',', '.'));
+      const quantity = parseFloat(input.dataset.quantity);
+      preview.textContent = (isFinite(factor) && factor > 0)
+        ? (quantity * factor).toLocaleString('cs-CZ', { maximumFractionDigits: 3 })
+        : '—';
+    });
+  });
+</script>
+{% endblock %}

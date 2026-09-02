@@ -45,12 +45,19 @@ urlpatterns = [
     path('supplier-csv-import/preview/', views.supplier_csv_import_step2, name='supplier_csv_import_step2'),
     path('supplier-csv-import/create/', views.supplier_csv_import_step3, name='supplier_csv_import_step3'),
     
+    # Import příjemky z fotky dokladu (Mistral OCR)
+    path('photo-import/', views.photo_import_step1, name='photo_import_step1'),
+    path('photo-import/preview/', views.photo_import_step2, name='photo_import_step2'),
+    path('photo-import/create/', views.photo_import_step3, name='photo_import_step3'),
+    path('photo-import/scan/<int:pk>/', views.photo_import_scan, name='photo_import_scan'),
+    
     # Příjem zboží (GoodsReceipt)
     path('goods-receipts/', views.GoodsReceiptListView.as_view(), name='goods_receipt_list'),
     path('goods-receipts/create/', views.goods_receipt_create, name='goods_receipt_create'),
     path('goods-receipts/<int:pk>/', views.GoodsReceiptDetailView.as_view(), name='goods_receipt_detail'),
     path('goods-receipts/<int:pk>/edit/', views.goods_receipt_edit, name='goods_receipt_edit'),
     path('goods-receipts/<int:pk>/confirm/', views.goods_receipt_confirm, name='goods_receipt_confirm'),
+    path('goods-receipts/<int:pk>/resolve-units/', views.goods_receipt_resolve_units, name='goods_receipt_resolve_units'),
     path('goods-receipts/<int:pk>/delete/', views.goods_receipt_delete, name='goods_receipt_delete'),
     
     # Inventura (InventoryVerification)

@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load core_filters %}
 {% load django_bootstrap5 %}
 
 {% block title %}
@@ -32,7 +33,7 @@
                 <strong>Sazba DPH:</strong> {{ form.instance.vat_rate }}%
               </div>
               <div class="col-md-6">
-                <strong>Cena bez DPH:</strong> {{ form.instance.price_without_vat }} Kč
+                <strong>Cena bez DPH:</strong> {{ form.instance.price_without_vat|format_price }} Kč
               </div>
             </div>
             <small class="text-muted mt-2 d-block">
