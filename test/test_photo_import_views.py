@@ -1,8 +1,10 @@
 """
 Testy importu příjemky z fotky dokladu.
 
-OCR se v testech nevolá – `run_ocr` je nahrazeno anotací z `backups/bolero`,
-takže testy neplatí za stránky a nezávisí na síti. Ověřuje se celá cesta
+OCR se v testech nevolá – `run_ocr` je nahrazeno anotací z
+`test/fixtures/ocr`, takže testy neplatí za stránky a nezávisí na síti.
+Fixtury jsou verzované; složka `backups/` je v .gitignore a test postavený
+na ní by na čistém klonu spadl. Ověřuje se celá cesta
 od nahrání fotky po vytvoření příjemky, včetně toho, co si systém zapamatuje
 a kdy se maže fotka.
 """
@@ -27,7 +29,7 @@ from apps.inventory.models import (
 
 pytestmark = pytest.mark.django_db
 
-FIXTURE = Path(settings.BASE_DIR) / 'backups' / 'bolero' / '1hsItXfw.jpg'
+FIXTURE = Path(settings.BASE_DIR) / 'test' / 'fixtures' / 'ocr' / 'prodejka_zelenina'
 
 
 @pytest.fixture
@@ -52,7 +54,7 @@ def uzivatel(client):
 @pytest.fixture
 def bolero():
     return Supplier.objects.create(
-        name='BOLERO Fruit', slug='bolero-fruit', ico='68524358',
+        name='BOLERO Fruit', slug='bolero-fruit', ico='11122233',
     )
 
 
@@ -74,7 +76,7 @@ def ocr_bez_site(monkeypatch):
         (FIXTURE / 'document-annotation.json').read_text(encoding='utf-8')
     )
 
-    def fake_run_ocr(raw_bytes, filename, model=None, api_key=None):
+    def fake_run_ocr(raw_bytes, filename, **kwargs):
         return {'annotation': annotation, 'markdown': '# doklad', 'raw': {}}
 
     def fake_prepare_image(raw_bytes, filename):
@@ -110,11 +112,11 @@ def test_nahrani_dokladu_ulozi_sken_i_data(client, uzivatel, sklad, bolero,
     scan = GoodsReceiptScan.objects.get()
     assert scan.uploaded_by == uzivatel
     assert scan.goods_receipt is None
-    assert scan.annotation['doklad']['cislo_dokladu'] == 'PR20260548'
+    assert scan.annotation['doklad']['cislo_dokladu'] == 'PR20260001'
     assert default_storage.exists(scan.file_path)
 
     data = client.session['photo_receipt_data']
-    assert data['receipt_number'] == 'PR20260548'
+    assert data['receipt_number'] == 'PR20260001'
     assert data['supplier_id'] == bolero.id
 
 
@@ -204,7 +206,7 @@ def test_vytvoreni_prijemky(client, uzivatel, sklad, bolero, suroviny,
     odeslat_prijemku(client, sklad, suroviny)
 
     prijemka = GoodsReceipt.objects.get()
-    assert prijemka.receipt_number == 'PR20260548'
+    assert prijemka.receipt_number == 'PR20260001'
     assert prijemka.supplier_obj == bolero
     assert prijemka.status == GoodsReceipt.Status.DRAFT
     # Zaokrouhlení se na sklad nedostalo.
@@ -285,7 +287,7 @@ def test_potvrzeni_prijemky_smaze_fotku(client, uzivatel, sklad, bolero, surovin
     assert scan.has_file is False
     assert not default_storage.exists(cesta)
     # Anotace zůstává kvůli dohledatelnosti.
-    assert scan.annotation['doklad']['cislo_dokladu'] == 'PR20260548'
+    assert scan.annotation['doklad']['cislo_dokladu'] == 'PR20260001'
 
 
 def test_sken_vidi_jen_opravneny_uzivatel(client, uzivatel, sklad, bolero,
@@ -344,8 +346,8 @@ def ocr_pekarna(monkeypatch):
     from apps.inventory.ocr import client
 
     annotation = {
-        'dodavatel': {'nazev': 'Pekárna Podlesí s.r.o.', 'ico': '25171284'},
-        'doklad': {'cislo_dokladu': 'DL2026/0417', 'typ_dokladu': 'dodaci_list',
+        'dodavatel': {'nazev': 'Pekárna Podlesí s.r.o.', 'ico': '77788899'},
+        'doklad': {'cislo_dokladu': 'DL2026/0001', 'typ_dokladu': 'dodaci_list',
                    'datum_vystaveni': '2026-09-02'},
         'ceny_jsou_s_dph': False,
         'polozky': [
@@ -365,7 +367,7 @@ def ocr_pekarna(monkeypatch):
 @pytest.fixture
 def pekarna():
     return Supplier.objects.create(
-        name='Pekárna Podlesí', slug='pekarna-p', ico='25171284',
+        name='Pekárna Podlesí', slug='pekarna-p', ico='77788899',
     )
 
 
@@ -578,3 +580,31 @@ def test_csv_import_oznaci_nejednoznacne_jednotky_a_neda_potvrdit(client, uzivat
     )
     # Do skladu se nic nedostalo.
     assert not StockItem.objects.filter(ingredient=rajce).exists()
+
+
+def test_pdf_sken_se_posle_jako_pdf(client, uzivatel, sklad, media_root):
+    """Doklad nahraný jako PDF nesmí odejít s hlavičkou obrázku."""
+    from apps.inventory.ocr.storage import save_scan
+
+    scan = GoodsReceiptScan.objects.create(
+        file_path=save_scan(b'%PDF-1.4', 'application/pdf'),
+        original_filename='doklad.pdf', uploaded_by=uzivatel,
+    )
+
+    response = client.get(reverse('inventory:photo_import_scan', args=[scan.pk]))
+
+    assert response.status_code == 200
+    assert response['Content-Type'] == 'application/pdf'
+
+
+def test_obrazkovy_sken_se_posle_jako_obrazek(client, uzivatel, sklad, media_root):
+    from apps.inventory.ocr.storage import save_scan
+
+    scan = GoodsReceiptScan.objects.create(
+        file_path=save_scan(b'fotka', 'image/jpeg'),
+        original_filename='doklad.jpg', uploaded_by=uzivatel,
+    )
+
+    response = client.get(reverse('inventory:photo_import_scan', args=[scan.pk]))
+
+    assert response['Content-Type'] == 'image/jpeg'

@@ -27,7 +27,14 @@ services:
       - OCR_SCAN_RETENTION_DAYS=7
     # Pozor: tenhle command přebíjí docker-entrypoint.sh, takže kroky, které
     # mají běžet při startu, musí být i tady.
-    command: sh -c "python manage.py migrate && python manage.py collectstatic --noinput && python create_superuser.py && python manage.py purge_receipt_scans || true; gunicorn --bind 0.0.0.0:8000 spiz_project.wsgi:application"
+    # Nefatální je jen úklid skenů; migrace, statika a superuser musí projít,
+    # jinak by Gunicorn nastartoval nad nemigrovanou databází.
+    command: >
+      sh -c "python manage.py migrate &&
+      python manage.py collectstatic --noinput &&
+      python create_superuser.py &&
+      { python manage.py purge_receipt_scans || true; } &&
+      gunicorn --bind 0.0.0.0:8000 spiz_project.wsgi:application"
 
 volumes:
   sqlite_data:

@@ -1,7 +1,10 @@
 """
 Testy normalizace OCR dokladů.
 
-Běží nad reálnými anotacemi z backups/bolero, takže nesahají na síť ani na API.
+Běží nad anotacemi ve `test/fixtures/ocr`, takže nesahají na síť ani na API.
+Fixtury jsou verzované – složka `backups/` je v .gitignore, takže testy nad ní
+by na čistém klonu tiše přeskočily a nikdo by si toho nevšiml.
+
 Pokrývají:
 
 - převod anotace na kanonický receipt_data
@@ -21,12 +24,11 @@ from apps.inventory.ocr.client import OcrError, load_fixture
 from apps.inventory.ocr.normalize import to_receipt_data
 from apps.inventory.ocr.quirks import classify_line, map_unit
 
-FIXTURE_ROOT = Path(settings.BASE_DIR) / 'backups' / 'bolero'
+FIXTURE_ROOT = Path(settings.BASE_DIR) / 'test' / 'fixtures' / 'ocr'
 
-pytestmark = pytest.mark.skipif(
-    not FIXTURE_ROOT.exists(),
-    reason='Chybí ukázkové OCR anotace v backups/bolero.',
-)
+# Reálné skeny od dodavatelů, pokud je má vývojář po ruce. Nejsou v gitu,
+# takže se na nich nesmí zakládat základní pokrytí – jen rozšiřují záběr.
+REAL_SCANS = Path(settings.BASE_DIR) / 'backups' / 'bolero'
 
 
 def load(name):
@@ -38,18 +40,18 @@ def all_fixtures():
 
 
 def test_prodejka_hlavicka():
-    data = load('1hsItXfw.jpg')
+    data = load('prodejka_zelenina')
 
     assert data['source'] == 'ocr'
-    assert data['receipt_number'] == 'PR20260548'
+    assert data['receipt_number'] == 'PR20260001'
     assert data['receipt_date'] == date(2026, 8, 24)
     assert data['doc_type'] == 'prodejka'
-    assert data['supplier_ico'] == '68524358'
+    assert data['supplier_ico'] == '11122233'
     assert data['totals']['total'] == Decimal('1219')
 
 
 def test_polozky_a_ceny():
-    data = load('1hsItXfw.jpg')
+    data = load('prodejka_zelenina')
     rajce = data['items'][0]
 
     assert rajce['item_name'] == 'Rajče keř TUR'
@@ -64,7 +66,7 @@ def test_polozky_a_ceny():
 
 
 def test_zaokrouhleni_je_oznaceno_jako_nezbozni_radek():
-    data = load('1hsItXfw.jpg')
+    data = load('prodejka_zelenina')
     posledni = data['items'][-1]
 
     assert posledni['item_name'] == 'Zaokrouhlení'
@@ -75,24 +77,26 @@ def test_zaokrouhleni_je_oznaceno_jako_nezbozni_radek():
 
 
 def test_zaporne_zaokrouhleni_se_precte_se_znamenkem():
-    data = load('a7Bds-5f.jpg')
+    data = load('bez_hlavicky')
     posledni = data['items'][-1]
 
     assert posledni['is_ignored'] is True
     assert posledni['price_per_unit_net'] == Decimal('-0.32')
 
 
-def test_jednotka_ks_zustane_ks():
-    data = load('Whb-Bubd.jpg')
-    salat = next(item for item in data['items'] if item['item_name'].startswith('Salát'))
+def test_jednotka_baleni_se_mapuje():
+    """Dodavatel fakturuje kartony, systém je vede jako balení."""
+    data = load('dodaci_list_pekarna')
+    rohlik = next(i for i in data['items'] if i['item_name'].startswith('Rohlík'))
 
-    assert salat['unit_mapped'] == 'ks'
-    assert salat['quantity'] == Decimal('6.000')
+    assert rohlik['unit'] == 'bal'
+    assert rohlik['unit_mapped'] == 'bal'
+    assert rohlik['quantity'] == Decimal('3.000')
 
 
 def test_ceny_bez_dph_jsou_rozpoznany_i_bez_priznaku():
     """Anotace z playgroundu příznak `ceny_jsou_s_dph` nemá, odvodíme si ho."""
-    payload = load_fixture(FIXTURE_ROOT / '1hsItXfw.jpg')
+    payload = load_fixture(FIXTURE_ROOT / 'prodejka_zelenina')
     assert 'ceny_jsou_s_dph' not in payload['annotation']
 
     data = to_receipt_data(payload['annotation'])
@@ -110,7 +114,7 @@ def test_soucet_polozek_sedi_se_zakladem_dane(fixture_name):
 
 def test_neprecteny_doklad_vraci_varovani_misto_vyjimky():
     """Sken bez hlavičky (jen razítko) se musí dát dokončit ručně."""
-    data = load('mQQw0vKd.jpg')
+    data = load('bez_hlavicky')
 
     assert data['receipt_number'] == ''
     assert data['supplier_ico'] == ''
@@ -119,6 +123,22 @@ def test_neprecteny_doklad_vraci_varovani_misto_vyjimky():
     assert any('IČO' in w for w in data['warnings'])
     # Zboží se přesto přečetlo.
     assert any(not item['is_ignored'] for item in data['items'])
+
+
+@pytest.mark.skipif(not REAL_SCANS.exists(), reason='Reálné skeny nejsou v gitu.')
+@pytest.mark.parametrize('fixture_dir', sorted(
+    (p.parent for p in REAL_SCANS.glob('*/document-annotation.json'))
+    if REAL_SCANS.exists() else []
+))
+def test_realne_skeny_projdou_souctovou_kontrolou(fixture_dir):
+    """
+    Rozšiřující pokrytí nad skutečnými doklady. Složka `backups/` není v gitu,
+    takže tenhle test na čistém klonu neběží – základní pokrytí stojí na
+    fixturách v `test/fixtures/ocr`.
+    """
+    data = to_receipt_data(load_fixture(fixture_dir)['annotation'])
+
+    assert [w for w in data['warnings'] if 'Součet položek' in w] == []
 
 
 def test_chybejici_fixtura_hlasi_srozumitelnou_chybu():
@@ -148,8 +168,13 @@ def test_klasifikace_radku(nazev, ocekavano):
     ('karton', 'bal'),
     ('BX', 'bal'),
     ('kg netto', 'kg'),
+    # Jednotka nemusí stát první – doklady ji píšou i za množstvím.
+    ('6,70 kg', 'kg'),
+    ('12 ks', 'ks'),
+    ('1,5 l', 'l'),
     ('', 'ks'),
     ('neznámá', 'ks'),
+    ('2,5 neznámá', 'ks'),
 ])
 def test_mapovani_jednotek(vstup, ocekavano):
     assert map_unit(vstup) == ocekavano
@@ -207,3 +232,25 @@ def test_neznamy_format_hlasi_srozumitelnou_chybu():
 def test_klasifikace_obalu_a_sluzeb(nazev, ocekavano):
     is_ignored, _reason = classify_line(nazev)
     assert is_ignored is ocekavano
+
+
+def test_pripravena_fotka_se_neprekoduje_znovu(monkeypatch):
+    """
+    Pohled si obrázek zmenší sám kvůli uložení skenu. Kdyby ho `run_ocr`
+    překódoval znovu, ubere se kvalita a čas nadarmo.
+    """
+    from apps.inventory.ocr import client
+
+    volani = []
+    monkeypatch.setattr(client, 'prepare_image',
+                        lambda b, n: volani.append(n) or (b, 'image/jpeg'))
+    monkeypatch.setattr(client.settings, 'MISTRAL_API_KEY', 'testovaci-klic',
+                        raising=False)
+
+    try:
+        client.run_ocr(b'uz-zmensene', 'doklad.jpg', mime_type='image/jpeg')
+    except Exception:
+        # Na síť se stejně nedostaneme, zajímá nás jen příprava obrázku.
+        pass
+
+    assert volani == []

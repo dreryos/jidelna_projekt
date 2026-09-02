@@ -25,9 +25,10 @@
 
         <div class="mb-3">
           <label for="scan_file" class="form-label">Fotka dokladu</label>
-          {# capture nabídne na mobilu rovnou fotoaparát; na počítači je to běžný výběr souboru #}
+          {# Bez capture: telefon nabídne fotoaparát i galerii. S ním by šlo
+             jen fotit, takže by nešel poslat doklad vyfocený dřív ani PDF. #}
           <input type="file" class="form-control" id="scan_file" name="scan_file"
-                 accept="image/*,application/pdf" capture="environment" required
+                 accept="image/*,application/pdf" required
                  {% if not ocr_available %}disabled{% endif %}>
           <div class="form-text">JPEG, PNG, HEIC nebo PDF, maximálně 25 MB.</div>
         </div>

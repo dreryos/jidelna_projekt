@@ -29,7 +29,7 @@ class Subjekt(BaseModel):
     ico: Optional[str] = Field(
         ..., description="IČO, pouze číslice, bez mezer.")
     dic: Optional[str] = Field(
-        ..., description="DIČ včetně předpony země, například CZ27152251.")
+        ..., description="DIČ včetně předpony země, například CZ44455566.")
 
 
 class Doklad(BaseModel):

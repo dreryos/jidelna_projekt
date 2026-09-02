@@ -123,15 +123,18 @@ def _register_heif_opener():
     _heif_registered = True
 
 
-def run_ocr(raw_bytes, filename, model=None, api_key=None):
+def run_ocr(raw_bytes, filename, model=None, api_key=None, mime_type=None):
     """
     Pošle doklad do Mistral OCR a vrátí strukturovanou anotaci.
 
     Args:
-        raw_bytes: obsah nahraného souboru
-        filename: původní název souboru, určuje formát
+        raw_bytes: obsah souboru
+        filename: název souboru, určuje formát (když není dán `mime_type`)
         model: název OCR modelu, výchozí `settings.MISTRAL_OCR_MODEL`
         api_key: API klíč, výchozí `settings.MISTRAL_API_KEY`
+        mime_type: typ už připravených dat. Volající, který si obrázek
+            zmenšil sám přes `prepare_image`, ho předá a ušetří tím druhé
+            překódování do JPEG.
 
     Returns:
         dict se klíči `annotation` (dict podle schématu), `markdown` (str)
@@ -154,7 +157,10 @@ def run_ocr(raw_bytes, filename, model=None, api_key=None):
             'Chybí balíček mistralai. Nainstalujte jej příkazem pip install mistralai.'
         ) from exc
 
-    image_bytes, mime = prepare_image(raw_bytes, filename)
+    if mime_type is None:
+        image_bytes, mime = prepare_image(raw_bytes, filename)
+    else:
+        image_bytes, mime = raw_bytes, mime_type
     encoded = base64.b64encode(image_bytes).decode('ascii')
     chunk_type = 'document_url' if mime == 'application/pdf' else 'image_url'
     document = {'type': chunk_type, chunk_type: f'data:{mime};base64,{encoded}'}

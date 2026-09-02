@@ -15,7 +15,7 @@ pytestmark = pytest.mark.django_db
 
 @pytest.fixture
 def bolero():
-    return Supplier.objects.create(name='BOLERO Fruit', slug='bolero-w', ico='68524358')
+    return Supplier.objects.create(name='BOLERO Fruit', slug='bolero-w', ico='11122233')
 
 
 @pytest.fixture
@@ -34,11 +34,14 @@ def doklad():
     """Data dokladu v podobě, jakou do session ukládají všechny tři importy."""
     return {
         'supplier': 'BOLERO Fruit, Aleš Bolek',
-        'supplier_ico': '68524358',
+        'supplier_ico': '11122233',
         'items': [
-            {'item_name': 'Jablko Gala IT', 'unit': 'kg'},
-            {'item_name': 'Cibule cal.70/90 25kg NL', 'unit': 'kg'},
-            {'item_name': 'Zaokrouhlení', 'unit': 'ks'},
+            {'item_name': 'Jablko Gala IT', 'unit': 'kg', 'unit_mapped': 'kg'},
+            # Dodavatel fakturuje kartony, mapovaná jednotka je balení –
+            # resolver tak projde i cestou přepočtu jednotek.
+            {'item_name': 'Cibule cal.70/90 25kg NL', 'unit': 'karton',
+             'unit_mapped': 'bal'},
+            {'item_name': 'Zaokrouhlení', 'unit': 'ks', 'unit_mapped': 'ks'},
         ],
     }
 
@@ -52,6 +55,9 @@ def test_import_doplni_navrhy_k_polozkam(bolero, suroviny, doklad):
     assert jablko['suggested_ingredient_name'] == 'Jablko'
     assert cibule['suggested_ingredient_name'] == 'Cibule'
     assert zaokrouhleni['is_ignored'] is True
+    # Jednotky sedí u jablka, u cibule v balení se musí zeptat.
+    assert jablko['needs_unit_check'] is False
+    assert cibule['needs_unit_check'] is True
     # Dodavatele poznáme podle IČO na dokladu.
     assert doklad['supplier_id'] == bolero.id
 
@@ -80,7 +86,7 @@ def test_import_se_nauci_a_podruhe_uz_je_to_jiste(bolero, suroviny, doklad):
 
     dalsi_doklad = {
         'supplier': 'BOLERO Fruit',
-        'supplier_ico': '68524358',
+        'supplier_ico': '11122233',
         # Jiná země původu i jiná gramáž než minule.
         'items': [
             {'item_name': 'Jablko Gala PL', 'unit': 'kg'},

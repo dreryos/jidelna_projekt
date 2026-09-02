@@ -142,7 +142,7 @@ už do databáze nechodí. Doklad má běžně deset až třicet řádků; ově�
 testem s `django_assert_num_queries(0)`.
 
 ### Fáze 4 — UI (hotovo)
-- [x] `photo_import_step1` — upload/fotoaparát, výběr skladu, volání OCR
+- [x] `photo_import_step1` — nahrání fotky, výběr skladu, volání OCR
 - [x] `photo_import_step2` — náhled skenu vedle tabulky, odškrtávání řádků
 - [x] `photo_import_step3` — vytvoření příjemky, samoučení včetně odmítnutých řádků
 - [x] `photo_import_scan` — náhled skenu přes view s kontrolou oprávnění
@@ -258,6 +258,22 @@ Tyhle dvě neblokují, jen upozorňují. Obě mají legitimní výjimku: dodavat
 opravdu zdražil, doklad se opravdu importuje znovu po smazání. Měrné jednotky
 naopak blokují, protože tam žádná legitimní výjimka není – množství v cizí
 jednotce je vždycky chyba.
+
+#### Nálezy z revize
+
+- Sporná přihrádka `core_key` se nepředvyplňuje. `Rohlík tukový karton`
+  a `Rohlík tukový 43g` mají stejný `core_key`, ale jiný `unit_factor` –
+  předvyplnit ten špatný by naskladnilo dvanáctinásobek. Když se aliasy
+  v přihrádce liší surovinou, příznakem nezbožního řádku nebo přepočtem,
+  přihrádka se zahodí a rozhodne člověk.
+- Základní pokrytí testů stojí na fixturách v `test/fixtures/ocr`. Složka
+  `backups/` je v `.gitignore`, takže testy nad ní na čistém klonu tiše
+  přeskakovaly. Sweep přes reálné skeny zůstává jako rozšíření.
+- `input[type=file]` nemá `capture` – zamklo by výběr na fotoaparát, takže
+  by nešel poslat doklad vyfocený dřív ani PDF.
+- Dopočet DPH v `GoodsReceiptItem.calculate_vat_fields`, `StockItem.save()`
+  a v `GoodsReceiptItemForm.clean()` zaokrouhloval na haléře, takže si
+  položka ničila přesnost sama při uložení.
 
 #### Hygiena dat v ostré DB
 

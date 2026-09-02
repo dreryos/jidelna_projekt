@@ -37,7 +37,7 @@ def uzivatel(client):
 def pekarna():
     # Název „Pekárna" a slug „pekarna" zabírá seed z migrace.
     return Supplier.objects.create(
-        name='Pekárna Podlesí', slug='pekarna-guard', ico='25171284',
+        name='Pekárna Podlesí', slug='pekarna-guard', ico='77788899',
     )
 
 
@@ -144,3 +144,59 @@ def test_potvrzenou_prijemku_uz_srovnavat_nejde(client, uzivatel, prijemka, skla
     )
 
     assert 'už upravovat nelze' in response.content.decode()
+
+
+def test_neplatny_prepocet_nezmeni_ani_drivejsi_polozky(client, uzivatel,
+                                                        prijemka, sklad, rohlik):
+    """
+    `return` uvnitř `transaction.atomic()` transakci potvrdí, ne zruší.
+    Když je druhý přepočet nesmysl, nesmí se uložit ani ten první.
+    """
+    mouka = Ingredient.objects.create(name='Mouka', unit='kg', base_unit='kg')
+    prvni = polozka(prijemka, sklad, rohlik)
+    druha = polozka(prijemka, sklad, mouka, source_name='Mouka pytel',
+                    source_unit='pytel')
+
+    response = client.post(
+        reverse('inventory:goods_receipt_resolve_units', args=[prijemka.pk]),
+        {f'factor_{prvni.pk}': '12', f'factor_{druha.pk}': 'dvanáct'},
+        follow=True,
+    )
+
+    assert 'jako číslo' in response.content.decode()
+    prvni.refresh_from_db()
+    druha.refresh_from_db()
+    assert prvni.quantity == Decimal('3')
+    assert druha.quantity == Decimal('3')
+    assert len(prijemka.unit_conflicts) == 2
+
+
+def test_zaporny_prepocet_nezmeni_ani_drivejsi_polozky(client, uzivatel,
+                                                       prijemka, sklad, rohlik):
+    mouka = Ingredient.objects.create(name='Mouka', unit='kg', base_unit='kg')
+    prvni = polozka(prijemka, sklad, rohlik)
+    druha = polozka(prijemka, sklad, mouka, source_name='Mouka pytel',
+                    source_unit='pytel')
+
+    client.post(
+        reverse('inventory:goods_receipt_resolve_units', args=[prijemka.pk]),
+        {f'factor_{prvni.pk}': '12', f'factor_{druha.pk}': '-5'}, follow=True,
+    )
+
+    prvni.refresh_from_db()
+    assert prvni.quantity == Decimal('3')
+
+
+def test_nahled_dostane_cislo_s_teckou(client, uzivatel, prijemka, sklad, rohlik):
+    """
+    Projekt má české locale, takže by se množství vykreslilo jako „3,000".
+    parseFloat by z „0,750" udělal nulu a náhled by lhal.
+    """
+    polozka(prijemka, sklad, rohlik, source_quantity=Decimal('0.75'))
+
+    obsah = client.get(
+        reverse('inventory:goods_receipt_resolve_units', args=[prijemka.pk])
+    ).content.decode()
+
+    assert 'data-quantity="0.750"' in obsah
+    assert 'data-quantity="0,750"' not in obsah

@@ -1,0 +1,18 @@
+{
+  "dodavatel": {"nazev": "RAZÍTKO NEČITELNÉ", "adresa": null, "ico": null, "dic": null},
+  "odberatel": null,
+  "doklad": {
+    "cislo_dokladu": null,
+    "cislo_objednavky": null,
+    "typ_dokladu": "prodejka",
+    "datum_vystaveni": null,
+    "poznamka_rukou": null
+  },
+  "polozky": [
+    {"nazev": "Cibule cal.70/90 10kg AT", "mnozstvi": 30, "jednotka": "kg", "cena_za_mj": 19.9, "dph_procenta": 12, "cena_bez_dph": 597.0, "dph_castka": 71.64, "cena_celkem": 668.64},
+    {"nazev": "Zaokrouhlení", "mnozstvi": 1, "jednotka": "ks", "cena_za_mj": -0.32, "dph_procenta": 0, "cena_bez_dph": -0.32, "dph_castka": 0, "cena_celkem": -0.32}
+  ],
+  "souhrn_dph": [{"sazba": "12", "zaklad": 597.0, "vyse_dph": 71.64, "celkem": 668.64}],
+  "celkem": {"zaklad": 596.68, "dph": 71.64, "celkem_kc": 668.32},
+  "platba": {"zpusob": "hotove", "castka": 668.32}
+}

@@ -39,7 +39,7 @@ def uzivatel(client):
 def pekarna():
     # Název „Pekárna" a slug „pekarna" zabírá seed z migrace.
     return Supplier.objects.create(
-        name='Pekárna Podlesí', slug='pekarna-guard', ico='25171284',
+        name='Pekárna Podlesí', slug='pekarna-guard', ico='77788899',
     )
 
 

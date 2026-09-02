@@ -38,6 +38,9 @@ from apps.inventory.units import conversion_factor, normalize_unit
 
 logger = logging.getLogger('apps.inventory')
 
+# Odlišuje „v indexu nic není" od „přihrádka je sporná" (uloženo jako None).
+_MISSING = object()
+
 # Pod touhle hranicí návrh nenabízíme vůbec – lepší prázdné pole než
 # zavádějící napovězená surovina, kterou někdo odklikne.
 FUZZY_THRESHOLD = 0.4
@@ -147,16 +150,53 @@ class IngredientResolver:
         for alias in aliases:
             if alias.supplier_id is None:
                 self._global_by_raw.setdefault(alias.raw_key, alias)
-                self._global_by_core.setdefault(alias.core_key, alias)
+                self._index_core(self._global_by_core, alias)
             elif self.supplier and alias.supplier_id == self.supplier.id:
                 self._supplier_by_raw.setdefault(alias.raw_key, alias)
-                self._supplier_by_core.setdefault(alias.core_key, alias)
+                self._index_core(self._supplier_by_core, alias)
             else:
                 # Aliasy cizích dodavatelů. Nejčastěji použitý vyhrává,
-                # protože ten je nejspíš správně.
+                # protože ten je nejspíš správně. Tady se nic nepředvyplňuje,
+                # takže případná nejednoznačnost projde rukama uživatele.
                 current = self._other_by_core.get(alias.core_key)
                 if current is None or alias.times_used > current.times_used:
                     self._other_by_core[alias.core_key] = alias
+
+    @staticmethod
+    def _index_core(index, alias):
+        """
+        Zapíše alias do přihrádky podle `core_key`, pokud je jednoznačná.
+
+        Do jedné přihrádky spadne víc názvů – `Jablko Gala IT` i
+        `Jablko Gala PL` dají `jablko gala`. Dokud vedou na totéž, je to
+        přesně ten záměr. Když se ale liší surovinou, příznakem nezbožního
+        řádku nebo přepočtem jednotek, nedá se z nich vybrat bez hádání:
+        `Rohlík tukový karton` (12 kusů v balení) a `Rohlík tukový 43g`
+        (jeden kus) mají stejný `core_key`, ale jiný `unit_factor`.
+
+        Sporná přihrádka se proto zahodí. Řádek pak spadne na nižší vrstvu,
+        která se nepředvyplňuje, a rozhodne o něm člověk.
+        """
+        existing = index.get(alias.core_key, _MISSING)
+
+        if existing is _MISSING:
+            index[alias.core_key] = alias
+            return
+        if existing is None:
+            # Přihrádka už byla označena za spornou.
+            return
+
+        conflicting = (
+            existing.ingredient_id != alias.ingredient_id
+            or existing.is_ignored != alias.is_ignored
+            or existing.unit_factor != alias.unit_factor
+        )
+        if conflicting:
+            logger.debug(
+                'Přihrádka „%s" je sporná, nepředvyplňuje se: %s vs %s',
+                alias.core_key, existing, alias,
+            )
+            index[alias.core_key] = None
 
     def resolve(self, raw_name, unit=None):
         """
@@ -181,6 +221,7 @@ class IngredientResolver:
         )
 
         for index, key, source, confidence in tiers:
+            # None v indexu značí spornou přihrádku, ta se přeskakuje.
             alias = index.get(key)
             if alias is not None:
                 return self._resolve_units(

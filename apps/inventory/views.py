@@ -19,6 +19,7 @@ from apps.core.views import CanteenAccessMixin, user_can_access_canteen
 from decimal import Decimal, InvalidOperation
 import logging
 import json
+from pathlib import Path
 
 from .models import (
     StockItem, GoodsReceipt, GoodsReceiptItem, 
@@ -2407,6 +2408,15 @@ def supplier_csv_import_step3(request):
 # Fotka z mobilu má i ve vysokém rozlišení jednotky megabajtů.
 MAX_SCAN_UPLOAD_BYTES = 25 * 1024 * 1024
 
+# Skeny ukládá `ocr.storage` podle typu, takže přípona určuje, čím se mají
+# poslat zpátky. PDF poslané jako obrázek prohlížeč nezobrazí.
+SCAN_CONTENT_TYPES = {
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.png': 'image/png',
+    '.pdf': 'application/pdf',
+}
+
 
 def _serialize_receipt_data(receipt_data):
     """
@@ -2479,7 +2489,8 @@ def photo_import_step1(request):
             # Ukládáme zmenšenou podobu, ne originál – na náhled stačí
             # a na disku se drží jen do potvrzení příjemky.
             scan_path = save_scan(image_bytes, mime)
-            result = run_ocr(image_bytes, scan_file.name)
+            # Posíláme už zmenšenou podobu, ať se JPEG nekóduje podruhé.
+            result = run_ocr(image_bytes, scan_file.name, mime_type=mime)
             receipt_data = to_receipt_data(result['annotation'])
         except OcrError as exc:
             messages.error(request, str(exc))
@@ -2569,7 +2580,7 @@ def _collect_import_warnings(receipt_data, warehouse):
             price_warnings.append(
                 f'„{item["item_name"]}": po přepočtu na {item["target_unit"]} '
                 f'vychází cena {precision["exact"]} Kč, ale sklad ji umí uložit '
-                f'jen na haléře ({precision["stored"]} Kč). Ocenění skladu bude '
+                f'jen jako {precision["stored"]} Kč. Ocenění skladu bude '
                 f'o {precision["error"] * 100:.0f} % vedle. Zvažte, jestli má '
                 f'{item["ingredient_name"]} zůstat v {item["target_unit"]}.'
             )
@@ -2859,7 +2870,11 @@ def photo_import_scan(request, pk):
     if not scan.has_file or not default_storage.exists(scan.file_path):
         raise Http404
 
-    return FileResponse(default_storage.open(scan.file_path), content_type='image/jpeg')
+    # PDF se nesmí poslat jako obrázek – prohlížeč by ho nezobrazil.
+    content_type = SCAN_CONTENT_TYPES.get(
+        Path(scan.file_path).suffix.lower(), 'application/octet-stream',
+    )
+    return FileResponse(default_storage.open(scan.file_path), content_type=content_type)
 
 
 @login_required
@@ -2899,23 +2914,36 @@ def goods_receipt_resolve_units(request, pk):
             if goods_receipt.supplier_obj else None
         )
 
+        # Nejdřív se ověří všechny zadané poměry a teprve pak se zapisuje.
+        # `return` uvnitř `transaction.atomic()` transakci potvrdí, ne zruší,
+        # takže při opačném pořadí by se změny u dřívějších položek uložily
+        # a příjemka by zůstala v půli přepočtená.
+        factors = {}
+        for item in conflicts:
+            raw = request.POST.get(f'factor_{item.pk}', '').strip().replace(',', '.')
+            try:
+                factor = Decimal(raw)
+            except (InvalidOperation, ValueError):
+                messages.error(
+                    request,
+                    f'„{item.ingredient.name}": zadejte přepočet jako číslo.'
+                )
+                return redirect('inventory:goods_receipt_resolve_units', pk=pk)
+
+            if factor <= 0:
+                messages.error(
+                    request,
+                    f'„{item.ingredient.name}": přepočet jednotek musí být '
+                    f'kladné číslo.'
+                )
+                return redirect('inventory:goods_receipt_resolve_units', pk=pk)
+
+            factors[item.pk] = factor
+
         with transaction.atomic():
             for item in conflicts:
-                raw = request.POST.get(f'factor_{item.pk}', '').strip().replace(',', '.')
-                try:
-                    factor = Decimal(raw)
-                except (InvalidOperation, ValueError):
-                    messages.error(
-                        request,
-                        f'„{item.ingredient.name}": zadejte přepočet jako číslo.'
-                    )
-                    return redirect('inventory:goods_receipt_resolve_units', pk=pk)
-
-                try:
-                    item.apply_unit_factor(factor)
-                except ValidationError as exc:
-                    messages.error(request, f'„{item.ingredient.name}": {exc.messages[0]}')
-                    return redirect('inventory:goods_receipt_resolve_units', pk=pk)
+                factor = factors[item.pk]
+                item.apply_unit_factor(factor)
 
                 # Ať se na totéž zboží podruhé neptáme.
                 if resolver and item.source_name:

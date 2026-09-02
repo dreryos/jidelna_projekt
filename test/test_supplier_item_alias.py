@@ -29,7 +29,7 @@ pytestmark = pytest.mark.django_db
 
 @pytest.fixture
 def dodavatel():
-    return Supplier.objects.create(name='BOLERO Fruit', slug='bolero', ico='68524358')
+    return Supplier.objects.create(name='BOLERO Fruit', slug='bolero', ico='11122233')
 
 
 @pytest.fixture
@@ -42,11 +42,11 @@ def surovina():
 def test_ico_se_ocisti_od_mezer_a_teckek():
     # Slugy 'pekarna' a 'zelinar' zabírá seed z migrace, bereme si vlastní.
     dodavatel = Supplier.objects.create(
-        name='Pekárna Podlesí', slug='pekarna-podlesi', ico='251 712 84',
+        name='Pekárna Podlesí', slug='pekarna-podlesi', ico='777 888 99',
     )
 
     dodavatel.refresh_from_db()
-    assert dodavatel.ico == '25171284'
+    assert dodavatel.ico == '77788899'
 
 
 def test_prazdne_ico_se_uklada_jako_null():
@@ -59,7 +59,7 @@ def test_prazdne_ico_se_uklada_jako_null():
 
 def test_dva_dodavatele_nemohou_sdilet_ico(dodavatel):
     with pytest.raises(IntegrityError):
-        Supplier.objects.create(name='Podvrh', slug='podvrh', ico='68524358')
+        Supplier.objects.create(name='Podvrh', slug='podvrh', ico='11122233')
 
 
 def test_ico_musi_mit_osm_cislic():
@@ -71,9 +71,9 @@ def test_ico_musi_mit_osm_cislic():
 
 def test_vyhledani_dodavatele_podle_ica_z_dokladu(dodavatel):
     """OCR vrací IČO i s mezerami nebo s předponou, hledání to musí přežít."""
-    assert Supplier.find_by_ico('68524358') == dodavatel
-    assert Supplier.find_by_ico('685 243 58') == dodavatel
-    assert Supplier.find_by_ico('IČ: 68524358') == dodavatel
+    assert Supplier.find_by_ico('11122233') == dodavatel
+    assert Supplier.find_by_ico('111 222 33') == dodavatel
+    assert Supplier.find_by_ico('IČ: 11122233') == dodavatel
     assert Supplier.find_by_ico('') is None
     assert Supplier.find_by_ico('11111111') is None
 

@@ -21,7 +21,7 @@ pytestmark = pytest.mark.django_db
 
 @pytest.fixture
 def bolero():
-    return Supplier.objects.create(name='BOLERO Fruit', slug='bolero-f', ico='68524358')
+    return Supplier.objects.create(name='BOLERO Fruit', slug='bolero-f', ico='11122233')
 
 
 @pytest.fixture
@@ -272,7 +272,7 @@ def test_shoda_prvniho_slova_pomaha():
 def test_dodavatel_se_hleda_prednostne_podle_ica(bolero):
     from apps.inventory.matching import find_supplier
 
-    assert find_supplier(name='Úplně jiný název', ico='68524358') == bolero
+    assert find_supplier(name='Úplně jiný název', ico='11122233') == bolero
 
 
 def test_dodavatel_podle_zkraceneho_nazvu(bolero):
@@ -369,3 +369,86 @@ def test_naucený_prevod_neplati_pro_jinou_jednotku(bolero, suroviny):
 
     assert match.unit_factor == Decimal('1')
     assert match.needs_unit_check is False
+
+
+# --- Sporné přihrádky ---
+
+def test_sporna_prihradka_se_nepredvyplni(bolero, suroviny):
+    """
+    Do jedné přihrádky spadnou dva názvy, které vedou na jinou surovinu.
+    Vybrat z nich bez hádání nelze, takže se nesmí předvyplnit.
+    """
+    SupplierItemAlias.objects.create(
+        supplier=bolero, raw_name='Jablko Gala IT', ingredient=suroviny['jablko'],
+    )
+    SupplierItemAlias.objects.create(
+        supplier=bolero, raw_name='Jablko Gala PL', ingredient=suroviny['cibule'],
+    )
+
+    match = IngredientResolver(bolero).resolve('Jablko Gala ES')
+
+    assert match.source != 'alias_core'
+    assert match.is_automatic is False
+
+
+def test_sporny_prepocet_jednotek_se_nepredvyplni(bolero, suroviny):
+    """
+    Rohlík tukový karton a Rohlík tukový 43g mají stejný core_key, ale jiný
+    přepočet. Předvyplnit ten špatný by naskladnilo dvanáctinásobek.
+    """
+    SupplierItemAlias.objects.create(
+        supplier=bolero, raw_name='Rohlík tukový karton', ingredient=suroviny['rohlik'],
+        unit='bal', unit_factor=Decimal('12'),
+    )
+    SupplierItemAlias.objects.create(
+        supplier=bolero, raw_name='Rohlík tukový 43g', ingredient=suroviny['rohlik'],
+        unit='ks', unit_factor=Decimal('1'),
+    )
+
+    match = IngredientResolver(bolero).resolve('Rohlík tukový BIO', unit='ks')
+
+    assert match.source != 'alias_core'
+    assert match.is_automatic is False
+
+
+def test_sporny_priznak_nezbozniho_radku_se_nepredvyplni(bolero, suroviny):
+    SupplierItemAlias.objects.create(
+        supplier=bolero, raw_name='Obal vratný', is_ignored=True,
+    )
+    SupplierItemAlias.objects.create(
+        supplier=bolero, raw_name='Obal vratný CZ', ingredient=suroviny['jablko'],
+    )
+
+    match = IngredientResolver(bolero).resolve('Obal vratný DE')
+
+    assert match.source != 'alias_core'
+
+
+def test_shodne_aliasy_v_prihradce_predvyplnit_lze(bolero, suroviny):
+    """Různá země původu u téže suroviny sporná není – to je celý smysl."""
+    SupplierItemAlias.objects.create(
+        supplier=bolero, raw_name='Jablko Gala IT', ingredient=suroviny['jablko'],
+    )
+    SupplierItemAlias.objects.create(
+        supplier=bolero, raw_name='Jablko Gala PL', ingredient=suroviny['jablko'],
+    )
+
+    match = IngredientResolver(bolero).resolve('Jablko Gala ES')
+
+    assert match.source == 'alias_core'
+    assert match.ingredient == suroviny['jablko']
+
+
+def test_presna_shoda_prebije_spornou_prihradku(bolero, suroviny):
+    """Přesný název je jednoznačný i tehdy, když je přihrádka sporná."""
+    SupplierItemAlias.objects.create(
+        supplier=bolero, raw_name='Jablko Gala IT', ingredient=suroviny['jablko'],
+    )
+    SupplierItemAlias.objects.create(
+        supplier=bolero, raw_name='Jablko Gala PL', ingredient=suroviny['cibule'],
+    )
+
+    match = IngredientResolver(bolero).resolve('Jablko Gala IT')
+
+    assert match.source == 'alias'
+    assert match.ingredient == suroviny['jablko']

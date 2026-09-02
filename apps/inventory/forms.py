@@ -5,6 +5,7 @@ from django.forms import inlineformset_factory, BaseInlineFormSet
 from django.core.exceptions import ValidationError, ObjectDoesNotExist
 from django.db.models import Q
 from .models import (
+    MONEY,
     GoodsReceipt, GoodsReceiptItem, Warehouse, Ingredient,
     InventoryVerification, InventoryVerificationItem,
     StockTransfer, StockTransferItem, StockItem,
@@ -265,11 +266,14 @@ class GoodsReceiptItemForm(forms.ModelForm):
 
         vat_multiplier = Decimal('1') + (vat_rate / Decimal('100'))
 
+        # Dopočtená cena si drží šest desetinných míst stejně jako pole
+        # v databázi. Zaokrouhlení na haléře by u surovin vedených v gramech
+        # ukrojilo procenta hodnoty.
         if price_without_vat is not None:
-            computed_price_with_vat = (price_without_vat * vat_multiplier).quantize(Decimal('0.01'))
+            computed_price_with_vat = (price_without_vat * vat_multiplier).quantize(MONEY)
             cleaned_data['price'] = computed_price_with_vat
         elif price_with_vat is not None:
-            computed_price_without_vat = (price_with_vat / vat_multiplier).quantize(Decimal('0.01'))
+            computed_price_without_vat = (price_with_vat / vat_multiplier).quantize(MONEY)
             cleaned_data['price_without_vat'] = computed_price_without_vat
 
         return cleaned_data

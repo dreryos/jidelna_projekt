@@ -35,7 +35,7 @@ def rajce():
 
 @pytest.fixture
 def bolero():
-    return Supplier.objects.create(name='BOLERO', slug='bolero-check', ico='68524358')
+    return Supplier.objects.create(name='BOLERO', slug='bolero-check', ico='11122233')
 
 
 @pytest.fixture
@@ -160,18 +160,24 @@ def test_prepocet_bez_ztraty_presnosti():
     assert check_price_precision(Decimal('120'), Decimal('12')) is None
 
 
-def test_prevod_kil_na_gramy_zahodi_presnost_ceny():
+def test_bezny_prevod_na_gramy_uz_presnost_neztraci():
     """
-    Surovina vedená v gramech: 54,90 Kč/kg je 0,0549 Kč/g, ale cenová pole
-    ve skladu mají přesnost na haléře.
+    Dřív se ceny ukládaly na dvě desetinná místa a 54,90 Kč/kg z toho vyšlo
+    jako 0,05 Kč/g. Při šesti místech je 0,0549 Kč/g přesně.
     """
     from apps.inventory.receipt_checks import check_price_precision
 
-    ztrata = check_price_precision(Decimal('54.90'), Decimal('1000'))
+    assert check_price_precision(Decimal('54.90'), Decimal('1000')) is None
+
+
+def test_extremni_prepocet_presnost_stale_hlida():
+    """Pojistka pro případ, kdy cena spadne pod přesnost cenových polí."""
+    from apps.inventory.receipt_checks import check_price_precision
+
+    ztrata = check_price_precision(Decimal('0.01'), Decimal('1000000'))
 
     assert ztrata is not None
-    assert ztrata['stored'] == Decimal('0.05')
-    assert ztrata['error'] > Decimal('0.08')
+    assert ztrata['error'] > Decimal('0.01')
 
 
 def test_nulova_cena_se_neresi():

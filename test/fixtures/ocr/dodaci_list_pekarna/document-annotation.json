@@ -1,0 +1,34 @@
+{
+  "dodavatel": {
+    "nazev": "Pekárna Ukázka s.r.o.",
+    "adresa": "Ukázková 3, 100 00 Praha 1, Česká republika",
+    "ico": "77788899",
+    "dic": "CZ77788899"
+  },
+  "odberatel": {
+    "nazev": "Ukázková jídelna, s.r.o.",
+    "adresa": "Vzorová 2, 110 00 Praha 1, Česká republika",
+    "ico": "44455566",
+    "dic": "CZ44455566"
+  },
+  "doklad": {
+    "cislo_dokladu": "DL2026/0001",
+    "cislo_objednavky": "",
+    "typ_dokladu": "dodaci_list",
+    "datum_vystaveni": "2026-09-02",
+    "datum_dodani": "2026-09-02",
+    "poznamka_rukou": ""
+  },
+  "ceny_jsou_s_dph": false,
+  "polozky": [
+    {"nazev": "Rohlík tukový karton", "mnozstvi": 3, "jednotka": "bal", "cena_za_mj": 120, "dph_procenta": 12, "cena_bez_dph": 360, "dph_castka": 43.2, "cena_celkem": 403.2},
+    {"nazev": "Mouka hladká", "mnozstvi": 2, "jednotka": "kg", "cena_za_mj": 30, "dph_procenta": 12, "cena_bez_dph": 60, "dph_castka": 7.2, "cena_celkem": 67.2},
+    {"nazev": "Doprava", "mnozstvi": 1, "jednotka": "ks", "cena_za_mj": 150, "dph_procenta": 21, "cena_bez_dph": 150, "dph_castka": 31.5, "cena_celkem": 181.5}
+  ],
+  "souhrn_dph": [
+    {"sazba": "12", "zaklad": 420, "vyse_dph": 50.4, "celkem": 470.4},
+    {"sazba": "21", "zaklad": 150, "vyse_dph": 31.5, "celkem": 181.5}
+  ],
+  "celkem": {"zaklad": 570, "dph": 81.9, "celkem_kc": 651.9},
+  "platba": {"zpusob": "prevodem", "castka": 651.9}
+}

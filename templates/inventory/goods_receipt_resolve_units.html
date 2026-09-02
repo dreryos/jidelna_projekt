@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load core_filters %}
+{% load core_filters l10n %}
 
 {% block title %}Srovnání měrných jednotek – Spíž{% endblock %}
 
@@ -46,7 +46,7 @@
                   <span class="input-group-text">1 {{ item.source_unit }} =</span>
                   <input type="text" class="form-control" required
                          name="factor_{{ item.pk }}"
-                         data-quantity="{{ item.source_quantity }}"
+                         data-quantity="{{ item.source_quantity|unlocalize }}"
                          data-row="{{ item.pk }}"
                          placeholder="např. 0,25">
                   <span class="input-group-text">{{ item.ingredient.base_unit }}</span>

@@ -175,3 +175,46 @@ def test_stara_presnost_by_ukrojila_procenta():
 
     assert stara == Decimal('0.05')
     assert (presna - stara) / presna > Decimal('0.08')
+
+
+def test_dopocet_dph_neztrati_presnost(prijemka, sklad, mouka):
+    """
+    `calculate_vat_fields` dřív zaokrouhlovala na haléře, takže si položka
+    zničila přesnost sama při uložení.
+    """
+    item = GoodsReceiptItem(
+        goods_receipt=prijemka, ingredient=mouka, warehouse=sklad,
+        quantity=Decimal('2000'), price_without_vat=Decimal('0.049'),
+        vat_rate=Decimal('12'),
+    )
+    item.save()
+
+    item.refresh_from_db()
+    assert item.vat_amount == Decimal('0.005880')
+    assert item.price == Decimal('0.054880')
+
+
+def test_skladova_polozka_dopocita_cenu_bez_dph_presne(sklad, mouka):
+    """`StockItem.save()` přepočítává cenu bez DPH při každém uložení."""
+    stock = StockItem.objects.create(
+        ingredient=mouka, warehouse=sklad, quantity=Decimal('2000'),
+        price=Decimal('0.0549'), vat_rate=Decimal('12'),
+        price_without_vat=Decimal('0'),
+    )
+
+    stock.refresh_from_db()
+    assert stock.price_without_vat == Decimal('0.049018')
+
+
+def test_formular_dopocte_cenu_na_sest_mist(sklad, mouka):
+    """Zadá se jen cena bez DPH, druhá se dopočítá – a nesmí se zaokrouhlit."""
+    from apps.inventory.forms import GoodsReceiptItemForm
+
+    form = GoodsReceiptItemForm(data={
+        'ingredient': mouka.id, 'warehouse': sklad.id,
+        'quantity': '2000', 'price_without_vat': '0.049',
+        'vat_rate': '12', 'notes': '',
+    })
+
+    assert form.is_valid(), form.errors
+    assert form.cleaned_data['price'] == Decimal('0.054880')

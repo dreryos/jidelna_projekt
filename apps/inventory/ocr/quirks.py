@@ -90,6 +90,10 @@ def map_unit(unit, fallback='ks'):
         return UNIT_MAPPING[key]
 
     # Doklady občas píšou jednotku spolu s množstvím („6,70 kg") nebo
-    # s upřesněním („kg netto"). Zkusíme první slovo.
-    first_word = re.split(r'[\s/]+', key)[0] if key else ''
-    return UNIT_MAPPING.get(first_word, fallback)
+    # s upřesněním („kg netto"). Projdeme všechny části, protože jednotka
+    # může stát kdekoli – u „6,70 kg" je to až ta druhá.
+    for token in re.split(r'[\s/]+', key):
+        if token in UNIT_MAPPING:
+            return UNIT_MAPPING[token]
+
+    return fallback

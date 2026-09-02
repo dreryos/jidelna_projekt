@@ -128,18 +128,21 @@ def collect_receipt_warnings(items, warehouse_by_index=None):
     return warnings
 
 
-# O kolik smí zaokrouhlení ceny na haléře uhnout, než na to upozorníme.
+# Přesnost, se kterou se ceny ukládají – odpovídá decimal_places cenových polí.
+STORED_PRICE_PRECISION = Decimal('0.000001')
+
+# O kolik smí zaokrouhlení ceny uhnout, než na to upozorníme.
 PRICE_PRECISION_TOLERANCE = Decimal('0.01')
 
 
 def check_price_precision(unit_price, factor):
     """
-    Ověří, že se jednotková cena vejde do dvou desetinných míst.
+    Ověří, že se jednotková cena vejde do přesnosti cenových polí.
 
-    Cenová pole v celém skladu mají přesnost na haléře. Když se surovina
-    vede v gramech a doklad fakturuje kilogramy, vyjde po přepočtu cena
-    v řádu setin a zaokrouhlení ji posune o procenta. Na množství to vliv
-    nemá, na ocenění skladu ano.
+    Ceny se ukládají na šest desetinných míst. Při běžných potravinách se
+    kontrola neozve – smysl má u extrémního přepočtu, kde by cena za skladovou
+    jednotku spadla pod desetitisícinu haléře a zaokrouhlení by z ní ukrojilo
+    procenta.
 
     Returns:
         dict s klíči `exact`, `stored` a `error`, nebo None, když je cena
@@ -153,7 +156,7 @@ def check_price_precision(unit_price, factor):
     if exact == 0:
         return None
 
-    stored = exact.quantize(Decimal('0.01'))
+    stored = exact.quantize(STORED_PRICE_PRECISION)
     error = (stored - exact).copy_abs() / exact
 
     if error <= PRICE_PRECISION_TOLERANCE:

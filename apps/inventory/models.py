@@ -16,6 +16,11 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# Přesnost ukládaných peněžních hodnot. Odpovídá decimal_places u cenových
+# polí – u suroviny vedené v gramech je 54,90 Kč/kg jen 0,0549 Kč/g a na
+# haléře by se z toho stalo 0,05, tedy ocenění skladu o 9 % vedle.
+MONEY = Decimal('0.000001')
+
 class Supplier(models.Model):
     """Dodavatel s možností šablon surovin"""
     
@@ -426,7 +431,7 @@ class StockItem(models.Model):
         # Výpočet ceny bez DPH (price je cena s DPH)
         if self.price is not None and self.vat_rate is not None:
              vat_multiplier = Decimal('1') + (self.vat_rate / Decimal('100'))
-             self.price_without_vat = (self.price / vat_multiplier).quantize(Decimal('0.01'))
+             self.price_without_vat = (self.price / vat_multiplier).quantize(MONEY)
 
         # Automatická oprava nepřesností pro kusové položky
         if self.ingredient.base_unit in ['ks', 'kus', 'kusy']:
@@ -927,14 +932,13 @@ class GoodsReceiptItem(models.Model):
         """Vypočítá všechny DPH pole"""
         if self.price_without_vat and self.vat_rate is not None:
             # Výpočet z ceny bez DPH
-            vat_multiplier = Decimal('1') + (self.vat_rate / Decimal('100'))
-            self.vat_amount = (self.price_without_vat * self.vat_rate / Decimal('100')).quantize(Decimal('0.01'))
-            self.price = (self.price_without_vat + self.vat_amount).quantize(Decimal('0.01'))
+            self.vat_amount = (self.price_without_vat * self.vat_rate / Decimal('100')).quantize(MONEY)
+            self.price = (self.price_without_vat + self.vat_amount).quantize(MONEY)
         elif self.price and self.vat_rate is not None:
             # Výpočet z ceny s DPH (zpětný výpočet)
             vat_multiplier = Decimal('1') + (self.vat_rate / Decimal('100'))
-            self.price_without_vat = (self.price / vat_multiplier).quantize(Decimal('0.01'))
-            self.vat_amount = (self.price - self.price_without_vat).quantize(Decimal('0.01'))
+            self.price_without_vat = (self.price / vat_multiplier).quantize(MONEY)
+            self.vat_amount = (self.price - self.price_without_vat).quantize(MONEY)
     
     def save(self, *args, **kwargs):
         # Automatický výpočet DPH polí
