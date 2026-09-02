@@ -4,6 +4,10 @@ services:
     volumes:
       - sqlite_data:/app/data
       - static_volume:/app/staticfiles
+      # Nahrané skeny dokladů. Jsou dočasné (mažou se po potvrzení příjemky,
+      # nejpozději po OCR_SCAN_RETENTION_DAYS), ale rozdělaný import nesmí
+      # restart kontejneru shodit.
+      - media_volume:/app/media
     ports:
       - "8000:8000"
     environment:
@@ -16,8 +20,16 @@ services:
       - DJANGO_SUPERUSER_USERNAME=admin
       - DJANGO_SUPERUSER_EMAIL=admin@example.com
       - DJANGO_SUPERUSER_PASSWORD=admin
-    command: sh -c "python manage.py migrate && python manage.py collectstatic --noinput && python create_superuser.py && gunicorn --bind 0.0.0.0:8000 spiz_project.wsgi:application"
+      - MEDIA_ROOT=/app/media
+      # Načítání příjemek z fotky. Bez klíče je funkce nedostupná,
+      # zbytek aplikace běží normálně. Klíč patří do .env, ne sem.
+      - MISTRAL_API_KEY=${MISTRAL_API_KEY:-}
+      - OCR_SCAN_RETENTION_DAYS=7
+    # Pozor: tenhle command přebíjí docker-entrypoint.sh, takže kroky, které
+    # mají běžet při startu, musí být i tady.
+    command: sh -c "python manage.py migrate && python manage.py collectstatic --noinput && python create_superuser.py && python manage.py purge_receipt_scans || true; gunicorn --bind 0.0.0.0:8000 spiz_project.wsgi:application"
 
 volumes:
   sqlite_data:
   static_volume:
+  media_volume:

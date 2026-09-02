@@ -13,6 +13,16 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 from pathlib import Path
 import os
 
+# Načtení .env dřív, než se sáhne na os.environ. Proměnné z prostředí
+# (Docker, systemd) mají přednost před souborem, aby šlo nastavení přebít
+# při nasazení. Chybí-li balíček nebo soubor, běží se jen s os.environ.
+try:
+    from dotenv import load_dotenv
+except ImportError:
+    pass
+else:
+    load_dotenv(Path(__file__).resolve().parent.parent / '.env', override=False)
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -165,6 +175,22 @@ STORAGES = {
         "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
     },
 }
+
+# Nahrané soubory (skeny dodacích listů pro OCR import příjemek).
+# V Dockeru musí MEDIA_ROOT ležet na perzistentním volume, jinak se skeny
+# při redeployi ztratí.
+MEDIA_URL = 'media/'
+MEDIA_ROOT = Path(os.environ.get('MEDIA_ROOT', str(BASE_DIR / 'media')))
+
+# Mistral OCR pro načítání příjemek z fotky.
+# Bez klíče je funkce nedostupná, zbytek aplikace běží normálně.
+MISTRAL_API_KEY = os.environ.get('MISTRAL_API_KEY', '')
+MISTRAL_OCR_MODEL = os.environ.get('MISTRAL_OCR_MODEL', 'mistral-ocr-latest')
+
+# Jak dlouho se drží fotka dokladu, kterou nikdo nedopracoval do příjemky.
+# Po potvrzení příjemky se sken maže hned, tohle je pojistka na rozdělané
+# importy. Úklid provádí `manage.py purge_receipt_scans`, pouštěný z cronu.
+OCR_SCAN_RETENTION_DAYS = int(os.environ.get('OCR_SCAN_RETENTION_DAYS', '7'))
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/6.0/ref/settings/#default-auto-field
