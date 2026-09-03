@@ -13,6 +13,7 @@ from django.urls import reverse
 
 from apps.canteens.models import Canteen, Warehouse
 from apps.core.models import Ingredient
+from apps.inventory.matching import IngredientResolver
 from apps.inventory.models import (
     GoodsReceipt, GoodsReceiptItem, Supplier, SupplierItemAlias,
 )
@@ -222,3 +223,110 @@ def test_jmeno_pole_neprojde_lokalizaci(client, uzivatel, prijemka, sklad, rohli
 
     item.refresh_from_db()
     assert item.quantity == Decimal('4.5')
+
+
+def test_prepocet_jedna_odblokuje_potvrzeni(client, uzivatel, prijemka, sklad, rohlik):
+    """
+    „1 balení = 1 kus" je platná odpověď, ne chybějící rozhodnutí.
+    Dokud se poznávalo podle `unit_factor != 1`, položka po zadání jedničky
+    zůstala konfliktní: hláška slibovala úspěch a potvrdit stejně nešlo.
+    """
+    item = polozka(prijemka, sklad, rohlik)
+
+    response = client.post(
+        reverse('inventory:goods_receipt_resolve_units', args=[prijemka.pk]),
+        {f'factor_{item.pk}': '1'}, follow=True,
+    )
+
+    item.refresh_from_db()
+    assert item.unit_resolved is True
+    assert item.has_unit_conflict is False
+    assert not prijemka.unit_conflicts
+    assert 'Příjemku teď jde potvrdit' in response.content.decode()
+
+    prijemka.confirm()
+    prijemka.refresh_from_db()
+    assert prijemka.status == GoodsReceipt.Status.CONFIRMED
+
+
+def test_naucena_jedna_plati_i_podruhe(client, uzivatel, prijemka, sklad,
+                                       rohlik, pekarna):
+    """Jednou zadané „1 bal = 1 ks" se nesmí příště ptát znovu."""
+    item = polozka(prijemka, sklad, rohlik)
+    client.post(reverse('inventory:goods_receipt_resolve_units', args=[prijemka.pk]),
+                {f'factor_{item.pk}': '1'}, follow=True)
+
+    alias = SupplierItemAlias.objects.get(raw_name='Rohlík karton')
+    assert alias.unit_factor == Decimal('1')
+    assert alias.unit_resolved is True
+
+    from apps.inventory.matching import IngredientResolver
+    shoda = IngredientResolver(supplier=pekarna, ingredients=[rohlik]).resolve(
+        'Rohlík karton', unit='bal',
+    )
+    assert shoda.needs_unit_check is False
+    assert shoda.unit_factor == Decimal('1')
+
+
+def test_import_neoznaci_vychozi_jednicku_za_rozhodnuti(pekarna, rohlik):
+    """
+    Import posílá `unit_factor=1` i tam, kde uživatel nic nerozhodl. Kdyby se
+    to uložilo jako vyřešené, u nesedících jednotek by se příště neptal nikdo
+    a do skladu by se naskladnilo 1:1.
+    """
+    resolver = IngredientResolver(supplier=pekarna, ingredients=[rohlik])
+    resolver.remember('Rohlík karton', ingredient=rohlik, unit='bal',
+                      unit_factor=Decimal('1'))
+
+    alias = SupplierItemAlias.objects.get(raw_name='Rohlík karton')
+    assert alias.unit_resolved is False
+
+    shoda = IngredientResolver(supplier=pekarna, ingredients=[rohlik]).resolve(
+        'Rohlík karton', unit='bal',
+    )
+    assert shoda.needs_unit_check is True
+
+
+def test_hlaska_nelze_kdyz_zbyva_konflikt(client, uzivatel, prijemka, sklad, rohlik,
+                                          monkeypatch):
+    """Úspěch se hlásí podle stavu po zápisu, ne podle počtu řádků ve smyčce."""
+    from apps.inventory.models import GoodsReceiptItem
+
+    item = polozka(prijemka, sklad, rohlik)
+    # Zápis, který se „nepovede" – přepočet zůstane nevyřešený.
+    monkeypatch.setattr(GoodsReceiptItem, 'apply_unit_factor', lambda self, factor: None)
+
+    response = client.post(
+        reverse('inventory:goods_receipt_resolve_units', args=[prijemka.pk]),
+        {f'factor_{item.pk}': '12'}, follow=True,
+    )
+
+    obsah = response.content.decode()
+    assert 'Potvrdit zatím nejde' in obsah
+    assert 'Příjemku teď jde potvrdit' not in obsah
+
+
+def test_import_neshodi_driv_potvrzeny_alias(client, uzivatel, prijemka, sklad,
+                                             rohlik, pekarna):
+    """
+    Import volá `remember()` bez ohledu na jednotky. Kdyby zapsal výchozí
+    `unit_resolved=False`, shodil by dřív potvrzený alias na nevyřešený
+    a uživatel by ten samý přepočet zadával při každém dalším dokladu.
+    """
+    item = polozka(prijemka, sklad, rohlik)
+    client.post(reverse('inventory:goods_receipt_resolve_units', args=[prijemka.pk]),
+                {f'factor_{item.pk}': '1'}, follow=True)
+    assert SupplierItemAlias.objects.get(raw_name='Rohlík karton').unit_resolved
+
+    # Další doklad se stejnou položkou projde importem, který o jednotkách nic neví.
+    IngredientResolver(supplier=pekarna, ingredients=[rohlik]).remember(
+        'Rohlík karton', ingredient=rohlik, unit='bal', unit_factor=Decimal('1'),
+    )
+
+    alias = SupplierItemAlias.objects.get(raw_name='Rohlík karton')
+    assert alias.unit_resolved is True
+
+    shoda = IngredientResolver(supplier=pekarna, ingredients=[rohlik]).resolve(
+        'Rohlík karton', unit='bal',
+    )
+    assert shoda.needs_unit_check is False

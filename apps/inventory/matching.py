@@ -295,7 +295,8 @@ class IngredientResolver:
         alias = match.alias
         learned_applies = (
             alias is not None
-            and alias.unit_factor != Decimal('1')
+            # Vědomé „1 bal = 1 ks" se pozná podle příznaku, ne podle hodnoty.
+            and (alias.unit_resolved or alias.unit_factor != Decimal('1'))
             # Prázdná jednotka na kterékoli straně znamená „nevíme", ne
             # „je jiná" – tam se poměru naučenému pro tenhle název věří.
             and (
@@ -319,12 +320,23 @@ class IngredientResolver:
         return match
 
     def remember(self, raw_name, ingredient=None, is_ignored=False,
-                 unit='', unit_factor=None, user=None):
+                 unit='', unit_factor=None, user=None, unit_resolved=None):
         """
         Uloží, jak uživatel řádek namapoval, aby to příště sedlo samo.
 
         Existující alias se přepíše – uživatel právě rozhodl znovu a jeho
         poslední rozhodnutí platí. Vrací None, když není co si pamatovat.
+
+        `unit_resolved` patří jen volajícímu, který poměr dostal od člověka
+        (obrazovka srovnání jednotek). Import ho nenastavuje: tam je
+        `unit_factor=1` většinou jen výchozí hodnota formuláře, a kdyby se
+        uložila jako rozhodnutá, příště by se u nesedících jednotek
+        neptal nikdo a do skladu by se naskladnilo 1:1.
+
+        `None` proto znamená „k jednotkám se nevyjadřuji" a příznak na
+        existujícím aliasu nechá být. Zapisovat rovnou `False` by potvrzený
+        alias degradoval na nevyřešený při každém dalším importu téhož
+        zboží – a uživatel by ten samý přepočet zadával pořád dokola.
         """
         if not raw_name or not raw_name.strip():
             return None
@@ -344,6 +356,8 @@ class IngredientResolver:
             'unit': unit or '',
             'unit_factor': Decimal(str(unit_factor)) if unit_factor else Decimal('1'),
         }
+        if unit_resolved is not None:
+            defaults['unit_resolved'] = unit_resolved
 
         alias, created = SupplierItemAlias.objects.update_or_create(
             supplier=self.supplier,
