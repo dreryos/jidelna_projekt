@@ -249,24 +249,49 @@ def _repair_unescaped_quotes(text):
     domnělou uzavírací uvozovkou, takže ta vadná je vždy ta nejbližší
     před ním. Escapuje se a zkusí znovu – doklad může mít takových slov
     víc, proto smyčka.
+
+    Když se ukáže, že o neescapovanou uvozovku nešlo (nebo se text ani
+    po několika opravách nesejde), vyhazuje se vždy ta úplně první chyba
+    z nepozměněného vstupu – ne poslední, zmatenou chybu z rozjeté opravy
+    ani vlastní vymyšlenou zprávu. Volající tak vidí totéž, co by dostal
+    bez pokusu o opravu.
     """
     attempt = text
+    prvni_chyba = None
     for _ in range(_MAX_QUOTE_REPAIR_ATTEMPTS):
         try:
             return json.loads(attempt)
         except json.JSONDecodeError as exc:
+            if prvni_chyba is None:
+                prvni_chyba = exc
             if "Expecting ',' delimiter" not in exc.msg:
-                raise
+                raise prvni_chyba from None
             idx = attempt.rfind('"', 0, exc.pos)
-            if idx <= 0 or attempt[idx - 1] == '\\':
+            if idx <= 0 or _je_escapovana(attempt, idx):
                 # Uvozovka nenalezena, nebo je vadné něco jiného – tuhle
                 # opravu neumí, ať to skončí na původní chybě.
-                raise
+                raise prvni_chyba from None
             attempt = attempt[:idx] + '\\"' + attempt[idx + 1:]
-    raise json.JSONDecodeError(
-        f'oprava nekonverguje ani po {_MAX_QUOTE_REPAIR_ATTEMPTS} pokusech',
-        attempt, 0,
-    )
+    raise prvni_chyba from None
+
+
+def _je_escapovana(text, idx):
+    """
+    Je uvozovka na `idx` už escapovaná zpětným lomítkem?
+
+    Escapování v JSONu se řídí paritou po sobě jdoucích zpětných lomítek
+    před znakem, ne tím, jestli tam nějaké je – `\\"` je escapovaná
+    uvozovka, ale `\\\\"` je escapované lomítko následované NEescapovanou
+    uvozovkou. Bez tohohle rozlišení by se hodnota s doslovným zpětným
+    lomítkem těsně před vadnou uvozovkou (cesta k souboru, LaTeX apod.)
+    považovala za už opravenou a chyba by zůstala neopravená.
+    """
+    pocet = 0
+    cursor = idx - 1
+    while cursor >= 0 and text[cursor] == '\\':
+        pocet += 1
+        cursor -= 1
+    return pocet % 2 == 1
 
 
 def _to_dict(response):

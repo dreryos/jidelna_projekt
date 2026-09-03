@@ -80,3 +80,47 @@ def test_unpack_response_neopravitelny_json_vyhodi_ocrerror_a_zaloguje_syrova_da
     zprava = '\n'.join(zaznam.message for zaznam in caplog.records)
     assert 'nerozebratelný' in zprava
     assert '"a": 1 "b": 2' in zprava
+
+
+def test_jinou_vadu_jsonu_zachova_puvodni_zpravu_i_po_castecne_oprave():
+    """
+    `{"a": 1 "b": 2}` hlásí taky "Expecting ',' delimiter", ale příčinou
+    je chybějící čárka mezi poli, ne uvozovka. Repair to jedním pokusem
+    rozmlátí do stavu s JINOU chybou ("Expecting ':' delimiter") – volající
+    ale má vidět původní chybu ze vstupu, ne tenhle mezikrok.
+    """
+    vadny = '{"a": 1 "b": 2}'
+
+    with pytest.raises(json.JSONDecodeError) as excinfo:
+        _repair_unescaped_quotes(vadny)
+
+    assert "Expecting ',' delimiter" in excinfo.value.msg
+    assert excinfo.value.pos == 8
+
+
+def test_uvozovku_za_lichym_poctem_lomitek_opravi():
+    r"""
+    `\"` je escapovaná uvozovka, ale `\\"` je escapované lomítko
+    následované neescapovanou uvozovkou (např. cesta k souboru končící
+    lomítkem, těsně před vadnou uvozovkou modelu). Sudá parita lomítek
+    nesmí opravu zablokovat.
+    """
+    vadny = '{"cesta": "C:\\\\", "nazev": "Sýr "Eidam" plátky"}'
+
+    opraveno = _repair_unescaped_quotes(vadny)
+
+    assert opraveno == {'cesta': 'C:\\', 'nazev': 'Sýr "Eidam" plátky'}
+
+
+def test_uvozovku_za_sudym_poctem_lomitek_neopravi_jako_uz_escapovanou():
+    r"""
+    Dva doslovné backslashe těsně před vadnou uvozovkou (`\\"`) čte
+    parser jako „escapovaný backslash" + neescapovaná uvozovka – uvozovka
+    sama escapovaná NENÍ. Naivní kontrola posledního znaku (`je to '\\'?`)
+    by ji ale za escapovanou omylem považovala a opravu by rovnou vzdala.
+    """
+    vadny = '{"nazev": "cesta C:\\\\"vadne", "b": 1}'
+
+    opraveno = _repair_unescaped_quotes(vadny)
+
+    assert opraveno == {'nazev': 'cesta C:\\"vadne', 'b': 1}
