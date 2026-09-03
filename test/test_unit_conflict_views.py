@@ -304,3 +304,29 @@ def test_hlaska_nelze_kdyz_zbyva_konflikt(client, uzivatel, prijemka, sklad, roh
     obsah = response.content.decode()
     assert 'Potvrdit zatím nejde' in obsah
     assert 'Příjemku teď jde potvrdit' not in obsah
+
+
+def test_import_neshodi_driv_potvrzeny_alias(client, uzivatel, prijemka, sklad,
+                                             rohlik, pekarna):
+    """
+    Import volá `remember()` bez ohledu na jednotky. Kdyby zapsal výchozí
+    `unit_resolved=False`, shodil by dřív potvrzený alias na nevyřešený
+    a uživatel by ten samý přepočet zadával při každém dalším dokladu.
+    """
+    item = polozka(prijemka, sklad, rohlik)
+    client.post(reverse('inventory:goods_receipt_resolve_units', args=[prijemka.pk]),
+                {f'factor_{item.pk}': '1'}, follow=True)
+    assert SupplierItemAlias.objects.get(raw_name='Rohlík karton').unit_resolved
+
+    # Další doklad se stejnou položkou projde importem, který o jednotkách nic neví.
+    IngredientResolver(supplier=pekarna, ingredients=[rohlik]).remember(
+        'Rohlík karton', ingredient=rohlik, unit='bal', unit_factor=Decimal('1'),
+    )
+
+    alias = SupplierItemAlias.objects.get(raw_name='Rohlík karton')
+    assert alias.unit_resolved is True
+
+    shoda = IngredientResolver(supplier=pekarna, ingredients=[rohlik]).resolve(
+        'Rohlík karton', unit='bal',
+    )
+    assert shoda.needs_unit_check is False
