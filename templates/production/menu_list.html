@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load django_bootstrap5 %}
+{% load l10n django_bootstrap5 %}
 
 {% block title %}Jídelníčky{% endblock %}
 
@@ -33,7 +33,7 @@
                             <select name="canteen" id="canteen" class="form-select">
                                 <option value="">Všechny jídelny</option>
                                 {% for canteen in canteens %}
-                                    <option value="{{ canteen.id }}" {% if canteen.id|stringformat:'s' == selected_canteen %}selected{% endif %}>
+                                    <option value="{{ canteen.id|unlocalize }}" {% if canteen.id|stringformat:'s' == selected_canteen %}selected{% endif %}>
                                         {{ canteen.name }}
                                     </option>
                                 {% endfor %}

@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load l10n %}
 
 {% block title %}Import CSV (Makro) - Krok 2{% endblock %}
 
@@ -40,7 +41,7 @@
                         <tr>
                             <td>{{ item.item_name }}</td>
                             <td>
-                                <input type="text" class="form-control" name="quantity_{{ forloop.counter0 }}" value="{{ item.quantity }}">
+                                <input type="text" class="form-control" name="quantity_{{ forloop.counter0|unlocalize }}" value="{{ item.quantity }}">
                             </td>
                             <td>{{ item.unit_mapped }}</td>
                             <td>{{ item.price_per_unit_net }}</td>
@@ -48,34 +49,34 @@
                             <td>{{ item.price_per_unit_gross }}</td>
                             <td>
                                 {% if item.suggested_ingredient_id %}
-                                    <select class="form-select" name="ingredient_{{ forloop.counter0 }}">
+                                    <select class="form-select" name="ingredient_{{ forloop.counter0|unlocalize }}">
                                         <option value="">-- Vybrat surovinu --</option>
-                                        <option value="{{ item.suggested_ingredient_id }}" selected>
+                                        <option value="{{ item.suggested_ingredient_id|unlocalize }}" selected>
                                             {{ item.suggested_ingredient_name }} ({{ item.match_ratio }}%)
                                         </option>
                                         {% for ingredient in all_ingredients %}
-                                            <option value="{{ ingredient.id }}">{{ ingredient.name }}</option>
+                                            <option value="{{ ingredient.id|unlocalize }}">{{ ingredient.name }}</option>
                                         {% endfor %}
                                     </select>
                                 {% else %}
-                                    <select class="form-select" name="ingredient_{{ forloop.counter0 }}">
+                                    <select class="form-select" name="ingredient_{{ forloop.counter0|unlocalize }}">
                                         <option value="" selected>-- Vybrat surovinu --</option>
                                         {% for ingredient in all_ingredients %}
-                                            <option value="{{ ingredient.id }}">{{ ingredient.name }}</option>
+                                            <option value="{{ ingredient.id|unlocalize }}">{{ ingredient.name }}</option>
                                         {% endfor %}
                                     </select>
                                 {% endif %}
                                 <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" name="create_new_{{ forloop.counter0 }}" id="create_new_{{ forloop.counter0 }}">
-                                    <label class="form-check-label" for="create_new_{{ forloop.counter0 }}">
+                                    <input class="form-check-input" type="checkbox" name="create_new_{{ forloop.counter0|unlocalize }}" id="create_new_{{ forloop.counter0|unlocalize }}">
+                                    <label class="form-check-label" for="create_new_{{ forloop.counter0|unlocalize }}">
                                         Vytvořit novou surovinu
                                     </label>
                                 </div>
                             </td>
                             <td>
-                                <select class="form-select" name="warehouse_{{ forloop.counter0 }}">
+                                <select class="form-select" name="warehouse_{{ forloop.counter0|unlocalize }}">
                                     {% for warehouse in warehouses %}
-                                        <option value="{{ warehouse.id }}" {% if warehouse.id == default_warehouse_id %}selected{% endif %}>
+                                        <option value="{{ warehouse.id|unlocalize }}" {% if warehouse.id == default_warehouse_id %}selected{% endif %}>
                                             {{ warehouse.name }}
                                         </option>
                                     {% endfor %}

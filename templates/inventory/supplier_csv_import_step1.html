@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load l10n %}
 
 {% block title %}Import CSV (Makro) - Krok 1{% endblock %}
 
@@ -21,7 +22,7 @@
                     <select class="form-select" id="warehouse" name="warehouse" required>
                         <option value="" selected disabled>Vyberte sklad</option>
                         {% for warehouse in warehouses %}
-                            <option value="{{ warehouse.id }}">{{ warehouse.name }} ({{ warehouse.canteen.name }})</option>
+                            <option value="{{ warehouse.id|unlocalize }}">{{ warehouse.name }} ({{ warehouse.canteen.name }})</option>
                         {% endfor %}
                     </select>
                 </div>

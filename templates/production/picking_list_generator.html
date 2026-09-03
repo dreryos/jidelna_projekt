@@ -45,7 +45,7 @@
             <select class="form-select" id="canteen" name="canteen" required>
               <option value="">-- Vyberte jídelnu --</option>
               {% for canteen in canteens %}
-                <option value="{{ canteen.id }}">{{ canteen.name }}</option>
+                <option value="{{ canteen.id|unlocalize }}">{{ canteen.name }}</option>
               {% endfor %}
             </select>
             <div class="invalid-feedback">

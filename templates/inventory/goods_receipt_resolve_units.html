@@ -45,15 +45,15 @@
                 <div class="input-group">
                   <span class="input-group-text">1 {{ item.source_unit }} =</span>
                   <input type="text" class="form-control" required
-                         name="factor_{{ item.pk }}"
+                         name="factor_{{ item.pk|unlocalize }}"
                          data-quantity="{{ item.source_quantity|unlocalize }}"
-                         data-row="{{ item.pk }}"
+                         data-row="{{ item.pk|unlocalize }}"
                          placeholder="např. 0,25">
                   <span class="input-group-text">{{ item.ingredient.base_unit }}</span>
                 </div>
               </td>
               <td class="text-end">
-                <span id="preview-{{ item.pk }}" class="text-muted">—</span>
+                <span id="preview-{{ item.pk|unlocalize }}" class="text-muted">—</span>
                 {{ item.ingredient.base_unit }}
               </td>
             </tr>
