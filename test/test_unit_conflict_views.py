@@ -200,3 +200,25 @@ def test_nahled_dostane_cislo_s_teckou(client, uzivatel, prijemka, sklad, rohlik
 
     assert 'data-quantity="0.750"' in obsah
     assert 'data-quantity="0,750"' not in obsah
+
+
+def test_jmeno_pole_neprojde_lokalizaci(client, uzivatel, prijemka, sklad, rohlik):
+    """
+    Projekt má USE_THOUSAND_SEPARATOR, takže `{{ item.pk }}` by u čtyřmístného
+    ID vykreslil „4 598" a jméno pole by přestalo sedět s tím, co hledá view.
+    Uživatel by pak dostal „zadejte přepočet jako číslo" i po zadání jedničky.
+    """
+    item = polozka(prijemka, sklad, rohlik)
+    GoodsReceiptItem.objects.filter(pk=item.pk).update(id=4598)
+    item = GoodsReceiptItem.objects.get(pk=4598)
+
+    obsah = client.get(
+        reverse('inventory:goods_receipt_resolve_units', args=[prijemka.pk])
+    ).content.decode()
+    assert 'name="factor_4598"' in obsah
+
+    client.post(reverse('inventory:goods_receipt_resolve_units', args=[prijemka.pk]),
+                {f'factor_{item.pk}': '1,5'}, follow=True)
+
+    item.refresh_from_db()
+    assert item.quantity == Decimal('4.5')

@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load django_bootstrap5 %}
+{% load l10n django_bootstrap5 %}
 
 {% block title %}Import XML (Bidfood) - Spíž{% endblock %}
 
@@ -36,7 +36,7 @@
         <select name="warehouse" id="warehouse" class="form-select" required>
           <option value="">-- Vyberte výchozí sklad --</option>
           {% for warehouse in warehouses %}
-            <option value="{{ warehouse.id }}">
+            <option value="{{ warehouse.id|unlocalize }}">
               {{ warehouse.name }} ({{ warehouse.canteen.name }})
             </option>
           {% endfor %}

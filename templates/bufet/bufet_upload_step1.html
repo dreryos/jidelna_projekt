@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load django_bootstrap5 %}
+{% load l10n django_bootstrap5 %}
 
 {% block title %}Bufet – nahrát přehled prodeje{% endblock %}
 
@@ -43,7 +43,7 @@
             <select name="warehouse" required class="form-select">
               <option value="">– vyberte sklad –</option>
               {% for w in warehouses %}
-              <option value="{{ w.id }}">{{ w.canteen.name }} – {{ w.name }}</option>
+              <option value="{{ w.id|unlocalize }}">{{ w.canteen.name }} – {{ w.name }}</option>
               {% endfor %}
             </select>
             <div class="form-text">

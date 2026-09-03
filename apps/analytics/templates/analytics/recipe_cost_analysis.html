@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load django_bootstrap5 %}
+{% load l10n django_bootstrap5 %}
 
 {% block title %}Analýza nákladů receptů - Spíž{% endblock %}
 
@@ -29,7 +29,7 @@
         <select name="canteen" class="form-select">
           <option value="">Všechny jídelny</option>
           {% for canteen in canteens %}
-          <option value="{{ canteen.id }}" {% if selected_canteen == canteen.id|stringformat:"s" %}selected{% endif %}>
+          <option value="{{ canteen.id|unlocalize }}" {% if selected_canteen == canteen.id|stringformat:"s" %}selected{% endif %}>
             {{ canteen.name }}
           </option>
           {% endfor %}
@@ -42,7 +42,7 @@
         <select name="category" class="form-select">
           <option value="">Všechny kategorie</option>
           {% for category in categories %}
-          <option value="{{ category.id }}" {% if selected_category == category.id|stringformat:"s" %}selected{% endif %}>
+          <option value="{{ category.id|unlocalize }}" {% if selected_category == category.id|stringformat:"s" %}selected{% endif %}>
             {{ category.name }}
           </option>
           {% endfor %}

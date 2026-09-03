@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load static %}
+{% load l10n static %}
 
 {% block title %}Analytika odepisování zboží{% endblock %}
 
@@ -22,7 +22,7 @@
                     <select name="warehouse" id="warehouse" class="form-select">
                         <option value="">-- Všechny sklady --</option>
                         {% for wh_id, wh_name in available_warehouses %}
-                            <option value="{{ wh_id }}" {% if selected_warehouse == wh_id|stringformat:"s" %}selected{% endif %}>
+                            <option value="{{ wh_id|unlocalize }}" {% if selected_warehouse == wh_id|stringformat:"s" %}selected{% endif %}>
                                 {{ wh_name }}
                             </option>
                         {% endfor %}

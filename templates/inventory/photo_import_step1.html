@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load l10n %}
 
 {% block title %}Příjemka z fotky – krok 1{% endblock %}
 
@@ -39,7 +40,7 @@
                   {% if not ocr_available %}disabled{% endif %}>
             <option value="" selected disabled>Vyberte sklad</option>
             {% for warehouse in warehouses %}
-              <option value="{{ warehouse.id }}">{{ warehouse.name }} ({{ warehouse.canteen.name }})</option>
+              <option value="{{ warehouse.id|unlocalize }}">{{ warehouse.name }} ({{ warehouse.canteen.name }})</option>
             {% endfor %}
           </select>
           <div class="form-text">U jednotlivých položek ho půjde ještě změnit.</div>

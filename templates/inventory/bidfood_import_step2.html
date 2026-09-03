@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load django_bootstrap5 %}
+{% load l10n django_bootstrap5 %}
 
 {% block title %}Bidfood Import - Preview - Spíž{% endblock %}
 
@@ -122,13 +122,13 @@
                 <td>
                   {% if item.suggested_ingredient_id %}
                     <!-- Automatické mapování -->
-                    <select name="ingredient_{{ forloop.counter0 }}" class="form-select form-select-sm">
-                      <option value="{{ item.suggested_ingredient_id }}" selected>
+                    <select name="ingredient_{{ forloop.counter0|unlocalize }}" class="form-select form-select-sm">
+                      <option value="{{ item.suggested_ingredient_id|unlocalize }}" selected>
                         {{ item.suggested_ingredient_name }} ({{ item.suggested_ingredient_unit }})
                       </option>
                       {% for ing in all_ingredients %}
                         {% if ing.id != item.suggested_ingredient_id %}
-                          <option value="{{ ing.id }}">{{ ing.name }} ({{ ing.unit }})</option>
+                          <option value="{{ ing.id|unlocalize }}">{{ ing.name }} ({{ ing.unit }})</option>
                         {% endif %}
                       {% endfor %}
                     </select>
@@ -139,14 +139,14 @@
                     <!-- Žádná shoda - možnost vytvořit novou nebo vybrat -->
                     <div class="mb-1">
                       <label class="form-check-label">
-                        <input type="checkbox" name="create_new_{{ forloop.counter0 }}" class="form-check-input">
+                        <input type="checkbox" name="create_new_{{ forloop.counter0|unlocalize }}" class="form-check-input">
                         <strong>Vytvořit novou surovinu</strong>
                       </label>
                     </div>
-                    <select name="ingredient_{{ forloop.counter0 }}" class="form-select form-select-sm">
+                    <select name="ingredient_{{ forloop.counter0|unlocalize }}" class="form-select form-select-sm">
                       <option value="">-- Nebo vybrat existující --</option>
                       {% for ing in all_ingredients %}
-                        <option value="{{ ing.id }}">{{ ing.name }} ({{ ing.unit }})</option>
+                        <option value="{{ ing.id|unlocalize }}">{{ ing.name }} ({{ ing.unit }})</option>
                       {% endfor %}
                     </select>
                     <span class="match-badge match-low">Nenalezeno</span>
@@ -155,9 +155,9 @@
                 
                 <!-- Sklad -->
                 <td>
-                  <select name="warehouse_{{ forloop.counter0 }}" class="form-select form-select-sm warehouse-select">
+                  <select name="warehouse_{{ forloop.counter0|unlocalize }}" class="form-select form-select-sm warehouse-select">
                     {% for warehouse in warehouses %}
-                      <option value="{{ warehouse.id }}" {% if warehouse.id == default_warehouse_id %}selected{% endif %}>
+                      <option value="{{ warehouse.id|unlocalize }}" {% if warehouse.id == default_warehouse_id %}selected{% endif %}>
                         {{ warehouse.name }}
                       </option>
                     {% endfor %}
@@ -166,14 +166,14 @@
                 
                 <!-- Množství -->
                 <td>
-                  <input type="text" name="quantity_{{ forloop.counter0 }}" 
+                  <input type="text" name="quantity_{{ forloop.counter0|unlocalize }}" 
                          value="{{ item.quantity }}" 
                          class="form-control form-control-sm text-end">
                 </td>
                 
                 <!-- Jednotka -->
                 <td>
-                  <input type="text" name="unit_{{ forloop.counter0 }}" 
+                  <input type="text" name="unit_{{ forloop.counter0|unlocalize }}" 
                          value="{{ item.unit_mapped }}" 
                          class="form-control form-control-sm">
                 </td>

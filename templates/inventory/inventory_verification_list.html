@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load django_bootstrap5 %}
+{% load l10n django_bootstrap5 %}
 
 {% block title %}Inventury{% endblock %}
 
@@ -23,7 +23,7 @@
                     <select name="warehouse" id="warehouse" class="form-select">
                         <option value="">Všechny sklady</option>
                         {% for warehouse in warehouses %}
-                        <option value="{{ warehouse.id }}" {% if request.GET.warehouse == warehouse.id|stringformat:"s" %}selected{% endif %}>
+                        <option value="{{ warehouse.id|unlocalize }}" {% if request.GET.warehouse == warehouse.id|stringformat:"s" %}selected{% endif %}>
                             {{ warehouse.name }} ({{ warehouse.canteen.name }})
                         </option>
                         {% endfor %}

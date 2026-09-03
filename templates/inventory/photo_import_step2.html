@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load l10n %}
 
 {% block title %}Příjemka z fotky – krok 2{% endblock %}
 
@@ -70,7 +71,7 @@
               <select class="form-select" id="supplier_obj" name="supplier_obj">
                 <option value="">— nepřiřazeno —</option>
                 {% for supplier in suppliers %}
-                  <option value="{{ supplier.id }}"
+                  <option value="{{ supplier.id|unlocalize }}"
                           {% if supplier.id == receipt_data.supplier_id %}selected{% endif %}>
                     {{ supplier.name }}
                   </option>
@@ -104,7 +105,7 @@
               {% for item in receipt_data.items %}
                 <tr {% if item.is_ignored %}class="table-secondary"{% endif %}>
                   <td>
-                    <input type="checkbox" class="form-check-input" name="include_{{ forloop.counter0 }}"
+                    <input type="checkbox" class="form-check-input" name="include_{{ forloop.counter0|unlocalize }}"
                            {% if not item.is_ignored %}checked{% endif %}>
                   </td>
                   <td>
@@ -115,7 +116,7 @@
                   </td>
                   <td>
                     <div class="input-group input-group-sm">
-                      <input type="text" class="form-control" name="quantity_{{ forloop.counter0 }}"
+                      <input type="text" class="form-control" name="quantity_{{ forloop.counter0|unlocalize }}"
                              value="{{ item.quantity }}">
                       <span class="input-group-text">{{ item.unit_mapped }}</span>
                     </div>
@@ -126,7 +127,7 @@
                         <span class="input-group-text">×</span>
                         <input type="text"
                                class="form-control {% if item.needs_unit_check %}border-danger{% endif %}"
-                               name="unit_factor_{{ forloop.counter0 }}"
+                               name="unit_factor_{{ forloop.counter0|unlocalize }}"
                                value="{{ item.unit_factor }}">
                         <span class="input-group-text">{{ item.target_unit }}</span>
                       </div>
@@ -138,15 +139,15 @@
                         {% endif %}
                       </small>
                     {% else %}
-                      <input type="hidden" name="unit_factor_{{ forloop.counter0 }}" value="1">
+                      <input type="hidden" name="unit_factor_{{ forloop.counter0|unlocalize }}" value="1">
                       <small class="text-muted">—</small>
                     {% endif %}
                   </td>
                   <td>
-                    <select class="form-select form-select-sm" name="ingredient_{{ forloop.counter0 }}">
+                    <select class="form-select form-select-sm" name="ingredient_{{ forloop.counter0|unlocalize }}">
                       <option value="">— vyberte —</option>
                       {% for ingredient in all_ingredients %}
-                        <option value="{{ ingredient.id }}"
+                        <option value="{{ ingredient.id|unlocalize }}"
                                 {% if ingredient.id == item.ingredient_id %}selected{% endif %}>
                           {{ ingredient.name }} ({{ ingredient.unit }})
                         </option>
@@ -158,20 +159,20 @@
                       </small>
                     {% endif %}
                     <div class="form-check form-check-inline ms-2">
-                      <input type="checkbox" class="form-check-input" id="new_{{ forloop.counter0 }}"
-                             name="create_new_{{ forloop.counter0 }}">
-                      <label class="form-check-label small" for="new_{{ forloop.counter0 }}">
+                      <input type="checkbox" class="form-check-input" id="new_{{ forloop.counter0|unlocalize }}"
+                             name="create_new_{{ forloop.counter0|unlocalize }}">
+                      <label class="form-check-label small" for="new_{{ forloop.counter0|unlocalize }}">
                         založit novou
                       </label>
                     </div>
                     <input type="text" class="form-control form-control-sm mt-1"
-                           name="ingredient_name_{{ forloop.counter0 }}"
+                           name="ingredient_name_{{ forloop.counter0|unlocalize }}"
                            value="{{ item.item_name }}" placeholder="Název nové suroviny">
                   </td>
                   <td>
-                    <select class="form-select form-select-sm" name="warehouse_{{ forloop.counter0 }}">
+                    <select class="form-select form-select-sm" name="warehouse_{{ forloop.counter0|unlocalize }}">
                       {% for warehouse in warehouses %}
-                        <option value="{{ warehouse.id }}"
+                        <option value="{{ warehouse.id|unlocalize }}"
                                 {% if warehouse.id == default_warehouse_id %}selected{% endif %}>
                           {{ warehouse.name }}
                         </option>

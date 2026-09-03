@@ -322,7 +322,7 @@
                         <select class="form-select" id="addMealRecipe" required>
                             <option value="">Vyberte recept...</option>
                             {% for recipe in recipes %}
-                                <option value="{{ recipe.id }}">{{ recipe.name }}</option>
+                                <option value="{{ recipe.id|unlocalize }}">{{ recipe.name }}</option>
                             {% endfor %}
                         </select>
                     </div>
