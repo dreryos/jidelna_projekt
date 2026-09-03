@@ -251,6 +251,14 @@ class SupplierItemAlias(models.Model):
             "Karton dvanácti kusů = 12, jinak 1."
         )
     )
+    unit_resolved = models.BooleanField(
+        default=False,
+        verbose_name="Přepočet potvrzen člověkem",
+        help_text=(
+            "Poměr zadal uživatel, ne odhad. Odlišuje vědomé „1 bal = 1 ks\" "
+            "od výchozí jedničky, která znamená „nikdo neurčil\"."
+        )
+    )
     times_used = models.PositiveIntegerField(
         default=0,
         verbose_name="Počet použití"
@@ -852,6 +860,15 @@ class GoodsReceiptItem(models.Model):
         verbose_name="Použitý přepočet",
         help_text="Kolika skladovými jednotkami je jedna jednotka z dokladu"
     )
+    unit_resolved = models.BooleanField(
+        default=False,
+        verbose_name="Přepočet vyřešen",
+        help_text=(
+            "Poměr už někdo určil. Samotný `unit_factor` to neprozradí – "
+            "jednička je zároveň výchozí hodnota i platný přepočet "
+            "(1 balení = 1 kus)."
+        )
+    )
     
     def __str__(self):
         return f"{self.ingredient.name}: {self.quantity} {self.ingredient.unit} @ {self.price} Kč"
@@ -872,8 +889,11 @@ class GoodsReceiptItem(models.Model):
 
         if not self.source_unit:
             return False
-        if self.unit_factor != Decimal('1'):
+        if self.unit_resolved or self.unit_factor != Decimal('1'):
             # Někdo poměr určil, ať už ručně nebo naučeným aliasem.
+            # Na `unit_factor` samotný se spolehnout nejde: jednička je
+            # i platná odpověď (1 balení = 1 kus), takže bez příznaku by
+            # se položka po vyřešení tvářila dál jako konfliktní.
             return False
         return conversion_factor(self.source_unit, self.ingredient.base_unit) is None
     
@@ -907,6 +927,7 @@ class GoodsReceiptItem(models.Model):
             self.vat_amount = (self.price - (self.price_without_vat or Decimal('0')))
         self.source_quantity = source_quantity
         self.unit_factor = factor
+        self.unit_resolved = True
         self.save()
     
     @property

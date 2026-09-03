@@ -2949,8 +2949,21 @@ def goods_receipt_resolve_units(request, pk):
                 if resolver and item.source_name:
                     resolver.remember(
                         item.source_name, ingredient=item.ingredient,
-                        unit=item.source_unit, unit_factor=factor, user=request.user,
+                        unit=item.source_unit, unit_factor=factor,
+                        user=request.user, unit_resolved=True,
                     )
+
+        # Hlásit úspěch podle počtu zpracovaných řádků je slib naslepo –
+        # rozhoduje stav po zápisu, ne kolik položek do smyčky vlezlo.
+        zbyva = goods_receipt.unit_conflicts
+        if zbyva:
+            messages.warning(
+                request,
+                f'Měrné jednotky srovnány u {len(conflicts) - len(zbyva)} '
+                f'z {len(conflicts)} položek. Potvrdit zatím nejde: '
+                + '; '.join(item.unit_conflict_label for item in zbyva) + '.'
+            )
+            return redirect('inventory:goods_receipt_resolve_units', pk=pk)
 
         messages.success(
             request,
