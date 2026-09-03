@@ -197,7 +197,22 @@ def _unpack_response(response, filename):
         try:
             annotation = json.loads(annotation)
         except json.JSONDecodeError as exc:
-            raise OcrError(f'OCR vrátilo neplatný JSON: {exc}') from exc
+            try:
+                annotation = _repair_unescaped_quotes(annotation)
+                logger.warning(
+                    'OCR vrátilo JSON s neescapovanou uvozovkou u „%s" – '
+                    'automaticky opraveno.',
+                    filename,
+                )
+            except json.JSONDecodeError:
+                # Log si necháváme kvůli podpoře – bez syrového textu se
+                # tahle chyba jinak nedá vyšetřit, doklad se vidí jen jako
+                # neuloženou fotku na telefonu uživatele.
+                logger.error(
+                    'OCR vrátilo nerozebratelný JSON u „%s" (%s):\n%s',
+                    filename, exc, annotation[:4000],
+                )
+                raise OcrError(f'OCR vrátilo neplatný JSON: {exc}') from exc
 
     if not isinstance(annotation, dict):
         raise OcrError(
@@ -210,6 +225,73 @@ def _unpack_response(response, filename):
     )
 
     return {'annotation': annotation, 'markdown': markdown, 'raw': raw}
+
+
+# Kolikrát nejvýš zkusit doescapovat další zapomenutou uvozovku. Doklad
+# s desítkami položek v uvozovkách („Sýr "Eidam"", pivo "Kozel" apod.) jich
+# může mít víc než jednu; strop je jen pojistka proti nekonečné smyčce,
+# kdyby šlo o jinou vadu JSONu, kterou tahle oprava neumí.
+_MAX_QUOTE_REPAIR_ATTEMPTS = 50
+
+
+def _repair_unescaped_quotes(text):
+    """
+    Doescapuje uvozovky, které model zapomněl escapovat uvnitř řetězce.
+
+    Prompt cílí model, aby názvy položek a poznámky opisoval doslova
+    „včetně poznámek v uvozovkách" – a model do JSON řetězce občas
+    vloží doslovnou uvozovku bez escapování, např.
+    `"nazev": "Sýr "Eidam" plátky"`. Parser pak čte řetězec jen po první
+    takovou uvozovku, hodnotu uzavře a spadne na "Expecting ',' delimiter"
+    hned za ní – zbytek slova zůstane viset tam, kde má být čárka.
+
+    `JSONDecodeError.pos` u týhle chyby vždy ukazuje na znak hned za
+    domnělou uzavírací uvozovkou, takže ta vadná je vždy ta nejbližší
+    před ním. Escapuje se a zkusí znovu – doklad může mít takových slov
+    víc, proto smyčka.
+
+    Když se ukáže, že o neescapovanou uvozovku nešlo (nebo se text ani
+    po několika opravách nesejde), vyhazuje se vždy ta úplně první chyba
+    z nepozměněného vstupu – ne poslední, zmatenou chybu z rozjeté opravy
+    ani vlastní vymyšlenou zprávu. Volající tak vidí totéž, co by dostal
+    bez pokusu o opravu.
+    """
+    attempt = text
+    prvni_chyba = None
+    for _ in range(_MAX_QUOTE_REPAIR_ATTEMPTS):
+        try:
+            return json.loads(attempt)
+        except json.JSONDecodeError as exc:
+            if prvni_chyba is None:
+                prvni_chyba = exc
+            if "Expecting ',' delimiter" not in exc.msg:
+                raise prvni_chyba from None
+            idx = attempt.rfind('"', 0, exc.pos)
+            if idx <= 0 or _je_escapovana(attempt, idx):
+                # Uvozovka nenalezena, nebo je vadné něco jiného – tuhle
+                # opravu neumí, ať to skončí na původní chybě.
+                raise prvni_chyba from None
+            attempt = attempt[:idx] + '\\"' + attempt[idx + 1:]
+    raise prvni_chyba from None
+
+
+def _je_escapovana(text, idx):
+    """
+    Je uvozovka na `idx` už escapovaná zpětným lomítkem?
+
+    Escapování v JSONu se řídí paritou po sobě jdoucích zpětných lomítek
+    před znakem, ne tím, jestli tam nějaké je – `\\"` je escapovaná
+    uvozovka, ale `\\\\"` je escapované lomítko následované NEescapovanou
+    uvozovkou. Bez tohohle rozlišení by se hodnota s doslovným zpětným
+    lomítkem těsně před vadnou uvozovkou (cesta k souboru, LaTeX apod.)
+    považovala za už opravenou a chyba by zůstala neopravená.
+    """
+    pocet = 0
+    cursor = idx - 1
+    while cursor >= 0 and text[cursor] == '\\':
+        pocet += 1
+        cursor -= 1
+    return pocet % 2 == 1
 
 
 def _to_dict(response):
