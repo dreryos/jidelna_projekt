@@ -197,7 +197,22 @@ def _unpack_response(response, filename):
         try:
             annotation = json.loads(annotation)
         except json.JSONDecodeError as exc:
-            raise OcrError(f'OCR vrátilo neplatný JSON: {exc}') from exc
+            try:
+                annotation = _repair_unescaped_quotes(annotation)
+                logger.warning(
+                    'OCR vrátilo JSON s neescapovanou uvozovkou u „%s" – '
+                    'automaticky opraveno.',
+                    filename,
+                )
+            except json.JSONDecodeError:
+                # Log si necháváme kvůli podpoře – bez syrového textu se
+                # tahle chyba jinak nedá vyšetřit, doklad se vidí jen jako
+                # neuloženou fotku na telefonu uživatele.
+                logger.error(
+                    'OCR vrátilo nerozebratelný JSON u „%s" (%s):\n%s',
+                    filename, exc, annotation[:4000],
+                )
+                raise OcrError(f'OCR vrátilo neplatný JSON: {exc}') from exc
 
     if not isinstance(annotation, dict):
         raise OcrError(
@@ -210,6 +225,48 @@ def _unpack_response(response, filename):
     )
 
     return {'annotation': annotation, 'markdown': markdown, 'raw': raw}
+
+
+# Kolikrát nejvýš zkusit doescapovat další zapomenutou uvozovku. Doklad
+# s desítkami položek v uvozovkách („Sýr "Eidam"", pivo "Kozel" apod.) jich
+# může mít víc než jednu; strop je jen pojistka proti nekonečné smyčce,
+# kdyby šlo o jinou vadu JSONu, kterou tahle oprava neumí.
+_MAX_QUOTE_REPAIR_ATTEMPTS = 50
+
+
+def _repair_unescaped_quotes(text):
+    """
+    Doescapuje uvozovky, které model zapomněl escapovat uvnitř řetězce.
+
+    Prompt cílí model, aby názvy položek a poznámky opisoval doslova
+    „včetně poznámek v uvozovkách" – a model do JSON řetězce občas
+    vloží doslovnou uvozovku bez escapování, např.
+    `"nazev": "Sýr "Eidam" plátky"`. Parser pak čte řetězec jen po první
+    takovou uvozovku, hodnotu uzavře a spadne na "Expecting ',' delimiter"
+    hned za ní – zbytek slova zůstane viset tam, kde má být čárka.
+
+    `JSONDecodeError.pos` u týhle chyby vždy ukazuje na znak hned za
+    domnělou uzavírací uvozovkou, takže ta vadná je vždy ta nejbližší
+    před ním. Escapuje se a zkusí znovu – doklad může mít takových slov
+    víc, proto smyčka.
+    """
+    attempt = text
+    for _ in range(_MAX_QUOTE_REPAIR_ATTEMPTS):
+        try:
+            return json.loads(attempt)
+        except json.JSONDecodeError as exc:
+            if "Expecting ',' delimiter" not in exc.msg:
+                raise
+            idx = attempt.rfind('"', 0, exc.pos)
+            if idx <= 0 or attempt[idx - 1] == '\\':
+                # Uvozovka nenalezena, nebo je vadné něco jiného – tuhle
+                # opravu neumí, ať to skončí na původní chybě.
+                raise
+            attempt = attempt[:idx] + '\\"' + attempt[idx + 1:]
+    raise json.JSONDecodeError(
+        f'oprava nekonverguje ani po {_MAX_QUOTE_REPAIR_ATTEMPTS} pokusech',
+        attempt, 0,
+    )
 
 
 def _to_dict(response):
