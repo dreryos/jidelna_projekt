@@ -130,7 +130,15 @@ def _purge_day(day_dir, stats, dry_run):
         except (OSError, NotImplementedError):
             pass
         if not dry_run:
-            default_storage.delete(path)
+            try:
+                default_storage.delete(path)
+            except FileNotFoundError:
+                # `maybe_purge()` běží synchronně při nahrávání dokladu –
+                # se dvěma gunicorn workery může na stejný den narazit
+                # i druhý souběžný upload. Kdo smaže soubor jako druhý,
+                # ho už nenajde; výsledek (soubor pryč) je stejný, takže
+                # se to nemá počítat za chybu.
+                pass
         stats['deleted_files'] += 1
 
     if dry_run:

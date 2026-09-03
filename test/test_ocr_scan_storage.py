@@ -114,3 +114,28 @@ def test_znacka_uklidu_neni_povazovana_za_sken(media_root):
     stats = storage.purge_expired_scans(today=dnes + timedelta(days=30))
 
     assert stats['deleted_files'] == 0
+
+
+def test_uklid_prezije_soubor_smazany_soubezne(media_root, monkeypatch):
+    """
+    `maybe_purge()` běží synchronně při nahrávání dokladu – se dvěma gunicorn
+    workery může na stejný prošlý den narazit i souběžný upload. Oba si
+    přečtou stejný výpis souborů (`listdir`), ale kdo smaže soubor jako
+    druhý, ho už tam nenajde. Výsledek (soubor pryč) je stejný jako úspěch,
+    ne chyba, se kterou má spadnout celý upload dokladu.
+    """
+    stary = date(2026, 9, 2) - timedelta(days=10)
+    storage.save_scan(b'a', 'image/jpeg', today=stary)
+
+    original_delete = default_storage.delete
+
+    def delete_jako_by_uz_soubor_zmizel(path):
+        original_delete(path)
+        raise FileNotFoundError(path)
+
+    monkeypatch.setattr(default_storage, 'delete', delete_jako_by_uz_soubor_zmizel)
+
+    stats = {'deleted_files': 0, 'deleted_days': 0, 'kept_days': 0, 'bytes': 0}
+    storage._purge_day(stary.isoformat(), stats, dry_run=False)
+
+    assert stats['deleted_files'] == 1

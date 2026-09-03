@@ -120,6 +120,32 @@ def test_nahrani_dokladu_ulozi_sken_i_data(client, uzivatel, sklad, bolero,
     assert data['supplier_id'] == bolero.id
 
 
+def test_selhany_uklid_skenu_neshodi_upload(client, uzivatel, sklad, bolero,
+                                            media_root, ocr_bez_site, monkeypatch):
+    """
+    `maybe_purge()` maže cizí staré soubory synchronně při nahrávání – se
+    dvěma gunicorn workery na produkci na sebe může narazit souběžný
+    upload (viz `test_uklid_prezije_soubor_smazany_soubezne` ve storage
+    testech) i cokoli jiného na disku. Sken uživatele je v tuhle chvíli
+    už uložený; kdyby úklid spadl a shodil s sebou celý request, uživatel
+    by neměl jak doklad vůbec dostat do systému – jen by dostal 500
+    a zkusil to znovu se stejným výsledkem.
+    """
+    from apps.inventory.ocr import storage as ocr_storage
+
+    def selhat(*args, **kwargs):
+        raise FileNotFoundError('cizí soubor zmizel pod rukama')
+
+    monkeypatch.setattr(ocr_storage, 'purge_expired_scans', selhat)
+
+    response = nahrat_doklad(client, sklad)
+
+    assert response.status_code == 200
+    scan = GoodsReceiptScan.objects.get()
+    assert scan.uploaded_by == uzivatel
+    assert 'Doklad načten' in response.content.decode()
+
+
 def test_prilis_velky_soubor_se_odmitne(client, uzivatel, sklad, media_root):
     from apps.inventory.views import MAX_SCAN_UPLOAD_BYTES
 

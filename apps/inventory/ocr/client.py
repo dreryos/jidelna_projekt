@@ -88,14 +88,18 @@ def prepare_image(raw_bytes, filename):
         # Fotky z mobilu nesou orientaci v EXIF; bez tohohle přijde doklad ležatě.
         image = ImageOps.exif_transpose(image)
         image = image.convert('RGB')
+
+        # `Image.open` čte jen hlavičku – zmenšení a uložení teprve
+        # dekóduje celý obrázek, takže i useknutý přenos z mobilu (slabé
+        # připojení, přerušený upload) spadne až tady, ne o tři řádky výš.
+        if max(image.size) > MAX_IMAGE_EDGE:
+            image.thumbnail((MAX_IMAGE_EDGE, MAX_IMAGE_EDGE), Image.LANCZOS)
+
+        buffer = io.BytesIO()
+        image.save(buffer, format='JPEG', quality=JPEG_QUALITY, optimize=True)
     except Exception as exc:
         raise OcrError(f'Soubor se nepodařilo načíst jako obrázek: {exc}') from exc
 
-    if max(image.size) > MAX_IMAGE_EDGE:
-        image.thumbnail((MAX_IMAGE_EDGE, MAX_IMAGE_EDGE), Image.LANCZOS)
-
-    buffer = io.BytesIO()
-    image.save(buffer, format='JPEG', quality=JPEG_QUALITY, optimize=True)
     return buffer.getvalue(), 'image/jpeg'
 
 
