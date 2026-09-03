@@ -121,7 +121,14 @@ def purge_expired_scans(days=None, today=None, dry_run=False):
 
 def _purge_day(day_dir, stats, dry_run):
     prefix = f'{SCAN_SUBDIR}/{day_dir}'
-    _subdirs, files = default_storage.listdir(prefix)
+    try:
+        _subdirs, files = default_storage.listdir(prefix)
+    except FileNotFoundError:
+        # Souběžný worker může celý den domazat (soubory i adresář) dřív,
+        # než sem dorazí tenhle – `purge_expired_scans` sestavil seznam
+        # dnů z dřívějšího `listdir(SCAN_SUBDIR)`, mezitím zastaralého.
+        # Prázdný adresář je přesně to, co tenhle úklid chtěl dosáhnout.
+        return
 
     for file_name in files:
         path = f'{prefix}/{file_name}'

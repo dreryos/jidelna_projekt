@@ -139,3 +139,22 @@ def test_uklid_prezije_soubor_smazany_soubezne(media_root, monkeypatch):
     storage._purge_day(stary.isoformat(), stats, dry_run=False)
 
     assert stats['deleted_files'] == 1
+
+
+def test_uklid_prezije_cely_den_smazany_soubezne(media_root):
+    """
+    `purge_expired_scans` sestaví seznam prošlých dnů jedním `listdir`
+    a pak nad každým zavolá `_purge_day`. Mezi tím může souběžný worker
+    stihnout smazat celý den – soubory i adresář. `_purge_day` pak narazí
+    na `listdir(prefix)` nad adresářem, který už neexistuje; to je stejný
+    cíl, kterého se úklid snažil dosáhnout, ne chyba.
+    """
+    stary = date(2026, 9, 2) - timedelta(days=10)
+    den = stary.isoformat()
+
+    stats = {'deleted_files': 0, 'deleted_days': 0, 'kept_days': 0, 'bytes': 0}
+    # Adresář pro daný den nikdy nevznikl (nebo ho mezitím smazal jiný
+    # worker) – `listdir` nad ním musí selhat stejně jako v produkci.
+    storage._purge_day(den, stats, dry_run=False)
+
+    assert stats == {'deleted_files': 0, 'deleted_days': 0, 'kept_days': 0, 'bytes': 0}
