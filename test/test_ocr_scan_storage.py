@@ -114,3 +114,47 @@ def test_znacka_uklidu_neni_povazovana_za_sken(media_root):
     stats = storage.purge_expired_scans(today=dnes + timedelta(days=30))
 
     assert stats['deleted_files'] == 0
+
+
+def test_uklid_prezije_soubor_smazany_soubezne(media_root, monkeypatch):
+    """
+    `maybe_purge()` běží synchronně při nahrávání dokladu – se dvěma gunicorn
+    workery může na stejný prošlý den narazit i souběžný upload. Oba si
+    přečtou stejný výpis souborů (`listdir`), ale kdo smaže soubor jako
+    druhý, ho už tam nenajde. Výsledek (soubor pryč) je stejný jako úspěch,
+    ne chyba, se kterou má spadnout celý upload dokladu.
+    """
+    stary = date(2026, 9, 2) - timedelta(days=10)
+    storage.save_scan(b'a', 'image/jpeg', today=stary)
+
+    original_delete = default_storage.delete
+
+    def delete_jako_by_uz_soubor_zmizel(path):
+        original_delete(path)
+        raise FileNotFoundError(path)
+
+    monkeypatch.setattr(default_storage, 'delete', delete_jako_by_uz_soubor_zmizel)
+
+    stats = {'deleted_files': 0, 'deleted_days': 0, 'kept_days': 0, 'bytes': 0}
+    storage._purge_day(stary.isoformat(), stats, dry_run=False)
+
+    assert stats['deleted_files'] == 1
+
+
+def test_uklid_prezije_cely_den_smazany_soubezne(media_root):
+    """
+    `purge_expired_scans` sestaví seznam prošlých dnů jedním `listdir`
+    a pak nad každým zavolá `_purge_day`. Mezi tím může souběžný worker
+    stihnout smazat celý den – soubory i adresář. `_purge_day` pak narazí
+    na `listdir(prefix)` nad adresářem, který už neexistuje; to je stejný
+    cíl, kterého se úklid snažil dosáhnout, ne chyba.
+    """
+    stary = date(2026, 9, 2) - timedelta(days=10)
+    den = stary.isoformat()
+
+    stats = {'deleted_files': 0, 'deleted_days': 0, 'kept_days': 0, 'bytes': 0}
+    # Adresář pro daný den nikdy nevznikl (nebo ho mezitím smazal jiný
+    # worker) – `listdir` nad ním musí selhat stejně jako v produkci.
+    storage._purge_day(den, stats, dry_run=False)
+
+    assert stats == {'deleted_files': 0, 'deleted_days': 0, 'kept_days': 0, 'bytes': 0}

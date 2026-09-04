@@ -121,7 +121,14 @@ def purge_expired_scans(days=None, today=None, dry_run=False):
 
 def _purge_day(day_dir, stats, dry_run):
     prefix = f'{SCAN_SUBDIR}/{day_dir}'
-    _subdirs, files = default_storage.listdir(prefix)
+    try:
+        _subdirs, files = default_storage.listdir(prefix)
+    except FileNotFoundError:
+        # Souběžný worker může celý den domazat (soubory i adresář) dřív,
+        # než sem dorazí tenhle – `purge_expired_scans` sestavil seznam
+        # dnů z dřívějšího `listdir(SCAN_SUBDIR)`, mezitím zastaralého.
+        # Prázdný adresář je přesně to, co tenhle úklid chtěl dosáhnout.
+        return
 
     for file_name in files:
         path = f'{prefix}/{file_name}'
@@ -130,7 +137,15 @@ def _purge_day(day_dir, stats, dry_run):
         except (OSError, NotImplementedError):
             pass
         if not dry_run:
-            default_storage.delete(path)
+            try:
+                default_storage.delete(path)
+            except FileNotFoundError:
+                # `maybe_purge()` běží synchronně při nahrávání dokladu –
+                # se dvěma gunicorn workery může na stejný den narazit
+                # i druhý souběžný upload. Kdo smaže soubor jako druhý,
+                # ho už nenajde; výsledek (soubor pryč) je stejný, takže
+                # se to nemá počítat za chybu.
+                pass
         stats['deleted_files'] += 1
 
     if dry_run:

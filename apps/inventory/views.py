@@ -2519,7 +2519,14 @@ def photo_import_step1(request):
         request.session['photo_scan_id'] = scan.id
 
         # Úklid prošlých skenů se veze na nahrávání – projekt nemá plánovač.
-        maybe_purge()
+        # Sken uživatele je v tuhle chvíli už uložený a v session; kdyby
+        # úklid cizích starých souborů spadl (souběh dvou workerů, sklad
+        # bez oprávnění zapisovat), nesmí to strhnout celý upload do 500 –
+        # uživatel by pak neměl jak doklad vůbec dostat do systému.
+        try:
+            maybe_purge()
+        except Exception:
+            logger.exception('Úklid prošlých skenů dokladů selhal, pokračuje se bez něj')
 
         pocet = len([i for i in receipt_data['items'] if not i['is_ignored']])
         messages.success(request, f'Doklad načten: {pocet} položek zboží.')
