@@ -279,7 +279,7 @@ def test_dodavatel_podle_zkraceneho_nazvu(bolero):
     """Na dokladu je celý obchodní název, v systému zkrácený."""
     from apps.inventory.matching import find_supplier
 
-    assert find_supplier(name='BOLERO Fruit, Aleš Bolek') == bolero
+    assert find_supplier(name='BOLERO Fruit Export s.r.o.') == bolero
 
 
 def test_nejednoznacny_nazev_nevraci_nic(bolero):
@@ -287,7 +287,7 @@ def test_nejednoznacny_nazev_nevraci_nic(bolero):
 
     Supplier.objects.create(name='BOLERO', slug='bolero-kratke')
 
-    assert find_supplier(name='BOLERO Fruit, Aleš Bolek') is None
+    assert find_supplier(name='BOLERO Fruit Export s.r.o.') is None
 
 
 def test_bez_dodavatele_se_alias_neuklada(suroviny):

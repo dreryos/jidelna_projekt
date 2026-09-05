@@ -29,7 +29,7 @@ pytestmark = pytest.mark.django_db
 
 @pytest.fixture
 def dodavatel():
-    return Supplier.objects.create(name='BOLERO Fruit', slug='bolero', ico='11122233')
+    return Supplier.objects.create(name='BOLERO Fruit', slug='bolero-alias', ico='11122233')
 
 
 @pytest.fixture
