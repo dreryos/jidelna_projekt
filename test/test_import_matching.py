@@ -33,7 +33,7 @@ def suroviny():
 def doklad():
     """Data dokladu v podobě, jakou do session ukládají všechny tři importy."""
     return {
-        'supplier': 'BOLERO Fruit, Aleš Bolek',
+        'supplier': 'BOLERO Fruit Export s.r.o.',
         'supplier_ico': '11122233',
         'items': [
             {'item_name': 'Jablko Gala IT', 'unit': 'kg', 'unit_mapped': 'kg'},
