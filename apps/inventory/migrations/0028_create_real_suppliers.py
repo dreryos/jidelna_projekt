@@ -20,25 +20,33 @@ NOVI_DODAVATELE = [
 
 
 def vytvorit_dodavatele(apps, schema_editor):
+    """
+    `get_or_create(slug=...)` by nenašlo řádek, který už existuje pod jiným
+    slugem se stejným (unikátním) `name` – vytvoření by pak spadlo na
+    IntegrityError. A kdyby řádek pod tímhle slugem už existoval (ruční
+    zásah, dřívější částečný deploy), `defaults` by se použily jen při
+    vytvoření – chybějící IČO by zůstalo chybějící napořád.
+
+    Proto se hledá napřed podle `name`, pak podle `slug`, a když se něco
+    najde, aktualizují se všechna pole – ne jen doplní to, co chybí.
+    """
     Supplier = apps.get_model('inventory', 'Supplier')
 
     for slug, name, ico in NOVI_DODAVATELE:
-        Supplier.objects.get_or_create(
-            slug=slug,
-            defaults={
-                'name': name,
-                'ico': ico,
-                'template_cache_key': f'supplier_template_{slug}',
-                'is_active': True,
-            },
-        )
-
-
-def smazat_dodavatele(apps, schema_editor):
-    Supplier = apps.get_model('inventory', 'Supplier')
-    Supplier.objects.filter(
-        slug__in=[slug for slug, _, _ in NOVI_DODAVATELE]
-    ).delete()
+        supplier_data = {
+            'name': name,
+            'slug': slug,
+            'ico': ico,
+            'template_cache_key': f'supplier_template_{slug}',
+            'is_active': True,
+        }
+        supplier = Supplier.objects.filter(name=name).first()
+        if supplier is None:
+            supplier = Supplier.objects.filter(slug=slug).first()
+        if supplier is None:
+            Supplier.objects.create(**supplier_data)
+        else:
+            Supplier.objects.filter(pk=supplier.pk).update(**supplier_data)
 
 
 class Migration(migrations.Migration):
@@ -48,5 +56,9 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RunPython(vytvorit_dodavatele, smazat_dodavatele),
+        # Vracet migraci smazáním podle slugu je nebezpečné – smazal by se
+        # i řádek, který mezitím osídlily reálné příjemky nebo ruční úprava
+        # (kaskádově i jeho aliasy a šablony surovin). Bez zpětné operace to
+        # nejde bezpečně udělat, tak se rollback bere jako no-op.
+        migrations.RunPython(vytvorit_dodavatele, migrations.RunPython.noop),
     ]
