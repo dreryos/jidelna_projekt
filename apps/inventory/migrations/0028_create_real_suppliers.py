@@ -8,15 +8,14 @@ from django.db import migrations
 # skutečné dodávky nikdy nenapojil `find_supplier()` a naučené přepočty/aliasy
 # (`SupplierItemAlias`) se pro ně vůbec neukládaly.
 #
-# IČO se vyplňuje jen tam, kde je potvrzené z reálného OCR dokladu v DB
-# (Bolero Fruit). U ostatních zůstává prázdné, ať se nedoplní špatný údaj –
-# doplní se ručně přes admin, až bude jistý.
+# IČO ověřené (Bolero Fruit z reálné OCR anotace v DB, ostatní zadal uživatel
+# ručně podle rejstříku).
 NOVI_DODAVATELE = [
     # slug, name, ico
-    ('bidfood', 'Bidfood Czech Republic s.r.o.', None),
-    ('makro-real', 'MAKRO Cash & Carry ČR s.r.o.', None),
+    ('bidfood', 'Bidfood Czech Republic s.r.o.', '28234642'),
+    ('makro-real', 'MAKRO Cash & Carry ČR s.r.o.', '26450691'),
     ('bolero-real', 'Bolero Fruit, Aleš Bolek', '68524358'),
-    ('dk-open', 'DK Open', None),
+    ('dk-open', 'DK OPEN, spol. s r.o.', '48200620'),
 ]
 
 
