@@ -2742,10 +2742,20 @@ def photo_import_step3(request):
                 )
                 return redirect('inventory:photo_import_step2')
 
-            if ingredient is not None and factor == Decimal('1'):
-                # Nová surovina teprve vznikne, ta dostane jednotku z dokladu
-                # a přepočítávat se nemusí.
-                if not units_are_compatible(item['unit_mapped'], ingredient.base_unit):
+            # Jednotky, které se automaticky nepřevedou (např. „ks" na
+            # dokladu vs. vlastní jednotka skladu jako „bochník") – bez
+            # zásahu člověka nevíme, jestli je poměr 1:1, nebo úplně jiný.
+            unit_conflict = (
+                ingredient is not None
+                and not units_are_compatible(item['unit_mapped'], ingredient.base_unit)
+            )
+            if unit_conflict and factor == Decimal('1'):
+                # `factor == 1` je zároveň neupravený výchozí stav pole i
+                # platná odpověď („1 ks = 1 bochník“) – to samo o sobě
+                # nerozeznáme. Skrytý příznak z JS řekne, jestli s polem
+                # uživatel skutečně pohnul; teprve pak se jeho jedničce věří.
+                touched = request.POST.get(f'unit_factor_touched_{idx}') == '1'
+                if not touched:
                     messages.error(
                         request,
                         f'Řádek {idx + 1} „{item["item_name"]}": doklad je '
@@ -2791,6 +2801,7 @@ def photo_import_step3(request):
                 'quantity': quantity,
                 'source_quantity': source_quantity,
                 'unit_factor': factor,
+                'unit_resolved': unit_conflict,
                 'price_net': unit_price_net,
                 'price_gross': unit_price_gross,
             })
@@ -2859,8 +2870,13 @@ def photo_import_step3(request):
                 source_unit=item['unit_mapped'],
                 source_quantity=row['source_quantity'],
                 unit_factor=row['unit_factor'],
+                # Bez tohohle by se položka po založení tvářila dál jako
+                # konfliktní (viz `has_unit_conflict`) – přepočet 1 je i
+                # platná odpověď, jen se od výchozí hodnoty nedá rozeznat
+                # bez příznaku.
+                unit_resolved=row['unit_resolved'],
             )
-            mappings.append((item, row['ingredient'], row['unit_factor']))
+            mappings.append((item, row['ingredient'], row['unit_factor'], row['unit_resolved']))
 
         _remember_photo_mapping(supplier_obj, mappings, skipped, request.user)
 
@@ -2916,10 +2932,15 @@ def _remember_photo_mapping(supplier, mappings, skipped, user):
     resolver = IngredientResolver(supplier=supplier, ingredients=[])
     remembered = 0
 
-    for item, ingredient, unit_factor in mappings:
+    for item, ingredient, unit_factor, unit_resolved in mappings:
         if resolver.remember(item['item_name'], ingredient=ingredient,
                              unit=item.get('unit_mapped') or item.get('unit', ''),
-                             unit_factor=unit_factor, user=user):
+                             unit_factor=unit_factor, user=user,
+                             # `False` by mohlo degradovat dřív potvrzený
+                             # alias na nerozhodnutý (viz `remember()`) – tam,
+                             # kde tenhle import o jednotkách nic neřeší, se
+                             # radši nevyjadřujeme vůbec.
+                             unit_resolved=True if unit_resolved else None):
             remembered += 1
 
     for item in skipped:
