@@ -47,7 +47,14 @@ ANNOTATION_PROMPT = (
     'doslova, včetně země původu, gramáže balení a poznámek v uvozovkách. '
     'Nepřekládej je ani nezkracuj. Desetinná čárka v českých číslech je '
     'oddělovač desetin, mezera v číslech odděluje tisíce. '
-    'Údaje, které na dokladu nejsou, nech prázdné a nic si nedomýšlej.'
+    'Údaje, které na dokladu nejsou, nech prázdné a nic si nedomýšlej. '
+    'Kód položky (číslo zboží v katalogu dodavatele) je jiný sloupec než '
+    'množství – nezaměňuj je, i když jsou u sebe. Sloupec s množstvím může '
+    'být na řádku vzdálený od názvu položky (např. až na pravém okraji '
+    'stránky); čti ho vždy ze stejné vodorovné řádky jako danou položku. '
+    'Reference objednávky nebo zákaznické/rozvozové číslo (často značené '
+    '„OM:", „č. obj." apod.) není IČO dodavatele ani odběratele – IČO hledej '
+    'jen tam, kde je opravdu tak označené.'
 )
 
 

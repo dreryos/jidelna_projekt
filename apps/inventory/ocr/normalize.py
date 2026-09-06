@@ -118,7 +118,11 @@ def _normalize_item(raw_item, index, prices_include_vat, warnings):
 
     if unit_net is None:
         if not is_ignored:
-            warnings.append(f'Řádek {index} „{name}" nemá čitelnou cenu, doplňte ji.')
+            warnings.append(
+                f'Řádek {index} „{name}" nemá čitelnou cenu, doplňte ji '
+                f'a zkontrolujte i množství – bez cenových součtů na dokladu '
+                f'ho nejde ověřit automaticky.'
+            )
         unit_net = Decimal('0')
         unit_gross = Decimal('0')
 
