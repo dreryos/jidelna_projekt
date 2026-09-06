@@ -2729,19 +2729,6 @@ def photo_import_step3(request):
                 messages.error(request, f'Řádek {idx + 1}: vybraný sklad neexistuje.')
                 return redirect('inventory:photo_import_step2')
 
-            # Přepočet na skladovou jednotku. Bez něj by se do skladu, který
-            # vede gramy, přičetlo množství v kilech.
-            factor = _decimal_from_post(
-                request.POST.get(f'unit_factor_{idx}'), item.get('unit_factor', '1')
-            )
-            if factor <= 0:
-                messages.error(
-                    request,
-                    f'Řádek {idx + 1} „{item["item_name"]}": přepočet jednotek '
-                    f'musí být kladné číslo.'
-                )
-                return redirect('inventory:photo_import_step2')
-
             # Jednotky, které se automaticky nepřevedou (např. „ks" na
             # dokladu vs. vlastní jednotka skladu jako „bochník") – bez
             # zásahu člověka nevíme, jestli je poměr 1:1, nebo úplně jiný.
@@ -2749,20 +2736,42 @@ def photo_import_step3(request):
                 ingredient is not None
                 and not units_are_compatible(item['unit_mapped'], ingredient.base_unit)
             )
-            if unit_conflict and factor == Decimal('1'):
-                # `factor == 1` je zároveň neupravený výchozí stav pole i
-                # platná odpověď („1 ks = 1 bochník“) – to samo o sobě
-                # nerozeznáme. Skrytý příznak z JS řekne, jestli s polem
-                # uživatel skutečně pohnul; teprve pak se jeho jedničce věří.
-                touched = request.POST.get(f'unit_factor_touched_{idx}') == '1'
-                if not touched:
+
+            # Přepočet na skladovou jednotku. Bez něj by se do skladu, který
+            # vede gramy, přičetlo množství v kilech.
+            #
+            # Nevyplněný/nedořešený přepočet se v session i ve formuláři
+            # předvyplňuje nulou, ne jedničkou – jednička je totiž i platná
+            # odpověď („1 ks = 1 bochník"), takže by šlo těžko poznat, jestli
+            # ji tam nechal uživatel, nebo je to jen nedotčený výchozí stav.
+            # Nula je jednoznačně „nevyplněno", takže stačí jediná kontrola.
+            factor = _decimal_from_post(
+                request.POST.get(f'unit_factor_{idx}'), item.get('unit_factor', '0')
+            )
+            # Záporné číslo je vždycky jen překlep, ne nevyplněné pole –
+            # ať se to nesplete s „ještě nedořešeno" u nuly.
+            if factor < 0:
+                messages.error(
+                    request,
+                    f'Řádek {idx + 1} „{item["item_name"]}": přepočet jednotek '
+                    f'musí být kladné číslo.'
+                )
+                return redirect('inventory:photo_import_step2')
+            if factor == 0:
+                if unit_conflict:
                     messages.error(
                         request,
                         f'Řádek {idx + 1} „{item["item_name"]}": doklad je '
                         f'v jednotce {item["unit_mapped"]}, sklad vede '
                         f'{ingredient.name} v {ingredient.base_unit}. Doplňte přepočet.'
                     )
-                    return redirect('inventory:photo_import_step2')
+                else:
+                    messages.error(
+                        request,
+                        f'Řádek {idx + 1} „{item["item_name"]}": přepočet jednotek '
+                        f'musí být kladné číslo.'
+                    )
+                return redirect('inventory:photo_import_step2')
 
             # Cena jde upravit na kroku 2 – doklad bez vytištěné ceny (např.
             # rozvozový list řidiče místo dodacího listu) ji OCR předvyplní
