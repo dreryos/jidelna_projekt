@@ -2754,14 +2754,33 @@ def photo_import_step3(request):
                     )
                     return redirect('inventory:photo_import_step2')
 
+            # Cena jde upravit na kroku 2 – doklad bez vytištěné ceny (např.
+            # rozvozový list řidiče místo dodacího listu) ji OCR předvyplní
+            # nulou, jinak by nešla doplnit vůbec.
+            price_net_per_unit = _decimal_from_post(
+                request.POST.get(f'price_{idx}'), item['price_per_unit_net']
+            )
+            if price_net_per_unit < 0:
+                messages.error(
+                    request,
+                    f'Řádek {idx + 1} „{item["item_name"]}": cena nesmí být záporná.'
+                )
+                return redirect('inventory:photo_import_step2')
+
+            # Cena s DPH se dopočítá ze (případně upravené) ceny bez DPH, ne
+            # ze samostatně přečteného pole – jinak by po úpravě ceny přestaly
+            # sedět k sobě.
+            vat_multiplier = Decimal('1') + (Decimal(item['vat_rate']) / Decimal('100'))
+            price_gross_per_unit = (price_net_per_unit * vat_multiplier).quantize(Decimal('0.01'))
+
             source_quantity = _decimal_from_post(
                 request.POST.get(f'quantity_{idx}'), item['quantity']
             )
             quantity, unit_price_net = convert_line(
-                source_quantity, Decimal(item['price_per_unit_net']), factor,
+                source_quantity, price_net_per_unit, factor,
             )
             _quantity_gross, unit_price_gross = convert_line(
-                Decimal('1'), Decimal(item['price_per_unit_gross']), factor,
+                Decimal('1'), price_gross_per_unit, factor,
             )
 
             planned.append({

@@ -600,6 +600,99 @@ def test_zaporny_prepocet_se_odmitne(client, uzivatel, sklad, pekarna,
     assert GoodsReceipt.objects.count() == 0
 
 
+# --- Doklad bez vytištěné ceny ---
+
+@pytest.fixture
+def ocr_rozvozovy_list(monkeypatch):
+    """
+    Rozvozový list řidiče (DK OPEN) místo dodacího listu – jen kód, název
+    a množství v kusech, žádný sloupec s cenou ani hlavička dodavatele.
+    """
+    from apps.inventory.ocr import client
+
+    annotation = {
+        'dodavatel': {'nazev': None, 'ico': None},
+        'doklad': {'cislo_dokladu': 'DL3608901', 'typ_dokladu': 'jine',
+                   'datum_vystaveni': '2026-07-02'},
+        'ceny_jsou_s_dph': None,
+        'polozky': [
+            {'nazev': 'Chléb konzumní,1200g', 'kod': '1020',
+             'mnozstvi': 4, 'jednotka': 'KS'},
+            {'nazev': 'Rohlík,43g', 'kod': '2090',
+             'mnozstvi': 60, 'jednotka': 'KS'},
+        ],
+    }
+    monkeypatch.setattr(client, 'run_ocr',
+                        lambda *a, **kw: {'annotation': annotation, 'markdown': '', 'raw': {}})
+    monkeypatch.setattr(client, 'prepare_image', lambda b, n: (b'x', 'image/jpeg'))
+    return annotation
+
+
+def test_doklad_bez_ceny_neshodi_upload_a_upozorni(client, uzivatel, sklad,
+                                                    media_root, ocr_rozvozovy_list):
+    """
+    Bez sloupce s cenou OCR nemá co přečíst – nesmí to ale shodit upload ani
+    tiše naskladnit za nulu beze stopy. Cena 0 s varováním je čestná odpověď,
+    ne chyba.
+    """
+    response = nahrat_doklad(client, sklad)
+
+    assert response.status_code == 200
+    data = client.session['photo_receipt_data']
+    assert all(item['price_per_unit_net'] == '0' for item in data['items'])
+
+    response = client.get(reverse('inventory:photo_import_step2'))
+    assert 'nemá čitelnou cenu' in response.content.decode()
+
+
+def test_dopsana_cena_se_pouzije_misto_nulove(client, uzivatel, sklad,
+                                              media_root, ocr_rozvozovy_list):
+    """
+    Cenu, kterou OCR nenašla, musí jít na kroku 2 dopsat – jinak by se
+    doklad bez cenového sloupce dal naskladnit jedině za nulu.
+    """
+    chleba = Ingredient.objects.create(name='Chléb konzumní', unit='ks', base_unit='ks')
+    nahrat_doklad(client, sklad)
+    data = client.session['photo_receipt_data']
+    radek = next(i for i, item in enumerate(data['items'])
+                 if 'Chléb' in item['item_name'])
+
+    client.post(reverse('inventory:photo_import_step3'), {
+        'receipt_number': data['receipt_number'],
+        'receipt_date': data['receipt_date'],
+        f'include_{radek}': 'on',
+        f'ingredient_{radek}': chleba.id,
+        f'quantity_{radek}': data['items'][radek]['quantity'],
+        f'price_{radek}': '37.80',
+        f'warehouse_{radek}': sklad.id,
+    }, follow=True)
+
+    polozka = GoodsReceiptItem.objects.get(ingredient=chleba)
+    assert polozka.price_without_vat == Decimal('37.80')
+    assert polozka.vat_rate == Decimal('12')
+    assert polozka.price == Decimal('42.34')
+
+
+def test_zaporna_cena_se_odmitne(client, uzivatel, sklad, media_root,
+                                 ocr_rozvozovy_list):
+    chleba = Ingredient.objects.create(name='Chléb konzumní', unit='ks', base_unit='ks')
+    nahrat_doklad(client, sklad)
+    data = client.session['photo_receipt_data']
+
+    response = client.post(reverse('inventory:photo_import_step3'), {
+        'receipt_number': data['receipt_number'],
+        'receipt_date': data['receipt_date'],
+        'include_0': 'on',
+        'ingredient_0': chleba.id,
+        'quantity_0': data['items'][0]['quantity'],
+        'price_0': '-1',
+        'warehouse_0': sklad.id,
+    }, follow=True)
+
+    assert 'nesmí být záporná' in response.content.decode()
+    assert GoodsReceipt.objects.count() == 0
+
+
 # --- Pojistky v kroku 2 ---
 
 def test_duplicitni_doklad_se_ohlasi(client, uzivatel, sklad, bolero, suroviny,
