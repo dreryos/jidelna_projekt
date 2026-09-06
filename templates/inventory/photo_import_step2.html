@@ -152,6 +152,16 @@
                         —
                       {% endif %}
                     </small>
+                    {% comment %}
+                      Přepočet přesně 1 je zároveň neupravený výchozí stav
+                      pole (viz JS níže) i platná odpověď („1 ks = 1
+                      bochník"). Server sám o sobě obě situace nerozezná –
+                      tenhle skrytý příznak řekne, že uživatel s polem
+                      skutečně pohnul, takže se jeho odpověď bere vážně
+                      i když zůstala na jedničce.
+                    {% endcomment %}
+                    <input type="hidden" name="unit_factor_touched_{{ forloop.counter0|unlocalize }}"
+                           id="unit-factor-touched-{{ forloop.counter0|unlocalize }}" value="0">
                   </td>
                   <td>
                     <select class="form-select form-select-sm ingredient-select"
@@ -296,6 +306,15 @@
         hint.classList.remove('text-muted');
         hint.classList.add('text-danger');
       }
+    });
+  });
+
+  // Přepočet přesně 1 je zároveň neupravený výchozí stav i platná odpověď –
+  // server to nerozezná bez tohohle příznaku (viz komentář u skrytého pole).
+  document.querySelectorAll('.unit-factor-input').forEach(function (input) {
+    input.addEventListener('input', function () {
+      const idx = input.id.replace('unit-factor-input-', '');
+      document.getElementById('unit-factor-touched-' + idx).value = '1';
     });
   });
 </script>

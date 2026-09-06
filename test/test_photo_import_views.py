@@ -550,6 +550,44 @@ def test_nejednoznacne_jednotky_zastavi_import(client, uzivatel, sklad, pekarna,
     assert GoodsReceipt.objects.count() == 0
 
 
+def test_dotknuty_prepocet_jedna_se_uzna(client, uzivatel, sklad, pekarna,
+                                         media_root, ocr_pekarna):
+    """
+    Přepočet 1 je i platná odpověď („1 ks chleba = 1 bochník") – ne jen
+    neupravený výchozí stav pole. Skrytý `unit_factor_touched_` (JS ho
+    nastaví, když se do pole s přepočtem sáhne) řekne systému, že jedničku
+    zadal člověk vědomě, ne že ji tam nechal omylem.
+    """
+    rohlik = Ingredient.objects.create(name='Rohlík', unit='ks', base_unit='ks')
+    nahrat_doklad(client, sklad)
+    data = client.session['photo_receipt_data']
+    radek = next(i for i, item in enumerate(data['items'])
+                 if 'Rohlík' in item['item_name'])
+
+    client.post(reverse('inventory:photo_import_step3'), {
+        'receipt_number': data['receipt_number'],
+        'receipt_date': data['receipt_date'],
+        'supplier_obj': pekarna.id,
+        f'include_{radek}': 'on',
+        f'ingredient_{radek}': rohlik.id,
+        f'quantity_{radek}': '3',
+        f'unit_factor_{radek}': '1',
+        f'unit_factor_touched_{radek}': '1',
+        f'warehouse_{radek}': sklad.id,
+    }, follow=True)
+
+    polozka = GoodsReceiptItem.objects.get(ingredient=rohlik)
+    assert polozka.quantity == Decimal('3')
+    assert polozka.unit_resolved is True
+    # Příjemku jde rovnou potvrdit, ne se znovu ptát na týž řádek.
+    assert polozka.has_unit_conflict is False
+
+    # Příště se na totéž zboží od stejného dodavatele nemusí ptát vůbec.
+    alias = SupplierItemAlias.objects.get(raw_name='Rohlík tukový karton')
+    assert alias.unit_resolved is True
+    assert alias.unit_factor == Decimal('1')
+
+
 def test_zadany_prepocet_se_pouzije_i_zapamatuje(client, uzivatel, sklad, pekarna,
                                                  media_root, ocr_pekarna):
     rohlik = Ingredient.objects.create(name='Rohlík', unit='ks', base_unit='ks')
