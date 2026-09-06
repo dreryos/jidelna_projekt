@@ -222,6 +222,26 @@ def test_neocekavana_chyba_pri_navrhu_neshodi_do_500(client, uzivatel, sklad, bo
     assert response.redirect_chain[-1][0] == reverse('inventory:photo_import_step1')
 
 
+def test_poskozena_relace_neshodi_navrh_do_500(client, uzivatel, sklad, bolero,
+                                                media_root, ocr_bez_site):
+    """
+    `photo_default_warehouse` se čte a převádí na int ještě před chráněným
+    blokem – stará nebo poškozená relace (např. po změně formátu) by tak
+    obešla ošetření a spadla do holé 500 dřív, než se vůbec začne sestavovat
+    návrh.
+    """
+    nahrat_doklad(client, sklad)
+    session = client.session
+    session['photo_default_warehouse'] = 'neplatne-id'
+    session.save()
+
+    response = client.get(reverse('inventory:photo_import_step2'), follow=True)
+
+    assert response.status_code == 200
+    assert 'nepodařilo připravit' in response.content.decode()
+    assert response.redirect_chain[-1][0] == reverse('inventory:photo_import_step1')
+
+
 # --- Krok 3 ---
 
 def odeslat_prijemku(client, sklad, suroviny, vynechat=()):
@@ -319,6 +339,30 @@ def test_neurcena_surovina_vrati_na_kontrolu(client, uzivatel, sklad, bolero,
     }, follow=True)
 
     assert 'vyberte surovinu' in response.content.decode()
+    assert GoodsReceipt.objects.count() == 0
+
+
+def test_vadne_pole_v_polozce_pri_overeni_neshodi_do_500(client, uzivatel, sklad, bolero,
+                                                          suroviny, media_root, ocr_bez_site):
+    """
+    Ověřovací smyčka čte přímo pole z dokladu (`price_per_unit_net` a
+    podobně) a počítá s nimi přes `Decimal(...)`/`convert_line(...)` – u
+    staršího nebo neobvyklého skenu se tahle pole nemusí povést přečíst.
+    To je jiná situace než ty, co si uživatel opraví sám (chybějící
+    surovina, sklad, přepočet) – dřív skončila holou 500.
+    """
+    nahrat_doklad(client, sklad)
+    session = client.session
+    receipt_data = session['photo_receipt_data']
+    receipt_data['items'][0]['price_per_unit_net'] = 'neplatna-cena'
+    session['photo_receipt_data'] = receipt_data
+    session.save()
+
+    response = odeslat_prijemku(client, sklad, suroviny)
+
+    assert response.status_code == 200
+    assert 'Řádek 1' in response.content.decode()
+    assert 'nepodařilo zpracovat' in response.content.decode()
     assert GoodsReceipt.objects.count() == 0
 
 
