@@ -103,7 +103,8 @@
             </thead>
             <tbody>
               {% for item in receipt_data.items %}
-                <tr {% if item.is_ignored %}class="table-secondary"{% endif %}>
+                <tr {% if item.is_ignored %}class="table-secondary"{% endif %}
+                    data-source-unit="{{ item.unit_mapped }}">
                   <td>
                     <input type="checkbox" class="form-check-input" name="include_{{ forloop.counter0|unlocalize }}"
                            {% if not item.is_ignored %}checked{% endif %}>
@@ -122,32 +123,42 @@
                     </div>
                   </td>
                   <td>
-                    {% if item.target_unit and item.source_unit != item.target_unit %}
-                      <div class="input-group input-group-sm">
-                        <span class="input-group-text">×</span>
-                        <input type="text"
-                               class="form-control {% if item.needs_unit_check %}border-danger{% endif %}"
-                               name="unit_factor_{{ forloop.counter0|unlocalize }}"
-                               value="{{ item.unit_factor }}">
-                        <span class="input-group-text">{{ item.target_unit }}</span>
-                      </div>
-                      <small class="{% if item.needs_unit_check %}text-danger{% else %}text-muted{% endif %}">
+                    {# Ručně vybraná surovina může mít jinou jednotku než ta, kterou
+                       navrhl automatický přiřazovač – JS níže tenhle blok podle
+                       výběru přepočítá, ať se místo doplnění přepočtu nevyhodí
+                       až chyba na kroku 3. #}
+                    <div class="input-group input-group-sm unit-factor-group{% if not item.target_unit or item.source_unit == item.target_unit %} d-none{% endif %}"
+                         id="unit-factor-group-{{ forloop.counter0|unlocalize }}">
+                      <span class="input-group-text">×</span>
+                      <input type="text"
+                             class="form-control unit-factor-input{% if item.needs_unit_check %} border-danger{% endif %}"
+                             name="unit_factor_{{ forloop.counter0|unlocalize }}"
+                             id="unit-factor-input-{{ forloop.counter0|unlocalize }}"
+                             value="{{ item.unit_factor }}">
+                      <span class="input-group-text unit-factor-target"
+                            id="unit-factor-target-{{ forloop.counter0|unlocalize }}">{{ item.target_unit }}</span>
+                    </div>
+                    <small class="unit-factor-hint {% if item.needs_unit_check %}text-danger{% else %}text-muted{% endif %}"
+                           id="unit-factor-hint-{{ forloop.counter0|unlocalize }}">
+                      {% if item.target_unit and item.source_unit != item.target_unit %}
                         {% if item.needs_unit_check %}
                           Kolik {{ item.target_unit }} je jedna {{ item.source_unit }}?
                         {% else %}
                           {{ item.source_unit }} → {{ item.target_unit }}
                         {% endif %}
-                      </small>
-                    {% else %}
-                      <input type="hidden" name="unit_factor_{{ forloop.counter0|unlocalize }}" value="1">
-                      <small class="text-muted">—</small>
-                    {% endif %}
+                      {% else %}
+                        —
+                      {% endif %}
+                    </small>
                   </td>
                   <td>
-                    <select class="form-select form-select-sm" name="ingredient_{{ forloop.counter0|unlocalize }}">
+                    <select class="form-select form-select-sm ingredient-select"
+                            id="ingredient-select-{{ forloop.counter0|unlocalize }}"
+                            name="ingredient_{{ forloop.counter0|unlocalize }}">
                       <option value="">— vyberte —</option>
                       {% for ingredient in all_ingredients %}
                         <option value="{{ ingredient.id|unlocalize }}"
+                                data-unit="{{ ingredient.base_unit }}"
                                 {% if ingredient.id == item.ingredient_id %}selected{% endif %}>
                           {{ ingredient.name }} ({{ ingredient.unit }})
                         </option>
@@ -205,4 +216,74 @@
     </div>
   </form>
 </div>
+
+<script>
+  // Zrcadlí apps/inventory/units.py – jednoznačný převod (kg/g, l/ml) se
+  // dopočítá sám, u zbytku (ks → kg apod.) se musí zeptat člověk. Beze
+  // změny tady, ale ruční výběr suroviny přepočet přepočítá pro NOVĚ
+  // vybranou surovinu, ne pro tu, kterou navrhl automatický přiřazovač.
+  const UNIT_SCALES = { kg: 1000, dkg: 10, g: 1, l: 1000, dl: 100, ml: 1 };
+  const UNIT_FAMILIES = {
+    kg: 'hmotnost', dkg: 'hmotnost', g: 'hmotnost',
+    l: 'objem', dl: 'objem', ml: 'objem',
+    ks: 'kus', bal: 'kus',
+  };
+
+  function normalizeUnit(unit) {
+    return (unit || '').trim().toLowerCase().replace(/\.+$/, '');
+  }
+
+  function conversionFactor(fromUnit, toUnit) {
+    const source = normalizeUnit(fromUnit);
+    const target = normalizeUnit(toUnit);
+
+    if (!source || !target) return null;
+    if (source === target) return 1;
+    if (!(source in UNIT_SCALES) || !(target in UNIT_SCALES)) return null;
+    if (UNIT_FAMILIES[source] !== UNIT_FAMILIES[target]) return null;
+
+    return UNIT_SCALES[source] / UNIT_SCALES[target];
+  }
+
+  document.querySelectorAll('.ingredient-select').forEach(function (select) {
+    select.addEventListener('change', function () {
+      const idx = select.id.replace('ingredient-select-', '');
+      const group = document.getElementById('unit-factor-group-' + idx);
+      const input = document.getElementById('unit-factor-input-' + idx);
+      const targetSpan = document.getElementById('unit-factor-target-' + idx);
+      const hint = document.getElementById('unit-factor-hint-' + idx);
+      const sourceUnit = select.closest('tr').dataset.sourceUnit;
+      const option = select.options[select.selectedIndex];
+      const targetUnit = option ? option.dataset.unit : '';
+
+      if (!targetUnit || normalizeUnit(targetUnit) === normalizeUnit(sourceUnit)) {
+        group.classList.add('d-none');
+        input.classList.remove('border-danger');
+        input.value = '1';
+        hint.textContent = '—';
+        hint.classList.remove('text-danger');
+        hint.classList.add('text-muted');
+        return;
+      }
+
+      targetSpan.textContent = targetUnit;
+      group.classList.remove('d-none');
+
+      const factor = conversionFactor(sourceUnit, targetUnit);
+      if (factor !== null) {
+        input.value = String(factor);
+        input.classList.remove('border-danger');
+        hint.textContent = sourceUnit + ' → ' + targetUnit;
+        hint.classList.remove('text-danger');
+        hint.classList.add('text-muted');
+      } else {
+        input.value = '1';
+        input.classList.add('border-danger');
+        hint.textContent = 'Kolik ' + targetUnit + ' je jedna ' + sourceUnit + '?';
+        hint.classList.remove('text-muted');
+        hint.classList.add('text-danger');
+      }
+    });
+  });
+</script>
 {% endblock %}

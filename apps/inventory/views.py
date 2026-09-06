@@ -2613,21 +2613,40 @@ def photo_import_step2(request):
         messages.error(request, 'Session vypršela. Začněte znovu.')
         return redirect('inventory:photo_import_step1')
 
-    default_warehouse_id = int(request.session['photo_default_warehouse'])
-    warehouses = Warehouse.objects.select_related('canteen').all()
-    if not request.user.is_superuser:
-        try:
-            user_canteens = request.user.profile.canteens.all()
-            warehouses = warehouses.filter(canteen__in=user_canteens)
-        except ObjectDoesNotExist:
-            warehouses = Warehouse.objects.none()
+    # Sestavení návrhu je citlivé na obsah dokladu i na relaci (neočekávaný
+    # formát čísla, chybějící pole u starého skenu, poškozená nebo zastaralá
+    # `photo_default_warehouse` v relaci apod.) – neošetřená výjimka by tu
+    # spadla do holé 500 bez stopy, co přesně selhalo. Zabalené je celé tělo
+    # od prvního přístupu k relaci až po render, ať se nezapomene na kus mezi
+    # nimi. Radši konkrétní hláška a čitelný záznam v logu, ať je to
+    # dohledatelné i bez přístupu k živému serveru.
+    try:
+        default_warehouse_id = int(request.session['photo_default_warehouse'])
+        warehouses = Warehouse.objects.select_related('canteen').all()
+        if not request.user.is_superuser:
+            try:
+                user_canteens = request.user.profile.canteens.all()
+                warehouses = warehouses.filter(canteen__in=user_canteens)
+            except ObjectDoesNotExist:
+                warehouses = Warehouse.objects.none()
 
-    all_ingredients = list(Ingredient.objects.filter(is_active=True))
-    _apply_ingredient_matching(receipt_data, all_ingredients)
-    request.session['photo_receipt_data'] = receipt_data
+        all_ingredients = list(Ingredient.objects.filter(is_active=True))
+        _apply_ingredient_matching(receipt_data, all_ingredients)
+        request.session['photo_receipt_data'] = receipt_data
 
-    default_warehouse = Warehouse.objects.filter(id=default_warehouse_id).first()
-    checks = _collect_import_warnings(receipt_data, default_warehouse)
+        default_warehouse = Warehouse.objects.filter(id=default_warehouse_id).first()
+        checks = _collect_import_warnings(receipt_data, default_warehouse)
+    except Exception as exc:
+        logger.exception(
+            'Návrh příjemky z fotky selhal (doklad %s, sken %s)',
+            receipt_data.get('receipt_number'), request.session.get('photo_scan_id'),
+        )
+        messages.error(
+            request,
+            f'Návrh příjemky se nepodařilo připravit ({exc}). Zkuste doklad '
+            f'nahrát znovu; pokud to nepomůže, nahlaste to i s tímhle popisem.'
+        )
+        return redirect('inventory:photo_import_step1')
 
     return render(request, 'inventory/photo_import_step2.html', {
         'receipt_data': receipt_data,
@@ -2671,138 +2690,178 @@ def photo_import_step3(request):
     skipped = []
     new_ingredient_names = []
 
-    for idx, item in enumerate(receipt_data['items']):
-        # Nezaškrtnutý řádek na sklad nejde. Uživatel takhle odmítá
-        # zaokrouhlení, dopravu a obaly – a my si to zapamatujeme.
-        if request.POST.get(f'include_{idx}') != 'on':
-            skipped.append(item)
-            continue
+    # Validace řádků čte přímo pole z dokladu (`item['price_per_unit_net']`
+    # apod.) – u staršího nebo neobvyklého skenu můžou chybět nebo mít tvar,
+    # který `Decimal(...)`/`convert_line(...)` nesloví. To je jiná chyba než
+    # ty, co si uživatel může sám opravit na kroku 2 výše (proto zvlášť,
+    # ne jen další `except` u nich) – tady se jen zaloguje a diagnostikuje,
+    # u kterého řádku to bylo, ať to zase nespadne do holé 500.
+    idx = None
+    try:
+        for idx, item in enumerate(receipt_data['items']):
+            # Nezaškrtnutý řádek na sklad nejde. Uživatel takhle odmítá
+            # zaokrouhlení, dopravu a obaly – a my si to zapamatujeme.
+            if request.POST.get(f'include_{idx}') != 'on':
+                skipped.append(item)
+                continue
 
-        if request.POST.get(f'create_new_{idx}') == 'on':
-            new_ingredient_names.append(
-                (idx, request.POST.get(f'ingredient_name_{idx}') or item['item_name'])
-            )
-            ingredient = None
-        else:
-            ingredient = Ingredient.objects.filter(
-                id=request.POST.get(f'ingredient_{idx}')
+            if request.POST.get(f'create_new_{idx}') == 'on':
+                new_ingredient_names.append(
+                    (idx, request.POST.get(f'ingredient_name_{idx}') or item['item_name'])
+                )
+                ingredient = None
+            else:
+                ingredient = Ingredient.objects.filter(
+                    id=request.POST.get(f'ingredient_{idx}')
+                ).first()
+                if ingredient is None:
+                    messages.error(
+                        request,
+                        f'Řádek {idx + 1} „{item["item_name"]}": vyberte surovinu, '
+                        f'založte novou, nebo řádek odškrtněte.'
+                    )
+                    return redirect('inventory:photo_import_step2')
+
+            warehouse = Warehouse.objects.filter(
+                id=request.POST.get(f'warehouse_{idx}', default_warehouse_id)
             ).first()
-            if ingredient is None:
-                messages.error(
-                    request,
-                    f'Řádek {idx + 1} „{item["item_name"]}": vyberte surovinu, '
-                    f'založte novou, nebo řádek odškrtněte.'
-                )
+            if warehouse is None:
+                messages.error(request, f'Řádek {idx + 1}: vybraný sklad neexistuje.')
                 return redirect('inventory:photo_import_step2')
 
-        warehouse = Warehouse.objects.filter(
-            id=request.POST.get(f'warehouse_{idx}', default_warehouse_id)
-        ).first()
-        if warehouse is None:
-            messages.error(request, f'Řádek {idx + 1}: vybraný sklad neexistuje.')
-            return redirect('inventory:photo_import_step2')
-
-        # Přepočet na skladovou jednotku. Bez něj by se do skladu, který
-        # vede gramy, přičetlo množství v kilech.
-        factor = _decimal_from_post(
-            request.POST.get(f'unit_factor_{idx}'), item.get('unit_factor', '1')
-        )
-        if factor <= 0:
-            messages.error(
-                request,
-                f'Řádek {idx + 1} „{item["item_name"]}": přepočet jednotek '
-                f'musí být kladné číslo.'
+            # Přepočet na skladovou jednotku. Bez něj by se do skladu, který
+            # vede gramy, přičetlo množství v kilech.
+            factor = _decimal_from_post(
+                request.POST.get(f'unit_factor_{idx}'), item.get('unit_factor', '1')
             )
-            return redirect('inventory:photo_import_step2')
-
-        if ingredient is not None and factor == Decimal('1'):
-            # Nová surovina teprve vznikne, ta dostane jednotku z dokladu
-            # a přepočítávat se nemusí.
-            if not units_are_compatible(item['unit_mapped'], ingredient.base_unit):
+            if factor <= 0:
                 messages.error(
                     request,
-                    f'Řádek {idx + 1} „{item["item_name"]}": doklad je '
-                    f'v jednotce {item["unit_mapped"]}, sklad vede '
-                    f'{ingredient.name} v {ingredient.base_unit}. Doplňte přepočet.'
+                    f'Řádek {idx + 1} „{item["item_name"]}": přepočet jednotek '
+                    f'musí být kladné číslo.'
                 )
                 return redirect('inventory:photo_import_step2')
 
-        source_quantity = _decimal_from_post(
-            request.POST.get(f'quantity_{idx}'), item['quantity']
-        )
-        quantity, unit_price_net = convert_line(
-            source_quantity, Decimal(item['price_per_unit_net']), factor,
-        )
-        _quantity_gross, unit_price_gross = convert_line(
-            Decimal('1'), Decimal(item['price_per_unit_gross']), factor,
-        )
+            if ingredient is not None and factor == Decimal('1'):
+                # Nová surovina teprve vznikne, ta dostane jednotku z dokladu
+                # a přepočítávat se nemusí.
+                if not units_are_compatible(item['unit_mapped'], ingredient.base_unit):
+                    messages.error(
+                        request,
+                        f'Řádek {idx + 1} „{item["item_name"]}": doklad je '
+                        f'v jednotce {item["unit_mapped"]}, sklad vede '
+                        f'{ingredient.name} v {ingredient.base_unit}. Doplňte přepočet.'
+                    )
+                    return redirect('inventory:photo_import_step2')
 
-        planned.append({
-            'index': idx,
-            'item': item,
-            'ingredient': ingredient,
-            'warehouse': warehouse,
-            'quantity': quantity,
-            'source_quantity': source_quantity,
-            'unit_factor': factor,
-            'price_net': unit_price_net,
-            'price_gross': unit_price_gross,
-        })
+            source_quantity = _decimal_from_post(
+                request.POST.get(f'quantity_{idx}'), item['quantity']
+            )
+            quantity, unit_price_net = convert_line(
+                source_quantity, Decimal(item['price_per_unit_net']), factor,
+            )
+            _quantity_gross, unit_price_gross = convert_line(
+                Decimal('1'), Decimal(item['price_per_unit_gross']), factor,
+            )
+
+            planned.append({
+                'index': idx,
+                'item': item,
+                'ingredient': ingredient,
+                'warehouse': warehouse,
+                'quantity': quantity,
+                'source_quantity': source_quantity,
+                'unit_factor': factor,
+                'price_net': unit_price_net,
+                'price_gross': unit_price_gross,
+            })
+    except Exception as exc:
+        radek = '?' if idx is None else str(idx + 1)
+        logger.exception(
+            'Ověření řádků příjemky z fotky selhalo (doklad %s, řádek %s)',
+            receipt_data.get('receipt_number'), radek,
+        )
+        messages.error(
+            request,
+            f'Řádek {radek} se nepodařilo zpracovat ({exc}). Zkuste doklad '
+            f'nahrát znovu; pokud to nepomůže, nahlaste to i s tímhle popisem.'
+        )
+        return redirect('inventory:photo_import_step2')
 
     if not planned:
         messages.error(request, 'Není co naskladnit – všechny řádky jsou odškrtnuté.')
         return redirect('inventory:photo_import_step2')
 
-    # Od téhle chvíle se jen zapisuje a nic nemůže poslat uživatele zpátky.
-    created_ingredients_count = 0
-    for idx, name in new_ingredient_names:
-        row = next(row for row in planned if row['index'] == idx)
-        ingredient, created = Ingredient.objects.get_or_create(
-            name=name,
-            defaults={
-                'unit': row['item']['unit_mapped'],
-                'base_unit': row['item']['unit_mapped'],
-            },
+    # Od téhle chvíle se jen zapisuje a nic nemůže poslat uživatele zpátky
+    # přes `return redirect(...)` – `transaction.atomic` totiž reaguje jen na
+    # neodchycenou výjimku, ne na to, co view vrátí. Neočekávaná chyba (např.
+    # nesmyslná cena z OCR, na kterou tu nikdo nenarazil dřív) by tak spadla
+    # do holé 500 bez stopy, co přesně a u kterého řádku selhalo. Radši se
+    # transakce zruší ručně a uživatel i log dostanou konkrétní důvod.
+    try:
+        created_ingredients_count = 0
+        for idx, name in new_ingredient_names:
+            row = next(row for row in planned if row['index'] == idx)
+            ingredient, created = Ingredient.objects.get_or_create(
+                name=name,
+                defaults={
+                    'unit': row['item']['unit_mapped'],
+                    'base_unit': row['item']['unit_mapped'],
+                },
+            )
+            row['ingredient'] = ingredient
+            created_ingredients_count += int(created)
+
+        goods_receipt = GoodsReceipt.objects.create(
+            warehouse=default_warehouse,
+            receipt_number=request.POST.get('receipt_number') or receipt_data['receipt_number'],
+            receipt_date=request.POST.get('receipt_date') or receipt_data['receipt_date'],
+            supplier=receipt_data['supplier'],
+            supplier_obj=supplier_obj,
+            status=GoodsReceipt.Status.DRAFT,
+            created_by=request.user,
+            notes='Načteno z fotky dokladu',
         )
-        row['ingredient'] = ingredient
-        created_ingredients_count += int(created)
 
-    goods_receipt = GoodsReceipt.objects.create(
-        warehouse=default_warehouse,
-        receipt_number=request.POST.get('receipt_number') or receipt_data['receipt_number'],
-        receipt_date=request.POST.get('receipt_date') or receipt_data['receipt_date'],
-        supplier=receipt_data['supplier'],
-        supplier_obj=supplier_obj,
-        status=GoodsReceipt.Status.DRAFT,
-        created_by=request.user,
-        notes='Načteno z fotky dokladu',
-    )
+        mappings = []
+        for row in planned:
+            item = row['item']
+            GoodsReceiptItem.objects.create(
+                goods_receipt=goods_receipt,
+                ingredient=row['ingredient'],
+                warehouse=row['warehouse'],
+                quantity=row['quantity'],
+                price_without_vat=row['price_net'],
+                vat_rate=Decimal(item['vat_rate']),
+                vat_amount=row['price_gross'] - row['price_net'],
+                price=row['price_gross'],
+                notes=f"Z dokladu: {item['item_name']}"[:100],
+                source_name=item['item_name'][:255],
+                source_unit=item['unit_mapped'],
+                source_quantity=row['source_quantity'],
+                unit_factor=row['unit_factor'],
+            )
+            mappings.append((item, row['ingredient'], row['unit_factor']))
 
-    mappings = []
-    for row in planned:
-        item = row['item']
-        GoodsReceiptItem.objects.create(
-            goods_receipt=goods_receipt,
-            ingredient=row['ingredient'],
-            warehouse=row['warehouse'],
-            quantity=row['quantity'],
-            price_without_vat=row['price_net'],
-            vat_rate=Decimal(item['vat_rate']),
-            vat_amount=row['price_gross'] - row['price_net'],
-            price=row['price_gross'],
-            notes=f"Z dokladu: {item['item_name']}"[:100],
-            source_name=item['item_name'][:255],
-            source_unit=item['unit_mapped'],
-            source_quantity=row['source_quantity'],
-            unit_factor=row['unit_factor'],
+        _remember_photo_mapping(supplier_obj, mappings, skipped, request.user)
+
+        scan_id = request.session.get('photo_scan_id')
+        if scan_id:
+            GoodsReceiptScan.objects.filter(id=scan_id).update(goods_receipt=goods_receipt)
+    except Exception as exc:
+        # Transakci je potřeba zrušit ručně – zůstáváme uvnitř view, kterou
+        # `@transaction.atomic` obaluje, takže na obyčejný `except` nereaguje.
+        transaction.set_rollback(True)
+        logger.exception(
+            'Vytvoření příjemky z fotky selhalo (doklad %s, sklad %s)',
+            receipt_data.get('receipt_number'), default_warehouse_id,
         )
-        mappings.append((item, row['ingredient'], row['unit_factor']))
-
-    _remember_photo_mapping(supplier_obj, mappings, skipped, request.user)
-
-    scan_id = request.session.get('photo_scan_id')
-    if scan_id:
-        GoodsReceiptScan.objects.filter(id=scan_id).update(goods_receipt=goods_receipt)
+        messages.error(
+            request,
+            f'Příjemku se nepodařilo založit ({exc}). Zkuste to znovu; '
+            f'pokud to nepomůže, nahlaste to i s tímhle popisem.'
+        )
+        return redirect('inventory:photo_import_step2')
 
     for key in ('photo_receipt_data', 'photo_default_warehouse', 'photo_scan_id'):
         request.session.pop(key, None)

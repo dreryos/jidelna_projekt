@@ -198,6 +198,50 @@ def test_bez_session_vrati_na_zacatek(client, uzivatel):
     assert response.url == reverse('inventory:photo_import_step1')
 
 
+def test_neocekavana_chyba_pri_navrhu_neshodi_do_500(client, uzivatel, sklad, bolero,
+                                                     media_root, ocr_bez_site,
+                                                     monkeypatch):
+    """
+    Sestavení návrhu (přiřazení surovin, kontroly duplicity/ceny) se dělá
+    z obsahu dokladu – nic tu nezaručuje, že se nikdy nenarazí na
+    neočekávaný tvar dat. Neodchycená výjimka by dřív spadla do holé 500;
+    teď musí skončit konkrétní hláškou a záznamem v logu.
+    """
+    from apps.inventory import views
+
+    def selhat(*args, **kwargs):
+        raise ValueError('neplatná cena na dokladu')
+
+    monkeypatch.setattr(views, '_apply_ingredient_matching', selhat)
+    nahrat_doklad(client, sklad)
+
+    response = client.get(reverse('inventory:photo_import_step2'), follow=True)
+
+    assert response.status_code == 200
+    assert 'nepodařilo připravit' in response.content.decode()
+    assert response.redirect_chain[-1][0] == reverse('inventory:photo_import_step1')
+
+
+def test_poskozena_relace_neshodi_navrh_do_500(client, uzivatel, sklad, bolero,
+                                                media_root, ocr_bez_site):
+    """
+    `photo_default_warehouse` se čte a převádí na int ještě před chráněným
+    blokem – stará nebo poškozená relace (např. po změně formátu) by tak
+    obešla ošetření a spadla do holé 500 dřív, než se vůbec začne sestavovat
+    návrh.
+    """
+    nahrat_doklad(client, sklad)
+    session = client.session
+    session['photo_default_warehouse'] = 'neplatne-id'
+    session.save()
+
+    response = client.get(reverse('inventory:photo_import_step2'), follow=True)
+
+    assert response.status_code == 200
+    assert 'nepodařilo připravit' in response.content.decode()
+    assert response.redirect_chain[-1][0] == reverse('inventory:photo_import_step1')
+
+
 # --- Krok 3 ---
 
 def odeslat_prijemku(client, sklad, suroviny, vynechat=()):
@@ -296,6 +340,57 @@ def test_neurcena_surovina_vrati_na_kontrolu(client, uzivatel, sklad, bolero,
 
     assert 'vyberte surovinu' in response.content.decode()
     assert GoodsReceipt.objects.count() == 0
+
+
+def test_vadne_pole_v_polozce_pri_overeni_neshodi_do_500(client, uzivatel, sklad, bolero,
+                                                          suroviny, media_root, ocr_bez_site):
+    """
+    Ověřovací smyčka čte přímo pole z dokladu (`price_per_unit_net` a
+    podobně) a počítá s nimi přes `Decimal(...)`/`convert_line(...)` – u
+    staršího nebo neobvyklého skenu se tahle pole nemusí povést přečíst.
+    To je jiná situace než ty, co si uživatel opraví sám (chybějící
+    surovina, sklad, přepočet) – dřív skončila holou 500.
+    """
+    nahrat_doklad(client, sklad)
+    session = client.session
+    receipt_data = session['photo_receipt_data']
+    receipt_data['items'][0]['price_per_unit_net'] = 'neplatna-cena'
+    session['photo_receipt_data'] = receipt_data
+    session.save()
+
+    response = odeslat_prijemku(client, sklad, suroviny)
+
+    assert response.status_code == 200
+    assert 'Řádek 1' in response.content.decode()
+    assert 'nepodařilo zpracovat' in response.content.decode()
+    assert GoodsReceipt.objects.count() == 0
+
+
+def test_neocekavana_chyba_pri_zapisu_zrusi_transakci(client, uzivatel, sklad, bolero,
+                                                       suroviny, media_root, ocr_bez_site,
+                                                       monkeypatch):
+    """
+    Od chvíle, kdy se začne zapisovat, `return redirect(...)` transakci
+    nezruší – reaguje jen na neodchycenou výjimku. Bez ručního
+    `transaction.set_rollback(True)` by tak chyba uprostřed zápisu skončila
+    holou 500 a nechala by po sobě rozdělanou příjemku bez položek.
+    """
+    from apps.inventory.models import GoodsReceiptItem
+
+    def selhat(*args, **kwargs):
+        raise ValueError('cena je nesmyslná')
+
+    monkeypatch.setattr(GoodsReceiptItem.objects, 'create', selhat)
+    nahrat_doklad(client, sklad)
+
+    response = odeslat_prijemku(client, sklad, suroviny)
+
+    assert response.status_code == 200
+    assert 'nepodařilo založit' in response.content.decode()
+    assert GoodsReceipt.objects.count() == 0
+    # Session se zahodí, jen když se povede – uživatel nesmí o rozpracovaný
+    # doklad přijít jen proto, že se něco nepovedlo zapsat.
+    assert 'photo_receipt_data' in client.session
 
 
 # --- Sken a jeho životnost ---
