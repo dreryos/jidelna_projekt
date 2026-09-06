@@ -198,6 +198,30 @@ def test_bez_session_vrati_na_zacatek(client, uzivatel):
     assert response.url == reverse('inventory:photo_import_step1')
 
 
+def test_neocekavana_chyba_pri_navrhu_neshodi_do_500(client, uzivatel, sklad, bolero,
+                                                     media_root, ocr_bez_site,
+                                                     monkeypatch):
+    """
+    Sestavení návrhu (přiřazení surovin, kontroly duplicity/ceny) se dělá
+    z obsahu dokladu – nic tu nezaručuje, že se nikdy nenarazí na
+    neočekávaný tvar dat. Neodchycená výjimka by dřív spadla do holé 500;
+    teď musí skončit konkrétní hláškou a záznamem v logu.
+    """
+    from apps.inventory import views
+
+    def selhat(*args, **kwargs):
+        raise ValueError('neplatná cena na dokladu')
+
+    monkeypatch.setattr(views, '_apply_ingredient_matching', selhat)
+    nahrat_doklad(client, sklad)
+
+    response = client.get(reverse('inventory:photo_import_step2'), follow=True)
+
+    assert response.status_code == 200
+    assert 'nepodařilo připravit' in response.content.decode()
+    assert response.redirect_chain[-1][0] == reverse('inventory:photo_import_step1')
+
+
 # --- Krok 3 ---
 
 def odeslat_prijemku(client, sklad, suroviny, vynechat=()):
@@ -296,6 +320,33 @@ def test_neurcena_surovina_vrati_na_kontrolu(client, uzivatel, sklad, bolero,
 
     assert 'vyberte surovinu' in response.content.decode()
     assert GoodsReceipt.objects.count() == 0
+
+
+def test_neocekavana_chyba_pri_zapisu_zrusi_transakci(client, uzivatel, sklad, bolero,
+                                                       suroviny, media_root, ocr_bez_site,
+                                                       monkeypatch):
+    """
+    Od chvíle, kdy se začne zapisovat, `return redirect(...)` transakci
+    nezruší – reaguje jen na neodchycenou výjimku. Bez ručního
+    `transaction.set_rollback(True)` by tak chyba uprostřed zápisu skončila
+    holou 500 a nechala by po sobě rozdělanou příjemku bez položek.
+    """
+    from apps.inventory.models import GoodsReceiptItem
+
+    def selhat(*args, **kwargs):
+        raise ValueError('cena je nesmyslná')
+
+    monkeypatch.setattr(GoodsReceiptItem.objects, 'create', selhat)
+    nahrat_doklad(client, sklad)
+
+    response = odeslat_prijemku(client, sklad, suroviny)
+
+    assert response.status_code == 200
+    assert 'nepodařilo založit' in response.content.decode()
+    assert GoodsReceipt.objects.count() == 0
+    # Session se zahodí, jen když se povede – uživatel nesmí o rozpracovaný
+    # doklad přijít jen proto, že se něco nepovedlo zapsat.
+    assert 'photo_receipt_data' in client.session
 
 
 # --- Sken a jeho životnost ---
