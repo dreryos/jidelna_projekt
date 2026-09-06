@@ -123,10 +123,12 @@
                     </div>
                   </td>
                   <td>
-                    {# Ručně vybraná surovina může mít jinou jednotku než ta, kterou
-                       navrhl automatický přiřazovač – JS níže tenhle blok podle
-                       výběru přepočítá, ať se místo doplnění přepočtu nevyhodí
-                       až chyba na kroku 3. #}
+                    {% comment %}
+                      Ručně vybraná surovina může mít jinou jednotku než ta, kterou
+                      navrhl automatický přiřazovač – JS níže tenhle blok podle
+                      výběru přepočítá, ať se místo doplnění přepočtu nevyhodí
+                      až chyba na kroku 3.
+                    {% endcomment %}
                     <div class="input-group input-group-sm unit-factor-group{% if not item.target_unit or item.source_unit == item.target_unit %} d-none{% endif %}"
                          id="unit-factor-group-{{ forloop.counter0|unlocalize }}">
                       <span class="input-group-text">×</span>

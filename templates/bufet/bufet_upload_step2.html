@@ -131,8 +131,10 @@
        (chyba 520). Sdílený <datalist> to srazí na jeden seznam. -->
   <datalist id="ingredient-options">
     {% for ing in all_ingredients %}
-    {# #id v popisku odliší suroviny se shodným name+unit (jinak by se
-       namapovaly na tu nesprávnou) #}
+    {% comment %}
+      #id v popisku odliší suroviny se shodným name+unit (jinak by se
+      namapovaly na tu nesprávnou)
+    {% endcomment %}
     <option data-id="{{ ing.id|unlocalize }}" value="{{ ing.name }} ({{ ing.unit }}) #{{ ing.id|unlocalize }}"></option>
     {% endfor %}
   </datalist>
