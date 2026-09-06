@@ -523,7 +523,12 @@ def test_jednoznacny_prevod_naskladni_spravne_mnozstvi(client, uzivatel, sklad,
 
 def test_nejednoznacne_jednotky_zastavi_import(client, uzivatel, sklad, pekarna,
                                                media_root, ocr_pekarna):
-    """Kolik rohlíků je v kartonu, systém neví – hádat nesmí."""
+    """
+    Kolik rohlíků je v kartonu, systém neví – hádat nesmí. Nevyplněný
+    přepočet se předvyplňuje nulou (viz `matching._resolve_units`), takže
+    ho formulář odešle přesně tak, jak by ho odeslal prohlížeč, kdyby na
+    něj uživatel nesáhl.
+    """
     rohlik = Ingredient.objects.create(name='Rohlík', unit='ks', base_unit='ks')
     nahrat_doklad(client, sklad)
     response = client.get(reverse('inventory:photo_import_step2'))
@@ -534,6 +539,7 @@ def test_nejednoznacne_jednotky_zastavi_import(client, uzivatel, sklad, pekarna,
     radek = next(i for i, item in enumerate(data['items'])
                  if 'Rohlík' in item['item_name'])
     assert data['items'][radek]['needs_unit_check'] is True
+    assert data['items'][radek]['unit_factor'] == '0'
 
     response = client.post(reverse('inventory:photo_import_step3'), {
         'receipt_number': data['receipt_number'],
@@ -542,7 +548,7 @@ def test_nejednoznacne_jednotky_zastavi_import(client, uzivatel, sklad, pekarna,
         f'include_{radek}': 'on',
         f'ingredient_{radek}': rohlik.id,
         f'quantity_{radek}': '3',
-        f'unit_factor_{radek}': '1',
+        f'unit_factor_{radek}': data['items'][radek]['unit_factor'],
         f'warehouse_{radek}': sklad.id,
     }, follow=True)
 
@@ -550,19 +556,19 @@ def test_nejednoznacne_jednotky_zastavi_import(client, uzivatel, sklad, pekarna,
     assert GoodsReceipt.objects.count() == 0
 
 
-def test_dotknuty_prepocet_jedna_se_uzna(client, uzivatel, sklad, pekarna,
-                                         media_root, ocr_pekarna):
+def test_prepocet_jedna_se_uzna(client, uzivatel, sklad, pekarna,
+                                media_root, ocr_pekarna):
     """
     Přepočet 1 je i platná odpověď („1 ks chleba = 1 bochník") – ne jen
-    neupravený výchozí stav pole. Skrytý `unit_factor_touched_` (JS ho
-    nastaví, když se do pole s přepočtem sáhne) řekne systému, že jedničku
-    zadal člověk vědomě, ne že ji tam nechal omylem.
+    nevyplněný default. Ten je teď 0 (viz `matching._resolve_units`), takže
+    jednička odeslaná z formuláře je vždycky vědomá odpověď člověka.
     """
     rohlik = Ingredient.objects.create(name='Rohlík', unit='ks', base_unit='ks')
     nahrat_doklad(client, sklad)
     data = client.session['photo_receipt_data']
     radek = next(i for i, item in enumerate(data['items'])
                  if 'Rohlík' in item['item_name'])
+    assert data['items'][radek]['unit_factor'] == '0'
 
     client.post(reverse('inventory:photo_import_step3'), {
         'receipt_number': data['receipt_number'],
@@ -572,7 +578,6 @@ def test_dotknuty_prepocet_jedna_se_uzna(client, uzivatel, sklad, pekarna,
         f'ingredient_{radek}': rohlik.id,
         f'quantity_{radek}': '3',
         f'unit_factor_{radek}': '1',
-        f'unit_factor_touched_{radek}': '1',
         f'warehouse_{radek}': sklad.id,
     }, follow=True)
 
@@ -586,6 +591,55 @@ def test_dotknuty_prepocet_jedna_se_uzna(client, uzivatel, sklad, pekarna,
     alias = SupplierItemAlias.objects.get(raw_name='Rohlík tukový karton')
     assert alias.unit_resolved is True
     assert alias.unit_factor == Decimal('1')
+
+
+def test_naucena_jednicka_se_podruhe_uz_neresi(client, uzivatel, sklad, pekarna,
+                                               media_root, ocr_pekarna):
+    """
+    Přesně ten hlášený problém: poměr 1 se jednou potvrdí, systém si ho
+    zapamatuje – a podruhé se nesmí ptát znovu, natožpak to odmítnout.
+    """
+    rohlik = Ingredient.objects.create(name='Rohlík', unit='ks', base_unit='ks')
+    nahrat_doklad(client, sklad)
+    data = client.session['photo_receipt_data']
+    radek = next(i for i, item in enumerate(data['items'])
+                 if 'Rohlík' in item['item_name'])
+    client.post(reverse('inventory:photo_import_step3'), {
+        'receipt_number': data['receipt_number'],
+        'receipt_date': data['receipt_date'],
+        'supplier_obj': pekarna.id,
+        f'include_{radek}': 'on',
+        f'ingredient_{radek}': rohlik.id,
+        f'quantity_{radek}': '3',
+        f'unit_factor_{radek}': '1',
+        f'warehouse_{radek}': sklad.id,
+    }, follow=True)
+
+    # Druhý doklad od stejného dodavatele, stejné zboží.
+    nahrat_doklad(client, sklad, nazev='druhy.jpg')
+    client.get(reverse('inventory:photo_import_step2'))
+    data = client.session['photo_receipt_data']
+    radek = next(i for i, item in enumerate(data['items'])
+                 if 'Rohlík' in item['item_name'])
+    # Naučeno – nemá se znovu ptát, poměr je rovnou k dispozici.
+    assert data['items'][radek]['needs_unit_check'] is False
+    assert Decimal(data['items'][radek]['unit_factor']) == Decimal('1')
+
+    # Formulář odešle přesně to, co je předvyplněné – uživatel na nic
+    # nesahal, jen odklikl.
+    response = client.post(reverse('inventory:photo_import_step3'), {
+        'receipt_number': data['receipt_number'],
+        'receipt_date': data['receipt_date'],
+        'supplier_obj': pekarna.id,
+        f'include_{radek}': 'on',
+        f'ingredient_{radek}': rohlik.id,
+        f'quantity_{radek}': '5',
+        f'unit_factor_{radek}': data['items'][radek]['unit_factor'],
+        f'warehouse_{radek}': sklad.id,
+    }, follow=True)
+
+    assert 'Doplňte přepočet' not in response.content.decode()
+    assert GoodsReceiptItem.objects.filter(ingredient=rohlik).count() == 2
 
 
 def test_zadany_prepocet_se_pouzije_i_zapamatuje(client, uzivatel, sklad, pekarna,

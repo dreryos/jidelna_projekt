@@ -333,7 +333,9 @@ def test_nejednoznacny_prevod_se_oznaci_k_dotazu(bolero):
     match = IngredientResolver(bolero).resolve('Salát ledový CZ', unit='ks')
 
     assert match.needs_unit_check is True
-    assert match.unit_factor == Decimal('1')
+    # Nula, ne jednička – ta je i platná odpověď ("1 ks = 1 bochník"),
+    # nula jednoznačně znamená "ještě nedořešeno".
+    assert match.unit_factor == Decimal('0')
 
 
 def test_naucený_prevod_prebije_dotaz(bolero, suroviny):
