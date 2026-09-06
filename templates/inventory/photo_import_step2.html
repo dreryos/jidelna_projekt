@@ -279,6 +279,11 @@
       const option = select.options[select.selectedIndex];
       const targetUnit = option ? option.dataset.unit : '';
 
+      // Nová surovina = nová otázka na přepočet. Potvrzení předchozí
+      // suroviny se na tuhle nevztahuje, i kdyby JS obě dopočítal na
+      // stejnou jedničku.
+      document.getElementById('unit-factor-touched-' + idx).value = '0';
+
       if (!targetUnit || normalizeUnit(targetUnit) === normalizeUnit(sourceUnit)) {
         group.classList.add('d-none');
         input.classList.remove('border-danger');
