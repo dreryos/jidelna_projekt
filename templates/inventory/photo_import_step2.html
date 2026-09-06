@@ -192,9 +192,20 @@
                       {% endfor %}
                     </select>
                   </td>
-                  <td class="text-end">
-                    {{ item.price_per_unit_net }} Kč
-                    <br><small class="text-muted">DPH {{ item.vat_rate }} %</small>
+                  <td>
+                    {% comment %}
+                      Doklady bez vytištěné ceny (např. rozvozový list řidiče
+                      místo dodacího listu) OCR předvyplní nulou a jen
+                      upozorní ve varováních nahoře – bez editovatelného pole
+                      by cena nulová i zůstala.
+                    {% endcomment %}
+                    <div class="input-group input-group-sm">
+                      <input type="text" class="form-control text-end"
+                             name="price_{{ forloop.counter0|unlocalize }}"
+                             value="{{ item.price_per_unit_net }}">
+                      <span class="input-group-text">Kč</span>
+                    </div>
+                    <small class="text-muted">DPH {{ item.vat_rate }} %</small>
                   </td>
                 </tr>
               {% endfor %}
