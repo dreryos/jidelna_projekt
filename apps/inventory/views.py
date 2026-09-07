@@ -2749,8 +2749,11 @@ def photo_import_step3(request):
                 request.POST.get(f'unit_factor_{idx}'), item.get('unit_factor', '0')
             )
             # Záporné číslo je vždycky jen překlep, ne nevyplněné pole –
-            # ať se to nesplete s „ještě nedořešeno" u nuly.
-            if factor < 0:
+            # ať se to nesplete s „ještě nedořešeno" u nuly. NaN/nekonečno
+            # (`Decimal` je přijme) by porovnání `< 0` samo vyhodilo
+            # (`InvalidOperation`) nebo by prošlo beze změny do `convert_line`
+            # a spadlo tam s méně srozumitelnou chybou.
+            if not factor.is_finite() or factor < 0:
                 messages.error(
                     request,
                     f'Řádek {idx + 1} „{item["item_name"]}": přepočet jednotek '

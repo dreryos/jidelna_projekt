@@ -692,6 +692,33 @@ def test_zaporny_prepocet_se_odmitne(client, uzivatel, sklad, pekarna,
     assert GoodsReceipt.objects.count() == 0
 
 
+@pytest.mark.parametrize('hodnota', ['NaN', 'Infinity', '-Infinity'])
+def test_nekonecny_prepocet_se_odmitne(client, uzivatel, sklad, pekarna,
+                                       media_root, ocr_pekarna, hodnota):
+    """
+    `Decimal` NaN/nekonečno bez povšimnutí přijme – `factor < 0` by na NaN
+    vyhodilo `InvalidOperation` a nekonečno by prošlo dál do `convert_line`
+    a spadlo tam s méně srozumitelnou chybou než hláška z formuláře.
+    """
+    rohlik = Ingredient.objects.create(name='Rohlík', unit='ks', base_unit='ks')
+    nahrat_doklad(client, sklad)
+    data = client.session['photo_receipt_data']
+
+    response = client.post(reverse('inventory:photo_import_step3'), {
+        'receipt_number': data['receipt_number'],
+        'receipt_date': data['receipt_date'],
+        'supplier_obj': pekarna.id,
+        'include_0': 'on',
+        'ingredient_0': rohlik.id,
+        'quantity_0': '3',
+        'unit_factor_0': hodnota,
+        'warehouse_0': sklad.id,
+    }, follow=True)
+
+    assert 'kladné číslo' in response.content.decode()
+    assert GoodsReceipt.objects.count() == 0
+
+
 # --- Doklad bez vytištěné ceny ---
 
 @pytest.fixture
