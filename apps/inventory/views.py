@@ -17,6 +17,7 @@ from django.db.models.functions import Collate
 from django.conf import settings
 from apps.core.views import CanteenAccessMixin, user_can_access_canteen
 from decimal import Decimal, InvalidOperation
+from datetime import date
 import logging
 import json
 from pathlib import Path
@@ -538,15 +539,26 @@ class GoodsReceiptListView(CanteenAccessMixin, ListView):
         if status:
             queryset = queryset.filter(status=status)
 
-        # Filtrování podle data příjmu
-        date_from = self.request.GET.get('date_from')
+        # Filtrování podle data příjmu. Neplatný formát by Django předalo
+        # rovnou do SQL a spadlo by na ValueError místo hlášky – ručně
+        # zadané datum se tak nesmí pustit dál nerozparsované.
+        date_from = self._parse_date(self.request.GET.get('date_from'))
         if date_from:
             queryset = queryset.filter(receipt_date__gte=date_from)
-        date_to = self.request.GET.get('date_to')
+        date_to = self._parse_date(self.request.GET.get('date_to'))
         if date_to:
             queryset = queryset.filter(receipt_date__lte=date_to)
 
         return queryset.order_by('-created_at')
+
+    @staticmethod
+    def _parse_date(value):
+        if not value:
+            return None
+        try:
+            return date.fromisoformat(value)
+        except ValueError:
+            return None
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -562,7 +574,15 @@ class GoodsReceiptListView(CanteenAccessMixin, ListView):
             except ObjectDoesNotExist:
                 context['warehouses'] = Warehouse.objects.none()
 
-        context['suppliers'] = Supplier.objects.filter(is_active=True).order_by('name')
+        # Aktivní dodavatelé + ti, co mají v canteen-scoped příjmech aspoň
+        # jednu příjemku, i když je mezitím někdo deaktivoval – jinak by
+        # se historické příjemky nedaly podle dodavatele dohledat vůbec.
+        referenced_supplier_ids = super().get_queryset().exclude(
+            supplier_obj__isnull=True
+        ).values_list('supplier_obj_id', flat=True).distinct()
+        context['suppliers'] = Supplier.objects.filter(
+            Q(is_active=True) | Q(id__in=referenced_supplier_ids)
+        ).order_by('name')
         context['selected_search'] = self.request.GET.get('search', '')
         context['selected_supplier'] = self.request.GET.get('supplier', '')
         context['selected_warehouse'] = self.request.GET.get('warehouse', '')

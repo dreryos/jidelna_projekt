@@ -91,3 +91,37 @@ def test_bez_filtru_se_zobrazi_vsechno(client, uzivatel, sklad, bolero):
 
     prijmy = list(response.context['goods_receipts'])
     assert set(prijmy) == {a, b}
+
+
+def test_neplatne_datum_ve_filtru_neshodi_stranku(client, uzivatel, sklad):
+    """
+    `receipt_date__gte='neco'` by Django předalo rovnou do SQL a spadlo
+    by na ValueError – neplatné datum se má tiše ignorovat, ne shodit
+    celou stránku do 500.
+    """
+    prijem = vytvor_prijem(sklad, uzivatel, receipt_number='D1')
+
+    response = client.get(reverse('inventory:goods_receipt_list'), {
+        'date_from': 'neplatne-datum', 'date_to': '2026-13-40',
+    })
+
+    assert response.status_code == 200
+    assert list(response.context['goods_receipts']) == [prijem]
+
+
+def test_deaktivovany_dodavatel_zustava_ve_filtru(client, uzivatel, sklad, bolero):
+    """
+    Historickou příjemku od dodavatele, kterého mezitím někdo deaktivoval,
+    musí jít podle něj pořád dohledat – jinak by ho nešlo ve filtru vůbec
+    vybrat, přestože příjemky s ním v seznamu zůstávají.
+    """
+    prijem = vytvor_prijem(sklad, uzivatel, receipt_number='D1', supplier_obj=bolero)
+    bolero.is_active = False
+    bolero.save()
+
+    response = client.get(reverse('inventory:goods_receipt_list'))
+
+    assert bolero in response.context['suppliers']
+
+    response = client.get(reverse('inventory:goods_receipt_list'), {'supplier': bolero.id})
+    assert list(response.context['goods_receipts']) == [prijem]
