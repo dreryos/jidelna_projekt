@@ -14,6 +14,7 @@ import base64
 import io
 import json
 import logging
+import time
 from pathlib import Path
 
 from django.conf import settings
@@ -38,6 +39,15 @@ SUPPORTED_MIME_TYPES = {
 # 3000–4000 px; 2200 px stačí na čitelnost účtenkového písma a zmenší upload.
 MAX_IMAGE_EDGE = 2200
 JPEG_QUALITY = 85
+
+# Kolikrát to OCR zkusí, když se API odmítne odpovědět s přechodnou chybou
+# (503 upstream connect error apod. – u víc fotek najednou, kde je request
+# větší a trvá déle, se to statisticky trefí častěji). Bez tohohle musel
+# uživatel po výpadku na Mistral straně nahrávat celý vícestránkový doklad
+# znovu od nuly.
+OCR_MAX_ATTEMPTS = 3
+OCR_RETRY_BACKOFF_SECONDS = 2
+OCR_RETRYABLE_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
 
 # Doplňkové instrukce k anotačnímu schématu. Popisky polí říkají, co se má
 # vyplnit; tenhle prompt řeší, jak se chovat u českých dokladů a co nedělat.
@@ -70,7 +80,13 @@ ANNOTATION_PROMPT = (
     'při koupi...", „Kup více = plať méně") nezakládej jako vlastní položku '
     '– odečti jejich částku od cena_bez_dph a cena_celkem té položky, ke '
     'které se vztahují (řádek nad nimi), a jednotkovou cenu cena_za_mj '
-    'přepočti podle takhle sníženého součtu.'
+    'přepočti podle takhle sníženého součtu. '
+    'Účtenka MAKRO z pokladny (ne webshopový dodací list – pozná se podle '
+    'čárového kódu „FAKTURA – DAŇOVÝ DOKLAD" v záhlaví a útržku o platbě '
+    'kartou/kontaktless dole) nepíše u položek sazbu DPH rovnou v procentech, '
+    'ale interní kód sazbové skupiny: kód 23 znamená sazbu 12 %, kód 0 '
+    'znamená sazbu 21 %. Na tomhle typu účtenky dph_procenta vyplň už '
+    'přeloženou skutečnou sazbou (12 nebo 21), ne tím kódem.'
 )
 
 
@@ -198,6 +214,9 @@ def run_ocr(raw_bytes, filename, model=None, api_key=None, mime_type=None):
     """
     Pošle doklad do Mistral OCR a vrátí strukturovanou anotaci.
 
+    Přechodné chyby API (výpadek, přetížení – viz `_je_docasna_chyba`)
+    zkusí až `OCR_MAX_ATTEMPTS`-krát s prodlevou mezi pokusy, než se vzdá.
+
     Args:
         raw_bytes: obsah souboru
         filename: název souboru, určuje formát (když není dán `mime_type`)
@@ -242,19 +261,47 @@ def run_ocr(raw_bytes, filename, model=None, api_key=None, mime_type=None):
     )
 
     client = Mistral(api_key=api_key)
-    try:
-        response = client.ocr.process(
-            model=model,
-            document=document,
-            document_annotation_format=response_format_from_pydantic_model(DodaciDoklad),
-            document_annotation_prompt=ANNOTATION_PROMPT,
-            include_image_base64=False,
-        )
-    except Exception as exc:
-        logger.error('OCR selhalo: %s', exc)
-        raise OcrError(f'Rozpoznání dokladu selhalo: {exc}') from exc
+    for attempt in range(1, OCR_MAX_ATTEMPTS + 1):
+        try:
+            response = client.ocr.process(
+                model=model,
+                document=document,
+                document_annotation_format=response_format_from_pydantic_model(DodaciDoklad),
+                document_annotation_prompt=ANNOTATION_PROMPT,
+                include_image_base64=False,
+            )
+            break
+        except Exception as exc:
+            if attempt < OCR_MAX_ATTEMPTS and _je_docasna_chyba(exc):
+                logger.warning(
+                    'OCR selhalo přechodně (pokus %d/%d), zkouším znovu: %s',
+                    attempt, OCR_MAX_ATTEMPTS, exc,
+                )
+                time.sleep(OCR_RETRY_BACKOFF_SECONDS * attempt)
+                continue
+            logger.error('OCR selhalo: %s', exc)
+            raise OcrError(f'Rozpoznání dokladu selhalo: {exc}') from exc
 
     return _unpack_response(response, filename)
+
+
+def _je_docasna_chyba(exc):
+    """
+    Rozhodne, jestli má cenu OCR volání zopakovat.
+
+    Přechodné je: síťový výpadek úplně bez odpovědi (`NoResponseError`),
+    a chyba serveru nebo zahlcení (429/5xx) – ty se dřív nebo později
+    samy spraví. Chyba v požadavku (špatný klíč, nevalidní obsah) se
+    opakováním nespraví, tu opakovat nemá smysl.
+    """
+    from mistralai.client.errors import NoResponseError, SDKError
+
+    if isinstance(exc, NoResponseError):
+        return True
+    if isinstance(exc, SDKError):
+        status = getattr(getattr(exc, 'raw_response', None), 'status_code', None)
+        return status in OCR_RETRYABLE_STATUS_CODES
+    return False
 
 
 def _unpack_response(response, filename):

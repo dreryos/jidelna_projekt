@@ -1,16 +1,19 @@
 """
-Testy pomocných funkcí OCR klienta – zmenšení fotky a skládání víc fotek
-do jednoho PDF.
+Testy pomocných funkcí OCR klienta – zmenšení fotky, skládání víc fotek
+do jednoho PDF a opakování volání po přechodné chybě API.
 
-Skutečné volání Mistral API se netestuje (bez sítě), jen to, co s fotkami
-děláme před odesláním.
+Skutečné volání Mistral API se netestuje (bez sítě) – `run_ocr` se testuje
+s podvrženým klientem SDK, ať jde ověřit, kdy se pokus opakuje a kdy ne,
+beze změny toho, co se netestuje (síť).
 """
 import io
 
+import httpx
 import pytest
 from PIL import Image
 
-from apps.inventory.ocr.client import OcrError, combine_images_to_pdf, prepare_image
+from apps.inventory.ocr import client as ocr_client
+from apps.inventory.ocr.client import OcrError, combine_images_to_pdf, prepare_image, run_ocr
 
 
 def jpeg_bytes(barva='red', velikost=(50, 50)):
@@ -80,3 +83,83 @@ def test_prepare_image_jednu_fotku_nemeni_na_pdf():
 
     assert mime == 'image/jpeg'
     assert Image.open(io.BytesIO(data)).format == 'JPEG'
+
+
+# --- Opakování po přechodné chybě API ---
+
+def sdk_error(status_code, body='upstream connect error'):
+    """Stejný tvar výjimky, jakou vyhazuje `mistralai` SDK při chybě API."""
+    from mistralai.client.errors import SDKError
+
+    response = httpx.Response(
+        status_code=status_code,
+        request=httpx.Request('POST', 'https://api.mistral.ai/v1/ocr'),
+        text=body,
+    )
+    return SDKError('API error occurred', response)
+
+
+class FakeOcrEndpoint:
+    """Podvržené `client.ocr` – vrací/vyhazuje ze seznamu, jeden na pokus."""
+
+    def __init__(self, outcomes):
+        self._outcomes = list(outcomes)
+        self.calls = 0
+
+    def process(self, **kwargs):
+        self.calls += 1
+        outcome = self._outcomes.pop(0)
+        if isinstance(outcome, Exception):
+            raise outcome
+        return outcome
+
+
+def patch_mistral(monkeypatch, outcomes):
+    """Podvrhne `mistralai.client.Mistral` tak, aby `run_ocr` nesahalo na síť."""
+    endpoint = FakeOcrEndpoint(outcomes)
+
+    class FakeMistral:
+        def __init__(self, api_key):
+            self.ocr = endpoint
+
+    monkeypatch.setattr('mistralai.client.Mistral', FakeMistral)
+    monkeypatch.setattr(ocr_client.time, 'sleep', lambda seconds: None)
+    return endpoint
+
+
+def test_run_ocr_zopakuje_pokus_po_prechodne_503_a_uspeje(monkeypatch):
+    """
+    Přesně tahle situace nahlásil uživatel: "upstream connect error...
+    Connection refused" (503) u vícestránkového dokladu. Druhý pokus už
+    projde, takže uživatel nemusí nahrávat celý doklad znovu od nuly.
+    """
+    endpoint = patch_mistral(monkeypatch, [
+        sdk_error(503), {'document_annotation': {}, 'pages': []},
+    ])
+
+    result = run_ocr(jpeg_bytes(), 'doklad.jpg', api_key='testovaci-klic')
+
+    assert result['annotation'] == {}
+    assert endpoint.calls == 2
+
+
+def test_run_ocr_nezkousi_znovu_po_trvale_chybe(monkeypatch):
+    """Chybný požadavek (např. špatný klíč) se opakováním nespraví."""
+    endpoint = patch_mistral(monkeypatch, [sdk_error(401, 'Unauthorized')])
+
+    with pytest.raises(OcrError):
+        run_ocr(jpeg_bytes(), 'doklad.jpg', api_key='testovaci-klic')
+
+    assert endpoint.calls == 1
+
+
+def test_run_ocr_se_vzda_po_vycerpani_pokusu(monkeypatch):
+    """Trvalý výpadek se neopakuje donekonečna."""
+    endpoint = patch_mistral(
+        monkeypatch, [sdk_error(503) for _ in range(ocr_client.OCR_MAX_ATTEMPTS)],
+    )
+
+    with pytest.raises(OcrError):
+        run_ocr(jpeg_bytes(), 'doklad.jpg', api_key='testovaci-klic')
+
+    assert endpoint.calls == ocr_client.OCR_MAX_ATTEMPTS
