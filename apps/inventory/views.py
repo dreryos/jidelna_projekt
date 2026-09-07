@@ -2491,13 +2491,15 @@ def _serialize_receipt_data(receipt_data):
 @login_required
 def photo_import_step1(request):
     """
-    Krok 1: nahrání fotky dokladu a spuštění OCR.
+    Krok 1: nahrání jedné nebo více fotek dokladu a spuštění OCR.
 
-    Fotka se zmenší, uloží do dočasného úložiště a pošle do Mistral OCR.
-    Rozpoznaná data putují do session, sken zůstává na disku kvůli náhledu
-    v kroku 2 – po potvrzení příjemky se maže.
+    Jedna nahraná fotka se zmenší, zatímco samostatně nahrané PDF se uloží
+    a pošle beze změny. Více fotek se spojí do jednoho PDF, které se uloží
+    do dočasného úložiště a pošle do Mistral OCR. Rozpoznaná data putují do
+    session, sken zůstává na disku kvůli náhledu v kroku 2 – po potvrzení
+    příjemky se maže.
     """
-    from .ocr.client import OcrError, prepare_image, run_ocr
+    from .ocr.client import OcrError, combine_images_to_pdf, prepare_image, run_ocr
     from .ocr.normalize import to_receipt_data
     from .ocr.storage import maybe_purge, save_scan
 
@@ -2510,18 +2512,19 @@ def photo_import_step1(request):
             warehouses = Warehouse.objects.none()
 
     if request.method == 'POST':
-        scan_file = request.FILES.get('scan_file')
+        scan_files = request.FILES.getlist('scan_files')
         warehouse_id = request.POST.get('warehouse')
 
-        if not scan_file or not warehouse_id:
+        if not scan_files or not warehouse_id:
             messages.error(request, 'Vyberte fotku dokladu a sklad.')
             return redirect('inventory:photo_import_step1')
 
-        if scan_file.size > MAX_SCAN_UPLOAD_BYTES:
+        total_size = sum(f.size for f in scan_files)
+        if total_size > MAX_SCAN_UPLOAD_BYTES:
             messages.error(
                 request,
-                f'Soubor je příliš velký ({scan_file.size // (1024 * 1024)} MB). '
-                f'Maximum je {MAX_SCAN_UPLOAD_BYTES // (1024 * 1024)} MB.'
+                f'Soubory jsou příliš velké ({total_size // (1024 * 1024)} MB '
+                f'dohromady). Maximum je {MAX_SCAN_UPLOAD_BYTES // (1024 * 1024)} MB.'
             )
             return redirect('inventory:photo_import_step1')
 
@@ -2530,13 +2533,32 @@ def photo_import_step1(request):
             messages.error(request, 'Nemáte oprávnění zapisovat do tohoto skladu.')
             return redirect('inventory:photo_import_step1')
 
+        combined_name = ', '.join(f.name for f in scan_files)[:255]
+
         try:
-            image_bytes, mime = prepare_image(scan_file.read(), scan_file.name)
-            # Ukládáme zmenšenou podobu, ne originál – na náhled stačí
-            # a na disku se drží jen do potvrzení příjemky.
+            if len(scan_files) == 1:
+                image_bytes, mime = prepare_image(scan_files[0].read(), scan_files[0].name)
+            else:
+                # Víc souborů = víc stránek jednoho dokladu (typicky MAKRO).
+                # PDF podporuje jen jako jediný soubor – kombinovat hotové
+                # PDF s fotkami nebo víc PDF dohromady nemá smysl řešit,
+                # dokud o to nikdo nepožádá.
+                for scan_file in scan_files:
+                    if Path(scan_file.name).suffix.lower() == '.pdf':
+                        raise OcrError(
+                            'Víc souborů najednou podporujeme jen u fotek. '
+                            'PDF nahrajte samostatně jako jediný soubor.'
+                        )
+                image_bytes = combine_images_to_pdf(
+                    [(scan_file.read(), scan_file.name) for scan_file in scan_files]
+                )
+                mime = 'application/pdf'
+
+            # Ukládáme zmenšenou/poskládanou podobu, ne originály – na náhled
+            # stačí a na disku se drží jen do potvrzení příjemky.
             scan_path = save_scan(image_bytes, mime)
             # Posíláme už zmenšenou podobu, ať se JPEG nekóduje podruhé.
-            result = run_ocr(image_bytes, scan_file.name, mime_type=mime)
+            result = run_ocr(image_bytes, combined_name, mime_type=mime)
             receipt_data = to_receipt_data(result['annotation'])
         except OcrError as exc:
             messages.error(request, str(exc))
@@ -2553,7 +2575,7 @@ def photo_import_step1(request):
 
         scan = GoodsReceiptScan.objects.create(
             file_path=scan_path,
-            original_filename=scan_file.name[:255],
+            original_filename=combined_name,
             annotation=result['annotation'],
             markdown=result['markdown'],
             ocr_model=settings.MISTRAL_OCR_MODEL,

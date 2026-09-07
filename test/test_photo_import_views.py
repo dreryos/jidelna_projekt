@@ -89,7 +89,7 @@ def ocr_bez_site(monkeypatch):
 
 def nahrat_doklad(client, sklad, nazev='doklad.jpg'):
     return client.post(reverse('inventory:photo_import_step1'), {
-        'scan_file': SimpleUploadedFile(nazev, b'data', content_type='image/jpeg'),
+        'scan_files': SimpleUploadedFile(nazev, b'data', content_type='image/jpeg'),
         'warehouse': sklad.id,
     }, follow=True)
 
@@ -153,10 +153,10 @@ def test_prilis_velky_soubor_se_odmitne(client, uzivatel, sklad, media_root):
         'velky.jpg', b'x' * (MAX_SCAN_UPLOAD_BYTES + 1), content_type='image/jpeg',
     )
     response = client.post(reverse('inventory:photo_import_step1'), {
-        'scan_file': velky, 'warehouse': sklad.id,
+        'scan_files': velky, 'warehouse': sklad.id,
     }, follow=True)
 
-    assert 'příliš velký' in response.content.decode()
+    assert 'příliš velk' in response.content.decode()
     assert GoodsReceiptScan.objects.count() == 0
 
 
@@ -172,6 +172,63 @@ def test_chyba_ocr_nenechá_viset_sken(client, uzivatel, sklad, media_root, monk
     response = nahrat_doklad(client, sklad)
 
     assert 'selhalo' in response.content.decode()
+    assert GoodsReceiptScan.objects.count() == 0
+
+
+def jpeg_upload(nazev, barva='red'):
+    import io as _io
+    from PIL import Image as _Image
+
+    buffer = _io.BytesIO()
+    _Image.new('RGB', (30, 30), color=barva).save(buffer, format='JPEG')
+    return SimpleUploadedFile(nazev, buffer.getvalue(), content_type='image/jpeg')
+
+
+def test_vice_fotek_se_poskladaji_do_jednoho_pdf(client, uzivatel, sklad, media_root,
+                                                 monkeypatch):
+    """
+    Vícestránkový doklad (typicky MAKRO) – víc fotek najednou se má poslat
+    do OCR jako jedno PDF, ne jako první fotka se zbytkem zahozeným.
+    """
+    from apps.inventory.ocr import client as ocr_client
+
+    annotation = json.loads((FIXTURE / 'document-annotation.json').read_text(encoding='utf-8'))
+    zavolano_s = {}
+
+    def fake_run_ocr(raw_bytes, filename, **kwargs):
+        zavolano_s['mime_type'] = kwargs.get('mime_type')
+        zavolano_s['filename'] = filename
+        return {'annotation': annotation, 'markdown': '', 'raw': {}}
+
+    monkeypatch.setattr(ocr_client, 'run_ocr', fake_run_ocr)
+
+    response = client.post(reverse('inventory:photo_import_step1'), {
+        'scan_files': [
+            jpeg_upload('strana1.jpg', 'red'),
+            jpeg_upload('strana2.jpg', 'blue'),
+        ],
+        'warehouse': sklad.id,
+    }, follow=True)
+
+    assert response.status_code == 200
+    assert zavolano_s['mime_type'] == 'application/pdf'
+    assert 'strana1.jpg' in zavolano_s['filename'] and 'strana2.jpg' in zavolano_s['filename']
+
+    scan = GoodsReceiptScan.objects.get()
+    assert scan.file_path.endswith('.pdf')
+    assert 'strana1.jpg' in scan.original_filename and 'strana2.jpg' in scan.original_filename
+
+
+def test_pdf_mezi_vice_soubory_se_odmitne(client, uzivatel, sklad, media_root):
+    response = client.post(reverse('inventory:photo_import_step1'), {
+        'scan_files': [
+            jpeg_upload('strana1.jpg'),
+            SimpleUploadedFile('doklad.pdf', b'%PDF-1.4', content_type='application/pdf'),
+        ],
+        'warehouse': sklad.id,
+    }, follow=True)
+
+    assert 'PDF nahrajte samostatně' in response.content.decode()
     assert GoodsReceiptScan.objects.count() == 0
 
 

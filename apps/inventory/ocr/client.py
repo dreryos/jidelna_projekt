@@ -86,6 +86,23 @@ def prepare_image(raw_bytes, filename):
     if mime == 'application/pdf':
         return raw_bytes, mime
 
+    image = _load_and_normalize_image(raw_bytes, filename)
+    buffer = io.BytesIO()
+    image.save(buffer, format='JPEG', quality=JPEG_QUALITY, optimize=True)
+    return buffer.getvalue(), 'image/jpeg'
+
+
+def _load_and_normalize_image(raw_bytes, filename):
+    """
+    Otevře rastr, opraví orientaci podle EXIF, převede na RGB a zmenší.
+
+    Společný základ pro `prepare_image` (jedna fotka → JPEG) i
+    `combine_images_to_pdf` (víc fotek → stránky jednoho PDF) – obě
+    potřebují stejné čištění, jen jinak naloží s výsledkem.
+
+    Returns:
+        PIL.Image.Image
+    """
     from PIL import Image, ImageOps
 
     _register_heif_opener()
@@ -96,18 +113,45 @@ def prepare_image(raw_bytes, filename):
         image = ImageOps.exif_transpose(image)
         image = image.convert('RGB')
 
-        # `Image.open` čte jen hlavičku – zmenšení a uložení teprve
-        # dekóduje celý obrázek, takže i useknutý přenos z mobilu (slabé
-        # připojení, přerušený upload) spadne až tady, ne o tři řádky výš.
+        # `Image.open` čte jen hlavičku – zmenšení teprve dekóduje celý
+        # obrázek, takže i useknutý přenos z mobilu (slabé připojení,
+        # přerušený upload) spadne až tady, ne o tři řádky výš.
         if max(image.size) > MAX_IMAGE_EDGE:
             image.thumbnail((MAX_IMAGE_EDGE, MAX_IMAGE_EDGE), Image.LANCZOS)
-
-        buffer = io.BytesIO()
-        image.save(buffer, format='JPEG', quality=JPEG_QUALITY, optimize=True)
     except Exception as exc:
-        raise OcrError(f'Soubor se nepodařilo načíst jako obrázek: {exc}') from exc
+        raise OcrError(
+            f'Soubor „{filename}" se nepodařilo načíst jako obrázek: {exc}'
+        ) from exc
 
-    return buffer.getvalue(), 'image/jpeg'
+    return image
+
+
+def combine_images_to_pdf(files):
+    """
+    Poskládá víc fotek do jednoho PDF, po jedné stránce.
+
+    Mistral OCR bere jeden dokument na request, ale vícestránkové PDF
+    zpracuje jako celek do jedné anotace (stejně jako dnes funguje upload
+    hotového PDF). Díky tomu jde poslat víc fotek dodacího listu (typicky
+    MAKRO, kde jeden doklad zabere víc stránek) tak, jako by to byl jeden
+    sken – uživatel si PDF nemusí skládat sám a zbytek pipeline (OCR,
+    rozpoznávání, mapování) se vůbec nemění.
+
+    Args:
+        files: seznam dvojic (raw_bytes, filename), v pořadí stránek.
+
+    Returns:
+        bytes hotového PDF.
+    """
+    images = [_load_and_normalize_image(raw, name) for raw, name in files]
+    first, *rest = images
+
+    buffer = io.BytesIO()
+    if rest:
+        first.save(buffer, format='PDF', save_all=True, append_images=rest)
+    else:
+        first.save(buffer, format='PDF')
+    return buffer.getvalue()
 
 
 def _register_heif_opener():
