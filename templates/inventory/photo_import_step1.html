@@ -8,7 +8,9 @@
   <h2>Příjemka z fotky – krok 1</h2>
   <p class="text-muted">
     Vyfoťte dodací list, prodejku nebo fakturu. Doklad musí být na fotce celý
-    a rovně. Rozpoznaná data zkontrolujete v dalším kroku.
+    a rovně. Zabírá víc stránek (typicky MAKRO)? Vyberte rovnou všechny fotky
+    najednou, ve správném pořadí – poskládají se samy do jednoho dokladu.
+    Rozpoznaná data zkontrolujete v dalším kroku.
   </p>
 
   {% if not ocr_available %}
@@ -25,15 +27,20 @@
         {% csrf_token %}
 
         <div class="mb-3">
-          <label for="scan_file" class="form-label">Fotka dokladu</label>
+          <label for="scan_files" class="form-label">Fotka dokladu</label>
           {% comment %}
             Bez capture: telefon nabídne fotoaparát i galerii. S ním by šlo
             jen fotit, takže by nešel poslat doklad vyfocený dřív ani PDF.
+            `multiple` umožní vybrat víc fotek najednou – vícestránkové PDF
+            se pak poskládá server-side, uživatel ho nemusí tvořit sám.
           {% endcomment %}
-          <input type="file" class="form-control" id="scan_file" name="scan_file"
-                 accept="image/*,application/pdf" required
+          <input type="file" class="form-control" id="scan_files" name="scan_files"
+                 accept="image/*,application/pdf" multiple required
                  {% if not ocr_available %}disabled{% endif %}>
-          <div class="form-text">JPEG, PNG, HEIC nebo PDF, maximálně 25 MB.</div>
+          <div class="form-text">
+            JPEG, PNG, HEIC nebo PDF, maximálně 25 MB. Víc fotek najednou = víc
+            stránek jednoho dokladu (PDF jen samostatně, jako jediný soubor).
+          </div>
         </div>
 
         <div class="mb-3">
