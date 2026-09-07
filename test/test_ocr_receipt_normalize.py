@@ -125,6 +125,25 @@ def test_pocet_v_baleni_se_prenasobi_do_mnozstvi():
     assert polozka['total_price_net'] == Decimal('1496.40')
 
 
+def test_pocet_v_baleni_bez_jednotkove_ceny_se_dopocte_spravne():
+    """
+    Chybí-li cena_za_mj, jednotková cena se dopočte z řádkového součtu –
+    ten je ale za VŠECHNY kusy, ne za balení, takže se musí dělit už
+    přenásobeným množstvím. Jinak by cena za kus vyšla pocet_v_baleni-krát
+    předražená (skladová hodnota by pak byla stejně-krát nadhodnocená).
+    """
+    data = to_receipt_data(_minimalni_anotace({
+        'nazev': 'Srdíčko jogurt ovocný 125g', 'mnozstvi': 10,
+        'jednotka': 'ks', 'pocet_v_baleni': 20,
+        'dph_procenta': 12, 'cena_bez_dph': 1496.40,
+    }))
+    polozka = data['items'][0]
+
+    assert polozka['quantity'] == Decimal('200.000')
+    assert polozka['price_per_unit_net'] == Decimal('7.48')
+    assert polozka['total_price_net'] == Decimal('1496.40')
+
+
 def test_bez_pocet_v_baleni_zustava_mnozstvi_beze_zmeny():
     """Doklady bez rozlišení balení (drtivá většina) se chovají jako dřív."""
     data = to_receipt_data(_minimalni_anotace({

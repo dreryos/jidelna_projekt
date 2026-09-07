@@ -107,6 +107,15 @@ def _normalize_item(raw_item, index, prices_include_vat, warnings):
         if not is_ignored:
             warnings.append(f'Řádek {index} „{name}" nemá čitelné množství, doplňte ho.')
         quantity = Decimal('0')
+    elif pocet_v_baleni:
+        # Skladové množství je počet balení krát kolik je v jednom balení
+        # (typicky MAKRO: sloupce „Dodáno/Objednáno" a „Balení" zvlášť).
+        # Musí se přenásobit ještě PŘED dopočtem jednotkové ceny níž – když
+        # jednotkovou cenu doklad neuvádí, `_resolve_unit_prices` ji dopočte
+        # z řádkového součtu (`cena_bez_dph / množství`), a ten součet je za
+        # všechny kusy, ne za balení. S nepřenásobeným množstvím by tak
+        # vyšla cena za kus `pocet_v_baleni`-krát předražená.
+        quantity = quantity * pocet_v_baleni
 
     unit_net, unit_gross = _resolve_unit_prices(
         unit_price=unit_price,
@@ -126,15 +135,6 @@ def _normalize_item(raw_item, index, prices_include_vat, warnings):
             )
         unit_net = Decimal('0')
         unit_gross = Decimal('0')
-
-    # Skladové množství je počet balení krát kolik je v jednom balení
-    # (typicky MAKRO: sloupce „Dodáno/Objednáno" a „Balení" zvlášť) – ale až
-    # TADY, po dopočtu jednotkové ceny výše. Kdyby se násobilo dřív, fallback
-    # v `_resolve_unit_prices` (řádkový součet / množství, když chybí
-    # jednotková cena) by dělil už přenásobeným číslem a vyšla by jednotková
-    # cena `pocet_v_baleni`-krát menší.
-    if pocet_v_baleni:
-        quantity = quantity * pocet_v_baleni
 
     if line_gross is None:
         line_gross = (unit_gross * quantity).quantize(MONEY)
