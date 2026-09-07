@@ -17,6 +17,7 @@ from django.db.models.functions import Collate
 from django.conf import settings
 from apps.core.views import CanteenAccessMixin, user_can_access_canteen
 from decimal import Decimal, InvalidOperation
+from datetime import date
 import logging
 import json
 from pathlib import Path
@@ -513,24 +514,56 @@ class GoodsReceiptListView(CanteenAccessMixin, ListView):
     paginate_by = 20
     
     def get_queryset(self):
-        queryset = super().get_queryset().select_related('warehouse', 'warehouse__canteen', 'created_by')
-        
+        queryset = super().get_queryset().select_related(
+            'warehouse', 'warehouse__canteen', 'created_by', 'supplier_obj',
+        )
+
+        # Vyhledávání podle čísla dokladu (číslo objednávky = totéž číslo,
+        # zvláštní pole pro něj nepotřeba).
+        search = self.request.GET.get('search', '').strip()
+        if search:
+            queryset = queryset.filter(receipt_number__icontains=search)
+
+        # Filtrování podle dodavatele
+        supplier_id = self.request.GET.get('supplier')
+        if supplier_id:
+            queryset = queryset.filter(supplier_obj_id=supplier_id)
+
         # Filtrování podle skladu
         warehouse_id = self.request.GET.get('warehouse')
         if warehouse_id:
             queryset = queryset.filter(warehouse_id=warehouse_id)
-        
+
         # Filtrování podle stavu
         status = self.request.GET.get('status')
         if status:
             queryset = queryset.filter(status=status)
-        
+
+        # Filtrování podle data příjmu. Neplatný formát by Django předalo
+        # rovnou do SQL a spadlo by na ValueError místo hlášky – ručně
+        # zadané datum se tak nesmí pustit dál nerozparsované.
+        date_from = self._parse_date(self.request.GET.get('date_from'))
+        if date_from:
+            queryset = queryset.filter(receipt_date__gte=date_from)
+        date_to = self._parse_date(self.request.GET.get('date_to'))
+        if date_to:
+            queryset = queryset.filter(receipt_date__lte=date_to)
+
         return queryset.order_by('-created_at')
-    
+
+    @staticmethod
+    def _parse_date(value):
+        if not value:
+            return None
+        try:
+            return date.fromisoformat(value)
+        except ValueError:
+            return None
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         user = self.request.user
-        
+
         # Filtruj sklady na managed canteens
         if user.is_superuser:
             context['warehouses'] = Warehouse.objects.select_related('canteen').all()
@@ -540,9 +573,22 @@ class GoodsReceiptListView(CanteenAccessMixin, ListView):
                 context['warehouses'] = Warehouse.objects.filter(canteen__in=user_canteens).select_related('canteen')
             except ObjectDoesNotExist:
                 context['warehouses'] = Warehouse.objects.none()
-        
+
+        # Aktivní dodavatelé + ti, co mají v canteen-scoped příjmech aspoň
+        # jednu příjemku, i když je mezitím někdo deaktivoval – jinak by
+        # se historické příjemky nedaly podle dodavatele dohledat vůbec.
+        referenced_supplier_ids = super().get_queryset().exclude(
+            supplier_obj__isnull=True
+        ).values_list('supplier_obj_id', flat=True).distinct()
+        context['suppliers'] = Supplier.objects.filter(
+            Q(is_active=True) | Q(id__in=referenced_supplier_ids)
+        ).order_by('name')
+        context['selected_search'] = self.request.GET.get('search', '')
+        context['selected_supplier'] = self.request.GET.get('supplier', '')
         context['selected_warehouse'] = self.request.GET.get('warehouse', '')
         context['selected_status'] = self.request.GET.get('status', '')
+        context['selected_date_from'] = self.request.GET.get('date_from', '')
+        context['selected_date_to'] = self.request.GET.get('date_to', '')
         context['statuses'] = GoodsReceipt.Status.choices
         return context
 
