@@ -24,6 +24,12 @@ DATE_FORMATS = ('%Y-%m-%d', '%d.%m.%Y', '%d. %m. %Y', '%d/%m/%Y', '%Y/%m/%d')
 
 DOC_TYPES = {'faktura', 'prodejka', 'dodaci_list', 'jine'}
 
+# IČO MAKRO Cash & Carry ČR – potřeba k rozlišení účtenky z pokladny (kód
+# sazby DPH místo procent, viz `_resolve_vat_rate`) od webshopového
+# dodacího listu (ten už procenta tiskne přímo). Oba mají stejné IČO,
+# rozlišuje je až typ dokladu.
+MAKRO_ICO = '26450691'
+
 # Nad tuhle odchylku mezi součtem položek a celkovou částkou z dokladu
 # hlásíme rozpor. Koruna pokrývá zaokrouhlování, víc už je chyba čtení.
 TOTAL_TOLERANCE = Decimal('1.00')
@@ -57,11 +63,20 @@ def to_receipt_data(annotation, source='ocr'):
     if not supplier_ico:
         warnings.append('Na dokladu není čitelné IČO dodavatele, vyberte dodavatele ručně.')
 
+    doc_type = _normalize_doc_type(doklad.get('typ_dokladu'))
+    # Účtenka z pokladny MAKRO (čárový kód „FAKTURA – DAŇOVÝ DOKLAD" v
+    # záhlaví, viz prompt) má stejné IČO jako webshopový dodací list, ale
+    # jen na ní kód 0 u sazby DPH znamená 21 %, ne skutečnou nulovou sazbu.
+    is_makro_pokladna = supplier_ico == MAKRO_ICO and doc_type == 'faktura'
+
     prices_include_vat = _resolve_price_basis(annotation, warnings)
 
     items = []
     for index, raw_item in enumerate(annotation.get('polozky') or [], start=1):
-        item = _normalize_item(raw_item, index, prices_include_vat, warnings)
+        item = _normalize_item(
+            raw_item, index, prices_include_vat, warnings,
+            is_makro_pokladna=is_makro_pokladna,
+        )
         if item is not None:
             items.append(item)
 
@@ -74,7 +89,7 @@ def to_receipt_data(annotation, source='ocr'):
         'source': source,
         'receipt_number': receipt_number,
         'receipt_date': receipt_date,
-        'doc_type': _normalize_doc_type(doklad.get('typ_dokladu')),
+        'doc_type': doc_type,
         'supplier': (supplier.get('nazev') or '').strip(),
         'supplier_ico': supplier_ico,
         'supplier_id': None,
@@ -87,7 +102,7 @@ def to_receipt_data(annotation, source='ocr'):
     }
 
 
-def _normalize_item(raw_item, index, prices_include_vat, warnings):
+def _normalize_item(raw_item, index, prices_include_vat, warnings, is_makro_pokladna=False):
     """Zpracuje jeden řádek dokladu. Vrátí None u řádku, který nejde použít."""
     name = (raw_item.get('nazev') or '').strip()
     is_ignored, ignore_reason = classify_line(name)
@@ -95,7 +110,9 @@ def _normalize_item(raw_item, index, prices_include_vat, warnings):
     quantity = _to_decimal(raw_item.get('mnozstvi'))
     pocet_v_baleni = _to_decimal(raw_item.get('pocet_v_baleni'))
     unit = (raw_item.get('jednotka') or '').strip()
-    vat_rate = _resolve_vat_rate(raw_item.get('dph_procenta'), name, warnings)
+    vat_rate = _resolve_vat_rate(
+        raw_item.get('dph_procenta'), name, warnings, is_makro_pokladna=is_makro_pokladna,
+    )
 
     line_net = _to_decimal(raw_item.get('cena_bez_dph'))
     line_gross = _to_decimal(raw_item.get('cena_celkem'))
@@ -232,7 +249,7 @@ def _resolve_price_basis(annotation, warnings):
     return votes_gross > votes_net
 
 
-def _resolve_vat_rate(value, name, warnings):
+def _resolve_vat_rate(value, name, warnings, is_makro_pokladna=False):
     """Vrátí sazbu DPH omezenou na sazby, které systém zná."""
     rate = _to_decimal(value)
     if rate is None:
@@ -242,16 +259,21 @@ def _resolve_vat_rate(value, name, warnings):
         )
         return DEFAULT_VAT_RATE
 
+    # Účtenky MAKRO z pokladny netisknou u položek sazbu DPH přímo, ale
+    # interní kód sazbové skupiny – kód 0 na TOMHLE typu dokladu znamená
+    # 21 %. Mimo pokladní účtenky MAKRO je 0 % platná skutečná sazba
+    # (osvobozené zboží), takže se nesmí přepisovat plošně – proto až tady,
+    # podmíněně, a ne v obecné tabulce ALLOWED_VAT_RATES o pár řádků níž.
+    if is_makro_pokladna and rate == Decimal('0'):
+        return Decimal('21')
+
     if rate in ALLOWED_VAT_RATES:
         return rate
 
-    # Účtenky MAKRO z pokladny netisknou u položek sazbu DPH přímo, ale
-    # interní kód sazbové skupiny – kód 23 vždycky znamená 12 %. Prompt
-    # o tom OCR instruuje, ale žádná legitimní sazba v ČR 23 % nebyla ani
-    # není, takže tenhle překlad je bezpečný jako pojistka i bez ohledu na
-    # to, jestli se model překladem řídil. (Kód 0 pro 21 % takhle bezpečně
-    # přeložit nejde – 0 % je zároveň platná skutečná sazba, takže se musí
-    # spolehnout jen na prompt.)
+    # Kód 23 vždycky znamená 12 %. Prompt o tom OCR instruuje, ale žádná
+    # legitimní sazba v ČR 23 % nebyla ani není (na rozdíl od kódu 0 výš),
+    # takže tenhle překlad je bezpečný jako pojistka i bez ohledu na to,
+    # jestli se model překladem řídil, a i mimo pokladní účtenky MAKRO.
     if rate == Decimal('23'):
         return Decimal('12')
 

@@ -172,6 +172,49 @@ def test_makro_kod_sazby_23_se_prelozi_na_12_procent():
     assert not any('nejbližší platná sazba' in w for w in data['warnings'])
 
 
+def _anotace_s_typem_dokladu(ico, typ_dokladu, polozka):
+    return {
+        'dodavatel': {'nazev': 'Test s.r.o.', 'ico': ico},
+        'doklad': {'cislo_dokladu': 'D1', 'datum_vystaveni': '2026-09-07',
+                   'typ_dokladu': typ_dokladu},
+        'ceny_jsou_s_dph': False,
+        'polozky': [polozka],
+    }
+
+
+def test_makro_pokladna_kod_sazby_0_se_prelozi_na_21_procent():
+    """
+    Kód 0 znamená 21 % jen na pokladní účtence MAKRO – IČO MAKRO a typ
+    dokladu "faktura" (podle čárového kódu "FAKTURA – DAŇOVÝ DOKLAD").
+    """
+    data = to_receipt_data(_anotace_s_typem_dokladu('26450691', 'faktura', {
+        'nazev': 'LANZA PWD COLOR 1X5,85kg', 'mnozstvi': 1, 'jednotka': 'ks',
+        'cena_za_mj': 329.00, 'dph_procenta': 0, 'cena_bez_dph': 329.00,
+    }))
+
+    assert data['items'][0]['vat_rate'] == Decimal('21')
+
+
+def test_makro_webshop_nulova_sazba_zustava_nulova():
+    """Stejné IČO MAKRO, ale webshopový dodací list – kód 0 se nepřekládá."""
+    data = to_receipt_data(_anotace_s_typem_dokladu('26450691', 'dodaci_list', {
+        'nazev': 'Kniha o vaření', 'mnozstvi': 1, 'jednotka': 'ks',
+        'cena_za_mj': 100, 'dph_procenta': 0, 'cena_bez_dph': 100,
+    }))
+
+    assert data['items'][0]['vat_rate'] == Decimal('0')
+
+
+def test_jiny_dodavatel_nulova_sazba_zustava_nulova():
+    """Jiné IČO než MAKRO, i s typem dokladu "faktura" – nepřekládá se."""
+    data = to_receipt_data(_anotace_s_typem_dokladu('12345678', 'faktura', {
+        'nazev': 'Kniha o vaření', 'mnozstvi': 1, 'jednotka': 'ks',
+        'cena_za_mj': 100, 'dph_procenta': 0, 'cena_bez_dph': 100,
+    }))
+
+    assert data['items'][0]['vat_rate'] == Decimal('0')
+
+
 def test_ceny_bez_dph_jsou_rozpoznany_i_bez_priznaku():
     """Anotace z playgroundu příznak `ceny_jsou_s_dph` nemá, odvodíme si ho."""
     payload = load_fixture(FIXTURE_ROOT / 'prodejka_zelenina')
