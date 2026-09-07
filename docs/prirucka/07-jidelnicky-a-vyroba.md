@@ -47,13 +47,21 @@ Opakující se cykly (14denní jídelníček ŠVP…) uložte jako **šablonu** 
 
 **Jídelníčky → Tvorba ze šablony** (`/production/import-jidelnicku/`) — třífázový průvodce:
 
-1. **Výběr šablony** a data začátku.
+1. **Výběr šablony** a data začátku. Datum smí ležet i **v minulosti** — viz níže.
 2. **Náhled** — vidíte, která jídla na které dny vzniknou, a nastavíte počty porcí variant.
 3. **Potvrzení** — vytvoří se jídelní plán se všemi výrobními příkazy a variantami.
 
 ![Import jídelníčku ze šablony](img/07-import-jidelnicku.png)
 
 ⚠️ **Pozor:** Pokud šablona odkazuje na recept, který mezitím někdo smazal, náhled na to upozorní — jídlo přeskočte nebo recept obnovte. Proto recepty raději needitujte „mazáním a zakládáním znovu“ — nový recept dostane nový kód a vazba ze šablon se ztratí.
+
+#### Jídelníček zpětně
+
+Datum začátku není omezené na dnešek a dál — jídelníček lze založit i na dny, které už proběhly.
+
+💡 **Proč to jde:** Když se na akci zapomene jídelníček založit předem a akce už mezitím začala (typicky o den dřív), nemá provoz jak vykázat, co se vařilo. Zákaz zpětného data by v takové situaci vedl jen k tomu, že by se jídelníček založil na špatný den — a evidence by seděla ještě míň. Doplnit ho zpětně je tedy legitimní postup, ne obcházení systému.
+
+⚠️ **Pozor:** Zpětně založený jídelníček **nepřepíše, co se už stalo se skladem.** Vygenerovaná výdejka bude vycházet z norem, ne ze skutečnosti, a suroviny se odečtou až v okamžiku výdeje. Když už se zboží vydalo mimo systém, srovnejte rozdíl odpisem nebo inventurou (kapitoly [9](09-odpisy-a-bufet.md) a [6](06-inventura.md)) — jinak zůstane sklad v minusu.
 
 ## Úpravy ingrediencí na den (overrides)
 

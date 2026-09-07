@@ -112,7 +112,8 @@ a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
   - Při dvou desetinných místech se drobné položky zaokrouhlily na nulu a surovina se naskladnila zdarma
 
 - **Import jídelníčku bez minimálního data** (16.8.2026)
-  - `MenuImportForm` už neomezuje datum začátku na dnešek a dál — jde doplnit i jídelníček zpětně
+  - `MenuImportForm` už neomezuje datum začátku na dnešek a dál — jídelníček jde doplnit i zpětně
+  - Záměr: když se na akci zapomene jídelníček založit předem a akce už začala (zpravidla o den), musí ho jít doplnit; zákaz zpětného data by vedl jen k založení na špatný den
 
 - **Optimalizace fuzzy matchingu surovin při importu šablon jídelníčků** (31.7.2026)
   - Zrychlené vyhledávání snižuje timeouty při zpracování větších šablon (`apps/production/xml_parser.py`, `template_views.py`)
