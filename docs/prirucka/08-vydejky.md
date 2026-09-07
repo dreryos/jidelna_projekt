@@ -52,16 +52,21 @@ Surovinu, kterou nakonec nepoužijete, odeberete z výdejky **košem** u řádku
 
 ### Oprava omylem vydaného množství
 
-Už vydanou (dokončenou) položku nejde přepsat přímo — pole je needitovatelné. Opravu řešíte tlačítkem **Zrušit výdej** u daného řádku:
+Už vydanou (dokončenou) položku nejde přepsat přímo — pole je needitovatelné. Vydaný řádek poznáte podle přeškrtnutého názvu a zeleného štítku **Vydáno**. Opravu řešíte tlačítkem **Zrušit výdej** — žlutá šipka ↺ ve sloupci *Akce*:
 
 1. Systém vrátí skutečné množství zpět na sklad a řádek přepne zpátky na ČEKÁ se zablokovaným plánovaným množstvím.
 2. Zadáte správné množství znovu a uložíte.
+
+![Oprava vydaného množství](img/08-zrusit-vydej.png)
 
 Platí to stejně pro položky u jídel i pro položky vydané mimo plánovaná jídla.
 
 ## Záměna jídla
 
-Když se plánované jídlo nakonec vaří jinak (chybí surovina, změna na poslední chvíli), lze ho v editaci výdejky **zaměnit** za jiný recept tlačítkem **Zaměnit jídlo**: vyberete náhradní recept a systém přepočte suroviny podle jeho normy na stejný počet porcí. Původní jídlo zůstane u dokumentu vidět (přeškrtnuté, s odkazem „zaměněno za…“), jeho odběr surovin je nulový. Záměnu lze tlačítkem **Zrušit záměnu** vrátit zpět.
+Když se plánované jídlo nakonec vaří jinak (chybí surovina, změna na poslední chvíli), lze ho v editaci výdejky **zaměnit** za jiný recept tlačítkem **Zaměnit jídlo** pod seznamem surovin: rozbalí se výběr receptu a systém po potvrzení přepočte suroviny podle jeho normy na stejný počet porcí.
+
+![Záměna plánovaného jídla](img/08-zamena-jidla.png)
+ Původní jídlo zůstane u dokumentu vidět (přeškrtnuté, s odkazem „zaměněno za…“), jeho odběr surovin je nulový. Záměnu lze tlačítkem **Zrušit záměnu** vrátit zpět.
 
 💡 **Proč se původní jídlo neschovává:** V jídelníčku i na PDF pro kuchyni musí zůstat dohledatelné, co se mělo vařit a co se vařilo skutečně — kvůli alergenům, evidenci a případné reklamaci.
 

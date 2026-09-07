@@ -13,6 +13,7 @@ apps/
   core/        suroviny, receptury, kategorie, uživatelské profily, zálohy XML
   canteens/    jídelny, sklady (vč. meziskladu a zámku)
   inventory/   skladové karty, příjemky, dodavatelé, převodky, inventury, odpisy, cenová historie
+    ocr/         import příjemky z fotky dokladu (OCR přes Mistral, normalizace, rozpoznání nezbožních řádků)
   production/  jídelníčky, šablony, výrobní příkazy, varianty porcí, overrides, výdejky, PDF
   bufet/       import prodejů z FiskalPRO
   analytics/   náklady, vývoj cen, analýzy odpisů a kuchařů
@@ -33,6 +34,7 @@ Ingredient ─< RecipeIngredient >─ Recipe >─ Category
 Ingredient ×  Warehouse → StockItem (unique together; quantity, quantity_blocked, price)
                               └─< IngredientPriceHistory (ingredient, warehouse, -valid_from)
 GoodsReceipt ─< GoodsReceiptItem          Supplier ─< SupplierIngredientTemplate
+GoodsReceipt ─1 GoodsReceiptScan          Supplier ─< SupplierItemAlias
 StockTransfer ─< StockTransferItem        StockWriteOff ─< StockWriteOffItem
 InventoryVerification ─< InventoryVerificationItem
 BufetImport ─< BufetImportItem (→ StockWriteOff přes write_off_id)
@@ -56,6 +58,11 @@ Konvence: doklad = hlavička se stavem + položky s `unique_together` (doklad, s
 | **PDF po dnech nad 60 jídel** | WeasyPrint drží celý layout v paměti; chunking + spojení stránek drží špičku nízko | `apps/production/utils.py`, `PDF_CHUNK_MEAL_THRESHOLD` |
 | **Bufet agreguje podle názvu**, ne artiklu | FiskalPRO přiděluje jeden artikl více produktům; název je jediný stabilní klíč | `apps/bufet/fiskalpro_parser.py` |
 | **Cenová historie** jako append-only log | Zpětné kalkulace k datu; index `(ingredient, warehouse, -valid_from)` | signál v `StockItem.save()`, `get_prices_bulk()` |
+| **OCR vytváří jen koncept příjemky** | Rozpoznaná data jsou návrh; potvrzení musí projít lidskou kontrolou, protože se jím ceny propíšou do skladu i do kalkulací | `photo_import_step3` |
+| **Učení aliasů** místo fuzzy odhadu pokaždé znovu | Samotné porovnání názvů se nic nenaučí — pátý dodák od stejného dodavatele by dopadl stejně špatně jako první; potvrzené mapování se předvyplní jako hotová věc | `matching.py` (`IngredientResolver.remember()`), `SupplierItemAlias` |
+| **Nesrovnaná měrná jednotka blokuje potvrzení** | Kolik kilo je jedno balení ví jen člověk; naskladnit „10“ místo „50 kg“ se pozná až na inventuře, kdy už to nikdo nedohledá | `GoodsReceiptItem.has_unit_conflict`, `goods_receipt_resolve_units` |
+| **Fotka se maže, anotace zůstává** | Fotka je pracovní materiál ke kontrole při zadávání; anotace je malá a čitelná, a když se za měsíc nesejde sklad, jde z ní zjistit, co systém přečetl | `GoodsReceiptScan.delete_file()`, `ocr/storage.py` |
+| **Ceny na šest desetinných míst** | Cena za skladovou jednotku vzniká dělením ceny za balení; při dvou desetinných místech se drobné položky zaokrouhlily na nulu | `GoodsReceiptItem`, `StockItem` |
 
 ## Souběh a transakce
 
@@ -74,10 +81,12 @@ python -m venv .venv && .venv/bin/pip install -r requirements.txt
 
 Alternativně `docker-compose up` (viz `Dockerfile`, `docker-entrypoint.sh`).
 
+Import příjemky z fotky potřebuje `MISTRAL_API_KEY` (a volitelně `MISTRAL_OCR_MODEL`, `OCR_SCAN_RETENTION_DAYS` — výchozí `mistral-ocr-latest` a `7`, viz `spiz_project/settings.py`). Bez klíče je import z fotky v aplikaci vypnutý, ale zbytek vývoje i testy běží dál — testy OCR jedou nad uloženými anotacemi ve `test/fixtures/ocr/`, ne nad skutečným API.
+
 ## Kam sáhnout při rozšíření
 
 * **Nový typ dokladu** → vzor `StockWriteOff`: hlavička + položky, stavové metody na modelu, `ValidationError` pro pravidla, atomicita.
-* **Nový import** → vzor `apps/bufet/fiskalpro_parser.py`: čistý parser (bez DB) + vícekrokový průvodce se session + potvrzení tvoří doklad; testy parseru nad syntetickým souborem (`apps/bufet/tests.py`).
+* **Nový import** → vzor `apps/bufet/fiskalpro_parser.py`: čistý parser (bez DB) + vícekrokový průvodce se session + potvrzení tvoří doklad; testy parseru nad syntetickým souborem (`apps/bufet/tests.py`). Stejný vzor v `photo_import_step1..3`: `apps/inventory/ocr/` (parser/normalizace bez DB) + krokový průvodce se session (`photo_import_step1/2`) + potvrzení vytvoří `GoodsReceipt` (`photo_import_step3`). Test bez placeného API jde postavit nad uloženými anotacemi ve `test/fixtures/ocr/` (viz `ocr_replay`).
 * **Nová analytika** → čtěte přes existující kalkulační metody (`calculate_portion_price`, `get_prices_bulk`), nepočítejte ceny znovu ve view.
 * **Změna skladové logiky** → nejdřív testy: `test/test_stock_transfer_workflow.py`, `test/test_vat_implementation.py` ukazují očekávané invarianty.
 * Před commitem: `pytest`, u PDF změn ruční kontrola výstupu (černobílý tisk!), CHANGELOG.md záznam česky.
@@ -92,3 +101,5 @@ Příručka z `docs/prirucka/` se builduje MkDocs (`mkdocs.yml` v kořeni, theme
 * `MenuPlan.default_portions_adult/child` jsou legacy — varianty řeší `MenuPlanCoefficient`.
 * `manage.py test` selhává na kolizi modulu `tests` (adresář `apps/production/tests` vs. soubor) — používejte `pytest`.
 * Import receptur vyžaduje globálně unikátní kódy v XML (kontrola existence je per kategorie, ale DB constraint globální).
+* V šablonách se ID nesmí lokalizovat v atributech formulářů (Django by u čísla nad 999 vložilo mezeru jako oddělovač tisíců) — použijte filtr `|unlocalize`; hlídá `test_template_id_localization.py`.
+* Víceřádkový komentář `{# … #}` Django šablonový engine neodstraní (funguje jen na jednom řádku) a text unikne do vykreslené stránky — na víc řádků použijte `{% comment %} … {% endcomment %}`.

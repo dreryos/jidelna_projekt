@@ -8,6 +8,74 @@ a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
 ## [Unreleased]
 
 ### Added
+- **Import příjemky z fotky dokladu (OCR)** (2.–7.9.2026)
+  - Nový třífázový průvodce `/inventory/photo-import/`: nahrání fotky → kontrola rozpoznaných dat → vytvoření příjemky
+  - Rozpoznávání dodacích listů, prodejek a faktur přes Mistral OCR (`apps/inventory/ocr/`: `client`, `normalize`, `quirks`, `schema`, `storage`)
+  - Přijímá JPEG, PNG, HEIC a PDF do 25 MB; fotka se před odesláním zmenšuje
+  - Krok 2 zobrazuje rozpoznané řádky proti dokladu: množství, jednotka, přepočet, navržená surovina, sklad a cena bez DPH — vše editovatelné
+  - Neztržní řádky (doprava, obaly, zaokrouhlení) se rozpoznají a rovnou odškrtnou (`ocr/quirks.py`)
+  - Chybějící suroviny lze založit přímo z řádku importu
+  - Neblokující pojistky v kroku 2 (`apps/inventory/receipt_checks.py`): duplicitní číslo dokladu, odchylka ceny od poslední známé, přesnost ceny
+  - Dodavatel se hledá podle názvu i IČO; import vždy končí **konceptem** příjemky, potvrzení zůstává ruční
+  - Nový model `GoodsReceiptScan` — fotka se po potvrzení příjemky maže, rozpoznaná anotace a přepis dokladu zůstávají natrvalo kvůli dohledatelnosti
+  - Nedokončené skeny vyprší po `OCR_SCAN_RETENTION_DAYS` (výchozí 7 dnů); úklid se veze na dalším nahrání, ručně `manage.py purge_receipt_scans`
+  - Diagnostický příkaz `manage.py ocr_replay` přehraje uložené anotace bez volání API
+  - Nastavení: `MISTRAL_API_KEY`, `MISTRAL_OCR_MODEL` (výchozí `mistral-ocr-latest`), `OCR_SCAN_RETENTION_DAYS`; bez klíče je funkce vypnutá a zbytek aplikace běží dál
+  - Testy běží nad anotacemi ve `test/fixtures/ocr/` — nesahají na síť ani na placené API
+
+- **Učení dodavatelských názvů surovin** (2.9.2026)
+  - Nový model `SupplierItemAlias` a resolver `apps/inventory/matching.py`
+  - `IngredientResolver` hledá surovinu v sedmi vrstvách od nejjistější (alias dodavatele na přesný název) po nejméně jistou (fuzzy podobnost, práh 0,4)
+  - První čtyři vrstvy jsou potvrzené člověkem a předvyplní se jako hotová věc; zbytek je jen návrh se štítkem („naučeno u tohoto dodavatele", „naučeno globálně", „odhad podle podobnosti názvu")
+  - `remember()` při dokončení importu uloží, co uživatel vybral — první dodák od nového dodavatele je ruční práce, druhý už z velké části sedí sám
+  - Potvrzený alias import nepřepíše
+
+- **Srovnání měrných jednotek u příjemek** (2.9.2026)
+  - Nový modul `apps/inventory/units.py` rozlišuje jednoznačný převod (kg↔g, l↔ml) od nejednoznačného (ks→kg, bal→ks)
+  - Položka s jednotkou, která neodpovídá skladové jednotce suroviny, blokuje potvrzení příjemky (`GoodsReceiptItem.has_unit_conflict`)
+  - Nová obrazovka **Srovnat měrné jednotky** (`/inventory/goods-receipts/<pk>/resolve-units/`) pro doplnění přepočtu
+  - Zadaný poměr se uloží k položce i do aliasu dodavatele — na totéž zboží se systém podruhé neptá
+
+- **Katalog skutečných dodavatelů** (5.9.2026)
+  - Datová migrace `0028_create_real_suppliers` doplňuje Bidfood, Makro, Bolero a DK Open včetně IČO
+  - Katalog dosud obsahoval jen interní zástupce, takže se u reálných dokladů nepřiřadil dodavatel a systém si nezapamatoval vůbec nic
+  - Nové pole `Supplier.ico` pro párování dodavatele podle IČO z dokladu
+
+- **Odemknutí skladu při smazání inventury** (2.9.2026)
+  - Signál `pre_delete` (`apps/inventory/signals.py`) uvolní zámek skladu, když se inventura smaže — osiřelý zámek už nevznikne
+
+- **Šablona jídelníčku pro prázdninový provoz** (16.8.2026)
+  - Nová ukázková šablona `static/sablona_tydenni_prazdniny.xml`
+
+- **Vynulování skladu při inventuře** (13.8.2026)
+  - Tlačítko **Vynulovat sklad** na stránce počítání nastaví spočtené množství na 0 u všech položek a inventuru rovnou dokončí
+  - Určeno pro konec turnusu, kdy provoz vyprodá celý sklad; metoda `InventoryVerification.zero_out_and_complete()` běží v jedné transakci
+  - `complete()` si při dokončení znovu zamkne řádek a ověří stav, aby dva souběžné požadavky nedokončily tutéž inventuru dvakrát
+
+- **Polévka ve výdejce** (23.7.2026)
+  - Prázdná karta zařazená před obědem pro polévku, kterou kuchař uvaří nad rámec jídelníčku (`MealType.SOUP`)
+  - Karta vzniká až prvním přidáním suroviny, nepoužitá se sama uklidí; na papírovou PDF výdejku se netiskne
+
+- **Zrušení výdeje u vydané položky** (23.7.2026)
+  - Tlačítko **Zrušit výdej** vrátí skutečné množství na sklad a přepne řádek zpět na ČEKÁ se zablokovaným plánem
+  - Umožňuje opravit chybně vydané množství bez zásahu do databáze
+
+- **Záměna jídla ve výdejce** (12.7.2026)
+  - Plánované jídlo lze zaměnit za jiný recept; suroviny se přepočtou podle jeho normy na stejný počet porcí (`ProductionOrder.replacement_of`)
+  - Původní jídlo zůstává vidět přeškrtnuté s odkazem „zaměněno za…", odběr surovin je nulový; záměnu lze vrátit
+
+- **Druhá večeře ve výdejce** (11.7.2026)
+  - Volitelná karta mimo jídelníček (`MealType.DINNER_SECOND`, recept „Výdej") pro strávníky s režimem druhé večeře
+  - Tiskne se jako běžné jídlo
+
+- **Automatický sklad u položek přidávaných do výdejky** (11.7.2026)
+  - Při ručním přidání suroviny do výdejky se předvyplní sklad, na kterém surovina je
+
+- **Modul Nápověda — příručka v aplikaci** (9.7.2026)
+  - Kompletní česká uživatelská příručka v `docs/prirucka/` (13 kapitol pro uživatele, správce i vývojáře)
+  - Web nápovědy generuje MkDocs (theme Material) do `staticdocs/`, servíruje se na `/napoveda/` za přihlášením
+  - Build se spouští v `docker-entrypoint.sh`, při vývoji `mkdocs build` / `mkdocs serve`
+
 - **Rozšířené zálohování s výběrem entit** (29.1.2026)
   - Export zálohy nyní podporuje výběr, které entity zálohovat
   - Nové entity dostupné pro zálohu:
@@ -39,6 +107,29 @@ a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
   - Přidáno 9 testů pokrývajících všechny aspekty soft delete
 
 ### Changed
+- **Ceny se ukládají na šest desetinných míst** (2.9.2026)
+  - `GoodsReceiptItem` a `StockItem` počítají cenu za skladovou jednotku dělením ceny za balení
+  - Při dvou desetinných místech se drobné položky zaokrouhlily na nulu a surovina se naskladnila zdarma
+
+- **Import jídelníčku bez minimálního data** (16.8.2026)
+  - `MenuImportForm` už neomezuje datum začátku na dnešek a dál — jde doplnit i jídelníček zpětně
+
+- **Optimalizace fuzzy matchingu surovin při importu šablon jídelníčků** (31.7.2026)
+  - Zrychlené vyhledávání snižuje timeouty při zpracování větších šablon (`apps/production/xml_parser.py`, `template_views.py`)
+
+- **Párování bufetu přes našeptávač** (23.7.2026)
+  - Surovina se u položky vybírá v textovém poli s našeptávačem místo rozbalovacího seznamu; všechny řádky sdílejí jeden `<datalist>`
+  - Samostatný `<select>` se všemi surovinami v každém z několika set řádků nafoukl stránku tak, že import spadl na timeout (chyba 520); render klesl z ~1,0 s na ~0,03 s
+
+- **Zadávání skutečných množství ve výdejce** (22.7.2026)
+  - Pole **Skutečně vydáno** je nově vždy prázdné, plán (nebo už vydané množství) ukazuje jen placeholder
+  - Vyplněné pole = vydat a odečíst ze skladu, prázdné = beze změny, položka zůstává ČEKÁ s blokací
+  - Předvyplněný plán sváděl k tomu, aby ho kuchař nechal být a systém tiše vydal plán místo skutečnosti
+  - Desetinná čísla lze psát s čárkou i tečkou
+
+- **Zjednodušení importu bufetu na název a množství** (9.7.2026)
+  - Z exportu FiskalPRO se čte název a množství; ceny, DPH ani skupiny se nepoužívají, náklad určuje skladová cena po spárování
+
 - **PDF formát výdejek a reportů objednávek**: Změna z A4 landscape na A5 portrait
   - Původní změna na A4 landscape s CSS columns způsobovala timeout a problémy v Docker prostředí
   - WeasyPrint má problémy se složitým column layoutem (break-inside, column-fill)
@@ -59,6 +150,29 @@ a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
   - Přidány testy: `test_admin_stockitem_readonly_fields_cannot_be_changed`, `test_stockitem_form_has_disabled_fields`
 
 ### Fixed
+- **Import příjemky z fotky — opravy z ostrého provozu** (2.–7.9.2026)
+  - Nevyplněný přepočet jednotek se bere jako 0, ne jako 1 — naučená jednička už nenaskladní balení místo kilogramů; NaN a nekonečno jsou odmítnuty
+  - Přepočet přesně 1 lze zadat i pro nesouměřitelné jednotky a bere se jako platná odpověď
+  - Přepočet se nabídne i po ručním přepárování suroviny, příznak `touched` se při změně suroviny resetuje
+  - Cenu na kroku 2 jde doplnit ručně — doklady bez vytištěné ceny se dřív naskladnily za nulu
+  - Omezena záměna kódu položky a OM čísla za množství a IČO při rozpoznávání
+  - Opraven JSON od OCR s neescapovanou uvozovkou; oprava se nezaměňuje s jinou chybou JSONu
+  - Úklid starých skenů nesmí shodit nahrání dokladu (ošetřen i souběh a zmizelý den v `_purge_day`)
+  - Návrh i zápis příjemky z fotky nespadnou do holé 500 — ošetřeno celé tělo view i plánování řádků, s logem a konkrétní hláškou
+  - Kolize jména a slugu dodavatele nezpůsobí nebezpečný rollback katalogu
+- **Víceřádkový `{# … #}` komentář v šablonách** (6.9.2026)
+  - Django víceřádkový `{# #}` komentář neodstraní a text unikal do stránky — nahrazeno `{% comment %}`
+- **Lokalizace ID v atributech formulářů** (3.9.2026)
+  - ID v atributech šablon se nelokalizují (`|unlocalize`), jinak české oddělovače tisíců rozbily párování polí; hlídá `test_template_id_localization.py`
+- **Chyba 520 při importu velkého exportu z FiskalPRO** (23.7.2026)
+  - Jednoznačné mapování ingrediencí, stabilnější JS lookup a ošetření neočekávaných výjimek parseru s logem — poškozený soubor skončí hláškou, ne pádem workeru
+- **Chybová hlášení ve formuláři převodky** (22.7.2026)
+  - Chyby se zobrazí uživateli; doplněno logování pro neexistující uživatelské profily
+- **Ukládání položek přidaných do výdejky** (11.7.2026)
+  - Opravena lokalizace ID a duplicity; zápis override a položky výdejky běží atomicky, duplicitu hlídá DB constraint
+  - Override skutečného množství na porci s hodnotou `None` způsoboval množství 0 při přegenerování výdejky
+- **Chyba 500 při generování PDF výdejky na více dní** (9.7.2026)
+
 - **Chyba 500 při mazání surovin** (23.1.2025)
   - Přidáno ošetření `ProtectedError` v `IngredientAdmin`
   - Uživatelsky přívětivé chybové hlášky místo chyby serveru
