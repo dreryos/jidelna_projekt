@@ -41,6 +41,20 @@ Katalog situací, hlášek a jejich řešení. Většina „chyb“ ve SPÍŽi j
 | *„Session vypršela. Začněte znovu.“* | Vícekrokový průvodce (bufet, importy) přerušen příliš dlouhou pauzou | Začít od kroku 1 — nic se nestalo, doklad vzniká až potvrzením |
 | Import receptur XML spadne na duplicitním kódu | Dva recepty se stejným kódem v souboru | Opravit kódy v XML na unikátní |
 
+### Import příjemky z fotky
+
+| Hláška / situace | Příčina | Řešení |
+|---|---|---|
+| *„Rozpoznávání dokladů není nastavené."* | Chybí `MISTRAL_API_KEY` | Doklad zadat ručně; klíč doplní správce (kapitola [11](11-sprava-systemu.md)) |
+| *„Doklad se nepodařilo zpracovat: …"* | Nečitelná nebo oříznutá fotka, neobvyklý formát dokladu | Vyfotit doklad celý, rovně a za světla; jinak zadat ručně |
+| *„Soubor je příliš velký … Maximum je 25 MB."* | Fotka ve vysokém rozlišení nebo dlouhé PDF | Zmenšit fotku nebo nafotit doklad po částech |
+| *„Session vypršela. Začněte znovu."* | Průvodce přerušen dlouhou pauzou | Začít od kroku 1 — nic nevzniklo, příjemka se zakládá až posledním krokem |
+| Příjemku nejde potvrdit, svítí „Nesedí měrné jednotky" | Dodavatel fakturuje v jiné jednotce, než v jaké sklad surovinu vede | **Srovnat měrné jednotky** a doplnit přepočet (kapitola [4](04-prijem-zbozi.md)) |
+| *„… zadejte přepočet jako číslo."* / *„přepočet jednotek musí být kladné číslo"* | Prázdné pole, nula nebo nečíselný zápis | Vyplnit kladné číslo; kolik skladových jednotek je jedna jednotka z dokladu |
+| Systém navrhl u položky špatnou surovinu | Naučený alias dodavatele míří jinam | Vybrat správnou surovinu ručně (systém se přeučí); trvale opravit smazáním aliasu v adminu (kapitola [11](11-sprava-systemu.md)) |
+| Cena položky je 0 | Doklad cenu vytištěnou nemá (rozvozový list) | Cenu na kroku 2 dopsat ručně, jinak se surovina naskladní za nulu |
+| Dodavatel se u dokladu nepřiřadil | Dodavatel není v katalogu nebo nesedí IČO | Vybrat dodavatele ručně na kroku 2; správce ho doplní do katalogu — bez dodavatele si systém mapování názvů nezapamatuje |
+
 ## Zásady prevence chyb
 
 1. **Doklad před zbožím.** Každý pohyb zboží zapište dokladem hned, ne „až večer“ — minusy a rozdíly v inventuře vznikají z odkladů.
@@ -48,6 +62,7 @@ Katalog situací, hlášek a jejich řešení. Většina „chyb“ ve SPÍŽi j
 3. **Jednotky, jednotky, jednotky.** Nejdražší chyby jsou záměny kg/ks/balení při příjmu a špatné převodní koeficienty. Nové suroviny po založení zkontrolujte.
 4. **Nemazat, stornovat.** Systém pro každou opravu nabízí bezpečnou cestu (zrušení převodky, vratka výdejky, smazání položky odpisu). Mazání přes admin je poslední možnost a jen pro návrhy.
 5. **Nenechávat viset.** Rozpracované doklady (návrhy, V PŘEVOZU, PROBÍHÁ) pravidelně dokončovat či rušit — blokují zboží a matou přehledy.
+6. **OCR je návrh, ne pravda.** Rozpoznaná data z fotky dodacího listu (kapitola [4](04-prijem-zbozi.md)) systém jen odhaduje — než z nich vznikne příjemka, porovnejte je s fotkou, zvlášť množství, jednotky a ceny.
 
 ## Kdy kontaktovat vývojáře a co poslat
 
@@ -64,4 +79,4 @@ Do hlášení uveďte:
 
 ---
 
-*Technická poznámka pro vývojáře: Hlášky vznikají převážně jako `ValidationError` v modelových metodách (`apps/inventory/models.py`, `apps/production/models.py`) a přes `messages` framework ve views. Server loguje do `logs/`; chyby 500 viz `server_error.log`. Diagnostický příkaz pro nesoulad blokací: `manage.py recalculate_blocked_quantities`.*
+*Technická poznámka pro vývojáře: Hlášky vznikají převážně jako `ValidationError` v modelových metodách (`apps/inventory/models.py`, `apps/production/models.py`) a přes `messages` framework ve views. Hlášky importu příjemky z fotky vznikají jako `OcrError` a přes `messages` ve `photo_import_step1..3` (`apps/inventory/views.py`). Server loguje do `logs/`; chyby 500 viz `server_error.log`. Diagnostický příkaz pro nesoulad blokací: `manage.py recalculate_blocked_quantities`.*

@@ -38,6 +38,8 @@ Do řádků zapisujete **spočtené množství**. Systém průběžně ukazuje r
 
 Pokud provoz na konci turnusu vyprodá celý sklad do nuly, nemusíte zadávat 0 ručně do každé položky. Na stránce počítání je tlačítko **Vynulovat sklad** — po potvrzení nastaví spočtené množství na 0 u úplně všech položek (i těch, které jste už stihli ručně vyplnit) a inventuru rovnou dokončí.
 
+![Vynulování skladu při inventuře](img/06-vynulovat-sklad.png)
+
 ⚠️ **Pozor:** Tuto akci nelze vzít zpět. Použijte ji jen tehdy, když je sklad opravdu prázdný — jinak přijdete o rozpracované počítání a systém následně bude ukazovat manko u všeho, co ve skutečnosti na skladě zbylo.
 
 ### 4. Dokončení
@@ -65,7 +67,11 @@ Typický scénář: kolega zahájil inventuru, odešel a sklad zůstal zamčený
 2. Kontaktujte ho, ať dokončí nebo zruší.
 3. Není-li dostupný, inventuru zruší **správce** (superuser) — sklad se odemkne, žádná data se neztratí kromě rozpracovaného počítání.
 
-⚠️ **Pozor:** Nikdy neřešte zamčený sklad zásahem do databáze nebo Django adminu (ruční přepnutí `is_locked`). Zámek je svázán s inventurou; rozpojení vede k inventuře, kterou nejde ani dokončit, ani zrušit. Vždy jděte cestou zrušení inventury v aplikaci.
+⚠️ **Pozor:** Neřešte zamčený sklad ručním přepnutím `is_locked` v Django adminu. Zámek je svázán s inventurou; rozpojení vede k inventuře, kterou nejde ani dokončit, ani zrušit. Vždy jděte cestou zrušení inventury v aplikaci.
+
+Pokud správce inventuru přímo smaže v Django adminu (v aplikaci mazací tlačítko není), sklad se odemkne sám — systém při smazání pozná, že jde o inventuru, která ho drží zamčený, a zámek uvolní. Osiřelý zámek tedy tímto zásahem nevznikne.
+
+⚠️ **Pozor:** Smazání je záchranná brzda pro výjimečné situace, ne běžný postup. Za normálních okolností inventuru **rušte** (viz výše) — zrušená inventura zůstává v seznamu dohledatelná, kdežto smazaná zmizí i s celým rozpracovaným počítáním.
 
 ## Doporučený postup pro hladkou inventuru
 
@@ -77,4 +83,4 @@ Typický scénář: kolega zahájil inventuru, odešel a sklad zůstal zamčený
 
 ---
 
-*Technická poznámka pro vývojáře: `InventoryVerification.start()/complete()/cancel()/zero_out_and_complete()` v `apps/inventory/models.py`, atomicky se `select_for_update()`. Zámek: `Warehouse.is_locked` + `locked_by_inventory`. Řádky: `InventoryVerificationItem` (unikátní na dvojici inventura × surovina, `is_newly_found` pro dodatečně nalezené zboží). Validace „všechna pole spočtena“ běží v `complete()`. `zero_out_and_complete()` nastaví všem položkám `counted_quantity = 0` a zavolá `complete()` ve stejné transakci; `complete()` si při dokončení znovu zamkne řádek (`select_for_update`) a ověří stav, aby dva souběžné požadavky nemohly dokončit stejnou inventuru dvakrát.*
+*Technická poznámka pro vývojáře: `InventoryVerification.start()/complete()/cancel()/zero_out_and_complete()` v `apps/inventory/models.py`, atomicky se `select_for_update()`. Zámek: `Warehouse.is_locked` + `locked_by_inventory`. Řádky: `InventoryVerificationItem` (unikátní na dvojici inventura × surovina, `is_newly_found` pro dodatečně nalezené zboží). Validace „všechna pole spočtena“ běží v `complete()`. `zero_out_and_complete()` nastaví všem položkám `counted_quantity = 0` a zavolá `complete()` ve stejné transakci; `complete()` si při dokončení znovu zamkne řádek (`select_for_update`) a ověří stav, aby dva souběžné požadavky nemohly dokončit stejnou inventuru dvakrát. Smazání `InventoryVerification` (jen přes Django admin, v `apps/inventory/urls.py` mazací cesta chybí) odchytává `pre_delete` signál `unlock_warehouse_on_inventory_delete` v `apps/inventory/signals.py` — pokud `warehouse.locked_by_inventory_id == instance.pk`, nastaví `is_locked = False` a `locked_by_inventory = None`; signál registruje `InventoryConfig.ready()` v `apps/inventory/apps.py`.*

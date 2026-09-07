@@ -40,6 +40,8 @@ Z FiskalPRO vyexportujte přehled **„Položky dokladů – kumulované“** ve
 
 Vyberete XLSX a **sklad bufetu**, ze kterého se prodané zboží odepíše.
 
+Nečitelný soubor nebo jiný než očekávaný formát exportu systém neshodí — skončí srozumitelnou chybovou hláškou a vy nahrajete správný soubor.
+
 Při načtení systém:
 
 * zpracuje jen řádky typu *prodej* a *prodej návrat/storno* (platby a jiné doklady ignoruje),
@@ -57,6 +59,10 @@ Každé prodané zboží je třeba spárovat se **surovinou ve skladu**. Systém
 * zeleně ≥ 70 % — návrh téměř jistě sedí, jen zkontrolujte,
 * žlutě < 70 % — zkontrolujte pečlivě, případně vyberte ručně,
 * červeně — návrh nenalezen, vyberte ze seznamu.
+
+Surovinu nevybíráte z rozbalovacího seznamu, ale zapisujete do textového pole s **našeptávačem** — stačí začít psát název a vybrat z nabídky, která se pod polem zobrazí.
+
+💡 **Proč textové pole s našeptávačem, a ne rozbalovací seznam:** Export z FiskalPRO má běžně stovky řádků. Kdyby měl každý řádek vlastní rozbalovací seznam se všemi surovinami skladu, výsledná stránka by obsahovala statisíce položek a její vykreslení na produkci přesahovalo časový limit (chyba 520 — stránka nedoběhla). Jeden sdílený seznam pro všechny řádky stránku zmenšil na zlomek velikosti a zrychlil vykreslení z cca 1 sekundy na cca 0,03 sekundy.
 
 Zboží, které nechcete odepisovat (nebo ve skladu neexistuje), označte **Přeskočit**; tlačítko **Přeskočit nespárované** to udělá hromadně. Počítadlo nahoře průběžně ukazuje spárováno/přeskočeno/celkem.
 
@@ -78,4 +84,4 @@ Položky, pro které není na skladě dost zásoby, systém vyjmenuje ve varová
 
 ---
 
-*Technická poznámka pro vývojáře: Odpisy: `StockWriteOff`/`StockWriteOffItem` (`apps/inventory/models.py`) — `save()` položky odečítá sklad a přebírá `unit_cost`, `pre_delete` signál zboží vrací. Bufet: parser `apps/bufet/fiskalpro_parser.py` (povinné sloupce Typ, Artikl, Název, Množství; agregace dle názvu, storna záporným množstvím), párování fuzzy shodou (`difflib.SequenceMatcher`, práh 0,45) v `apps/bufet/views.py`, potvrzení vytváří `StockWriteOff` s agregací po surovinách; duplicitu importu hlídá `cash_register_import_id`.*
+*Technická poznámka pro vývojáře: Odpisy: `StockWriteOff`/`StockWriteOffItem` (`apps/inventory/models.py`) — `save()` položky odečítá sklad a přebírá `unit_cost`, `pre_delete` signál zboží vrací. Bufet: parser `apps/bufet/fiskalpro_parser.py` (povinné sloupce Typ, Artikl, Název, Množství; agregace dle názvu, storna záporným množstvím) — volání parseru v `bufet_upload_step1` má vedle `ValueError` i obecný `except Exception` s `logger.exception()`, aby neočekávaná chyba parseru neshodila worker (520), párování fuzzy shodou (`difflib.SequenceMatcher`, práh 0,45) v `apps/bufet/views.py`, potvrzení vytváří `StockWriteOff` s agregací po surovinách; duplicitu importu hlídá `cash_register_import_id`. Krok 2 v `templates/bufet/bufet_upload_step2.html` renderuje suroviny jen jednou do sdíleného `<datalist id="ingredient-options">`; každý řádek má textový input (`list="ingredient-options"`) a skryté pole s id suroviny, JS podle napsaného textu dohledá id z datalistu. Popisek volby sestavuje `suggested_label` ve view (`bufet_upload_step2`) a musí být totožný s `value` v datalistu, včetně `#id` pro odlišení surovin se shodným name+unit.*

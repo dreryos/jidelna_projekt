@@ -409,7 +409,9 @@ class SupplierItemAliasAdmin(admin.ModelAdmin):
     @admin.display(description='Mapuje se na')
     def target(self, obj):
         if obj.is_ignored:
-            return format_html('<em>nezbožní řádek</em>')
+            # Bez argumentu format_html od Djanga 5.0 vyhazuje TypeError, takže
+            # by celý seznam spadl na první odškrtnutý řádek (doprava, obaly).
+            return format_html('<em>{}</em>', 'nezbožní řádek')
         return obj.ingredient.name if obj.ingredient else '—'
 
 
