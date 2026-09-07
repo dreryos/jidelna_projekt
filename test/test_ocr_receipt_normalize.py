@@ -94,6 +94,67 @@ def test_jednotka_baleni_se_mapuje():
     assert rohlik['quantity'] == Decimal('3.000')
 
 
+def _minimalni_anotace(polozka):
+    """
+    Kostra anotace jen s tím, co `to_receipt_data` potřebuje – pro testy,
+    které se nezajímají o hlavičku dokladu, jen o zpracování jednoho řádku.
+    """
+    return {
+        'dodavatel': {'nazev': 'MAKRO Cash & Carry ČR s.r.o.', 'ico': '26450691'},
+        'doklad': {'cislo_dokladu': 'D1', 'datum_vystaveni': '2026-09-07'},
+        'ceny_jsou_s_dph': False,
+        'polozky': [polozka],
+    }
+
+
+def test_pocet_v_baleni_se_prenasobi_do_mnozstvi():
+    """
+    MAKRO (webshop dodací list) udává zvlášť počet balení a kolik je
+    v jednom balení – skladové množství je jejich součin, jednotková cena
+    zůstává za jeden kus.
+    """
+    data = to_receipt_data(_minimalni_anotace({
+        'nazev': 'Srdíčko jogurt ovocný 125g', 'mnozstvi': 10,
+        'jednotka': 'ks', 'pocet_v_baleni': 20, 'cena_za_mj': 7.48,
+        'dph_procenta': 12, 'cena_bez_dph': 1496.40,
+    }))
+    polozka = data['items'][0]
+
+    assert polozka['quantity'] == Decimal('200.000')
+    assert polozka['price_per_unit_net'] == Decimal('7.48')
+    assert polozka['total_price_net'] == Decimal('1496.40')
+
+
+def test_pocet_v_baleni_bez_jednotkove_ceny_se_dopocte_spravne():
+    """
+    Chybí-li cena_za_mj, jednotková cena se dopočte z řádkového součtu –
+    ten je ale za VŠECHNY kusy, ne za balení, takže se musí dělit už
+    přenásobeným množstvím. Jinak by cena za kus vyšla pocet_v_baleni-krát
+    předražená (skladová hodnota by pak byla stejně-krát nadhodnocená).
+    """
+    data = to_receipt_data(_minimalni_anotace({
+        'nazev': 'Srdíčko jogurt ovocný 125g', 'mnozstvi': 10,
+        'jednotka': 'ks', 'pocet_v_baleni': 20,
+        'dph_procenta': 12, 'cena_bez_dph': 1496.40,
+    }))
+    polozka = data['items'][0]
+
+    assert polozka['quantity'] == Decimal('200.000')
+    assert polozka['price_per_unit_net'] == Decimal('7.48')
+    assert polozka['total_price_net'] == Decimal('1496.40')
+
+
+def test_bez_pocet_v_baleni_zustava_mnozstvi_beze_zmeny():
+    """Doklady bez rozlišení balení (drtivá většina) se chovají jako dřív."""
+    data = to_receipt_data(_minimalni_anotace({
+        'nazev': 'Rajče keř TUR', 'mnozstvi': 6.7, 'jednotka': 'kg',
+        'cena_za_mj': 54.90, 'dph_procenta': 12,
+    }))
+    polozka = data['items'][0]
+
+    assert polozka['quantity'] == Decimal('6.700')
+
+
 def test_ceny_bez_dph_jsou_rozpoznany_i_bez_priznaku():
     """Anotace z playgroundu příznak `ceny_jsou_s_dph` nemá, odvodíme si ho."""
     payload = load_fixture(FIXTURE_ROOT / 'prodejka_zelenina')
@@ -223,6 +284,10 @@ def test_neznamy_format_hlasi_srozumitelnou_chybu():
     ('Vratné palety EUR', True),
     ('Doprava a manipulace', True),
     ('Sleva množstevní', True),
+    # Reálné MAKRO fráze – "sleva" a "kup víc = plať méň" nebývají na
+    # začátku řádku, takže by je samotná předpona nechytla.
+    ('Množstevní sleva při koupi 5 bal. a více', True),
+    ('Kup více = plať méně - ARO rajčat. pyré', True),
     # Zboží se stejným kořenem se ignorovat nesmí.
     # Sporné slovo samo o sobě neignorujeme – tohle je zboží, ne obal.
     ('Paleta chleba konzumního', False),

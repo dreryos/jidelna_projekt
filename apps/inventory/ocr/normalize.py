@@ -93,6 +93,7 @@ def _normalize_item(raw_item, index, prices_include_vat, warnings):
     is_ignored, ignore_reason = classify_line(name)
 
     quantity = _to_decimal(raw_item.get('mnozstvi'))
+    pocet_v_baleni = _to_decimal(raw_item.get('pocet_v_baleni'))
     unit = (raw_item.get('jednotka') or '').strip()
     vat_rate = _resolve_vat_rate(raw_item.get('dph_procenta'), name, warnings)
 
@@ -106,6 +107,15 @@ def _normalize_item(raw_item, index, prices_include_vat, warnings):
         if not is_ignored:
             warnings.append(f'Řádek {index} „{name}" nemá čitelné množství, doplňte ho.')
         quantity = Decimal('0')
+    elif pocet_v_baleni:
+        # Skladové množství je počet balení krát kolik je v jednom balení
+        # (typicky MAKRO: sloupce „Dodáno/Objednáno" a „Balení" zvlášť).
+        # Musí se přenásobit ještě PŘED dopočtem jednotkové ceny níž – když
+        # jednotkovou cenu doklad neuvádí, `_resolve_unit_prices` ji dopočte
+        # z řádkového součtu (`cena_bez_dph / množství`), a ten součet je za
+        # všechny kusy, ne za balení. S nepřenásobeným množstvím by tak
+        # vyšla cena za kus `pocet_v_baleni`-krát předražená.
+        quantity = quantity * pocet_v_baleni
 
     unit_net, unit_gross = _resolve_unit_prices(
         unit_price=unit_price,
@@ -199,10 +209,13 @@ def _resolve_price_basis(annotation, warnings):
     for raw_item in annotation.get('polozky') or []:
         unit_price = _to_decimal(raw_item.get('cena_za_mj'))
         quantity = _to_decimal(raw_item.get('mnozstvi'))
+        pocet_v_baleni = _to_decimal(raw_item.get('pocet_v_baleni'))
         line_net = _to_decimal(raw_item.get('cena_bez_dph'))
         line_gross = _to_decimal(raw_item.get('cena_celkem'))
         if not unit_price or not quantity or line_net is None or line_gross is None:
             continue
+        if pocet_v_baleni:
+            quantity = quantity * pocet_v_baleni
         computed = unit_price * quantity
         if abs(computed - line_net) < abs(computed - line_gross):
             votes_net += 1

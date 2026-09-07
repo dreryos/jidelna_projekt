@@ -70,19 +70,34 @@ class Polozka(BaseModel):
         description="Kód, artikl nebo EAN položky, pokud má doklad takový sloupec.",
     )
     mnozstvi: Optional[float] = Field(
-        ..., description="Počet měrných jednotek.")
+        ...,
+        description=(
+            'Počet měrných jednotek tak, jak je v hlavním sloupci s množstvím '
+            '(např. u dokladu se sloupci „Dodáno/Objednáno" a „Balení" je to '
+            'levé číslo ze zlomku Dodáno/Objednáno – počet balení, ne '
+            'přepočtené kusy). Přepočet na celkové kusy udělá `pocet_v_baleni`.'
+        ),
+    )
     jednotka: Optional[str] = Field(
         ..., description="Měrná jednotka, například kg, l, ks, bal, karton."
     )
     pocet_v_baleni: Optional[float] = Field(
         ...,
         description=(
-            "Kolik kusů nebo kilogramů je v jednom balení, pokud to doklad uvádí "
-            "v samostatném sloupci. Jinak nevyplňuj."
+            'Kolik kusů nebo kilogramů je v jednom balení, pokud to doklad uvádí '
+            'v samostatném sloupci (např. sloupec „Balení" s hodnotou „24 balení", '
+            '„42 kus" nebo „Balení po 300" – vyplň jen to číslo, 24/42/300). '
+            'Skladové množství se pak počítá jako mnozstvi × pocet_v_baleni, '
+            'takže cena_za_mj musí zůstat cena za JEDEN kus/kg, ne za balení. '
+            'Když doklad balení neuvádí, nevyplňuj.'
         ),
     )
     cena_za_mj: Optional[float] = Field(
-        ..., description="Jednotková cena za jednu měrnou jednotku."
+        ...,
+        description=(
+            "Jednotková cena za jednu měrnou jednotku (jeden kus/kg/l), ne za "
+            "celé balení – i když je doklad prodává v baleních."
+        ),
     )
     sleva_procenta: Optional[float] = Field(
         ..., description="Sleva na řádku v procentech, pokud je uvedena."
