@@ -93,6 +93,7 @@ def _normalize_item(raw_item, index, prices_include_vat, warnings):
     is_ignored, ignore_reason = classify_line(name)
 
     quantity = _to_decimal(raw_item.get('mnozstvi'))
+    pocet_v_baleni = _to_decimal(raw_item.get('pocet_v_baleni'))
     unit = (raw_item.get('jednotka') or '').strip()
     vat_rate = _resolve_vat_rate(raw_item.get('dph_procenta'), name, warnings)
 
@@ -125,6 +126,15 @@ def _normalize_item(raw_item, index, prices_include_vat, warnings):
             )
         unit_net = Decimal('0')
         unit_gross = Decimal('0')
+
+    # Skladové množství je počet balení krát kolik je v jednom balení
+    # (typicky MAKRO: sloupce „Dodáno/Objednáno" a „Balení" zvlášť) – ale až
+    # TADY, po dopočtu jednotkové ceny výše. Kdyby se násobilo dřív, fallback
+    # v `_resolve_unit_prices` (řádkový součet / množství, když chybí
+    # jednotková cena) by dělil už přenásobeným číslem a vyšla by jednotková
+    # cena `pocet_v_baleni`-krát menší.
+    if pocet_v_baleni:
+        quantity = quantity * pocet_v_baleni
 
     if line_gross is None:
         line_gross = (unit_gross * quantity).quantize(MONEY)
@@ -199,10 +209,13 @@ def _resolve_price_basis(annotation, warnings):
     for raw_item in annotation.get('polozky') or []:
         unit_price = _to_decimal(raw_item.get('cena_za_mj'))
         quantity = _to_decimal(raw_item.get('mnozstvi'))
+        pocet_v_baleni = _to_decimal(raw_item.get('pocet_v_baleni'))
         line_net = _to_decimal(raw_item.get('cena_bez_dph'))
         line_gross = _to_decimal(raw_item.get('cena_celkem'))
         if not unit_price or not quantity or line_net is None or line_gross is None:
             continue
+        if pocet_v_baleni:
+            quantity = quantity * pocet_v_baleni
         computed = unit_price * quantity
         if abs(computed - line_net) < abs(computed - line_gross):
             votes_net += 1

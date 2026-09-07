@@ -33,12 +33,18 @@ NON_STOCK_KEYWORDS = (
     ('zaloha na obal', 'záloha na obal'),
     ('balne', 'balné'),
     ('manipulacni poplatek', 'manipulační poplatek'),
+    # Slevový řádek vázaný na předchozí položku – v promptu se OCR žádá,
+    # ať ho rovnou odečte od té položky, ale sazí to na model. Sleva navíc
+    # nebývá na začátku řádku („Množstevní sleva při koupi…", MAKRO), takže
+    # nestačí jen předpona.
+    ('sleva', 'sleva'),
+    ('kup vice', 'akční sleva'),
+    ('plat mene', 'akční sleva'),
 )
 
 NON_STOCK_PREFIXES = (
     ('prepravka', 'přepravka'),
     ('poplatek', 'poplatek'),
-    ('sleva', 'sleva'),
     ('bonus', 'bonus'),
     ('obaly', 'obaly'),
 )

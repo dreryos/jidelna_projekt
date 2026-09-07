@@ -1,0 +1,45 @@
+{
+  "dodavatel": {
+    "nazev": "MAKRO Cash & Carry ČR s.r.o.",
+    "adresa": "Jeremiášova 1249/7, 155 00 Praha 5, Česká republika",
+    "ico": "26450691",
+    "dic": "CZ26450691"
+  },
+  "odberatel": {
+    "nazev": "Cestovní kancelář Topinka, s.r.o.",
+    "adresa": "Chyšky 5, 399 01 Chyšky-Milevsko, Česká republika",
+    "ico": null,
+    "dic": null
+  },
+  "doklad": {
+    "cislo_dokladu": "9-193005038",
+    "cislo_objednavky": "0112026185/9-193005038",
+    "typ_dokladu": "dodaci_list",
+    "datum_vystaveni": "2026-07-02",
+    "datum_dodani": "2026-07-04",
+    "poznamka_rukou": ""
+  },
+  "ceny_jsou_s_dph": false,
+  "polozky": [
+    {"nazev": "Srdíčko jogurt ovocný 125g", "kod": "271785", "mnozstvi": 10, "jednotka": "ks", "pocet_v_baleni": 20, "cena_za_mj": 7.48, "dph_procenta": 12, "cena_bez_dph": 1496.40, "dph_castka": 179.57, "cena_celkem": 1675.97},
+    {"nazev": "MC Rajč.protlak 800g", "kod": "478445", "mnozstvi": 5, "jednotka": "ks", "pocet_v_baleni": 1, "cena_za_mj": 82.95, "dph_procenta": 12, "cena_bez_dph": 414.75, "dph_castka": 49.77, "cena_celkem": 464.52},
+    {"nazev": "MC Čoko.čočky mléčná 31% 2,5kg", "kod": "420985", "mnozstvi": 2, "jednotka": "ks", "pocet_v_baleni": 1, "cena_za_mj": 863.00, "dph_procenta": 12, "cena_bez_dph": 1726.00, "dph_castka": 207.12, "cena_celkem": 1933.12},
+    {"nazev": "Bounty 57g", "kod": "54093", "mnozstvi": 1, "jednotka": "ks", "pocet_v_baleni": 24, "cena_za_mj": 16.77, "dph_procenta": 12, "cena_bez_dph": 402.43, "dph_castka": 48.29, "cena_celkem": 450.72},
+    {"nazev": "Snickers 50g", "kod": "138091", "mnozstvi": 1, "jednotka": "ks", "pocet_v_baleni": 40, "cena_za_mj": 12.79, "dph_procenta": 12, "cena_bez_dph": 511.60, "dph_castka": 61.39, "cena_celkem": 572.99},
+    {"nazev": "Twix 50g", "kod": "188730", "mnozstvi": 1, "jednotka": "ks", "pocet_v_baleni": 30, "cena_za_mj": 12.79, "dph_procenta": 12, "cena_bez_dph": 383.70, "dph_castka": 46.04, "cena_celkem": 429.74},
+    {"nazev": "Mars 51g", "kod": "218915", "mnozstvi": 1, "jednotka": "ks", "pocet_v_baleni": 40, "cena_za_mj": 14.74, "dph_procenta": 12, "cena_bez_dph": 589.68, "dph_castka": 70.76, "cena_celkem": 660.44},
+    {"nazev": "Oplatky,sušenky,trv.moučníky Bebe Dr 50g kakao", "kod": "98071", "mnozstvi": 1, "jednotka": "ks", "pocet_v_baleni": 30, "cena_za_mj": 8.99, "dph_procenta": 12, "cena_bez_dph": 269.70, "dph_castka": 32.36, "cena_celkem": 302.06},
+    {"nazev": "Tatranky l.ořech 33g Sereď", "kod": "160906", "mnozstvi": 1, "jednotka": "ks", "pocet_v_baleni": 42, "cena_za_mj": 4.60, "dph_procenta": 12, "cena_bez_dph": 193.20, "dph_castka": 23.18, "cena_celkem": 216.38},
+    {"nazev": "Tatranky mléčné 33g Sereď", "kod": "181729", "mnozstvi": 1, "jednotka": "ks", "pocet_v_baleni": 42, "cena_za_mj": 5.00, "dph_procenta": 12, "cena_bez_dph": 209.87, "dph_castka": 25.18, "cena_celkem": 235.05},
+    {"nazev": "Alaska kukuř.tr. 18g kakao", "kod": "253594", "mnozstvi": 1, "jednotka": "ks", "pocet_v_baleni": 48, "cena_za_mj": 3.24, "dph_procenta": 12, "cena_bez_dph": 155.52, "dph_castka": 18.66, "cena_celkem": 174.18},
+    {"nazev": "Frapé čaj lesní plody 160g", "kod": "445664", "mnozstvi": 1, "jednotka": "ks", "pocet_v_baleni": 1, "cena_za_mj": 56.70, "dph_procenta": 12, "cena_bez_dph": 56.70, "dph_castka": 6.80, "cena_celkem": 63.50},
+    {"nazev": "ARO 1,5l neperlivá", "kod": "430015", "mnozstvi": 5, "jednotka": "ks", "pocet_v_baleni": 6, "cena_za_mj": 6.82, "dph_procenta": 21, "cena_bez_dph": 204.45, "dph_castka": 42.93, "cena_celkem": 247.38},
+    {"nazev": "ARO 1,5l perlivá", "kod": "430036", "mnozstvi": 5, "jednotka": "ks", "pocet_v_baleni": 6, "cena_za_mj": 6.82, "dph_procenta": 21, "cena_bez_dph": 204.45, "dph_castka": 42.93, "cena_celkem": 247.38}
+  ],
+  "souhrn_dph": [
+    {"sazba": "12", "zaklad": 6409.55, "vyse_dph": 769.15, "celkem": 7178.70},
+    {"sazba": "21", "zaklad": 408.90, "vyse_dph": 85.87, "celkem": 494.77}
+  ],
+  "celkem": {"zaklad": 6818.45, "dph": 855.02, "celkem_kc": 7673.47},
+  "platba": {"zpusob": "prevodem", "castka": 7673.47}
+}
