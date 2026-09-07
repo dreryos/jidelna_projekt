@@ -38,8 +38,20 @@ def test_kombinace_jedne_fotky_da_jednostrankove_pdf():
     assert len(reader.pages) == 1
 
 
+def dominantni_barva(pil_image):
+    """Podle nejsilnějšího kanálu RGB uprostřed obrázku – barvy z JPEG
+    komprese nejsou čisté, ale kanál, co má vyhrát, pozná spolehlivě."""
+    r, g, b = pil_image.convert('RGB').getpixel(
+        (pil_image.width // 2, pil_image.height // 2)
+    )
+    return max((r, 'red'), (g, 'green'), (b, 'blue'))[1]
+
+
 def test_kombinace_zachova_poradi_stranek():
-    """Stránky musí zůstat v pořadí, v jakém uživatel fotky vybral."""
+    """
+    Stránky musí zůstat v pořadí, v jakém uživatel fotky vybral – jen počet
+    stránek by prošel i při obráceném nebo jinak přeházeném pořadí.
+    """
     pdf_bytes = combine_images_to_pdf([
         (jpeg_bytes('red'), '1.jpg'),
         (jpeg_bytes('blue'), '2.jpg'),
@@ -49,6 +61,9 @@ def test_kombinace_zachova_poradi_stranek():
     from pypdf import PdfReader
     reader = PdfReader(io.BytesIO(pdf_bytes))
     assert len(reader.pages) == 3
+
+    barvy = [dominantni_barva(page.images[0].image) for page in reader.pages]
+    assert barvy == ['red', 'blue', 'green']
 
 
 def test_kombinace_poskozene_fotky_vyhodi_ocrerror():

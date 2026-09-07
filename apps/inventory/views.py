@@ -2491,11 +2491,13 @@ def _serialize_receipt_data(receipt_data):
 @login_required
 def photo_import_step1(request):
     """
-    Krok 1: nahrání fotky dokladu a spuštění OCR.
+    Krok 1: nahrání jedné nebo více fotek dokladu a spuštění OCR.
 
-    Fotka se zmenší, uloží do dočasného úložiště a pošle do Mistral OCR.
-    Rozpoznaná data putují do session, sken zůstává na disku kvůli náhledu
-    v kroku 2 – po potvrzení příjemky se maže.
+    Jedna nahraná fotka se zmenší, zatímco samostatně nahrané PDF se uloží
+    a pošle beze změny. Více fotek se spojí do jednoho PDF, které se uloží
+    do dočasného úložiště a pošle do Mistral OCR. Rozpoznaná data putují do
+    session, sken zůstává na disku kvůli náhledu v kroku 2 – po potvrzení
+    příjemky se maže.
     """
     from .ocr.client import OcrError, combine_images_to_pdf, prepare_image, run_ocr
     from .ocr.normalize import to_receipt_data
