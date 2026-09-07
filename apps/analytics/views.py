@@ -543,6 +543,17 @@ def cook_analytics(request):
     date_to_str = request.GET.get('date_to', '')
     canteen_id = request.GET.get('canteen', '')
 
+    # Bez filtru by se počítaly úplně všechny výdejky od začátku provozu –
+    # pro každou se navíc dopočítává cena porce (dotazy do historie cen za
+    # datum výdejky), takže neomezený rozsah dokázal na produkci vytížit
+    # workera natolik, že request spadl do 520 (stejná past jako u velkého
+    # importu bufetu – viz komentář v bufet_upload_step2.html). Výchozí
+    # okno jde v UI kdykoli ručně rozšířit.
+    if not date_from_str and not date_to_str:
+        today = timezone.now().date()
+        date_from_str = (today - timedelta(days=30)).isoformat()
+        date_to_str = today.isoformat()
+
     # Základní QS dokumentů přístupných tomuto uživateli
     if user.is_superuser:
         docs_qs = PickingListDocument.objects.select_related('cook', 'canteen')

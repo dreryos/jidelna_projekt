@@ -60,6 +60,24 @@
   <div class="card-body">
     <form method="get" class="row g-3">
       <div class="col-md-4">
+        <label for="search" class="form-label">Hledat</label>
+        <input type="text" name="search" id="search" class="form-control"
+               placeholder="Číslo dokladu" value="{{ selected_search }}">
+      </div>
+
+      <div class="col-md-4">
+        <label for="supplier" class="form-label">Dodavatel</label>
+        <select name="supplier" id="supplier" class="form-select">
+          <option value="">Všichni dodavatelé</option>
+          {% for supplier in suppliers %}
+            <option value="{{ supplier.id|unlocalize }}" {% if selected_supplier == supplier.id|stringformat:"s" %}selected{% endif %}>
+              {{ supplier.name }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="col-md-4">
         <label for="warehouse" class="form-label">Sklad</label>
         <select name="warehouse" id="warehouse" class="form-select">
           <option value="">Všechny sklady</option>
@@ -70,8 +88,8 @@
           {% endfor %}
         </select>
       </div>
-      
-      <div class="col-md-4">
+
+      <div class="col-md-3">
         <label for="status" class="form-label">Stav</label>
         <select name="status" id="status" class="form-select">
           <option value="">Všechny stavy</option>
@@ -82,8 +100,18 @@
           {% endfor %}
         </select>
       </div>
-      
-      <div class="col-md-4 d-flex align-items-end">
+
+      <div class="col-md-3">
+        <label for="date_from" class="form-label">Datum příjmu od</label>
+        <input type="date" name="date_from" id="date_from" class="form-control" value="{{ selected_date_from }}">
+      </div>
+
+      <div class="col-md-3">
+        <label for="date_to" class="form-label">Datum příjmu do</label>
+        <input type="date" name="date_to" id="date_to" class="form-control" value="{{ selected_date_to }}">
+      </div>
+
+      <div class="col-md-3 d-flex align-items-end">
         <button type="submit" class="btn btn-primary me-2">
           <i class="fas fa-filter me-2"></i>Filtrovat
         </button>
@@ -123,7 +151,7 @@
                 </td>
                 <td>{{ receipt.warehouse.name }} ({{ receipt.warehouse.canteen.name }})</td>
                 <td>{{ receipt.receipt_date|date:"d.m.Y" }}</td>
-                <td>{{ receipt.supplier|default:"-" }}</td>
+                <td>{{ receipt.supplier_obj.name|default:receipt.supplier|default:"-" }}</td>
                 <td>
                   {% if receipt.status == 'CONFIRMED' %}
                     <span class="badge bg-success">
@@ -167,23 +195,23 @@
           <ul class="pagination justify-content-center">
             {% if page_obj.has_previous %}
               <li class="page-item">
-                <a class="page-link" href="?page=1{% if selected_warehouse %}&warehouse={{ selected_warehouse }}{% endif %}{% if selected_status %}&status={{ selected_status }}{% endif %}">První</a>
+                <a class="page-link" href="?page=1{% if selected_search %}&search={{ selected_search|urlencode }}{% endif %}{% if selected_supplier %}&supplier={{ selected_supplier }}{% endif %}{% if selected_warehouse %}&warehouse={{ selected_warehouse }}{% endif %}{% if selected_status %}&status={{ selected_status }}{% endif %}{% if selected_date_from %}&date_from={{ selected_date_from }}{% endif %}{% if selected_date_to %}&date_to={{ selected_date_to }}{% endif %}">První</a>
               </li>
               <li class="page-item">
-                <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if selected_warehouse %}&warehouse={{ selected_warehouse }}{% endif %}{% if selected_status %}&status={{ selected_status }}{% endif %}">Předchozí</a>
+                <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if selected_search %}&search={{ selected_search|urlencode }}{% endif %}{% if selected_supplier %}&supplier={{ selected_supplier }}{% endif %}{% if selected_warehouse %}&warehouse={{ selected_warehouse }}{% endif %}{% if selected_status %}&status={{ selected_status }}{% endif %}{% if selected_date_from %}&date_from={{ selected_date_from }}{% endif %}{% if selected_date_to %}&date_to={{ selected_date_to }}{% endif %}">Předchozí</a>
               </li>
             {% endif %}
-            
+
             <li class="page-item active">
               <span class="page-link">{{ page_obj.number }} z {{ page_obj.paginator.num_pages }}</span>
             </li>
-            
+
             {% if page_obj.has_next %}
               <li class="page-item">
-                <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if selected_warehouse %}&warehouse={{ selected_warehouse }}{% endif %}{% if selected_status %}&status={{ selected_status }}{% endif %}">Další</a>
+                <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if selected_search %}&search={{ selected_search|urlencode }}{% endif %}{% if selected_supplier %}&supplier={{ selected_supplier }}{% endif %}{% if selected_warehouse %}&warehouse={{ selected_warehouse }}{% endif %}{% if selected_status %}&status={{ selected_status }}{% endif %}{% if selected_date_from %}&date_from={{ selected_date_from }}{% endif %}{% if selected_date_to %}&date_to={{ selected_date_to }}{% endif %}">Další</a>
               </li>
               <li class="page-item">
-                <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% if selected_warehouse %}&warehouse={{ selected_warehouse }}{% endif %}{% if selected_status %}&status={{ selected_status }}{% endif %}">Poslední</a>
+                <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% if selected_search %}&search={{ selected_search|urlencode }}{% endif %}{% if selected_supplier %}&supplier={{ selected_supplier }}{% endif %}{% if selected_warehouse %}&warehouse={{ selected_warehouse }}{% endif %}{% if selected_status %}&status={{ selected_status }}{% endif %}{% if selected_date_from %}&date_from={{ selected_date_from }}{% endif %}{% if selected_date_to %}&date_to={{ selected_date_to }}{% endif %}">Poslední</a>
               </li>
             {% endif %}
           </ul>
