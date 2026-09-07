@@ -43,7 +43,7 @@ Dokud je příjemka koncept, můžete položky přidávat, mazat i opravovat —
 
 ## Dodavatelé a šablony položek
 
-Časté dodavatele založí správce v systému (včetně barvy a ikony tlačítka, IČO a případně i barvy). Katalog obsahuje reálné dodavatele — **Bidfood, Makro, Bolero, DK Open** — a doplňuje se podle potřeby provozu. Každému dodavateli lze připravit **šablonu položek** — seznam surovin s výchozí cenou a DPH v obvyklém pořadí dodacího listu.
+Časté dodavatele založí správce v systému (včetně barvy a ikony tlačítka a **IČO**, podle kterého se dodavatel páruje s dokladem). Katalog obsahuje reálné dodavatele — **Bidfood, Makro, Bolero, DK Open** — a doplňuje se podle potřeby provozu. Každému dodavateli lze připravit **šablonu položek** — seznam surovin s výchozí cenou a DPH v obvyklém pořadí dodacího listu.
 
 Při vytváření příjemky pak stačí kliknout na tlačítko dodavatele (např. **Zelinář**) a formulář se předvyplní jeho šablonou — jen upravíte množství a případně ceny podle skutečného závozu.
 
