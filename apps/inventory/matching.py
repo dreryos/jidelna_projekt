@@ -315,7 +315,14 @@ class IngredientResolver:
             return match
 
         # Jednotky se liší a poměr nikdo neurčil. Nehádáme.
-        match.unit_factor = Decimal('1')
+        #
+        # Nula, ne jednička – `1` je zároveň neplatný default i platná
+        # odpověď („1 ks = 1 bochník"), takže by šlo těžko rozeznat, jestli
+        # ho tam nechal uživatel, nebo tam je jen jako výchozí hodnota.
+        # Nula je jednoznačně „nevyplněno" a existující kontrola kladného
+        # čísla (`factor <= 0`) ji přirozeně odmítne, dokud ji člověk
+        # nepřepíše na něco skutečného.
+        match.unit_factor = Decimal('0')
         match.needs_unit_check = True
         return match
 
