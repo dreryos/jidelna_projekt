@@ -155,6 +155,23 @@ def test_bez_pocet_v_baleni_zustava_mnozstvi_beze_zmeny():
     assert polozka['quantity'] == Decimal('6.700')
 
 
+def test_makro_kod_sazby_23_se_prelozi_na_12_procent():
+    """
+    Účtenky MAKRO z pokladny tisknou u položek místo procent interní kód
+    sazbové skupiny – 23 vždycky znamená 12 %. Žádná legitimní sazba 23 %
+    v ČR není, takže je bezpečné to opravit i jako pojistku v kódu, ne se
+    spoléhat jen na to, že to model podle promptu přeloží sám.
+    """
+    data = to_receipt_data(_minimalni_anotace({
+        'nazev': 'FL mléko TRV.1,5% 1L', 'mnozstvi': 5, 'jednotka': 'ks',
+        'cena_za_mj': 9.90, 'dph_procenta': 23, 'cena_bez_dph': 49.50,
+    }))
+    polozka = data['items'][0]
+
+    assert polozka['vat_rate'] == Decimal('12')
+    assert not any('nejbližší platná sazba' in w for w in data['warnings'])
+
+
 def test_ceny_bez_dph_jsou_rozpoznany_i_bez_priznaku():
     """Anotace z playgroundu příznak `ceny_jsou_s_dph` nemá, odvodíme si ho."""
     payload = load_fixture(FIXTURE_ROOT / 'prodejka_zelenina')

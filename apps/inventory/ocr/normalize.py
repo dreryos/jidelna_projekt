@@ -245,6 +245,16 @@ def _resolve_vat_rate(value, name, warnings):
     if rate in ALLOWED_VAT_RATES:
         return rate
 
+    # Účtenky MAKRO z pokladny netisknou u položek sazbu DPH přímo, ale
+    # interní kód sazbové skupiny – kód 23 vždycky znamená 12 %. Prompt
+    # o tom OCR instruuje, ale žádná legitimní sazba v ČR 23 % nebyla ani
+    # není, takže tenhle překlad je bezpečný jako pojistka i bez ohledu na
+    # to, jestli se model překladem řídil. (Kód 0 pro 21 % takhle bezpečně
+    # přeložit nejde – 0 % je zároveň platná skutečná sazba, takže se musí
+    # spolehnout jen na prompt.)
+    if rate == Decimal('23'):
+        return Decimal('12')
+
     # OCR občas přečte 12 jako 1,2 nebo 120. Přichytneme se nejbližší platné sazby.
     closest = min(ALLOWED_VAT_RATES, key=lambda allowed: abs(allowed - rate))
     warnings.append(

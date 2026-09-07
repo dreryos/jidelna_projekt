@@ -70,7 +70,13 @@ ANNOTATION_PROMPT = (
     'při koupi...", „Kup více = plať méně") nezakládej jako vlastní položku '
     '– odečti jejich částku od cena_bez_dph a cena_celkem té položky, ke '
     'které se vztahují (řádek nad nimi), a jednotkovou cenu cena_za_mj '
-    'přepočti podle takhle sníženého součtu.'
+    'přepočti podle takhle sníženého součtu. '
+    'Účtenka MAKRO z pokladny (ne webshopový dodací list – pozná se podle '
+    'čárového kódu „FAKTURA – DAŇOVÝ DOKLAD" v záhlaví a útržku o platbě '
+    'kartou/kontaktless dole) nepíše u položek sazbu DPH rovnou v procentech, '
+    'ale interní kód sazbové skupiny: kód 23 znamená sazbu 12 %, kód 0 '
+    'znamená sazbu 21 %. Na tomhle typu účtenky dph_procenta vyplň už '
+    'přeloženou skutečnou sazbou (12 nebo 21), ne tím kódem.'
 )
 
 
