@@ -308,9 +308,19 @@ document.addEventListener('DOMContentLoaded', function() {
         // Připojíme nové handlery
         document.querySelectorAll('.remove-coefficient-btn').forEach(btn => {
             btn.addEventListener('click', function() {
+                // Musí zůstat aspoň jeden koeficient (formset vyžaduje min_num=1)
+                const activeRows = Array.from(coefficientFormsContainer.querySelectorAll('.coefficient-form-row')).filter(r => {
+                    const del = r.querySelector('input[name$="-DELETE"]');
+                    return !del || !del.checked;
+                });
+                if (activeRows.length <= 1) {
+                    alert('Musí zůstat aspoň jeden koeficient porcí.');
+                    return;
+                }
+
                 const row = this.closest('.coefficient-form-row');
                 const deleteCheckbox = row.querySelector('input[name$="-DELETE"]');
-                
+
                 if (deleteCheckbox) {
                     // Pokud má formulář ID (existující objekt), označíme ho pro smazání
                     const idInput = row.querySelector('input[name$="-id"]');
