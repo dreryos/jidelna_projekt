@@ -71,7 +71,14 @@
                         </div>
 
                         {{ coefficient_formset.management_form }}
-                        
+                        {% if coefficient_formset.non_form_errors %}
+                            <div class="alert alert-danger">
+                                {% for error in coefficient_formset.non_form_errors %}
+                                    <div>{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+
                         <div id="coefficient-forms">
                             {% for coef_form in coefficient_formset %}
                                 <div class="coefficient-form-row border rounded p-3 mb-3" data-form-index="{{ forloop.counter0 }}">
@@ -184,13 +191,34 @@ document.addEventListener('DOMContentLoaded', function() {
             if (badge) {
                 badge.textContent = index + 1;
             }
-            
+
             // Aktualizace pořadí
             const orderInput = row.querySelector('input[name$="-order"]');
             if (orderInput && !orderInput.value) {
                 orderInput.value = index;
             }
         });
+    }
+
+    // Přeindexování formulářů na souvislé indexy 0..N-1 (nutné po smazání
+    // řádku, jinak zůstane v name/id atributech mezera a Django formset
+    // pak neumí zbylá data správně napárovat - formulář "zamrzne")
+    function reindexForms() {
+        const rows = coefficientFormsContainer.querySelectorAll('.coefficient-form-row');
+        rows.forEach((row, index) => {
+            row.setAttribute('data-form-index', index);
+            const fields = row.querySelectorAll('input, select, textarea');
+            fields.forEach(field => {
+                const name = field.getAttribute('name');
+                if (name) {
+                    const newName = name.replace(/default_coefficients-\d+-/, `default_coefficients-${index}-`);
+                    field.setAttribute('name', newName);
+                    field.setAttribute('id', `id_${newName}`);
+                }
+            });
+        });
+        totalFormsInput.value = rows.length;
+        updateRowNumbers();
     }
     
     // Funkce pro získání HTML nového formuláře
@@ -280,9 +308,19 @@ document.addEventListener('DOMContentLoaded', function() {
         // Připojíme nové handlery
         document.querySelectorAll('.remove-coefficient-btn').forEach(btn => {
             btn.addEventListener('click', function() {
+                // Musí zůstat aspoň jeden koeficient (formset vyžaduje min_num=1)
+                const activeRows = Array.from(coefficientFormsContainer.querySelectorAll('.coefficient-form-row')).filter(r => {
+                    const del = r.querySelector('input[name$="-DELETE"]');
+                    return !del || !del.checked;
+                });
+                if (activeRows.length <= 1) {
+                    alert('Musí zůstat aspoň jeden koeficient porcí.');
+                    return;
+                }
+
                 const row = this.closest('.coefficient-form-row');
                 const deleteCheckbox = row.querySelector('input[name$="-DELETE"]');
-                
+
                 if (deleteCheckbox) {
                     // Pokud má formulář ID (existující objekt), označíme ho pro smazání
                     const idInput = row.querySelector('input[name$="-id"]');
@@ -290,17 +328,15 @@ document.addEventListener('DOMContentLoaded', function() {
                         deleteCheckbox.checked = true;
                         row.style.display = 'none';
                     } else {
-                        // Nový formulář - prostě ho odstraníme z DOM
+                        // Nový formulář - odstraníme z DOM a přeindexujeme zbylé,
+                        // aby name/id atributy zůstaly souvislé (0..N-1)
                         row.remove();
-                        // Snížíme počet formulářů
-                        totalFormsInput.value = parseInt(totalFormsInput.value) - 1;
+                        reindexForms();
                     }
                 } else {
                     row.remove();
-                    totalFormsInput.value = parseInt(totalFormsInput.value) - 1;
+                    reindexForms();
                 }
-                
-                updateRowNumbers();
             });
         });
     }

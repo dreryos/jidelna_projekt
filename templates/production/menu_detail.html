@@ -916,9 +916,14 @@ document.addEventListener('DOMContentLoaded', function() {
         
         document.querySelectorAll('.remove-variant-btn').forEach(btn => {
             btn.addEventListener('click', function() {
-                const row = this.closest('.variant-row');
-                row.remove();
-                updateTotalEffective();
+                // Musí zůstat aspoň jedna varianta
+                if (document.querySelectorAll('.variant-row').length > 1) {
+                    const row = this.closest('.variant-row');
+                    row.remove();
+                    updateTotalEffective();
+                } else {
+                    alert('Musí zůstat aspoň jedna varianta porcí.');
+                }
             });
         });
         
