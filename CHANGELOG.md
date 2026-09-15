@@ -8,6 +8,11 @@ a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
 ## [Unreleased]
 
 ### Added
+- **Hromadné odebrání surovin ve výdejce** (15.9.2026)
+  - Na stránce editace výdejky (`/production/vydejky/<id>/edit/`) lze zaškrtnout více nevydaných surovin naráz a odebrat je jedním tlačítkem **Smazat vybrané**
+  - Funguje v obou tabulkách – v rámci plánovaných jídel i u položek vydaných mimo jídlo; zaškrtnout jde jen položka, která ještě nebyla vydána
+  - Hromadné mazání jede stejnou cestou jako dosavadní koš u jednotlivého řádku, včetně uvolnění blokace na skladu
+
 - **Import příjemky z fotky dokladu (OCR)** (2.–7.9.2026)
   - Nový třífázový průvodce `/inventory/photo-import/`: nahrání fotky → kontrola rozpoznaných dat → vytvoření příjemky
   - Rozpoznávání dodacích listů, prodejek a faktur přes Mistral OCR (`apps/inventory/ocr/`: `client`, `normalize`, `quirks`, `schema`, `storage`)
