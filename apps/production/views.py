@@ -1048,22 +1048,25 @@ def _handle_deleted_items(request, document):
         )
 
     deleted_count = 0
+    deleted_names = []
     if items:
-        names = [item.ingredient.name for item in items]
         with transaction.atomic():
             for item in items:
-                item.delete()
-                deleted_count += 1
+                ingredient_name = item.ingredient.name
+                removed, _ = item.delete()
+                if removed:
+                    deleted_count += 1
+                    deleted_names.append(ingredient_name)
 
         if deleted_count == 1:
             messages.success(
                 request,
-                f'Surovina {names[0]} byla odebrána z výdejky.'
+                f'Surovina {deleted_names[0]} byla odebrána z výdejky.'
             )
-        else:
-            shown = names[:5]
+        elif deleted_count > 1:
+            shown = deleted_names[:5]
             names_text = ', '.join(shown)
-            if len(names) > 5:
+            if len(deleted_names) > 5:
                 names_text += ', …'
             messages.success(
                 request,

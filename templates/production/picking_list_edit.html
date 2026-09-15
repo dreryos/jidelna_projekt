@@ -606,12 +606,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (row) row.classList.toggle('marked-for-delete', checkbox.checked);
         var qtyInput = row ? row.querySelector('.qty-actual') : null;
         if (qtyInput) {
-            if (checkbox.checked) {
-                qtyInput.value = '';
-                qtyInput.disabled = true;
-            } else {
-                qtyInput.disabled = false;
-            }
+            qtyInput.disabled = checkbox.checked;
         }
     }
 
