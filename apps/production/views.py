@@ -992,6 +992,105 @@ def _handle_unissued_items(request, document):
     return unissued_count
 
 
+def _handle_deleted_items(request, document):
+    """Odebrání surovin z výdejky: jednotlivě košem (`delete_item_<id>`)
+    nebo hromadně přes zaškrtnuté checkboxy (`delete_items`), potvrzené
+    tlačítkem `bulk_delete_items`. Maže se výhradně per-instance (NE
+    queryset.delete()), protože post_delete signál
+    release_blocked_quantity_on_delete uvolňuje blokaci na skladu u každé
+    PENDING položky zvlášť. Musí se volat PŘED sestavením mapy položek níže
+    ve view, jinak by následné item.save() smazanou položku znovu vložilo.
+    Vrací počet smazaných položek."""
+    ids = set()
+
+    for key in request.POST.keys():
+        if not key.startswith('delete_item_'):
+            continue
+        try:
+            ids.add(int(key.rsplit('_', 1)[1]))
+        except (ValueError, IndexError):
+            continue
+
+    bulk_requested = bool(request.POST.get('bulk_delete_items'))
+    bulk_ids_raw = request.POST.getlist('delete_items')
+    if bulk_requested:
+        for raw_id in bulk_ids_raw:
+            try:
+                ids.add(int(raw_id))
+            except (ValueError, TypeError):
+                continue
+    elif bulk_ids_raw:
+        # Zaškrtnuté řádky odeslané jiným tlačítkem (např. "Uložit změny") -
+        # bez explicitního potvrzení bulk tlačítkem se nic nemaže.
+        messages.warning(
+            request,
+            'Vybrané položky nebyly odebrány – použijte tlačítko "Smazat vybrané".'
+        )
+
+    if not ids:
+        return 0
+
+    items = list(
+        PickingList.objects.filter(
+            id__in=ids,
+            document=document,
+            status=PickingList.Status.PENDING,
+        ).select_related('ingredient')
+    )
+    skipped = ids - {item.id for item in items}
+    if skipped:
+        logger.warning(
+            "picking_list_edit delete: skipped ids not PENDING/foreign/missing: "
+            "document_id=%s user_id=%s ids=%s",
+            document.id,
+            request.user.id,
+            sorted(skipped),
+        )
+
+    deleted_count = 0
+    deleted_names = []
+    if items:
+        with transaction.atomic():
+            for item in items:
+                ingredient_name = item.ingredient.name
+                removed, _ = item.delete()
+                if removed:
+                    deleted_count += 1
+                    deleted_names.append(ingredient_name)
+
+        if deleted_count == 1:
+            messages.success(
+                request,
+                f'Surovina {deleted_names[0]} byla odebrána z výdejky.'
+            )
+        elif deleted_count > 1:
+            shown = deleted_names[:5]
+            names_text = ', '.join(shown)
+            if len(deleted_names) > 5:
+                names_text += ', …'
+            messages.success(
+                request,
+                f'Odebráno {deleted_count} surovin z výdejky: {names_text}. '
+                f'Blokace na skladu byly uvolněny.'
+            )
+
+    if skipped:
+        messages.warning(
+            request,
+            f'{len(skipped)} položek nebylo odebráno – jsou už vydané nebo mezitím zmizely.'
+        )
+
+    logger.info(
+        "picking_list_edit delete: document_id=%s user_id=%s requested=%s deleted=%s skipped=%s",
+        document.id,
+        request.user.id,
+        len(ids),
+        deleted_count,
+        len(skipped),
+    )
+    return deleted_count
+
+
 def _get_or_create_lazy_meal_order(document, day_date, meal_type,
                                     recipe_name, recipe_code):
     """Vrátí (a případně lazy založí) výrobní příkaz pro jídlo, které v
@@ -1168,31 +1267,12 @@ def picking_list_edit(request, document_id):
             completed_count_after_save = 0
             pending_count_after_save = 0
 
-            # Odebrání surovin košem: nepoužitá surovina se odstraní z výdejky.
+            # Odebrání surovin: jednotlivě košem (delete_item_<id>) nebo
+            # hromadně přes checkboxy (delete_items + bulk_delete_items).
             # Musí proběhnout PŘED sestavením mapy položek níže, jinak by
             # následné item.save() smazanou položku znovu vložilo.
             # post_delete signál uvolní blokaci na skladu u PENDING položek.
-            for key in list(request.POST.keys()):
-                if not key.startswith('delete_item_'):
-                    continue
-                try:
-                    del_item_id = int(key.rsplit('_', 1)[1])
-                except (ValueError, IndexError):
-                    continue
-                item = PickingList.objects.filter(
-                    id=del_item_id,
-                    document=document,
-                    status=PickingList.Status.PENDING,
-                ).select_related('ingredient').first()
-                if item is None:
-                    continue
-                ingredient_name = item.ingredient.name
-                item.delete()
-                deleted_count += 1
-                messages.success(
-                    request,
-                    f'Surovina {ingredient_name} byla odebrána z výdejky.'
-                )
+            deleted_count = _handle_deleted_items(request, document)
 
             # Zrušení výdeje (COMPLETED→PENDING) musí proběhnout PŘED
             # quantity-loop – viz _handle_unissued_items

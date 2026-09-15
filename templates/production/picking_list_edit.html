@@ -71,6 +71,21 @@
 .meal-issue-all-btn {
     font-size: 0.8rem;
 }
+#bulk-delete-bar {
+    position: sticky;
+    top: 70px;
+    z-index: 100;
+}
+.item-delete-checkbox {
+    width: 1.15rem;
+    height: 1.15rem;
+    cursor: pointer;
+    accent-color: #dc3545;
+}
+tr.marked-for-delete td {
+    background-color: #f8d7da !important;
+    opacity: 0.7;
+}
 </style>
 {% endblock %}
 
@@ -121,7 +136,7 @@
 
 <div class="alert alert-info mb-3">
   <i class="fas fa-info-circle me-2"></i>
-  <strong>Instrukce:</strong> Zadejte skutečně vydaná množství. Vyplněný řádek se při uložení automaticky vydá a odečte ze skladu. Prázdné pole zůstane beze změny. Nepoužitou surovinu odeberte košem. Špatně vydané množství opravíte tlačítkem <strong>Zrušit výdej</strong>.
+  <strong>Instrukce:</strong> Zadejte skutečně vydaná množství. Vyplněný řádek se při uložení automaticky vydá a odečte ze skladu. Prázdné pole zůstane beze změny. Nepoužitou surovinu odeberte košem. Více surovin naráz odeberete zaškrtnutím a tlačítkem <strong>Smazat vybrané</strong>. Špatně vydané množství opravíte tlačítkem <strong>Zrušit výdej</strong>.
 </div>
 {% endif %}
 
@@ -155,6 +170,23 @@
       </div>
     </div>
   </div>
+
+  {% if not readonly_mode %}
+  <div id="bulk-delete-bar" class="alert alert-danger py-2 mb-3" style="display:none;">
+    <div class="d-flex justify-content-between align-items-center">
+      <span>Vybráno k odebrání: <strong id="bulk-delete-count">0</strong> položek</span>
+      <div class="d-flex gap-2">
+        <button type="button" id="bulk-delete-clear" class="btn btn-sm btn-outline-secondary">
+          Zrušit výběr
+        </button>
+        <button type="submit" id="bulk-delete-submit" name="bulk_delete_items" value="1"
+                class="btn btn-sm btn-danger" disabled>
+          <i class="fas fa-trash me-1"></i>Smazat vybrané (<span id="bulk-delete-count-btn">0</span>)
+        </button>
+      </div>
+    </div>
+  </div>
+  {% endif %}
 
   {% for day, meals in daily_picking_data %}
   <div class="mb-4">
@@ -207,8 +239,13 @@
           <table class="table table-sm table-hover table-ingredients mb-0">
             <thead>
               <tr>
+                <th style="width:3%; text-align:center;">
+                  {% if not readonly_mode %}
+                  <input type="checkbox" class="form-check-input select-all-items" title="Vybrat všechny neodevzdané">
+                  {% endif %}
+                </th>
                 <th style="width:3%; text-align:center;">#</th>
-                <th style="width:32%;">Surovina</th>
+                <th style="width:29%;">Surovina</th>
                 <th style="width:13%; text-align:center;">Plánováno</th>
                 <th style="width:7%; text-align:center;">Jedn.</th>
                 <th style="width:20%; text-align:center;">Skutečně vydáno</th>
@@ -219,6 +256,13 @@
               {% for ing in meal.ingredients %}
               <tr class="{% if not ing.has_stock %}table-danger{% elif not ing.is_sufficient %}table-warning{% endif %}{% if ing.status == 'COMPLETED' %} row-issued{% endif %}"
                   data-item-id="{{ ing.item_id|unlocalize }}">
+                <td class="text-center no-strike">
+                  {% if not readonly_mode and ing.status != 'COMPLETED' %}
+                  <input type="checkbox" class="form-check-input item-delete-checkbox"
+                         name="delete_items" value="{{ ing.item_id|unlocalize }}"
+                         data-ingredient="{{ ing.name }}">
+                  {% endif %}
+                </td>
                 <td style="text-align:center; font-weight:bold;">
                   {% if not ing.has_stock %}
                     <i class="fas fa-times-circle text-danger" title="Není na skladě"></i>
@@ -366,6 +410,11 @@
           <table class="table table-sm table-hover">
             <thead>
               <tr>
+                <th class="text-center" style="width:40px;">
+                  {% if not readonly_mode %}
+                  <input type="checkbox" class="form-check-input select-all-items" title="Vybrat všechny neodevzdané">
+                  {% endif %}
+                </th>
                 <th>Surovina</th>
                 <th>Sklad</th>
                 <th>Plánované množství</th>
@@ -377,6 +426,13 @@
             <tbody>
               {% for item in items_without_orders %}
               <tr>
+                <td class="text-center">
+                  {% if not readonly_mode and item.status != 'COMPLETED' %}
+                  <input type="checkbox" class="form-check-input item-delete-checkbox"
+                         name="delete_items" value="{{ item.id|unlocalize }}"
+                         data-ingredient="{{ item.ingredient.name }}">
+                  {% endif %}
+                </td>
                 <td>{{ item.ingredient.name }}</td>
                 <td>{{ item.warehouse.name }}</td>
                 <td>{{ item.quantity_planned }} {{ item.ingredient.base_unit }}</td>
@@ -480,7 +536,7 @@
         <ul class="mb-0">
           <li><strong>Vyplněné</strong> skutečné množství – řádek se vydá a automaticky odečte ze skladu</li>
           <li><strong>Prázdné</strong> pole – řádek zůstane beze změny, surovina zůstane zablokována</li>
-          <li>Nepoužitou surovinu odeberte <strong>košem</strong> – uvolní se blokace na skladu</li>
+          <li>Nepoužitou surovinu odeberte <strong>košem</strong>, nebo víc naráz zaškrtnutím a tlačítkem <strong>Smazat vybrané</strong> – uvolní se blokace na skladu</li>
           <li>Špatně vydané množství opravíte tlačítkem <strong>Zrušit výdej</strong> – řádek se vrátí na sklad a zadáte znovu</li>
         </ul>
       </div>
@@ -509,9 +565,99 @@ document.addEventListener('DOMContentLoaded', function () {
             const name = this.dataset.ingredient || 'tuto surovinu';
             if (!window.confirm(`Odebrat „${name}" z výdejky? Blokace na skladu se uvolní.`)) {
                 e.preventDefault();
+                return;
             }
+            // Koš maže jen tento řádek - zaškrtnuté bulk checkboxy by se
+            // odeslaly spolu s ním, proto je před odesláním vyčistíme.
+            document.querySelectorAll('.item-delete-checkbox:checked').forEach(function (cb) {
+                cb.checked = false;
+            });
+            updateBulkBar();
         });
     });
+
+    // --- Hromadné odebrání surovin ---
+    var bulkBar = document.getElementById('bulk-delete-bar');
+    var bulkCount = document.getElementById('bulk-delete-count');
+    var bulkCountBtn = document.getElementById('bulk-delete-count-btn');
+    var bulkSubmit = document.getElementById('bulk-delete-submit');
+    var bulkClear = document.getElementById('bulk-delete-clear');
+
+    function updateBulkBar() {
+        var checked = document.querySelectorAll('.item-delete-checkbox:checked');
+        var n = checked.length;
+        if (bulkCount) bulkCount.textContent = n;
+        if (bulkCountBtn) bulkCountBtn.textContent = n;
+        if (bulkBar) bulkBar.style.display = n > 0 ? '' : 'none';
+        if (bulkSubmit) bulkSubmit.disabled = n === 0;
+
+        document.querySelectorAll('table').forEach(function (table) {
+            var boxes = table.querySelectorAll('.item-delete-checkbox');
+            var selectAll = table.querySelector('.select-all-items');
+            if (!selectAll || boxes.length === 0) return;
+            var checkedInTable = table.querySelectorAll('.item-delete-checkbox:checked').length;
+            selectAll.checked = checkedInTable === boxes.length;
+            selectAll.indeterminate = checkedInTable > 0 && checkedInTable < boxes.length;
+        });
+    }
+
+    function toggleRowForDelete(checkbox) {
+        var row = checkbox.closest('tr');
+        if (row) row.classList.toggle('marked-for-delete', checkbox.checked);
+        var qtyInput = row ? row.querySelector('.qty-actual') : null;
+        if (qtyInput) {
+            qtyInput.disabled = checkbox.checked;
+        }
+    }
+
+    document.addEventListener('change', function (e) {
+        var checkbox = e.target.closest('.item-delete-checkbox');
+        if (checkbox) {
+            toggleRowForDelete(checkbox);
+            updateBulkBar();
+            return;
+        }
+        var selectAll = e.target.closest('.select-all-items');
+        if (selectAll) {
+            var table = selectAll.closest('table');
+            if (!table) return;
+            table.querySelectorAll('.item-delete-checkbox').forEach(function (cb) {
+                cb.checked = selectAll.checked;
+                toggleRowForDelete(cb);
+            });
+            updateBulkBar();
+        }
+    });
+
+    if (bulkClear) {
+        bulkClear.addEventListener('click', function () {
+            document.querySelectorAll('.item-delete-checkbox:checked').forEach(function (cb) {
+                cb.checked = false;
+                toggleRowForDelete(cb);
+            });
+            document.querySelectorAll('.select-all-items').forEach(function (sa) {
+                sa.checked = false;
+                sa.indeterminate = false;
+            });
+            updateBulkBar();
+        });
+    }
+
+    if (bulkSubmit) {
+        bulkSubmit.addEventListener('click', function (e) {
+            var checked = document.querySelectorAll('.item-delete-checkbox:checked');
+            var names = Array.prototype.map.call(checked, function (cb) {
+                return cb.dataset.ingredient || '';
+            }).filter(Boolean);
+            var shown = names.slice(0, 5).join(', ') + (names.length > 5 ? ', …' : '');
+            if (!window.confirm(
+                `Odebrat ${checked.length} vybraných surovin z výdejky?\n${shown}\n` +
+                `Blokace na skladu se uvolní. Tato akce je nevratná.`
+            )) {
+                e.preventDefault();
+            }
+        });
+    }
 
     // Potvrzení před zrušením výdeje (vrácení na sklad kvůli opravě)
     document.querySelectorAll('.btn-unissue-item').forEach(function (btn) {
