@@ -260,7 +260,8 @@ tr.marked-for-delete td {
                   {% if not readonly_mode and ing.status != 'COMPLETED' %}
                   <input type="checkbox" class="form-check-input item-delete-checkbox"
                          name="delete_items" value="{{ ing.item_id|unlocalize }}"
-                         data-ingredient="{{ ing.name }}">
+                         data-ingredient="{{ ing.name }}"
+                         aria-label="Odebrat surovinu {{ ing.name }}">
                   {% endif %}
                 </td>
                 <td style="text-align:center; font-weight:bold;">
@@ -430,7 +431,8 @@ tr.marked-for-delete td {
                   {% if not readonly_mode and item.status != 'COMPLETED' %}
                   <input type="checkbox" class="form-check-input item-delete-checkbox"
                          name="delete_items" value="{{ item.id|unlocalize }}"
-                         data-ingredient="{{ item.ingredient.name }}">
+                         data-ingredient="{{ item.ingredient.name }}"
+                         aria-label="Odebrat surovinu {{ item.ingredient.name }}">
                   {% endif %}
                 </td>
                 <td>{{ item.ingredient.name }}</td>

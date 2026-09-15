@@ -1030,14 +1030,45 @@ def _handle_deleted_items(request, document):
     if not ids:
         return 0
 
-    items = list(
-        PickingList.objects.filter(
-            id__in=ids,
-            document=document,
-            status=PickingList.Status.PENDING,
-        ).select_related('ingredient')
-    )
-    skipped = ids - {item.id for item in items}
+    deleted_count = 0
+    deleted_names = []
+    skipped = set()
+    with transaction.atomic():
+        for item_id in sorted(ids):
+            item = (
+                PickingList.objects.select_for_update()
+                .select_related('ingredient')
+                .filter(id=item_id, document=document)
+                .first()
+            )
+            if item is None or item.status != PickingList.Status.PENDING:
+                skipped.add(item_id)
+                continue
+
+            ingredient_name = item.ingredient.name
+            removed, _ = item.delete()
+            if removed:
+                deleted_count += 1
+                deleted_names.append(ingredient_name)
+            else:
+                skipped.add(item_id)
+
+    if deleted_count == 1:
+        messages.success(
+            request,
+            f'Surovina {deleted_names[0]} byla odebrána z výdejky.'
+        )
+    elif deleted_count > 1:
+        shown = deleted_names[:5]
+        names_text = ', '.join(shown)
+        if len(deleted_names) > 5:
+            names_text += ', …'
+        messages.success(
+            request,
+            f'Odebráno {deleted_count} surovin z výdejky: {names_text}. '
+            f'Blokace na skladu byly uvolněny.'
+        )
+
     if skipped:
         logger.warning(
             "picking_list_edit delete: skipped ids not PENDING/foreign/missing: "
@@ -1046,33 +1077,6 @@ def _handle_deleted_items(request, document):
             request.user.id,
             sorted(skipped),
         )
-
-    deleted_count = 0
-    deleted_names = []
-    if items:
-        with transaction.atomic():
-            for item in items:
-                ingredient_name = item.ingredient.name
-                removed, _ = item.delete()
-                if removed:
-                    deleted_count += 1
-                    deleted_names.append(ingredient_name)
-
-        if deleted_count == 1:
-            messages.success(
-                request,
-                f'Surovina {deleted_names[0]} byla odebrána z výdejky.'
-            )
-        elif deleted_count > 1:
-            shown = deleted_names[:5]
-            names_text = ', '.join(shown)
-            if len(deleted_names) > 5:
-                names_text += ', …'
-            messages.success(
-                request,
-                f'Odebráno {deleted_count} surovin z výdejky: {names_text}. '
-                f'Blokace na skladu byly uvolněny.'
-            )
 
     if skipped:
         messages.warning(
@@ -2741,4 +2745,3 @@ def bulk_reset_overrides(request, menu_pk, *args, **kwargs):
     except Exception as e:
         logger.error(f"Error in bulk_reset_overrides for menu {menu_pk}: {e}", exc_info=True)
         return JsonResponse({'success': False, 'error': 'Chyba při resetování úprav.'}, status=500)
-

@@ -400,6 +400,38 @@ class PickingBulkDeleteTest(TestCase):
         self.stocks['Mouka'].refresh_from_db()
         self.assertEqual(self.stocks['Mouka'].quantity_blocked, Decimal('0.000'))
 
+    def test_bulk_delete_removes_outside_meal_item_and_unblocks(self):
+        outside_ingredient = Ingredient.objects.create(
+            name='Pepř', unit='kg', base_unit='kg', recipe_unit='kg',
+            conversion_factor=Decimal('1.0'),
+        )
+        outside_stock = StockItem.objects.create(
+            warehouse=self.warehouse,
+            ingredient=outside_ingredient,
+            quantity=Decimal('50.000'),
+            price=Decimal('1.00'),
+        )
+        outside_item = PickingList.objects.create(
+            production_order=None,
+            document=self.document,
+            warehouse=self.warehouse,
+            ingredient=outside_ingredient,
+            quantity_planned=Decimal('1.500'),
+            status=PickingList.Status.PENDING,
+        )
+        outside_stock.refresh_from_db()
+        self.assertEqual(outside_stock.quantity_blocked, Decimal('1.500'))
+
+        response = self.client.post(self._url(), data={
+            'bulk_delete_items': '1',
+            'delete_items': [outside_item.id],
+        })
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(PickingList.objects.filter(id=outside_item.id).exists())
+        outside_stock.refresh_from_db()
+        self.assertEqual(outside_stock.quantity, Decimal('50.000'))
+        self.assertEqual(outside_stock.quantity_blocked, Decimal('0.000'))
+
     def test_edit_page_renders_bulk_delete_checkboxes(self):
         """GET stránky obsahuje bulk checkboxy a tlačítko Smazat vybrané."""
         response = self.client.get(self._url())
