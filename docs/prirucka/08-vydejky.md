@@ -49,6 +49,7 @@ Desetinná čísla lze psát s čárkou i tečkou.
 ### Odebrání nepoužité suroviny
 
 Surovinu, kterou nakonec nepoužijete, odeberete z výdejky **košem** u řádku (jen dokud není vydaná). Blokace na skladu se tím uvolní, jako by položka ve výdejce nikdy nebyla.
+Potřebujete-li odebrat více řádků najednou, zaškrtněte nevydané položky (funguje stejně u jídel i v tabulce *Vydáno mimo plánovaná jídla*) a potvrďte tlačítko **Smazat vybrané**.
 
 ### Oprava omylem vydaného množství
 
