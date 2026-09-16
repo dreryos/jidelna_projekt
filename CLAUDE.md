@@ -49,10 +49,10 @@ docs/prirucka/    zdroje uživatelské příručky (MkDocs → staticdocs/ → /
 ## Pravidla pro změny
 
 - **Stavové přechody patří na model**, ne do views (`confirm()`, `start_transfer()`, `complete()`, …). Views jen volají metodu a překládají `ValidationError` na hlášku přes `messages`.
-- **Žádný zápis do `StockItem` mimo `transaction.atomic` se `select_for_update()`** a žádná změna množství mimo dokladové metody.
-- **Doklad = hlavička se stavem + položky** s `unique_together` (doklad, surovina). Nový typ dokladu modeluj podle `StockWriteOff`.
+- **Zápisy do `StockItem` v novém kódu dělej v `transaction.atomic` a se `select_for_update()` tam, kde DB podporuje řádkové zámky.** U SQLite `select_for_update()` neposkytuje řádkový zámek, počítej s tím při návrhu souběhu.
+- **Doklad = hlavička se stavem + položky; u nových typů dokladů drž jednu položku suroviny na doklad** (constraint doplň podle potřeby). Nový typ dokladu modeluj podle `StockWriteOff`.
 - **Ceny nepočítej znovu ve view** — čti přes `calculate_portion_price()`, `get_prices_bulk()`.
-- **Data jsou scoped na jídelnu.** Každý queryset musí respektovat jídelny uživatele (`UserProfile.canteens`); superuser vidí vše. `ReadOnlyUserMiddleware` blokuje zápis uživatelům s `is_readonly`.
+- **Data navázaná na jídelnu scopeuj podle jídelny.** Každý queryset u canteen-modelů musí respektovat jídelny uživatele (`UserProfile.canteens`); globální katalogy (`Ingredient`, `Recipe`, `Supplier`) jsou sdílené. Superuser vidí vše. `ReadOnlyUserMiddleware` blokuje zápis uživatelům s `is_readonly`.
 - **Migrace** vždy vygeneruj a přilož ke commitu, který mění model.
 
 ## Šablonové pasti (opakovaně kousaly)

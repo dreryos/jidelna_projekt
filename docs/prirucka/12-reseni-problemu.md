@@ -79,4 +79,4 @@ Do hlášení uveďte:
 
 ---
 
-*Technická poznámka pro vývojáře: Hlášky vznikají převážně jako `ValidationError` v modelových metodách (`apps/inventory/models.py`, `apps/production/models.py`) a přes `messages` framework ve views. Hlášky importu příjemky z fotky vznikají jako `OcrError` a přes `messages` ve `photo_import_step1..3` (`apps/inventory/views.py`). Server loguje do `logs/`; chyby 500 viz `server_error.log`. Diagnostický příkaz pro nesoulad blokací: `manage.py recalculate_blocked_quantities`.*
+*Technická poznámka pro vývojáře: Hlášky vznikají převážně jako `ValidationError` v modelových metodách (`apps/inventory/models.py`, `apps/production/models.py`) a přes `messages` framework ve views. Hlášky importu příjemky z fotky vznikají jako `OcrError` a přes `messages` ve `photo_import_step1..3` (`apps/inventory/views.py`). Server loguje do `logs/`; chyby 500 hledejte v `logs/audit.log`. Diagnostický příkaz pro nesoulad blokací: `manage.py recalculate_blocked_quantities`.*

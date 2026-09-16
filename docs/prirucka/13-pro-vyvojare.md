@@ -66,7 +66,7 @@ Konvence: doklad = hlavička se stavem + položky s `unique_together` (doklad, s
 
 ## Souběh a transakce
 
-Všechny vícekrokové skladové operace běží v `transaction.atomic` a berou skladové karty přes `select_for_update()` (převodky, inventura, potvrzení příjemky). Při rozšiřování dodržujte: **žádný zápis do `StockItem` mimo transakci s řádkovým zámkem** a žádná změna množství mimo dokladové metody.
+Všechny vícekrokové skladové operace běží v `transaction.atomic` a berou skladové karty přes `select_for_update()` (převodky, inventura, potvrzení příjemky). Při rozšiřování dodržujte: **zápisy do `StockItem` v novém kódu dělejte v transakci a se zámkem tam, kde to DB umí**; na SQLite `select_for_update()` neposkytuje řádkové zámky, takže je potřeba s tím při návrhu souběhu počítat.
 
 ## Jak spustit vývoj
 
@@ -76,7 +76,7 @@ python -m venv .venv && .venv/bin/pip install -r requirements.txt
 .venv/bin/python manage.py createsuperuser
 .venv/bin/python manage.py import_recipes_xml docs/recipebook.xml   # volitelně data
 .venv/bin/python manage.py runserver
-.venv/bin/python -m pytest        # testy
+.venv/bin/python -m pytest apps test        # testy
 ```
 
 Alternativně `docker-compose up` (viz `Dockerfile`, `docker-entrypoint.sh`).
@@ -89,11 +89,11 @@ Import příjemky z fotky potřebuje `MISTRAL_API_KEY` (a volitelně `MISTRAL_OC
 * **Nový import** → vzor `apps/bufet/fiskalpro_parser.py`: čistý parser (bez DB) + vícekrokový průvodce se session + potvrzení tvoří doklad; testy parseru nad syntetickým souborem (`apps/bufet/tests.py`). Stejný vzor v `photo_import_step1..3`: `apps/inventory/ocr/` (parser/normalizace bez DB) + krokový průvodce se session (`photo_import_step1/2`) + potvrzení vytvoří `GoodsReceipt` (`photo_import_step3`). Test bez placeného API jde postavit nad uloženými anotacemi ve `test/fixtures/ocr/` (viz `ocr_replay`).
 * **Nová analytika** → čtěte přes existující kalkulační metody (`calculate_portion_price`, `get_prices_bulk`), nepočítejte ceny znovu ve view.
 * **Změna skladové logiky** → nejdřív testy: `test/test_stock_transfer_workflow.py`, `test/test_vat_implementation.py` ukazují očekávané invarianty.
-* Před commitem: `pytest`, u PDF změn ruční kontrola výstupu (černobílý tisk!), CHANGELOG.md záznam česky.
+* Před commitem: `.venv/bin/python -m pytest apps test`, u PDF změn ruční kontrola výstupu (černobílý tisk!), CHANGELOG.md záznam česky.
 
 ## Nápověda v aplikaci (tato příručka)
 
-Příručka z `docs/prirucka/` se builduje MkDocs (`mkdocs.yml` v kořeni, theme Material) do `staticdocs/` a servíruje se na `/napoveda/` za přihlášením (`help_index`/`help_page` v `apps/core/views.py` — záměrně mimo whitenoise, který je veřejný). Build spouští `docker-entrypoint.sh`; při vývoji `mkdocs build`, živý náhled `mkdocs serve`. Nová kapitola = nový `.md` soubor + řádek v `nav:` v `mkdocs.yml`; obrázky do `docs/prirucka/img/`.
+Příručka z `docs/prirucka/` se builduje MkDocs (`mkdocs.yml` v kořeni, theme Material) do `staticdocs/` a servíruje se na `/napoveda/` za přihlášením (`help_index`/`help_page` v `apps/core/views.py` — záměrně mimo whitenoise, který je veřejný). Build spouští `docker-entrypoint.sh`; při vývoji `.venv/bin/mkdocs build`, živý náhled `.venv/bin/mkdocs serve`. Nová kapitola = nový `.md` soubor + řádek v `nav:` v `mkdocs.yml`; obrázky do `docs/prirucka/img/`.
 
 ## Známé zvláštnosti
 

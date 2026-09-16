@@ -180,7 +180,7 @@ a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
   - Bez zadaného filtru se počítaly všechny výdejky od začátku provozu včetně dopočtu ceny porce k datu výdejky; neomezený rozsah vytížil workera do timeoutu
   - Bez filtru se použije posledních 30 dní (stejná konvence jako u analytiky odpisů) a datumová pole se tím rovnou předvyplní
 - **Neplatné datum ve filtru příjmů zboží** (7.9.2026)
-  - Ručně upravené `date_from`/`date_to` v URL spadlo na `ValidationError` místo hlášky; neplatné datum se nově tiše ignoruje
+  - Ručně upravené `date_from`/`date_to` v URL spadlo na `ValueError` místo hlášky; neplatné datum se nově tiše ignoruje
 - **Seznam naučených aliasů v adminu padal na 500** (7.9.2026)
   - `format_html()` bez formátovacího argumentu je od Djanga 5.0 tvrdá chyba; changelist spadl, jakmile v něm byl jediný odškrtnutý alias (doprava, obaly, zaokrouhlení)
   - Admin je přitom jediné místo, kde jde špatně naučené mapování opravit
