@@ -17,12 +17,12 @@ Celý projekt je česky — UI, hlášky, dokumentace, commit messages, komentá
 Vždy přes `.venv` — systémový Python nemá závislosti:
 
 ```bash
-.venv/bin/python -m pytest apps test    # všechny testy (335+)
+.venv/bin/python -m pytest apps test    # všechny testy (436)
 .venv/bin/python -m pytest test/test_ocr_client.py -k nazev
 .venv/bin/python manage.py check
 .venv/bin/python manage.py migrate
 .venv/bin/python manage.py runserver
-mkdocs build                            # nápověda → staticdocs/
+.venv/bin/mkdocs build                   # nápověda → staticdocs/
 ```
 
 - `pytest.ini` má `testpaths = test`, takže holý `pytest` **nespustí** testy v `apps/*/tests/` — proto vždy `pytest apps test`.
