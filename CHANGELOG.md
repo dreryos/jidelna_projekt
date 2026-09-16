@@ -13,6 +13,22 @@ a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
   - Funguje v obou tabulkách – v rámci plánovaných jídel i u položek vydaných mimo jídlo; zaškrtnout jde jen položka, která ještě nebyla vydána
   - Hromadné mazání jede stejnou cestou jako dosavadní koš u jednotlivého řádku, včetně uvolnění blokace na skladu
 
+- **Podpora dokladů MAKRO v rozpoznávání z fotky** (7.9.2026)
+  - Webshopový **dodací list k objednávce** (otočená tabulka Dodáno/Objednáno, Balení, Jedn. cena bez DPH) se rozpozná jako celek
+  - Doplněno chybějící přenásobení `pocet_v_baleni` — doklad uvádí zvlášť počet balení a kolik kusů je v balení; bez násobení se naskladnilo jedno balení místo celého závozu a chyba se projevila až na inventuře
+  - **Pokladní účtenka MAKRO** netiskne sazbu DPH v procentech, ale interní kód sazbové skupiny: kód 23 → 12 %, kód 0 → 21 %. Překlad nuly se pouští jen u účtenky MAKRO (podle IČO a typu dokladu), jinde zůstává 0 % platnou sazbou
+  - Rozpoznávání slev najde fráze „množstevní sleva" nebo „kup víc = plať míň" kdekoli v textu, nejen na začátku řádku
+
+- **Víc fotek jednoho dokladu naráz** (7.9.2026)
+  - Do kroku 1 fotoimportu lze vybrat několik fotek; server je poskládá do jednoho PDF a pošle do OCR jako jeden vícestránkový doklad
+  - Vícestránkový dodák (typicky MAKRO) už nemusí uživatel skládat do PDF sám
+  - Jeden soubor se posílá beze změny jako dřív; limit 25 MB platí na součet všech souborů, PDF mezi víc souborů se odmítne
+
+- **Filtrování a vyhledávání v seznamu příjmů zboží** (7.9.2026)
+  - Přibylo hledání podle čísla dokladu, filtr podle dodavatele a rozsah data příjmu; sklad a stav fungují beze změny
+  - Nabídka dodavatelů zahrnuje i deaktivované, pokud na ně ukazuje aspoň jedna příjemka — jinak by staré doklady nešlo dohledat
+  - Sloupec Dodavatel ukazuje přednostně přiřazeného dodavatele místo starého volného textu
+
 - **Import příjemky z fotky dokladu (OCR)** (2.–7.9.2026)
   - Nový třífázový průvodce `/inventory/photo-import/`: nahrání fotky → kontrola rozpoznaných dat → vytvoření příjemky
   - Rozpoznávání dodacích listů, prodejek a faktur přes Mistral OCR (`apps/inventory/ocr/`: `client`, `normalize`, `quirks`, `schema`, `storage`)
@@ -156,6 +172,18 @@ a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
   - Přidány testy: `test_admin_stockitem_readonly_fields_cannot_be_changed`, `test_stockitem_form_has_disabled_fields`
 
 ### Fixed
+- **Zamrznutí formuláře nového jídelníčku po smazání varianty porcí** (10.9.2026)
+  - Smazání koeficientu, který nebyl posledním řádkem, nechalo v indexaci formsetu mezeru; Django takový POST vyhodnotil jako neplatný a stránka se jen znovu vykreslila beze změny
+  - Řádky se po smazání přečíslují na souvislou řadu, chyby formsetu (`non_form_errors`) jsou nově vidět
+  - Poslední variantu porcí nejde smazat — ochrana doplněna i do editace existujícího jídla, kde dosud chyběla
+- **Analytika kuchařů padala na produkci do 520** (7.9.2026)
+  - Bez zadaného filtru se počítaly všechny výdejky od začátku provozu včetně dopočtu ceny porce k datu výdejky; neomezený rozsah vytížil workera do timeoutu
+  - Bez filtru se použije posledních 30 dní (stejná konvence jako u analytiky odpisů) a datumová pole se tím rovnou předvyplní
+- **Neplatné datum ve filtru příjmů zboží** (7.9.2026)
+  - Ručně upravené `date_from`/`date_to` v URL spadlo na `ValueError` místo hlášky; neplatné datum se nově tiše ignoruje
+- **Seznam naučených aliasů v adminu padal na 500** (7.9.2026)
+  - `format_html()` bez formátovacího argumentu je od Djanga 5.0 tvrdá chyba; changelist spadl, jakmile v něm byl jediný odškrtnutý alias (doprava, obaly, zaokrouhlení)
+  - Admin je přitom jediné místo, kde jde špatně naučené mapování opravit
 - **Import příjemky z fotky — opravy z ostrého provozu** (2.–7.9.2026)
   - Nevyplněný přepočet jednotek se bere jako 0, ne jako 1 — naučená jednička už nenaskladní balení místo kilogramů; NaN a nekonečno jsou odmítnuty
   - Přepočet přesně 1 lze zadat i pro nesouměřitelné jednotky a bere se jako platná odpověď
@@ -166,6 +194,8 @@ a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
   - Úklid starých skenů nesmí shodit nahrání dokladu (ošetřen i souběh a zmizelý den v `_purge_day`)
   - Návrh i zápis příjemky z fotky nespadnou do holé 500 — ošetřeno celé tělo view i plánování řádků, s logem a konkrétní hláškou
   - Kolize jména a slugu dodavatele nezpůsobí nebezpečný rollback katalogu
+  - Přechodný výpadek Mistral API (503, 429, síť bez odpovědi) se zopakuje až třikrát — uživatel nemusí vícestránkový doklad nahrávat znovu; chyba v požadavku (401, 400) se hlásí hned napoprvé
+  - Přenásobení `pocet_v_baleni` probíhá před dopočtem jednotkové ceny z řádkového součtu, ne po něm — jinak vyšla cena za kus `pocet_v_baleni`-krát předražená
 - **Víceřádkový `{# … #}` komentář v šablonách** (6.9.2026)
   - Django víceřádkový `{# #}` komentář neodstraní a text unikal do stránky — nahrazeno `{% comment %}`
 - **Lokalizace ID v atributech formulářů** (3.9.2026)
