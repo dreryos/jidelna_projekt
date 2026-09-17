@@ -137,6 +137,9 @@ cython_debug/
 # own files
 AIprompts.md
 .github/*
+# Workflows do repa patří - bez nich by GitHub Actions neměl co spouštět.
+# Zbytek .github zůstává ignorovaný podle původního záměru.
+!.github/workflows/
 /backups/*
 /picking_lists/*
 

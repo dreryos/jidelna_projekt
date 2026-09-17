@@ -38,6 +38,7 @@ staticfiles/
 # Pozor na `**`: vzory bez něj Docker vyhodnocuje jen proti kořeni kontextu,
 # takže samotné `__pycache__` nevyloučí `apps/core/__pycache__`.
 .git
+.github
 .claude
 .roo
 .venv

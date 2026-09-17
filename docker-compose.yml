@@ -29,7 +29,11 @@ services:
     # jde přes `docker compose exec db psql`.
 
   spiz:
-    image: dreryos/jidelna_projekt:latest
+    # GitHub Container Registry, ne Docker Hub. Image staví CI po merge do
+    # main (.github/workflows/testy-a-image.yml) - ručně stavěný image se
+    # dělat nemá, protože bere i soubory, které v gitu nejsou.
+    # Návrat na starší verzi: nahradit `latest` za `sha-<commit>`.
+    image: ghcr.io/dreryos/jidelna_projekt:latest
     depends_on:
       db:
         condition: service_healthy

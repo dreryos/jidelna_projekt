@@ -112,8 +112,11 @@ spiz/
 
 3. **Instalace závislostí:**
    ```bash
-   pip install -r requirements.txt
+   pip install -r requirements-dev.txt
    ```
+   Vývojový soubor stáhne i všechno z `requirements.txt` a navíc pytest.
+   Do image se instaluje jen `requirements.txt`, aby v něm testovací
+   nástroje zbytečně neležely.
 
 4. **Spuštění databáze:**
    ```bash
@@ -184,6 +187,26 @@ Většina má rozumnou výchozí hodnotu. Nastavit je potřeba `POSTGRES_PASSWOR
 | `MISTRAL_API_KEY` | prázdný | Klíč pro rozpoznávání dokladů z fotky. Bez něj je import z fotky vypnutý, zbytek aplikace běží dál |
 | `MISTRAL_OCR_MODEL` | `mistral-ocr-latest` | Model OCR |
 | `OCR_SCAN_RETENTION_DAYS` | `7` | Za jak dlouho se smažou nedokončené skeny dokladů |
+
+### Nasazení a build image
+
+Image staví **GitHub Actions** po merge do `main`
+(`.github/workflows/testy-a-image.yml`) a publikuje ho do GitHub Container
+Registry:
+
+```
+ghcr.io/dreryos/jidelna_projekt:latest
+ghcr.io/dreryos/jidelna_projekt:sha-<commit>
+```
+
+Před publikací musí projít celá testovací sada nad PostgreSQL. Tag
+`sha-<commit>` slouží k návratu na konkrétní dřívější verzi — stačí ho
+dosadit místo `latest` v `docker-compose.yml`.
+
+**Image nestavějte ručně.** `docker build` z pracovní kopie vezme i soubory,
+které nejsou v gitu (`.env`, `backups/`, `logs/`), a ty pak zůstanou natrvalo
+ve vrstvách publikovaného image. CI staví z čistého `git clone`, kde takové
+soubory nejsou.
 
 ## 📚 Dokumentace
 

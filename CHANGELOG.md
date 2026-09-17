@@ -7,6 +7,14 @@ a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+### Added
+- **Automatický build image přes GitHub Actions** (17.9.2026)
+  - Po merge do `main` se spustí celá testovací sada nad PostgreSQL a teprve pak se staví image. Dosud se stavěl ručně a publikoval bez ohledu na to, jestli kód funguje
+  - Image se publikuje do GitHub Container Registry (`ghcr.io/dreryos/jidelna_projekt`) místo Docker Hubu — pro veřejné image zdarma, autentizace vestavěným `GITHUB_TOKEN` bez tokenu k opatrování a bez limitů na stahování
+  - Kromě `latest` vzniká i tag `sha-<commit>`. Bez něj není na co zavěsit návrat na verzi, která běžela minulý týden
+  - Runner je nativní arm64 (`ubuntu-24.04-arm`) kvůli cílovému Oracle Ampere A1; na x86 runneru by se muselo emulovat přes QEMU. Pro veřejné repozitáře jsou tyhle runnery zdarma a bez limitu minut
+  - **Hlavní důvod je bezpečnostní:** CI staví z čistého `git clone`, takže netrackované soubory (`.env`, `backups/`, `logs/`) se do build kontextu nemají jak dostat. Přesně tímhle způsobem se do dřív publikovaného image dostaly dvě kompletní kopie ostré databáze
+
 ### Fixed
 - **Tajemství a zálohy se dostávaly do Docker image** (17.9.2026)
   - `Dockerfile` kopíruje celý projekt (`COPY . /app/`) a `.dockerignore` nevylučoval `.env`, `data/` ani `backups/`. Po lokálním `cp .env.example .env` nebo po vytvoření dumpu by rebuild vložil heslo k databázi, `SECRET_KEY` i kompletní zálohu do vrstvy image. Co jednou skončí ve vrstvě, z image nezmizí — smazání v pozdější vrstvě soubor neodstraní a `docker history` ho vydá dál
