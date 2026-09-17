@@ -101,10 +101,23 @@ WSGI_APPLICATION = 'spiz_project.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
+# PostgreSQL všude - vývoj, testy i produkce. SQLite fallback tu schválně
+# není: řádkové zámky (`select_for_update()`) neumí a tiše je ignoruje,
+# takže by se testy lišily od provozu přesně v tom, na čem stojí správnost
+# skladu. K vývoji stačí `docker compose up -d db`.
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': Path(os.environ.get('SQLITE_DB_PATH', str(BASE_DIR / 'db.sqlite3'))),
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': os.environ.get('POSTGRES_DB', 'spiz'),
+        'USER': os.environ.get('POSTGRES_USER', 'spiz'),
+        'PASSWORD': os.environ.get('POSTGRES_PASSWORD', ''),
+        'HOST': os.environ.get('POSTGRES_HOST', 'localhost'),
+        'PORT': os.environ.get('POSTGRES_PORT', '5432'),
+        # Bez znovupoužití spojení se na 1,5 OCPU pozná každý request -
+        # navázání spojení k PG je dražší než otevření SQLite souboru.
+        'CONN_MAX_AGE': 60,
+        'CONN_HEALTH_CHECKS': True,
+        'OPTIONS': {'connect_timeout': 5},
     }
 }
 
@@ -191,6 +204,17 @@ MISTRAL_OCR_MODEL = os.environ.get('MISTRAL_OCR_MODEL', 'mistral-ocr-latest')
 # Po potvrzení příjemky se sken maže hned, tohle je pojistka na rozdělané
 # importy. Úklid provádí `manage.py purge_receipt_scans`, pouštěný z cronu.
 OCR_SCAN_RETENTION_DAYS = int(os.environ.get('OCR_SCAN_RETENTION_DAYS', '7'))
+
+# Zálohy databáze (pg_dump). Adresář leží v datovém volume a **mimo**
+# MEDIA_ROOT i STATIC_ROOT - záloha obsahuje hashe hesel a data všech
+# jídelen, takže ji nesmí servírovat whitenoise ani media.
+DB_BACKUP_DIR = Path(os.environ.get('DB_BACKUP_DIR', str(BASE_DIR / 'data' / 'backups')))
+
+# Vypínač stahování dumpu z /backup/. Nastavením na False jde přístup
+# zavřít bez nasazení nové verze.
+DB_DUMP_DOWNLOAD_ENABLED = os.environ.get('DB_DUMP_DOWNLOAD_ENABLED', 'True').lower() not in (
+    'false', '0', 'no'
+)
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/6.0/ref/settings/#default-auto-field

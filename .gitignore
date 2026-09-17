@@ -144,3 +144,9 @@ AIprompts.md
 .roo/
 # Nahrané skeny dokladů (dočasné, mažou se do týdne)
 media/
+
+# Zálohy .env (obsahují hesla a API klíče)
+.env.bak*
+
+# Lokální override compose (vystavuje DB port pro vývoj) - na server nepatří
+docker-compose.override.yml
