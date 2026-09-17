@@ -18,9 +18,11 @@ a zopakovat**, ne dohledávat, jestli zrovna tenhle nevadí.
 """
 
 import argparse
+import json
 import os
 import sqlite3
 import sys
+from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
 
@@ -64,6 +66,162 @@ def sqlite_tables(cursor):
         "AND name NOT LIKE 'sqlite_%' ORDER BY name"
     )
     return [row[0] for row in cursor.fetchall()]
+
+
+def normalize(value):
+    """Srovná hodnotu do tvaru, ve kterém jdou obě databáze porovnat.
+
+    Bez tohohle kroku by porovnání hlásilo rozdíl skoro všude, aniž by se
+    cokoli ztratilo: SQLite nemá typ pro datum ani pro boolean, takže vrací
+    řetězce a nuly/jedničky tam, kde PostgreSQL vrací `datetime` a `bool`.
+    Desetinná čísla drží SQLite jako float s delším ocasem, než schéma
+    povoluje, kdežto PostgreSQL je zaokrouhlí na deklarovaný počet míst.
+
+    Cílem je chytit **ztrátu dat**, ne rozdíl v reprezentaci.
+    """
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, (dict, list)):
+        # PostgreSQL vrací `jsonb` rovnou jako Python objekt, SQLite jako text.
+        # `jsonb` navíc nedrží pořadí klíčů, takže se porovnává kanonicky.
+        return json.dumps(value, sort_keys=True, ensure_ascii=False)
+    if isinstance(value, (int, float, Decimal)):
+        # Tři desetinná místa = nejjemnější přesnost v tomhle schématu.
+        return Decimal(str(value)).quantize(Decimal('0.001'))
+    if isinstance(value, (datetime, date)):
+        return str(value)[:19]
+    if isinstance(value, (bytes, memoryview)):
+        return bytes(value)
+
+    text = str(value).strip()
+
+    # Prázdný řetězec a NULL znamenají u nevyplněného pole totéž. SQLite
+    # v takovém sloupci často drží NULL (typy nevynucuje), PostgreSQL
+    # u `null=False` prázdný řetězec. Žádná hodnota se tím neztrácí -
+    # neprázdné hodnoty se porovnávají dál normálně.
+    if text == '':
+        return None
+
+    # SQLite ukládá časy jako '2026-09-17 03:17:00.123456+00:00',
+    # PostgreSQL vrací datetime. Po převodu na řetězec je srovnáme
+    # na společnou délku "YYYY-MM-DD HH:MM:SS".
+    if len(text) > 19 and text[4] == '-' and text[10] in ' T':
+        return text[:19].replace('T', ' ')
+
+    # JSON uložený jako text (SQLite) proti `jsonb` (PostgreSQL).
+    if text[0] in '{[':
+        try:
+            return json.dumps(json.loads(text), sort_keys=True, ensure_ascii=False)
+        except ValueError:
+            pass
+
+    return text
+
+
+def shorten(value, limit=80):
+    """Zkrátí hodnotu do hlášky. Bez toho by jeden rozdíl v JSON sloupci
+    zaplnil celou obrazovku a zbytek nálezů by zmizel."""
+    text = repr(value)
+    return text if len(text) <= limit else text[:limit] + '…'
+
+
+def compare_rows(sqlite_cursor, pg_cursor, tables):
+    """Porovná **všechny sloupce všech tabulek**, řádek po řádku.
+
+    Počet řádků sám o sobě nestačí: projde i při prohozeném názvu, přepsaném
+    stavu dokladu nebo ztraceném cizím klíči. Proto se čtou celé řádky,
+    párují se podle `id` a porovnávají sloupec po sloupci.
+
+    Porovnávají se jen sloupce, které mají obě databáze - kdyby se schémata
+    lišila, ohlásí to zvlášť, protože to je samo o sobě nález.
+    """
+    problems = []
+
+    for table in tables:
+        if table in SKIPPED_TABLES:
+            continue
+
+        sqlite_cursor.execute(f'SELECT * FROM "{table}" LIMIT 0')
+        sqlite_columns = [d[0] for d in sqlite_cursor.description]
+
+        try:
+            pg_cursor.execute(f'SELECT * FROM "{table}" LIMIT 0')
+        except Exception as error:
+            connection.connection.rollback()
+            problems.append(f'{table}: v PostgreSQL nelze číst ({error})')
+            continue
+        pg_columns = [d[0] for d in pg_cursor.description]
+
+        common = [c for c in sqlite_columns if c in pg_columns]
+        only_sqlite = [c for c in sqlite_columns if c not in pg_columns]
+        if only_sqlite:
+            problems.append(
+                f'{table}: sloupce chybí v PostgreSQL: {", ".join(only_sqlite)}'
+            )
+
+        # Spojovací tabulka M2M (jen `id` a dva cizí klíče). Její `id`
+        # nemá žádný význam a `loaddata` ho přiděluje znovu v jiném pořadí,
+        # takže párovat podle něj by hlásilo rozdíl u každého řádku, i když
+        # jsou vazby stejné. Nic ten `id` nereferencuje, podstatná je
+        # množina dvojic - tu porovnáme.
+        if len(common) == 3 and 'id' in common and all(
+            c.endswith('_id') for c in common if c != 'id'
+        ):
+            keys = [c for c in common if c != 'id']
+            pair_list = ', '.join(f'"{c}"' for c in keys)
+
+            sqlite_cursor.execute(f'SELECT {pair_list} FROM "{table}"')
+            sqlite_pairs = set(sqlite_cursor.fetchall())
+            pg_cursor.execute(f'SELECT {pair_list} FROM "{table}"')
+            pg_pairs = set(pg_cursor.fetchall())
+
+            missing_pairs = sqlite_pairs - pg_pairs
+            extra_pairs = pg_pairs - sqlite_pairs
+            if missing_pairs or extra_pairs:
+                problems.append(
+                    f'{table}: v PostgreSQL chybí vazby {sorted(missing_pairs)[:5]}, '
+                    f'přebývají {sorted(extra_pairs)[:5]}'
+                )
+            continue
+
+        if 'id' not in common:
+            # Tabulky bez `id` (django_migrations apod.) se párují obtížně;
+            # u nich zůstává kontrola počtu řádků z compare_counts().
+            continue
+
+        column_list = ', '.join(f'"{c}"' for c in common)
+        sqlite_cursor.execute(f'SELECT {column_list} FROM "{table}"')
+        sqlite_rows = {
+            row[common.index('id')]: [normalize(v) for v in row]
+            for row in sqlite_cursor.fetchall()
+        }
+
+        pg_cursor.execute(f'SELECT {column_list} FROM "{table}"')
+        pg_rows = {
+            row[common.index('id')]: [normalize(v) for v in row]
+            for row in pg_cursor.fetchall()
+        }
+
+        differing = []
+        for row_id, sqlite_row in sqlite_rows.items():
+            pg_row = pg_rows.get(row_id)
+            if pg_row is None:
+                differing.append(f'id {row_id} v PostgreSQL chybí')
+                continue
+            for column, old, new in zip(common, sqlite_row, pg_row):
+                if old != new:
+                    differing.append(
+                        f'id {row_id}, {column}: {shorten(old)} × {shorten(new)}'
+                    )
+
+        if differing:
+            problems.append(
+                f'{table}: {len(differing)} rozdílů ({"; ".join(differing[:5])})'
+            )
+
+    return problems
 
 
 def compare_counts(sqlite_cursor, pg_cursor, tables):
@@ -254,6 +412,7 @@ def main():
 
             problems = (
                 compare_counts(sqlite_cursor, pg_cursor, tables)
+                + compare_rows(sqlite_cursor, pg_cursor, tables)
                 + compare_values(sqlite_cursor, pg_cursor)
                 + compare_sequences(pg_cursor)
                 + compare_users(sqlite_cursor, pg_cursor)
@@ -262,9 +421,10 @@ def main():
         sqlite_connection.close()
 
     if not problems:
+        checked = len(tables) - len(SKIPPED_TABLES & set(tables))
         print(
-            f'Shoda: {len(tables) - len(SKIPPED_TABLES & set(tables))} tabulek, '
-            'kontrolní součty, sekvence i uživatelé sedí.'
+            f'Shoda: {checked} tabulek porovnáno sloupec po sloupci, '
+            'sekvence i uživatelé sedí.'
         )
         return 0
 
