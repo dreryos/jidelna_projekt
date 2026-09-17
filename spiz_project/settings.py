@@ -256,6 +256,16 @@ LOGIN_URL = '/accounts/login/'
 LOGIN_REDIRECT_URL = '/'
 
 # Logging configuration
+#
+# Adresář se musí založit dřív, než ho logging dostane do ruky. `logs/` není
+# v gitu ani v build kontextu image, takže v čerstvém klonu i v čerstvém
+# kontejneru chybí - a `dictConfig` na chybějící cestě spadne rovnou při
+# `django.setup()` hláškou "Unable to configure handler 'file'". Aplikace
+# tedy vůbec nenaběhne a z hlášky není poznat, že jde jen o chybějící
+# adresář.
+LOG_DIR = BASE_DIR / 'logs'
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
@@ -273,7 +283,7 @@ LOGGING = {
         'file': {
             'level': 'INFO',
             'class': 'logging.handlers.RotatingFileHandler',
-            'filename': BASE_DIR / 'logs' / 'audit.log',
+            'filename': LOG_DIR / 'audit.log',
             'maxBytes': 10485760,  # 10MB
             'backupCount': 5,
             'formatter': 'verbose',

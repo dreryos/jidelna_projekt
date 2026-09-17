@@ -16,6 +16,10 @@ a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
   - **Hlavní důvod je bezpečnostní:** CI staví z čistého `git clone`, takže netrackované soubory (`.env`, `backups/`, `logs/`) se do build kontextu nemají jak dostat. Přesně tímhle způsobem se do dřív publikovaného image dostaly dvě kompletní kopie ostré databáze
 
 ### Fixed
+- **Aplikace nenaběhla v čerstvém klonu ani v čerstvém kontejneru** (17.9.2026)
+  - `LOGGING` píše do `logs/audit.log`, jenže `logs/` není v gitu ani v build kontextu image. Chybějící adresář shodí `dictConfig` rovnou při `django.setup()` hláškou „Unable to configure handler 'file'" — aplikace vůbec nenastartuje a z hlášky není poznat, že jde jen o chybějící adresář. Adresář se teď zakládá v `settings.py`
+  - Dosud to nebylo vidět, protože `logs/` se do image dostával omylem z pracovní kopie. Odhalilo to CI při prvním běhu nad čistým checkoutem
+
 - **Tajemství a zálohy se dostávaly do Docker image** (17.9.2026)
   - `Dockerfile` kopíruje celý projekt (`COPY . /app/`) a `.dockerignore` nevylučoval `.env`, `data/` ani `backups/`. Po lokálním `cp .env.example .env` nebo po vytvoření dumpu by rebuild vložil heslo k databázi, `SECRET_KEY` i kompletní zálohu do vrstvy image. Co jednou skončí ve vrstvě, z image nezmizí — smazání v pozdější vrstvě soubor neodstraní a `docker history` ho vydá dál
   - Nejhorší byl adresář `backups/` v kořeni: obsahuje dvě celé kopie ostré databáze (`db_provoz31_7.sqlite3`, `db_provoz_16.8..sqlite3`). Vzor `db.sqlite3` je nepokryl, protože platil doslova

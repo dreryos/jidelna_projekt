@@ -34,7 +34,7 @@ RUN pip install --upgrade pip && pip install -r requirements.txt && pip install 
 COPY . /app/
 
 # Datový adresář (zálohy databáze) a statika
-RUN mkdir -p /app/data/backups /app/staticfiles
+RUN mkdir -p /app/data/backups /app/staticfiles /app/logs
 
 # Make entrypoint executable
 RUN chmod +x /app/docker-entrypoint.sh
