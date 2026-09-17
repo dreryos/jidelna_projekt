@@ -2135,9 +2135,23 @@ def stock_write_off_create(request):
                         write_off = form.save(commit=False)
                         write_off.created_by = request.user
                         write_off.save()
-                        
+
                         # Nastavíme instance pro formset a uložíme
                         formset.instance = write_off
+
+                        # Zámky na skladové karty se berou předem a v jednotném
+                        # pořadí - viz StockWriteOff.lock_stock_items(). Bez
+                        # toho by si je formset bral v pořadí, v jakém uživatel
+                        # vyplnil řádky, a odpis by se mohl zaklesnout
+                        # s příjemkou nebo převodkou nad týmiž surovinami.
+                        write_off.lock_stock_items([
+                            item_form.cleaned_data['ingredient']
+                            for item_form in formset.forms
+                            if item_form.cleaned_data
+                            and item_form.cleaned_data.get('ingredient')
+                            and not item_form.cleaned_data.get('DELETE', False)
+                        ])
+
                         formset.save()
                         
                         messages.success(request, f'Odepsání bylo úspěšně vytvořeno. Celkem: {write_off.get_total_cost()} Kč')
@@ -2212,11 +2226,20 @@ class StockWriteOffDeleteView(CanteenAccessMixin, DeleteView):
         self.object = self.get_object()
         write_off_id = self.object.pk
         items_count = self.object.items.count()
+
+        # Mazání spustí pre_delete signál na každé položce a ten vrací
+        # množství na sklad. Django celé mazání obaluje jednou transakcí,
+        # takže se zámky hromadí v pořadí, v jakém jdou položky ke smazání.
+        # Proto se berou předem a jednotně - viz StockWriteOff.lock_stock_items().
+        with transaction.atomic():
+            self.object.lock_stock_items()
+            response = super().delete(request, *args, **kwargs)
+
         messages.success(
             request,
             f'Odepsání #{write_off_id} bylo smazáno a {items_count} položek bylo vráceno na sklad.'
         )
-        return super().delete(request, *args, **kwargs)
+        return response
 
 
 @login_required

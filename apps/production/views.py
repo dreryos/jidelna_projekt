@@ -1034,6 +1034,22 @@ def _handle_deleted_items(request, document):
     deleted_names = []
     skipped = set()
     with transaction.atomic():
+        # Každé smazání položky uvolňuje blokaci na skladové kartě, a protože
+        # celá smyčka běží v jedné transakci, zámky se hromadí až do konce.
+        # Braly by se v pořadí podle `PickingList.id` - což je jiné pořadí než
+        # to, ve kterém je bere příjemka, převodka i odpis. Proto se berou
+        # předem a jednotně, viz StockItem.lock_existing().
+        from apps.inventory.models import StockItem
+
+        doomed = list(
+            PickingList.objects
+            .filter(id__in=ids, document=document, status=PickingList.Status.PENDING)
+            .select_related('ingredient')
+        )
+        StockItem.lock_existing(
+            [(item.ingredient, item.warehouse) for item in doomed if item.warehouse_id]
+        )
+
         for item_id in sorted(ids):
             item = (
                 PickingList.objects.select_for_update()

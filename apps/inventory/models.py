@@ -804,10 +804,19 @@ class GoodsReceipt(models.Model):
             )
         
         with transaction.atomic():
-            # Položky se berou seřazené podle suroviny, aby všechny doklady
-            # braly zámky ve stejném pořadí. Bez toho se dvě souběžné příjemky
-            # se společnými surovinami navzájem zablokují (deadlock).
-            for item in self.items.select_related('ingredient').order_by('ingredient_id'):
+            items = list(self.items.select_related('ingredient').order_by('ingredient_id'))
+
+            # Všechny zámky předem a v pořadí podle `pk`, viz
+            # StockItem.lock_existing(). Řadit položky podle suroviny nestačí:
+            # pořadí skladových karet podle `pk` se od pořadí podle
+            # `ingredient_id` může lišit, takže by příjemka držela jednu kartu
+            # a čekala na druhou, zatímco převodka (která řadí podle `pk`) drží
+            # přesně opačnou dvojici. PostgreSQL by jednu z nich zabila.
+            StockItem.lock_existing(
+                [(item.ingredient, self.warehouse) for item in items]
+            )
+
+            for item in items:
                 # Získání nebo vytvoření skladové položky - zamčené pro zápis,
                 # viz StockItem.lock_or_create()
                 stock_item = StockItem.lock_or_create(
@@ -1311,9 +1320,17 @@ class InventoryVerification(models.Model):
             items_created = 0
             total_discrepancies = 0
 
-            # Řazení podle suroviny drží stejné pořadí zámků jako ostatní
-            # doklady - jinak by se inventura a příjemka mohly zaklesnout
-            for item in self.items.select_related('ingredient').order_by('ingredient_id'):
+            items = list(self.items.select_related('ingredient').order_by('ingredient_id'))
+
+            # Zámky předem a v pořadí podle `pk` - stejně jako příjemka
+            # a převodka, viz StockItem.lock_existing(). Kdyby si každý doklad
+            # bral zámky ve svém vlastním pořadí, dva souběžné doklady nad
+            # týmiž surovinami se zaklesnou.
+            StockItem.lock_existing(
+                [(item.ingredient, self.warehouse) for item in items]
+            )
+
+            for item in items:
                 if item.counted_quantity is None:
                     continue
                 
@@ -2041,7 +2058,31 @@ class StockWriteOff(models.Model):
         for item in self.items.all():
             total += item.get_total_cost()
         return total
-    
+
+    def lock_stock_items(self, ingredients=None):
+        """Zamkne předem skladové karty, kterých se odpis dotkne.
+
+        Proč to nestačí nechat na ``StockWriteOffItem.save()``: ta si zamyká
+        jednu kartu ve vlastní transakci, jenže formulář ukládá všechny
+        položky uvnitř jedné vnější ``transaction.atomic()``. Vnitřní
+        transakce se tam degraduje na savepoint, zámky se hromadí až
+        do konce té vnější - a berou se v pořadí, v jakém uživatel vyplnil
+        formulář. To je další, zcela libovolné pořadí zámků, takže se odpis
+        může zaklesnout s příjemkou nebo převodkou.
+
+        ``ingredients`` se předává při zakládání, kdy položky ještě nejsou
+        v databázi. Bez argumentu se vezmou uložené položky - to je případ
+        mazání, kde se množství vrací zpátky na sklad.
+
+        Volat **jen uvnitř** ``transaction.atomic()``.
+        """
+        if ingredients is None:
+            ingredients = [item.ingredient for item in self.items.select_related('ingredient')]
+
+        StockItem.lock_existing(
+            [(ingredient, self.warehouse) for ingredient in ingredients]
+        )
+
     class Meta:
         verbose_name = "Odepsání mimo recepty"
         verbose_name_plural = "Odepsání mimo recepty"
