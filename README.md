@@ -203,6 +203,13 @@ Před publikací musí projít celá testovací sada nad PostgreSQL. Tag
 `sha-<commit>` slouží k návratu na konkrétní dřívější verzi — stačí ho
 dosadit místo `latest` v `docker-compose.yml`.
 
+**Viditelnost balíčku:** nově vytvořený balíček v ghcr.io je **privátní**.
+Server ho tedy buď stáhne po `docker login ghcr.io` s tokenem, který má
+`read:packages`, nebo balíček přepněte na veřejný (GitHub → Packages →
+`jidelna_projekt` → Package settings → Change visibility). Veřejný je
+jednodušší a odpovídá tomu, jak to fungovalo na Docker Hubu — image už
+žádná tajemství neobsahuje.
+
 **Image nestavějte ručně.** `docker build` z pracovní kopie vezme i soubory,
 které nejsou v gitu (`.env`, `backups/`, `logs/`), a ty pak zůstanou natrvalo
 ve vrstvách publikovaného image. CI staví z čistého `git clone`, kde takové
