@@ -115,27 +115,37 @@ spiz/
    pip install -r requirements.txt
    ```
 
-4. **Aplikace migrací databáze:**
+4. **Spuštění databáze:**
+   ```bash
+   cp .env.example .env    # doplňte POSTGRES_PASSWORD
+   docker compose up -d db
+   ```
+   Aplikace běží nad PostgreSQL i při vývoji — SQLite fallback tu schválně
+   není. SQLite totiž řádkové zámky (`select_for_update()`) tiše ignoruje,
+   takže by se testy lišily od provozu přesně v tom, na čem stojí správnost
+   skladu.
+
+5. **Aplikace migrací databáze:**
    ```bash
    python manage.py migrate
    ```
 
-5. **Vytvoření superuživatele:**
+6. **Vytvoření superuživatele:**
    ```bash
    python manage.py createsuperuser
    ```
 
-6. **Import ukázkových receptů (volitelné):**
+7. **Import ukázkových receptů (volitelné):**
    ```bash
    python manage.py import_recipes_xml docs/recipebook.xml
    ```
 
-7. **Sestavení nápovědy (volitelné):**
+8. **Sestavení nápovědy (volitelné):**
    ```bash
    mkdocs build
    ```
 
-8. **Spuštění vývojového serveru:**
+9. **Spuštění vývojového serveru:**
    ```bash
    python manage.py runserver
    ```
@@ -144,7 +154,7 @@ Aplikace bude dostupná na adrese [http://127.0.0.1:8000](http://127.0.0.1:8000)
 
 ### Konfigurace přes proměnné prostředí
 
-Všechny mají rozumnou výchozí hodnotu, takže pro vývoj není potřeba nastavovat nic.
+Většina má rozumnou výchozí hodnotu. Nastavit je potřeba `POSTGRES_PASSWORD` — vzor je v `.env.example`.
 
 | Proměnná | Výchozí | K čemu je |
 |---|---|---|
@@ -152,8 +162,14 @@ Všechny mají rozumnou výchozí hodnotu, takže pro vývoj není potřeba nast
 | `DEBUG` | `True` | V produkci `False` |
 | `DJANGO_ALLOWED_HOSTS` | `localhost,127.0.0.1,testserver` | Povolené domény |
 | `CSRF_TRUSTED_ORIGINS` | `http://localhost,http://127.0.0.1` | Důvěryhodné originy pro CSRF |
-| `SQLITE_DB_PATH` | `db.sqlite3` v kořeni | Umístění databáze |
+| `POSTGRES_DB` | `spiz` | Název databáze |
+| `POSTGRES_USER` | `spiz` | Uživatel databáze |
+| `POSTGRES_PASSWORD` | prázdné | Heslo k databázi |
+| `POSTGRES_HOST` | `localhost` | Adresa serveru (v Dockeru `db`) |
+| `POSTGRES_PORT` | `5432` | Port |
 | `MEDIA_ROOT` | `media/` | Úložiště nahraných souborů (skeny dokladů) |
+| `DB_BACKUP_DIR` | `data/backups/` | Kam se ukládají noční zálohy databáze |
+| `DB_DUMP_DOWNLOAD_ENABLED` | `True` | Vypínač stahování zálohy z `/backup/` |
 | `MISTRAL_API_KEY` | prázdný | Klíč pro rozpoznávání dokladů z fotky. Bez něj je import z fotky vypnutý, zbytek aplikace běží dál |
 | `MISTRAL_OCR_MODEL` | `mistral-ocr-latest` | Model OCR |
 | `OCR_SCAN_RETENTION_DAYS` | `7` | Za jak dlouho se smažou nedokončené skeny dokladů |
@@ -176,7 +192,7 @@ mkdocs serve    # živý náhled při psaní dokumentace (http://127.0.0.1:8000)
 - **Backend:** Python 3.14
 - **Framework:** Django 6.0.1
 - **Frontend:** Bootstrap 5, FontAwesome, Select2
-- **Databáze:** SQLite3 (vývoj), PostgreSQL/MySQL (produkce)
+- **Databáze:** PostgreSQL 17 (vývoj i produkce)
 - **Template Engine:** Django Templates
 - **Forms:** django-bootstrap-v5
 - **PDF:** WeasyPrint (výdejky, převodky, odpisy, reporty)

@@ -7,7 +7,38 @@ a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+### Fixed
+- **49 testů se nikdy nespouštělo** (17.9.2026)
+  - pytest ve výchozím nastavení sbírá jen soubory `test_*.py`, jenže Django zakládá testy jako `tests.py`. Testy v `apps/core`, `apps/inventory` a `apps/bufet` tak sadou tiše propadávaly — `pytest apps test` hlásil 436 zelených a o dalších 49 nevěděl. Po doplnění `python_files` do `pytest.ini` jich běží 485
+  - Zmizel prázdný `apps/production/tests.py` (tři řádky vygenerované Djangem, žádný test). Kolidoval s adresářem `apps/production/tests/` a shazoval kolekci hláškou „import file mismatch"; kvůli němu nefungoval ani `manage.py test`
+
+- **Zamykání skladových karet při souběžné práci víc jídelen** (16.9.2026)
+  - Každý zápis do skladové karty (`StockItem`) si teď bere zámek — dosud si příjemka, převodka, inventura i odpis načetly množství, přičetly k němu své a uložily výsledek bez ochrany. Dva doklady na stejnou surovinu ve stejnou chvíli si přečetly totéž číslo a druhý zápis ten první přepsal; naskladněné zboží tiše zmizelo. Na SQLite to nešlo vidět, protože zamyká celou databázi a řádkové zámky umí jen ignorovat — s druhou a třetí rekreačkou a PostgreSQL by se to začalo dít
+  - Odpis zboží a jeho rušení nově běží v transakci; kontrola „je toho dost na skladu" a samotné odepsání byly dosud dva nezávislé kroky, mezi které se vešel jiný odpis
+  - Převodka bere všechny zámky předem a v jednotném pořadí (`StockItem.lock_existing()`). Bez toho by se dvě převodky v opačném směru mezi týmiž sklady zaklesly navzájem a PostgreSQL by jednu z nich zabila chybou uprostřed ukládání
+  - Nový souběhový test dvou protisměrných řad převodek; na SQLite se přeskakuje, protože tam neověřuje nic
+
+### Changed
+- **Databáze převedena na PostgreSQL 17** (16.9.2026)
+  - PostgreSQL běží jako služba `db` v `docker-compose.yml`, ven neposlouchá na žádném portu. Aplikace na něj čeká přes healthcheck, takže migrace v entrypointu už nestartují do nenaběhlé databáze
+  - PostgreSQL se používá i při vývoji a testech; SQLite fallback tu schválně není, protože `select_for_update()` tiše ignoruje a testy by pak neověřovaly právě to zamykání, kvůli kterému se převod dělá. K vývoji stačí `docker compose up -d db`
+  - České řazení názvů zajišťuje ICU kolace `czech` vytvořená migrací `core/0011_czech_collation`. Musí vzniknout dřív než tabulky, které ji používají — PostgreSQL kolaci hledá už při plánování dotazu a neexistující jméno je tvrdá chyba i nad prázdnou tabulkou
+  - Základ image je nově `python:3.14-slim` místo `python:3.15-rc-alpine`: `psycopg` má hotová wheels jen pro glibc a z produkce tím zároveň mizí release candidate Pythonu. Přibyl `postgresql-client-17` kvůli `pg_dump`
+  - Gunicorn jede na 3 workerech s timeoutem 120 s a recyklací po 200 requestech — `command:` v compose dosud přebíjel entrypoint a spouštěl jediný worker s výchozím timeoutem 30 s, takže delší PDF padalo na timeout. WeasyPrint navíc nechává růst RSS, proto recyklace
+  - Hesla (`SECRET_KEY`, heslo k databázi, heslo superuživatele) se berou z `.env`, ne z hodnot napsaných natvrdo v compose
+
+- **Odstraněny konstrukce závislé na SQLite** (16.9.2026)
+  - Test databázového omezení ve výdejkách předává čas parametrem místo funkce `datetime('now')`, kterou zná jen SQLite
+  - Příkaz `fix_conversion_factors` používá `F()` místo dávno zastaralého `.extra()`
+
 ### Added
+- **Záloha celé databáze** (16.9.2026)
+  - Na `/backup/` přibylo tlačítko **Stáhnout zálohu databáze** — kompletní `pg_dump`, streamovaný rovnou z databáze, takže na serveru nezůstává soubor, který by odtud mohl někdo odnést. Dosavadní XML export zálohou nikdy nebyl: nepokrývá naučené mapování dodavatelských názvů (`SupplierItemAlias`) ani bufet
+  - Stažení může vyvolat **jen superuživatel** a jen POST s CSRF; každé se zapisuje do logu s uživatelem a IP. Dump obsahuje hashe hesel, e-maily a data všech jídelen bez ohledu na `UserProfile.canteens` — kdo ho má, má celou aplikaci. Přístup jde zavřít proměnnou `DB_DUMP_DOWNLOAD_ENABLED` bez nasazení nové verze
+  - Noční automat `manage.py dump_database --keep 7` ukládá zálohy do `data/backups/` a maže starší než 7 dní. Na stránce je vidět čas a velikost té poslední, aby se poznalo, že se zálohy přestaly dělat
+  - XML export a import se přesunuly do sbalené sekce **Pokročilé — přenos dat mezi instalacemi**. Kód zůstává: je to jediný způsob, jak přenést suroviny a receptury z jedné instalace do druhé se slučováním, což `pg_restore` neumí — ten celou databázi přepíše
+  - Postup obnovy (`pg_restore --clean --if-exists`) je popsaný v příručce, kapitola 11
+
 - **Hromadné odebrání surovin ve výdejce** (15.9.2026)
   - Na stránce editace výdejky (`/production/vydejky/<id>/edit/`) lze zaškrtnout více nevydaných surovin naráz a odebrat je jedním tlačítkem **Smazat vybrané**
   - Funguje v obou tabulkách – v rámci plánovaných jídel i u položek vydaných mimo jídlo; zaškrtnout jde jen položka, která ještě nebyla vydána

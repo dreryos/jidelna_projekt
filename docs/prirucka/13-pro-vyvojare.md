@@ -5,7 +5,9 @@ Kapitola pro nástupce: architektura, datový model a hlavně **proč** jsou vě
 ## Technologie a struktura
 
 * **Django 6** / Python 3.14, šablony + Bootstrap 5, minimum JS (AJAX tam, kde to UX vyžaduje — vizuální editor se SortableJS, správa skladů).
-* **SQLite** (cesta přes env `SQLITE_DB_PATH`), **WeasyPrint** pro PDF, **openpyxl** pro XLSX.
+* **PostgreSQL 17** (připojení přes env `POSTGRES_*`), **WeasyPrint** pro PDF, **openpyxl** pro XLSX.
+* Databáze je PostgreSQL **i při vývoji a testech**, schválně bez SQLite fallbacku: SQLite `SELECT … FOR UPDATE` tiše ignoruje, takže by testy neověřovaly zamykání, na kterém stojí správnost skladu. K vývoji stačí `docker compose up -d db`.
+* Česká kolace `czech` je na PostgreSQL ICU kolace (`cs-CZ`), vytváří ji migrace `core/0011_czech_collation`. Musí vzniknout dřív než jakákoli migrace s `Collate('name', 'czech')` — PostgreSQL kolaci hledá už při plánování dotazu, takže ani prázdná tabulka nepomůže. Proto má migrace `run_before`.
 * Testy: `pytest` (`.venv/bin/python -m pytest apps test`), konfigurace `pytest.ini`.
 
 ```text
