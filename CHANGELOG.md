@@ -21,6 +21,7 @@ a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
   - Každý zápis do skladové karty (`StockItem`) si teď bere zámek — dosud si příjemka, převodka, inventura i odpis načetly množství, přičetly k němu své a uložily výsledek bez ochrany. Dva doklady na stejnou surovinu ve stejnou chvíli si přečetly totéž číslo a druhý zápis ten první přepsal; naskladněné zboží tiše zmizelo. Na SQLite to nešlo vidět, protože zamyká celou databázi a řádkové zámky umí jen ignorovat — s druhou a třetí rekreačkou a PostgreSQL by se to začalo dít
   - Odpis zboží a jeho rušení nově běží v transakci; kontrola „je toho dost na skladu" a samotné odepsání byly dosud dva nezávislé kroky, mezi které se vešel jiný odpis
   - Převodka bere všechny zámky předem a v jednotném pořadí (`StockItem.lock_existing()`). Bez toho by se dvě převodky v opačném směru mezi týmiž sklady zaklesly navzájem a PostgreSQL by jednu z nich zabila chybou uprostřed ukládání
+  - **Stejné pořadí zámků teď drží i příjemka, inventura, odpis a hromadné mazání položek výdejky.** Každý z nich si dosud bral zámky po svém — příjemka a inventura podle suroviny, odpis v pořadí řádků formuláře, mazání výdejky podle `id` položky. Pořadí skladových karet podle `pk` se od pořadí podle suroviny může lišit, takže příjemka držela kartu, na kterou čekala převodka, a naopak. Reprodukováno testem: bez opravy PostgreSQL hlásí `deadlock detected`
   - Nový souběhový test dvou protisměrných řad převodek; na SQLite se přeskakuje, protože tam neověřuje nic
 
 ### Changed
@@ -44,6 +45,7 @@ a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
 - **Záloha celé databáze** (16.9.2026)
   - Na `/backup/` přibylo tlačítko **Stáhnout zálohu databáze** — kompletní `pg_dump`, streamovaný rovnou z databáze, takže na serveru nezůstává soubor, který by odtud mohl někdo odnést. Dosavadní XML export zálohou nikdy nebyl: nepokrývá naučené mapování dodavatelských názvů (`SupplierItemAlias`) ani bufet
   - Stažení může vyvolat **jen superuživatel** a jen POST s CSRF; každé se zapisuje do logu s uživatelem a IP. Dump obsahuje hashe hesel, e-maily a data všech jídelen bez ohledu na `UserProfile.canteens` — kdo ho má, má celou aplikaci. Přístup jde zavřít proměnnou `DB_DUMP_DOWNLOAD_ENABLED` bez nasazení nové verze
+  - Soubor zálohy vzniká s právy `0600` v adresáři `0700` — s výchozí umaskou by ho v kontejneru přečetl kdokoli, kdo se dostane k volume. Zapisuje se pod dočasným názvem a hotový se teprve přejmenuje, aby po pádu uprostřed zápisu nezůstala nedopsaná záloha, kterou stránka ukáže jako platnou
   - Noční automat `manage.py dump_database --keep 7` ukládá zálohy do `data/backups/` a maže starší než 7 dní. Na stránce je vidět čas a velikost té poslední, aby se poznalo, že se zálohy přestaly dělat
   - XML export a import se přesunuly do sbalené sekce **Pokročilé — přenos dat mezi instalacemi**. Kód zůstává: je to jediný způsob, jak přenést suroviny a receptury z jedné instalace do druhé se slučováním, což `pg_restore` neumí — ten celou databázi přepíše
   - Postup obnovy (`pg_restore --clean --if-exists`) je popsaný v příručce, kapitola 11

@@ -117,9 +117,19 @@ spiz/
 
 4. **Spuštění databáze:**
    ```bash
-   cp .env.example .env    # doplňte POSTGRES_PASSWORD
+   cp .env.example .env
+   cp docker-compose.override.yml.example docker-compose.override.yml
    docker compose up -d db
    ```
+   V `.env` doplňte `POSTGRES_PASSWORD`. Override je potřeba proto, že hlavní
+   `docker-compose.yml` databázi **schválně nevystavuje žádným portem** — na
+   serveru nemá být vidět odnikud. Při vývoji ale `manage.py` běží mimo Docker
+   a musí se k ní dostat, takže override port otevře, a to jen na `127.0.0.1`.
+
+   Výchozí port je **55432**, ne 5432: ten na vývojářském stroji obvykle už
+   drží jiný projekt. `POSTGRES_PORT=55432` je v `.env.example` přednastavený;
+   měníte-li ho, změňte ho na obou místech.
+
    Aplikace běží nad PostgreSQL i při vývoji — SQLite fallback tu schválně
    není. SQLite totiž řádkové zámky (`select_for_update()`) tiše ignoruje,
    takže by se testy lišily od provozu přesně v tom, na čem stojí správnost
@@ -166,7 +176,7 @@ Většina má rozumnou výchozí hodnotu. Nastavit je potřeba `POSTGRES_PASSWOR
 | `POSTGRES_USER` | `spiz` | Uživatel databáze |
 | `POSTGRES_PASSWORD` | prázdné | Heslo k databázi |
 | `POSTGRES_HOST` | `localhost` | Adresa serveru (v Dockeru `db`) |
-| `POSTGRES_PORT` | `5432` | Port |
+| `POSTGRES_PORT` | `5432` | Port. Při vývoji `55432` — viz krok 4 |
 | `MEDIA_ROOT` | `media/` | Úložiště nahraných souborů (skeny dokladů) |
 | `HTTPS_ONLY` | `False` | Zapíná bezpečné cookie, HSTS a přesměrování na HTTPS. Zapněte až za HTTPS — na HTTP instalaci se nikdo nepřihlásí |
 | `DB_BACKUP_DIR` | `data/backups/` | Kam se ukládají noční zálohy databáze |

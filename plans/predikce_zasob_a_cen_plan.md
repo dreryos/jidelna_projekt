@@ -1,5 +1,13 @@
 # Plán: predikce potřebných zásob a budoucích cen jídel
 
+> **Pozor na zastaralý předpoklad:** plán vznikl **16. 9. 2026, před migrací
+> na PostgreSQL**, a rozhodnutí proti Celery v něm stojí mimo jiné na tom, že
+> aplikace běží na SQLite (`database is locked` při zápisu z workeru mimo
+> gunicorn). **Tenhle argument už neplatí** — od 17. 9. 2026 běží PostgreSQL
+> a řádkové zámky fungují. Ostatní důvody proti Celery (tři procesy navíc
+> na 1,5 OCPU) platí dál, ale před implementací je potřeba rozhodnutí
+> přehodnotit, ne ho převzít.
+
 Kontext: Aplikace má umět pro zadaný jídelníček na konkrétní jídelně předpovědět
 (a) kolik surovin bude potřeba nakoupit a (b) jakou cenu budou ta jídla mít
 v době vaření. Podklad pro plán: kopie produkční DB (`db.sqlite3`, stav

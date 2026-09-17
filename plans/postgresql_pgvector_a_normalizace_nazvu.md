@@ -1,5 +1,13 @@
 # Analýza: PostgreSQL + pgvector a normalizace názvů z příjemek
 
+> **Stav dokumentu:** analýza sepsaná **16. 9. 2026, před migrací**. Popisuje
+> tehdejší nasazení (SQLite, `python:3.15-rc-alpine3.23`). Závěr bodu 1
+> mezitím proběhl — aplikace běží na PostgreSQL 17 a base image je
+> `python:3.14-slim`. Text se schválně nepřepisuje: je to záznam toho, **proč**
+> se rozhodlo, jak se rozhodlo. Pro aktuální stav čtěte `CHANGELOG.md`
+> a `docs/prirucka/13-pro-vyvojare.md`. Body 2 a 3 (pgvector, embedding)
+> platí dál.
+
 Předchůdce rozhodnutí z `plans/predikce_zasob_a_cen_plan.md`. Tři oddělené
 otázky, které se míchají dohromady, ale mají různé odpovědi:
 
