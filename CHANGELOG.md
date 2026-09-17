@@ -8,6 +8,11 @@ a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
 ## [Unreleased]
 
 ### Fixed
+- **Tajemství a zálohy se dostávaly do Docker image** (17.9.2026)
+  - `Dockerfile` kopíruje celý projekt (`COPY . /app/`) a `.dockerignore` nevylučoval `.env`, `data/` ani `backups/`. Po lokálním `cp .env.example .env` nebo po vytvoření dumpu by rebuild vložil heslo k databázi, `SECRET_KEY` i kompletní zálohu do vrstvy image. Co jednou skončí ve vrstvě, z image nezmizí — smazání v pozdější vrstvě soubor neodstraní a `docker history` ho vydá dál
+  - Nejhorší byl adresář `backups/` v kořeni: obsahuje dvě celé kopie ostré databáze (`db_provoz31_7.sqlite3`, `db_provoz_16.8..sqlite3`). Vzor `db.sqlite3` je nepokryl, protože platil doslova
+  - Opraveny i vzory `__pycache__` a `*.pyc`: Docker je bez `**/` vyhodnocuje jen proti kořeni kontextu, takže bajtkód z `apps/` do image chodil taky. Kontext klesl z 629 na 411 souborů
+
 - **49 testů se nikdy nespouštělo** (17.9.2026)
   - pytest ve výchozím nastavení sbírá jen soubory `test_*.py`, jenže Django zakládá testy jako `tests.py`. Testy v `apps/core`, `apps/inventory` a `apps/bufet` tak sadou tiše propadávaly — `pytest apps test` hlásil 436 zelených a o dalších 49 nevěděl. Po doplnění `python_files` do `pytest.ini` jich běží 485
   - Zmizel prázdný `apps/production/tests.py` (tři řádky vygenerované Djangem, žádný test). Kolidoval s adresářem `apps/production/tests/` a shazoval kolekci hláškou „import file mismatch"; kvůli němu nefungoval ani `manage.py test`
