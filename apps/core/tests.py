@@ -9,7 +9,7 @@ from pathlib import Path
 import tempfile
 
 from django.contrib.auth.models import User
-from django.test import TestCase, override_settings
+from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
 from apps.core.db_backup import (
@@ -155,6 +155,19 @@ class DumpDownloadPermissionTest(TestCase):
         """GET by šel vyvolat odkazem nebo <img> z cizí stránky."""
         self.client.force_login(self.superuser)
         self.assertEqual(self.client.get(self.url).status_code, 405)
+
+    def test_post_without_csrf_token_forbidden(self):
+        """POST bez CSRF tokenu musí skončit 403.
+
+        Výchozí testovací klient CSRF **nekontroluje**, takže by odstranění
+        ochrany žádný jiný test neodhalil - jen by se tiše přestalo hlídat,
+        že požadavek přišel z naší stránky. Proto klient
+        s `enforce_csrf_checks=True`.
+        """
+        client = Client(enforce_csrf_checks=True)
+        client.force_login(self.superuser)
+
+        self.assertEqual(client.post(self.url).status_code, 403)
 
     @override_settings(DB_DUMP_DOWNLOAD_ENABLED=False)
     def test_kill_switch_blocks_superuser(self):

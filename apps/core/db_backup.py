@@ -129,21 +129,45 @@ def write_dump_to_file(directory=None, keep=7):
     soubor maže - nedopsaný dump vypadá jako záloha, ale není.
     """
     directory = Path(directory) if directory else get_backup_dir()
-    directory.mkdir(parents=True, exist_ok=True)
+    # 0700 ze stejného důvodu jako 0600 u souborů - obsah adresáře nemá
+    # číst nikdo jiný. Na už existujícím adresáři mkdir práva nemění,
+    # to je v pořádku: tam o nich rozhoduje ten, kdo ho založil.
+    directory.mkdir(parents=True, exist_ok=True, mode=0o700)
 
     target = directory / dump_filename()
+    # Zapisuje se pod dočasným názvem a hotový soubor se teprve přejmenuje.
+    # Kdyby se psalo rovnou do cílového názvu a kontejner by mezitím spadl
+    # (restart, OOM, vypnutý stroj), zůstal by tu nedopsaný `.dump`, který
+    # `latest_dump_info()` ukáže jako poslední zálohu. Uživatel by se
+    # spoléhal na soubor, ze kterého nejde nic obnovit. Přejmenování
+    # v rámci jednoho adresáře je atomické, takže pod cílovým názvem
+    # nikdy neleží polovičatá záloha.
+    partial = target.with_suffix(target.suffix + '.part')
 
-    with open(target, 'wb') as handle:
-        process = _spawn_pg_dump(handle)
-        stderr = process.stderr.read() if process.stderr else b''
-        if process.stderr:
-            process.stderr.close()
-        returncode = process.wait()
+    # Právě takhle, ne `open()`: dump obsahuje hashe hesel a data všech
+    # jídelen a `open()` by se řídil umaskou (v kontejneru pod rootem
+    # typicky 0644), takže by zálohu přečetl každý, kdo se dostane
+    # k volume. O_CREAT s režimem 0600 platí jen pro nově vzniklý soubor,
+    # proto ještě fchmod - kdyby tu zbyl `.part` po dřívějším pádu.
+    descriptor = os.open(partial, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        os.fchmod(descriptor, 0o600)
+        with os.fdopen(descriptor, 'wb') as handle:
+            process = _spawn_pg_dump(handle)
+            stderr = process.stderr.read() if process.stderr else b''
+            if process.stderr:
+                process.stderr.close()
+            returncode = process.wait()
+    except BaseException:
+        partial.unlink(missing_ok=True)
+        raise
 
     if returncode != 0:
-        target.unlink(missing_ok=True)
+        partial.unlink(missing_ok=True)
         message = stderr.decode('utf-8', errors='replace').strip()
         raise RuntimeError(f"pg_dump skončil s kódem {returncode}: {message}")
+
+    partial.replace(target)
 
     prune_old_dumps(directory, keep)
     return target
@@ -162,7 +186,13 @@ def prune_old_dumps(directory=None, keep=7):
     threshold = datetime.now() - timedelta(days=keep)
     removed = []
 
-    for path in directory.glob(f'{DUMP_FILENAME_PREFIX}*{DUMP_FILENAME_SUFFIX}'):
+    # Kromě hotových záloh i rozdělané `.part` soubory. Ty vzniknou jen po
+    # pádu uprostřed zápisu a `latest_dump_info()` je nevidí (glob je
+    # nezachytí), ale jinak by tu ležely navždy a zabíraly místo.
+    candidates = list(directory.glob(f'{DUMP_FILENAME_PREFIX}*{DUMP_FILENAME_SUFFIX}'))
+    candidates += list(directory.glob(f'{DUMP_FILENAME_PREFIX}*{DUMP_FILENAME_SUFFIX}.part'))
+
+    for path in candidates:
         if datetime.fromtimestamp(path.stat().st_mtime) < threshold:
             path.unlink()
             removed.append(path)
