@@ -21,6 +21,8 @@ urlpatterns = [
 
     # Záloha/import receptů a surovin (superuser)
     path('backup/', views.backup_page, name='backup_page'),
+    # Kompletní záloha databáze. Jen POST - viz backup_download_dump_view.
+    path('backup/dump/', views.backup_download_dump_view, name='backup_download_dump'),
     path('backup/xml/', views.backup_export_xml_view, name='backup_export_xml'),
     path('backup/xml/import/', views.backup_import_xml_view, name='backup_import_xml'),
 
