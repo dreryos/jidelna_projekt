@@ -1,0 +1,13 @@
+# Závislosti pro vývoj a CI.
+#
+# Schválně zvlášť od `requirements.txt`: Dockerfile instaluje jen ten
+# produkční, takže testovací nástroje se do image nedostanou. Zbytečně
+# by ho nafukovaly a v provozu je nikdo nepotřebuje.
+#
+# Instalace pro vývoj:  pip install -r requirements-dev.txt
+# (stáhne i všechno z requirements.txt, viz řádek níž)
+
+-r requirements.txt
+
+pytest==9.1.1
+pytest-django==4.12.0

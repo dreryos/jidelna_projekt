@@ -1,4 +1,5 @@
 from django.db import models
+from django.db.models import Q
 from django.utils import timezone
 from decimal import Decimal
 from datetime import datetime
@@ -384,7 +385,69 @@ class StockItem(models.Model):
     def quantity_available(self):
         """Vrátí dostupné množství (celkové - blokované)"""
         return self.quantity - self.quantity_blocked
-    
+
+    @classmethod
+    def lock_or_create(cls, *, ingredient, warehouse, defaults=None):
+        """
+        Vrátí skladovou položku zamčenou pro zápis (`SELECT ... FOR UPDATE`),
+        v případě potřeby ji nejdřív založí.
+
+        Proč nestačí samotné `get_or_create()`: to zámek nebere. Dva souběžné
+        doklady na stejnou surovinu si přečtou stejné množství a druhý zápis
+        ten první přepíše - klasický lost update. Na SQLite se to neprojevilo,
+        protože zamyká celou databázi a `SELECT ... FOR UPDATE` tiše ignoruje.
+        Na PostgreSQL by se to projevilo tichou ztrátou naskladněného zboží.
+
+        Volat **jen uvnitř `transaction.atomic()`** - mimo transakci zámek
+        skončí hned po dotazu a nechrání nic.
+
+        `defaults` se použijí jen při zakládání. Množství v nich nechávej na
+        nule a přičítej ho až na zamčeném řádku, jinak se první dávka započítá
+        dvakrát.
+        """
+        cls.objects.get_or_create(
+            ingredient=ingredient,
+            warehouse=warehouse,
+            defaults=defaults or {}
+        )
+        return cls.objects.select_for_update().get(
+            ingredient=ingredient,
+            warehouse=warehouse
+        )
+
+    @classmethod
+    def lock_existing(cls, pairs):
+        """
+        Zamkne pro zápis všechny už existující skladové položky ze zadaných
+        dvojic (surovina, sklad) - jedním dotazem a v pevném pořadí podle
+        primárního klíče.
+
+        Proč nestačí seřadit položky dokladu podle suroviny: převodka pracuje
+        se dvěma sklady najednou a zámek na zdroji bere dřív než na cíli.
+        Dvě souběžné převodky v opačném směru mezi týmiž sklady si tak vezmou
+        zámky křížem - první drží zdroj a čeká na cíl, druhá přesně naopak -
+        a PostgreSQL jednu z nich zabije jako deadlock. Když se všechny zámky
+        vezmou předem v pořadí podle `pk`, jdou obě transakce po řádcích
+        stejným směrem a cyklus vzniknout nemůže.
+
+        Neexistující položky se tu **nezakládají** - vznikají až v místě
+        zápisu přes `lock_or_create()`. Jinak by se ztratila hláška
+        "surovina není na skladu", protože by se řádek s nulou založil sám.
+
+        Volat **jen uvnitř `transaction.atomic()`** - mimo transakci zámek
+        skončí hned po dotazu a nechrání nic.
+        """
+        conditions = Q()
+        for ingredient, warehouse in pairs:
+            conditions |= Q(ingredient=ingredient, warehouse=warehouse)
+
+        if not conditions:
+            return
+
+        # list() je podstatný - queryset je líný a bez vyhodnocení
+        # by se zámky nevzaly vůbec.
+        list(cls.objects.select_for_update().filter(conditions).order_by('pk'))
+
     def block_quantity(self, amount):
         """
         Zablokuje zadané množství ze skladu.
@@ -741,9 +804,22 @@ class GoodsReceipt(models.Model):
             )
         
         with transaction.atomic():
-            for item in self.items.all():
-                # Získání nebo vytvoření skladové položky
-                stock_item, created = StockItem.objects.get_or_create(
+            items = list(self.items.select_related('ingredient').order_by('ingredient_id'))
+
+            # Všechny zámky předem a v pořadí podle `pk`, viz
+            # StockItem.lock_existing(). Řadit položky podle suroviny nestačí:
+            # pořadí skladových karet podle `pk` se od pořadí podle
+            # `ingredient_id` může lišit, takže by příjemka držela jednu kartu
+            # a čekala na druhou, zatímco převodka (která řadí podle `pk`) drží
+            # přesně opačnou dvojici. PostgreSQL by jednu z nich zabila.
+            StockItem.lock_existing(
+                [(item.ingredient, self.warehouse) for item in items]
+            )
+
+            for item in items:
+                # Získání nebo vytvoření skladové položky - zamčené pro zápis,
+                # viz StockItem.lock_or_create()
+                stock_item = StockItem.lock_or_create(
                     ingredient=item.ingredient,
                     warehouse=self.warehouse,
                     defaults={
@@ -753,7 +829,7 @@ class GoodsReceipt(models.Model):
                         'price_without_vat': item.price_without_vat
                     }
                 )
-                
+
                 # Přičtení množství
                 stock_item.quantity += item.quantity
                 
@@ -1244,7 +1320,17 @@ class InventoryVerification(models.Model):
             items_created = 0
             total_discrepancies = 0
 
-            for item in self.items.all():
+            items = list(self.items.select_related('ingredient').order_by('ingredient_id'))
+
+            # Zámky předem a v pořadí podle `pk` - stejně jako příjemka
+            # a převodka, viz StockItem.lock_existing(). Kdyby si každý doklad
+            # bral zámky ve svém vlastním pořadí, dva souběžné doklady nad
+            # týmiž surovinami se zaklesnou.
+            StockItem.lock_existing(
+                [(item.ingredient, self.warehouse) for item in items]
+            )
+
+            for item in items:
                 if item.counted_quantity is None:
                     continue
                 
@@ -1257,25 +1343,31 @@ class InventoryVerification(models.Model):
                 
                 # Aktualizovat nebo vytvořit StockItem
                 if item.is_newly_found:
-                    # Nově nalezená surovina
-                    stock_item, created = StockItem.objects.get_or_create(
+                    # Nově nalezená surovina. Řádek se zakládá s nulou a
+                    # množství se dopisuje až na zamčeném řádku - viz
+                    # StockItem.lock_or_create()
+                    existed = StockItem.objects.filter(
+                        ingredient=item.ingredient,
+                        warehouse=self.warehouse
+                    ).exists()
+                    stock_item = StockItem.lock_or_create(
                         ingredient=item.ingredient,
                         warehouse=self.warehouse,
                         defaults={
-                            'quantity': item.counted_quantity,
+                            'quantity': Decimal('0'),
                             'price': Decimal('0')  # Cena bude doplněna později
                         }
                     )
-                    if created:
+                    stock_item.quantity = item.counted_quantity
+                    stock_item.save(update_fields=['quantity'])
+                    if existed:
+                        items_updated += 1
+                    else:
                         items_created += 1
                         logger.info(
                             f"Inventory {self.id} - NEW item created: {item.ingredient.name}, "
                             f"quantity: {item.counted_quantity}"
                         )
-                    else:
-                        stock_item.quantity = item.counted_quantity
-                        stock_item.save(update_fields=['quantity'])
-                        items_updated += 1
                 else:
                     # Aktualizace existující položky
                     try:
@@ -1584,9 +1676,18 @@ class StockTransfer(models.Model):
         
         if transit_warehouse.is_locked:
             raise ValidationError(f"Mezisklad je zamčen.")
-        
-        # Zpracujeme všechny položky
-        for item in self.items.all():
+
+        items = list(self.items.select_related('ingredient').order_by('ingredient_id'))
+
+        # Všechny zámky se berou předem a v jednotném pořadí, viz
+        # StockItem.lock_existing(). Bez toho by se dvě souběžné převodky
+        # v opačném směru mezi týmiž sklady zablokovaly navzájem.
+        StockItem.lock_existing(
+            [(item.ingredient, self.warehouse_from) for item in items]
+            + [(item.ingredient, transit_warehouse) for item in items]
+        )
+
+        for item in items:
             # Najdeme StockItem ve zdrojovém skladu
             try:
                 source_stock = StockItem.objects.select_for_update().get(
@@ -1597,32 +1698,32 @@ class StockTransfer(models.Model):
                 raise ValidationError(
                     f"Surovina {item.ingredient.name} není na skladu {self.warehouse_from}."
                 )
-            
+
             # Kontrola dostupnosti
             if source_stock.quantity_available < item.quantity:
                 raise ValidationError(
                     f"Nedostatečné množství {item.ingredient.name}. "
                     f"Dostupné: {source_stock.quantity_available}, požadováno: {item.quantity}"
                 )
-            
+
             # Odečteme ze source
             source_stock.quantity -= item.quantity
             source_stock.save(update_fields=['quantity'])
-            
-            # Přidáme do transit warehouse
-            transit_stock, created = StockItem.objects.get_or_create(
+
+            # Přidáme do transit warehouse - i cílový řádek musí být zamčený,
+            # jinak by souběžná převodka přepsala naše množství
+            transit_stock = StockItem.lock_or_create(
                 ingredient=item.ingredient,
                 warehouse=transit_warehouse,
                 defaults={
-                    'quantity': item.quantity,
+                    'quantity': Decimal('0'),
                     'price': item.unit_price_with_vat,
                     'vat_rate': source_stock.vat_rate,
                 }
             )
-            if not created:
-                transit_stock.quantity += item.quantity
-                transit_stock.save(update_fields=['quantity'])
-        
+            transit_stock.quantity += item.quantity
+            transit_stock.save(update_fields=['quantity'])
+
         # Aktualizujeme status
         self.status = 'IN_TRANSIT'
         self.started_at = timezone.now()
@@ -1643,9 +1744,16 @@ class StockTransfer(models.Model):
         
         # Získáme transit warehouse
         transit_warehouse = self.warehouse_from.canteen.get_or_create_transit_warehouse()
-        
-        # Zpracujeme všechny položky
-        for item in self.items.all():
+
+        items = list(self.items.select_related('ingredient').order_by('ingredient_id'))
+
+        # Zámky předem a v jednotném pořadí, viz StockItem.lock_existing()
+        StockItem.lock_existing(
+            [(item.ingredient, transit_warehouse) for item in items]
+            + [(item.ingredient, self.warehouse_to) for item in items]
+        )
+
+        for item in items:
             # Najdeme StockItem v transit warehouse
             try:
                 transit_stock = StockItem.objects.select_for_update().get(
@@ -1668,18 +1776,17 @@ class StockTransfer(models.Model):
             transit_stock.quantity -= item.quantity
             transit_stock.save(update_fields=['quantity'])
 
-            # Přidáme do target
-            target_stock, created = StockItem.objects.get_or_create(
+            # Přidáme do target - zamčeně, viz StockItem.lock_or_create()
+            target_stock = StockItem.lock_or_create(
                 ingredient=item.ingredient,
                 warehouse=self.warehouse_to,
                 defaults={
-                    'quantity': item.quantity,
+                    'quantity': Decimal('0'),
                     'price': item.unit_price_with_vat,
                     'vat_rate': transit_stock.vat_rate,
                 }
             )
-            if not created:
-                self._add_to_stock_with_average_price(target_stock, item)
+            self._add_to_stock_with_average_price(target_stock, item)
 
         # Aktualizujeme status
         self.status = 'COMPLETED'
@@ -1700,9 +1807,18 @@ class StockTransfer(models.Model):
             raise ValidationError(f"Sklad {self.warehouse_from} je zamčen.")
         if self.warehouse_to.is_locked:
             raise ValidationError(f"Sklad {self.warehouse_to} je zamčen.")
-        
-        # Zpracujeme všechny položky
-        for item in self.items.all():
+
+        items = list(self.items.select_related('ingredient').order_by('ingredient_id'))
+
+        # Zámky předem a v jednotném pořadí, viz StockItem.lock_existing().
+        # Právě tady je riziko deadlocku největší: dvě rychlé převodky
+        # v opačném směru mezi týmiž sklady.
+        StockItem.lock_existing(
+            [(item.ingredient, self.warehouse_from) for item in items]
+            + [(item.ingredient, self.warehouse_to) for item in items]
+        )
+
+        for item in items:
             # Najdeme StockItem ve zdrojovém skladu
             try:
                 source_stock = StockItem.objects.select_for_update().get(
@@ -1713,30 +1829,29 @@ class StockTransfer(models.Model):
                 raise ValidationError(
                     f"Surovina {item.ingredient.name} není na skladu {self.warehouse_from}."
                 )
-            
+
             # Kontrola dostupnosti
             if source_stock.quantity_available < item.quantity:
                 raise ValidationError(
                     f"Nedostatečné množství {item.ingredient.name}. "
                     f"Dostupné: {source_stock.quantity_available}, požadováno: {item.quantity}"
                 )
-            
+
             # Odečteme ze source
             source_stock.quantity -= item.quantity
             source_stock.save(update_fields=['quantity'])
-            
-            # Přidáme do target
-            target_stock, created = StockItem.objects.get_or_create(
+
+            # Přidáme do target - zamčeně, viz StockItem.lock_or_create()
+            target_stock = StockItem.lock_or_create(
                 ingredient=item.ingredient,
                 warehouse=self.warehouse_to,
                 defaults={
-                    'quantity': item.quantity,
+                    'quantity': Decimal('0'),
                     'price': item.unit_price_with_vat,
                     'vat_rate': source_stock.vat_rate,
                 }
             )
-            if not created:
-                self._add_to_stock_with_average_price(target_stock, item)
+            self._add_to_stock_with_average_price(target_stock, item)
 
         # Aktualizujeme status
         self.status = 'COMPLETED'
@@ -1770,7 +1885,15 @@ class StockTransfer(models.Model):
             # Musíme vrátit zboží z transit warehouse zpět do source
             transit_warehouse = self.warehouse_from.canteen.get_or_create_transit_warehouse()
 
-            for item in self.items.all():
+            items = list(self.items.select_related('ingredient').order_by('ingredient_id'))
+
+            # Zámky předem a v jednotném pořadí, viz StockItem.lock_existing()
+            StockItem.lock_existing(
+                [(item.ingredient, transit_warehouse) for item in items]
+                + [(item.ingredient, self.warehouse_from) for item in items]
+            )
+
+            for item in items:
                 # Vracíme jen to, co v meziskladu skutečně je - jinak by se
                 # zásoba ve zdrojovém skladu uměle nafoukla
                 try:
@@ -1794,19 +1917,18 @@ class StockTransfer(models.Model):
                 transit_stock.quantity -= return_quantity
                 transit_stock.save(update_fields=['quantity'])
 
-                # Vrátíme zpět do source
-                source_stock, created = StockItem.objects.get_or_create(
+                # Vrátíme zpět do source - zamčeně, viz StockItem.lock_or_create()
+                source_stock = StockItem.lock_or_create(
                     ingredient=item.ingredient,
                     warehouse=self.warehouse_from,
                     defaults={
-                        'quantity': return_quantity,
+                        'quantity': Decimal('0'),
                         'price': item.unit_price_with_vat,
                         'vat_rate': transit_stock.vat_rate,
                     }
                 )
-                if not created:
-                    source_stock.quantity += return_quantity
-                    source_stock.save(update_fields=['quantity'])
+                source_stock.quantity += return_quantity
+                source_stock.save(update_fields=['quantity'])
         
         # Změníme status
         self.status = 'CANCELLED'
@@ -1936,7 +2058,31 @@ class StockWriteOff(models.Model):
         for item in self.items.all():
             total += item.get_total_cost()
         return total
-    
+
+    def lock_stock_items(self, ingredients=None):
+        """Zamkne předem skladové karty, kterých se odpis dotkne.
+
+        Proč to nestačí nechat na ``StockWriteOffItem.save()``: ta si zamyká
+        jednu kartu ve vlastní transakci, jenže formulář ukládá všechny
+        položky uvnitř jedné vnější ``transaction.atomic()``. Vnitřní
+        transakce se tam degraduje na savepoint, zámky se hromadí až
+        do konce té vnější - a berou se v pořadí, v jakém uživatel vyplnil
+        formulář. To je další, zcela libovolné pořadí zámků, takže se odpis
+        může zaklesnout s příjemkou nebo převodkou.
+
+        ``ingredients`` se předává při zakládání, kdy položky ještě nejsou
+        v databázi. Bez argumentu se vezmou uložené položky - to je případ
+        mazání, kde se množství vrací zpátky na sklad.
+
+        Volat **jen uvnitř** ``transaction.atomic()``.
+        """
+        if ingredients is None:
+            ingredients = [item.ingredient for item in self.items.select_related('ingredient')]
+
+        StockItem.lock_existing(
+            [(ingredient, self.warehouse) for ingredient in ingredients]
+        )
+
     class Meta:
         verbose_name = "Odepsání mimo recepty"
         verbose_name_plural = "Odepsání mimo recepty"
@@ -1986,27 +2132,31 @@ class StockWriteOffItem(models.Model):
         Při úpravě povoluje pouze změnu poznámky a prodejní ceny.
         """
         is_new = self._state.adding
-        
+
         if is_new:
+            # Kontrola zásoby a odpis musí být v jedné transakci nad zamčeným
+            # řádkem. Bez zámku by dva souběžné odpisy obě prošly kontrolou
+            # dostatku a odepsaly z téhož množství dvakrát.
             try:
-                stock_item = StockItem.objects.get(
-                    ingredient=self.ingredient,
-                    warehouse=self.write_off.warehouse
-                )
-                
-                if stock_item.quantity < self.quantity:
-                    raise ValidationError(
-                        f"Nedostatek {self.ingredient.name} na skladě. "
-                        f"Dostupné: {stock_item.quantity} {self.ingredient.base_unit}, "
-                        f"Požadováno: {self.quantity} {self.ingredient.base_unit}"
+                with transaction.atomic():
+                    stock_item = StockItem.objects.select_for_update().get(
+                        ingredient=self.ingredient,
+                        warehouse=self.write_off.warehouse
                     )
-                
-                self.unit_cost = stock_item.price
-                super().save(*args, **kwargs)
-                
-                stock_item.quantity -= self.quantity
-                stock_item.save(update_fields=['quantity'])
-                
+
+                    if stock_item.quantity < self.quantity:
+                        raise ValidationError(
+                            f"Nedostatek {self.ingredient.name} na skladě. "
+                            f"Dostupné: {stock_item.quantity} {self.ingredient.base_unit}, "
+                            f"Požadováno: {self.quantity} {self.ingredient.base_unit}"
+                        )
+
+                    self.unit_cost = stock_item.price
+                    super().save(*args, **kwargs)
+
+                    stock_item.quantity -= self.quantity
+                    stock_item.save(update_fields=['quantity'])
+
             except StockItem.DoesNotExist:
                 raise ValidationError(
                     f"Surovina {self.ingredient.name} není dostupná ve skladu {self.write_off.warehouse.name}"
@@ -2025,12 +2175,15 @@ class StockWriteOffItem(models.Model):
 def restore_stock_on_write_off_item_delete(sender, instance, **kwargs):
     """Při smazání položky odepsání vrátí odepsané množství zpět na sklad."""
     try:
-        stock_item = StockItem.objects.get(
-            ingredient=instance.ingredient,
-            warehouse=instance.write_off.warehouse
-        )
-        stock_item.quantity += instance.quantity
-        stock_item.save(update_fields=['quantity'])
+        # Zamčeně a v transakci - vrácení je read-modify-write, bez zámku
+        # by ho souběžný odpis téže suroviny přepsal
+        with transaction.atomic():
+            stock_item = StockItem.objects.select_for_update().get(
+                ingredient=instance.ingredient,
+                warehouse=instance.write_off.warehouse
+            )
+            stock_item.quantity += instance.quantity
+            stock_item.save(update_fields=['quantity'])
         logger.info(
             f"Vráceno {instance.quantity} {instance.ingredient.base_unit} "
             f"{instance.ingredient.name} na sklad {instance.write_off.warehouse.name}"

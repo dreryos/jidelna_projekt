@@ -6,9 +6,78 @@
 {% block content %}
 <div class="row justify-content-center">
   <div class="col-lg-10">
+
+    {% comment %}
+      Záloha databáze je primární a jediná úplná záloha. XML export níž je
+      selektivní přenos entit mezi instalacemi - nepokrývá naučené mapování
+      dodavatelských názvů ani bufet, takže jako záloha nikdy nestačil.
+    {% endcomment %}
     <div class="card shadow-sm mb-4">
       <div class="card-header bg-primary text-white">
-        <h5 class="mb-0"><i class="fas fa-archive me-2"></i>Export zálohy</h5>
+        <h5 class="mb-0"><i class="fas fa-database me-2"></i>Záloha databáze</h5>
+      </div>
+      <div class="card-body">
+        <p class="text-muted">
+          Kompletní obraz databáze ve formátu <code>pg_dump</code>. Obnovuje se příkazem
+          <code>pg_restore</code> — postup najdete v příručce.
+        </p>
+
+        <div class="alert alert-warning">
+          <i class="fas fa-shield-halved me-2"></i>
+          <strong>Soubor obsahuje všechno:</strong> hesla uživatelů (v zahashované podobě),
+          e-maily a data všech jídelen. Kdo ho má, má celou aplikaci. Ukládejte ho
+          jen na šifrovaný disk.
+        </div>
+
+        {% if latest_dump %}
+          <p class="mb-3">
+            <i class="fas fa-clock me-1 text-muted"></i>
+            Poslední automatická záloha:
+            <strong>{{ latest_dump.created_at|date:"j. n. Y H:i" }}</strong>
+            ({{ latest_dump.size|filesizeformat }}, celkem uložených záloh: {{ latest_dump.count }})
+          </p>
+        {% else %}
+          <p class="mb-3 text-muted">
+            <i class="fas fa-clock me-1"></i>
+            Automatická záloha zatím žádná — první vznikne při nejbližším nočním běhu.
+          </p>
+        {% endif %}
+
+        {% if dump_download_enabled %}
+          <form method="post" action="{% url 'core:backup_download_dump' %}">
+            {% csrf_token %}
+            <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+              <button type="submit" class="btn btn-primary">
+                <i class="fas fa-download me-2"></i>Stáhnout zálohu databáze
+              </button>
+            </div>
+          </form>
+        {% else %}
+          <div class="alert alert-secondary mb-0">
+            <i class="fas fa-ban me-2"></i>
+            Stahování zálohy je vypnuté v nastavení serveru
+            (<code>DB_DUMP_DOWNLOAD_ENABLED</code>).
+          </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <details class="mb-4">
+      <summary class="h6 text-secondary py-2" style="cursor: pointer;">
+        <i class="fas fa-sliders me-2"></i>Pokročilé — přenos dat mezi instalacemi
+      </summary>
+
+      <div class="alert alert-secondary mt-3">
+        <i class="fas fa-circle-info me-2"></i>
+        XML export <strong>není záloha</strong>. Přenáší vybrané entity (suroviny, recepty,
+        doklady) z jedné instalace do druhé a slučuje je s existujícími daty.
+        Nepokrývá naučené mapování dodavatelských názvů ani modul bufetu.
+        Na zálohu použijte dump databáze výše.
+      </div>
+
+    <div class="card shadow-sm mb-4">
+      <div class="card-header bg-secondary text-white">
+        <h5 class="mb-0"><i class="fas fa-archive me-2"></i>Export XML</h5>
       </div>
       <div class="card-body">
         <form id="backupForm" method="get" action="{% url 'core:backup_export_xml' %}">
@@ -204,31 +273,33 @@
 
           <div class="d-grid gap-2 d-md-flex justify-content-md-end">
             <button type="submit" class="btn btn-primary">
-              <i class="fas fa-download me-2"></i>Stáhnout XML zálohu
+              <i class="fas fa-download me-2"></i>Stáhnout XML export
             </button>
           </div>
         </form>
 
         <div class="alert alert-info mt-3 mb-0">
           <i class="fas fa-info-circle me-2"></i>
-          <strong>Tip:</strong> Pro běžnou zálohu stačí vybrat <em>Základní data</em> (suroviny, kategorie, recepty).
-          Pro kompletní zálohu všech dat použijte tlačítko <em>Vybrat vše</em>.
+          <strong>Tip:</strong> Při zakládání další rekreačky stačí <em>Základní data</em>
+          (suroviny, kategorie, recepty) — sklad a doklady patří každé jídelně zvlášť.
+          Ani <em>Vybrat vše</em> ale nedá úplnou zálohu: chybí naučené mapování
+          dodavatelských názvů a bufet.
         </div>
       </div>
     </div>
 
     <div class="card shadow-sm">
       <div class="card-header bg-success text-white">
-        <h5 class="mb-0"><i class="fas fa-upload me-2"></i>Obnova / Import</h5>
+        <h5 class="mb-0"><i class="fas fa-upload me-2"></i>Import XML z jiné instalace</h5>
       </div>
       <div class="card-body">
         <form method="post" enctype="multipart/form-data">
           {% csrf_token %}
           <div class="mb-3">
-            <label class="form-label" for="id_file">XML soubor zálohy</label>
+            <label class="form-label" for="id_file">XML soubor exportu</label>
             <input class="form-control" type="file" name="file" id="id_file" accept=".xml" required>
             <div class="form-text">
-              Nahrajte dříve exportovanou zálohu. Import podporuje XML verze 1.0 i 2.0.
+              Nahrajte XML vyexportované z jiné instalace. Import podporuje XML verze 1.0 i 2.0.
               Importované entity se slučují s existujícími daty (doplňují se chybějící hodnoty).
             </div>
           </div>
@@ -249,6 +320,8 @@
         </div>
       </div>
     </div>
+    </details>
+
   </div>
 </div>
 

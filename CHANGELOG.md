@@ -8,6 +8,60 @@ a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
 ## [Unreleased]
 
 ### Added
+- **Automatický build image přes GitHub Actions** (17.9.2026)
+  - Po merge do `main` se spustí celá testovací sada nad PostgreSQL a teprve pak se staví image. Dosud se stavěl ručně a publikoval bez ohledu na to, jestli kód funguje
+  - Image se publikuje do GitHub Container Registry (`ghcr.io/dreryos/jidelna_projekt`) místo Docker Hubu — pro veřejné image zdarma, autentizace vestavěným `GITHUB_TOKEN` bez tokenu k opatrování a bez limitů na stahování
+  - Kromě `latest` vzniká i tag `sha-<commit>`. Bez něj není na co zavěsit návrat na verzi, která běžela minulý týden
+  - Runner je nativní arm64 (`ubuntu-24.04-arm`) kvůli cílovému Oracle Ampere A1; na x86 runneru by se muselo emulovat přes QEMU. Pro veřejné repozitáře jsou tyhle runnery zdarma a bez limitu minut
+  - **Hlavní důvod je bezpečnostní:** CI staví z čistého `git clone`, takže netrackované soubory (`.env`, `backups/`, `logs/`) se do build kontextu nemají jak dostat. Přesně tímhle způsobem se do dřív publikovaného image dostaly dvě kompletní kopie ostré databáze
+
+### Fixed
+- **Aplikace nenaběhla v čerstvém klonu ani v čerstvém kontejneru** (17.9.2026)
+  - `LOGGING` píše do `logs/audit.log`, jenže `logs/` není v gitu ani v build kontextu image. Chybějící adresář shodí `dictConfig` rovnou při `django.setup()` hláškou „Unable to configure handler 'file'" — aplikace vůbec nenastartuje a z hlášky není poznat, že jde jen o chybějící adresář. Adresář se teď zakládá v `settings.py`
+  - Dosud to nebylo vidět, protože `logs/` se do image dostával omylem z pracovní kopie. Odhalilo to CI při prvním běhu nad čistým checkoutem
+
+- **Tajemství a zálohy se dostávaly do Docker image** (17.9.2026)
+  - `Dockerfile` kopíruje celý projekt (`COPY . /app/`) a `.dockerignore` nevylučoval `.env`, `data/` ani `backups/`. Po lokálním `cp .env.example .env` nebo po vytvoření dumpu by rebuild vložil heslo k databázi, `SECRET_KEY` i kompletní zálohu do vrstvy image. Co jednou skončí ve vrstvě, z image nezmizí — smazání v pozdější vrstvě soubor neodstraní a `docker history` ho vydá dál
+  - Nejhorší byl adresář `backups/` v kořeni: obsahuje dvě celé kopie ostré databáze (`db_provoz31_7.sqlite3`, `db_provoz_16.8..sqlite3`). Vzor `db.sqlite3` je nepokryl, protože platil doslova
+  - Opraveny i vzory `__pycache__` a `*.pyc`: Docker je bez `**/` vyhodnocuje jen proti kořeni kontextu, takže bajtkód z `apps/` do image chodil taky. Kontext klesl z 629 na 411 souborů
+
+- **49 testů se nikdy nespouštělo** (17.9.2026)
+  - pytest ve výchozím nastavení sbírá jen soubory `test_*.py`, jenže Django zakládá testy jako `tests.py`. Testy v `apps/core`, `apps/inventory` a `apps/bufet` tak sadou tiše propadávaly — `pytest apps test` hlásil 436 zelených a o dalších 49 nevěděl. Po doplnění `python_files` do `pytest.ini` jich běží 485
+  - Zmizel prázdný `apps/production/tests.py` (tři řádky vygenerované Djangem, žádný test). Kolidoval s adresářem `apps/production/tests/` a shazoval kolekci hláškou „import file mismatch"; kvůli němu nefungoval ani `manage.py test`
+
+- **Zamykání skladových karet při souběžné práci víc jídelen** (16.9.2026)
+  - Každý zápis do skladové karty (`StockItem`) si teď bere zámek — dosud si příjemka, převodka, inventura i odpis načetly množství, přičetly k němu své a uložily výsledek bez ochrany. Dva doklady na stejnou surovinu ve stejnou chvíli si přečetly totéž číslo a druhý zápis ten první přepsal; naskladněné zboží tiše zmizelo. Na SQLite to nešlo vidět, protože zamyká celou databázi a řádkové zámky umí jen ignorovat — s druhou a třetí rekreačkou a PostgreSQL by se to začalo dít
+  - Odpis zboží a jeho rušení nově běží v transakci; kontrola „je toho dost na skladu" a samotné odepsání byly dosud dva nezávislé kroky, mezi které se vešel jiný odpis
+  - Převodka bere všechny zámky předem a v jednotném pořadí (`StockItem.lock_existing()`). Bez toho by se dvě převodky v opačném směru mezi týmiž sklady zaklesly navzájem a PostgreSQL by jednu z nich zabila chybou uprostřed ukládání
+  - **Stejné pořadí zámků teď drží i příjemka, inventura, odpis a hromadné mazání položek výdejky.** Každý z nich si dosud bral zámky po svém — příjemka a inventura podle suroviny, odpis v pořadí řádků formuláře, mazání výdejky podle `id` položky. Pořadí skladových karet podle `pk` se od pořadí podle suroviny může lišit, takže příjemka držela kartu, na kterou čekala převodka, a naopak. Reprodukováno testem: bez opravy PostgreSQL hlásí `deadlock detected`
+  - Nový souběhový test dvou protisměrných řad převodek; na SQLite se přeskakuje, protože tam neověřuje nic
+
+### Changed
+- **Databáze převedena na PostgreSQL 17** (16.9.2026)
+  - PostgreSQL běží jako služba `db` v `docker-compose.yml`, ven neposlouchá na žádném portu. Aplikace na něj čeká přes healthcheck, takže migrace v entrypointu už nestartují do nenaběhlé databáze
+  - PostgreSQL se používá i při vývoji a testech; SQLite fallback tu schválně není, protože `select_for_update()` tiše ignoruje a testy by pak neověřovaly právě to zamykání, kvůli kterému se převod dělá. K vývoji stačí `docker compose up -d db`
+  - České řazení názvů zajišťuje ICU kolace `czech` vytvořená migrací `core/0011_czech_collation`. Musí vzniknout dřív než tabulky, které ji používají — PostgreSQL kolaci hledá už při plánování dotazu a neexistující jméno je tvrdá chyba i nad prázdnou tabulkou
+  - Základ image je nově `python:3.14-slim` místo `python:3.15-rc-alpine`: `psycopg` má hotová wheels jen pro glibc a z produkce tím zároveň mizí release candidate Pythonu. Přibyl `postgresql-client-17` kvůli `pg_dump`
+  - Gunicorn jede na 3 workerech s timeoutem 120 s a recyklací po 200 requestech — `command:` v compose dosud přebíjel entrypoint a spouštěl jediný worker s výchozím timeoutem 30 s, takže delší PDF padalo na timeout. WeasyPrint navíc nechává růst RSS, proto recyklace
+  - Hesla (`SECRET_KEY`, heslo k databázi, heslo superuživatele) se berou z `.env`, ne z hodnot napsaných natvrdo v compose
+
+- **Zabezpečení pro provoz za HTTPS** (17.9.2026)
+  - Nová proměnná `HTTPS_ONLY` zapne bezpečné session i CSRF cookie, HSTS a přesměrování na HTTPS. Výchozí hodnota je `False` schválně: na instalaci běžící po HTTP by se uživatelé rázem nepřihlásili a přesměrování by se zacyklilo. Zapněte ji, až aplikace pojede za HTTPS
+  - Bez toho by se přes `/backup/` dala po nešifrovaném spojení odposlechnout kompletní záloha databáze. Se zapnutou proměnnou nemá `manage.py check --deploy` jediný nález
+
+- **Odstraněny konstrukce závislé na SQLite** (16.9.2026)
+  - Test databázového omezení ve výdejkách předává čas parametrem místo funkce `datetime('now')`, kterou zná jen SQLite
+  - Příkaz `fix_conversion_factors` používá `F()` místo dávno zastaralého `.extra()`
+
+### Added
+- **Záloha celé databáze** (16.9.2026)
+  - Na `/backup/` přibylo tlačítko **Stáhnout zálohu databáze** — kompletní `pg_dump`, streamovaný rovnou z databáze, takže na serveru nezůstává soubor, který by odtud mohl někdo odnést. Dosavadní XML export zálohou nikdy nebyl: nepokrývá naučené mapování dodavatelských názvů (`SupplierItemAlias`) ani bufet
+  - Stažení může vyvolat **jen superuživatel** a jen POST s CSRF; každé se zapisuje do logu s uživatelem a IP. Dump obsahuje hashe hesel, e-maily a data všech jídelen bez ohledu na `UserProfile.canteens` — kdo ho má, má celou aplikaci. Přístup jde zavřít proměnnou `DB_DUMP_DOWNLOAD_ENABLED` bez nasazení nové verze
+  - Soubor zálohy vzniká s právy `0600` v adresáři `0700` — s výchozí umaskou by ho v kontejneru přečetl kdokoli, kdo se dostane k volume. Zapisuje se pod dočasným názvem a hotový se teprve přejmenuje, aby po pádu uprostřed zápisu nezůstala nedopsaná záloha, kterou stránka ukáže jako platnou
+  - Noční automat `manage.py dump_database --keep 7` ukládá zálohy do `data/backups/` a maže starší než 7 dní. Na stránce je vidět čas a velikost té poslední, aby se poznalo, že se zálohy přestaly dělat
+  - XML export a import se přesunuly do sbalené sekce **Pokročilé — přenos dat mezi instalacemi**. Kód zůstává: je to jediný způsob, jak přenést suroviny a receptury z jedné instalace do druhé se slučováním, což `pg_restore` neumí — ten celou databázi přepíše
+  - Postup obnovy (`pg_restore --clean --if-exists`) je popsaný v příručce, kapitola 11
+
 - **Hromadné odebrání surovin ve výdejce** (15.9.2026)
   - Na stránce editace výdejky (`/production/vydejky/<id>/edit/`) lze zaškrtnout více nevydaných surovin naráz a odebrat je jedním tlačítkem **Smazat vybrané**
   - Funguje v obou tabulkách – v rámci plánovaných jídel i u položek vydaných mimo jídlo; zaškrtnout jde jen položka, která ještě nebyla vydána

@@ -3,7 +3,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import SuspiciousFileOperation
-from django.http import FileResponse, Http404, HttpResponse, JsonResponse
+from django.http import FileResponse, Http404, HttpResponse, JsonResponse, StreamingHttpResponse
 from django.utils._os import safe_join
 from django.contrib.auth import logout
 from django.shortcuts import redirect, get_object_or_404
@@ -19,11 +19,15 @@ from typing import Type, Any
 from functools import wraps
 from pathlib import Path
 import json
+import logging
 import mimetypes
 
 from apps.core.models import Recipe, RecipeIngredient, Ingredient
 from apps.core.forms import RecipeIngredientForm, RecipeForm, IngredientForm
 from apps.core.backup import export_backup_xml, import_backup_xml, ENTITY_DEPENDENCIES, ENTITY_LABELS
+from apps.core.db_backup import dump_filename, latest_dump_info, stream_pg_dump
+
+logger = logging.getLogger('apps.core')
 
 """
 Tento modul je místo pro view funkce související s jádrem aplikace (recepty, suroviny).
@@ -179,8 +183,53 @@ def backup_page(request):
 	context = {
 		'entity_dependencies': json.dumps(ENTITY_DEPENDENCIES),
 		'entity_labels': json.dumps(ENTITY_LABELS),
+		'latest_dump': latest_dump_info(),
+		'dump_download_enabled': getattr(settings, 'DB_DUMP_DOWNLOAD_ENABLED', True),
 	}
 	return render(request, 'core/backup.html', context)
+
+
+@login_required
+@require_POST
+def backup_download_dump_view(request):
+	"""Stažení kompletní zálohy databáze (pg_dump).
+
+	Bezpečnostní pravidla, která tu musí platit doslova:
+
+	* **Jen superuživatel.** Ne `is_staff` - dump obsahuje hashe hesel všech
+	  uživatelů, e-maily a data všech jídelen bez ohledu na
+	  `UserProfile.canteens`. Kdo soubor má, má celou aplikaci.
+	* **Jen POST s CSRF.** GET by šlo vyvolat odkazem nebo `<img>` z cizí
+	  stránky a záloha by odtekla bez vědomí přihlášeného uživatele.
+	* **Každé stažení se loguje** (kdo, odkud, kdy) - jinak by nešlo dohledat,
+	  kdy kopie databáze opustila server.
+	* **Vypínač** `DB_DUMP_DOWNLOAD_ENABLED` zavře přístup bez nasazení
+	  nové verze.
+
+	Dump se streamuje přímo z `pg_dump`; na disku serveru nevzniká žádný
+	soubor, který by tam mohl zůstat ležet.
+	"""
+	if not request.user.is_superuser:
+		return HttpResponse(status=403)
+
+	if not getattr(settings, 'DB_DUMP_DOWNLOAD_ENABLED', True):
+		messages.error(request, 'Stahování zálohy databáze je vypnuté v nastavení serveru.')
+		return redirect('core:backup_page')
+
+	filename = dump_filename()
+	logger.warning(
+		"Stažena kompletní záloha databáze: uživatel=%s IP=%s soubor=%s",
+		request.user.username,
+		request.META.get('REMOTE_ADDR', '?'),
+		filename,
+	)
+
+	response = StreamingHttpResponse(
+		stream_pg_dump(),
+		content_type='application/octet-stream',
+	)
+	response['Content-Disposition'] = f'attachment; filename="{filename}"'
+	return response
 
 
 class RecipeListView(LoginRequiredMixin, ListView):

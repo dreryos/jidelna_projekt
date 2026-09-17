@@ -233,24 +233,31 @@ class PickingListDecrementTest(TestCase):
         MUSÍ být součástí MenuPlan.
         """
         from django.db import IntegrityError, connection
-        
-        # Pokus o vložení záznamu přímo na úrovni databáze (obcházíme Django ORM a save metodu)
+        from django.utils import timezone
+
+        # Pokus o vložení záznamu přímo na úrovni databáze (obcházíme Django ORM a save metodu).
+        # Čas se předává parametrem, ne funkcí databáze - `datetime('now')` umí
+        # jen SQLite a na PostgreSQL by test spadl na syntaxi, ne na omezení,
+        # které má ověřit.
         with self.assertRaises(IntegrityError) as context:
             with connection.cursor() as cursor:
                 cursor.execute(
                     """
-                    INSERT INTO production_productionorder 
+                    INSERT INTO production_productionorder
                     (recipe_id, canteen_id, menu_plan_id, date, created_at)
-                    VALUES (%s, %s, NULL, %s, datetime('now'))
+                    VALUES (%s, %s, NULL, %s, %s)
                     """,
-                    [self.recipe.id, self.canteen.id, '2025-09-10']
+                    [self.recipe.id, self.canteen.id, '2025-09-10', timezone.now()]
                 )
-        
-        # Ověříme, že chyba souvisí s NOT NULL constraint
-        error_message = str(context.exception)
-        # SQLite chybová zpráva obsahuje "NOT NULL constraint failed"
+
+        # Ověříme, že chyba souvisí s NOT NULL constraint.
+        # SQLite hlásí "NOT NULL constraint failed", PostgreSQL
+        # "null value in column ... violates not-null constraint".
+        error_message = str(context.exception).lower()
         self.assertTrue(
-            'not null' in error_message.lower() or 'menu_plan_id' in error_message.lower(),
+            'not null' in error_message
+            or 'not-null' in error_message
+            or 'menu_plan_id' in error_message,
             f"Error should mention NOT NULL constraint or menu_plan_id. Got: {error_message}"
         )
     

@@ -51,7 +51,7 @@ Systém je rozdělen do několika logických modulů:
 ## Technické detaily
 
 Projekt je postaven na frameworku **Django**.
-*   Databáze: SQLite (cesta konfigurovatelná přes env `SQLITE_DB_PATH`).
+*   Databáze: PostgreSQL 17 (připojení přes env `POSTGRES_*`), ve vývoji i v produkci.
 *   Front-end: Django Templates + Bootstrap 5.
 *   Generování PDF: WeasyPrint.
 *   Generování Excel: OpenPyXL.

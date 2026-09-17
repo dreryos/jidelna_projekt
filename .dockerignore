@@ -1,24 +1,62 @@
+# Co se nesmí dostat do build kontextu.
+#
+# Dockerfile dělá `COPY . /app/`, takže do image jde všechno, co tu není
+# vyloučené. A co jednou skončí ve vrstvě image, z něj už nejde dostat ven:
+# smazání souboru v pozdější vrstvě ho neodstraní, `docker history` i prosté
+# rozbalení vrstvy ho vydají dál. U image, který se publikuje, je to totéž
+# jako soubor zveřejnit.
+
+# --- Tajemství a provozní data (tahle sekce je ta podstatná) ---
+# Heslo k databázi, SECRET_KEY, klíč k Mistral OCR.
+.env
+.env.*
+!.env.example
+# Lokální override compose - obsahuje vystavený port databáze.
+docker-compose.override.yml
+# Zálohy databáze: dump obsahuje hashe hesel všech uživatelů, e-maily
+# a data všech jídelen. Adresář data/backups vzniká až v běžícím kontejneru
+# na volume, do image nepatří v žádné podobě.
+data/
+backups/
+**/*.dump
+# Pozor na hvězdičku: dřív tu bylo jen `db.sqlite3`, což nepokrylo
+# `backups/db_provoz31_7.sqlite3` - kompletní kopii ostré databáze.
+**/*.sqlite3
+**/*.sqlite3-journal
+# Auditní log nese uživatelská jména a skladové pohyby.
+logs/
+**/*.log
+# Nahrané skeny dodacích listů (ceny, dodavatelé, sortiment).
+media/
+
+# --- Generované věci, které si image vyrobí sám ---
+# Nápovědu sestaví docker-entrypoint.sh přes `mkdocs build`.
+staticdocs/
+staticfiles/
+
+# --- Vývojové prostředí ---
+# Pozor na `**`: vzory bez něj Docker vyhodnocuje jen proti kořeni kontextu,
+# takže samotné `__pycache__` nevyloučí `apps/core/__pycache__`.
 .git
+.github
+.claude
+.roo
 .venv
-__pycache__
-*.pyc
-*.pyo
-*.pyd
-.Python
 env/
 venv/
-pip-log.txt
-pip-delete-this-directory.txt
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/*.pyd
+.Python
 .tox/
+.pytest_cache
+.cache
 .coverage
 .coverage.*
-.cache
-nosetests.xml
 coverage.xml
 *.cover
-*.log
-.pytest_cache
+nosetests.xml
+pip-log.txt
+pip-delete-this-directory.txt
 .DS_Store
-db.sqlite3
-media/
-staticfiles/

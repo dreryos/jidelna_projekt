@@ -6,7 +6,9 @@ Pokyny pro Claude Code při práci v tomto repozitáři.
 
 **SPÍŽ** — Django aplikace pro provoz školní/firemní jídelny: sklad, receptury, jídelníčky, výdejky, příjemky (včetně importu z fotky dokladu přes Mistral OCR), inventury, analytika.
 
-Django 6 / Python 3.14, SQLite, Bootstrap 5, WeasyPrint (PDF), MkDocs (nápověda v aplikaci).
+Django 6 / Python 3.14, PostgreSQL 17, Bootstrap 5, WeasyPrint (PDF), MkDocs (nápověda v aplikaci).
+
+Databáze běží i při vývoji a testech na PostgreSQL — `docker compose up -d db`. SQLite fallback tu není schválně: `select_for_update()` tiše ignoruje, takže by testy neověřovaly zamykání.
 
 ## Jazyk
 
@@ -17,7 +19,7 @@ Celý projekt je česky — UI, hlášky, dokumentace, commit messages, komentá
 Vždy přes `.venv` — systémový Python nemá závislosti:
 
 ```bash
-.venv/bin/python -m pytest apps test    # všechny testy (436)
+.venv/bin/python -m pytest apps test    # všechny testy (485)
 .venv/bin/python -m pytest test/test_ocr_client.py -k nazev
 .venv/bin/python manage.py check
 .venv/bin/python manage.py migrate
@@ -26,7 +28,7 @@ Vždy přes `.venv` — systémový Python nemá závislosti:
 ```
 
 - `pytest.ini` má `testpaths = test`, takže holý `pytest` **nespustí** testy v `apps/*/tests/` — proto vždy `pytest apps test`.
-- `manage.py test` v tomto projektu nefunguje (kolize `apps/production/tests` adresář vs. soubor). Používej pytest.
+- Testy v `apps/*/tests.py` sbírá pytest jen díky `python_files` v `pytest.ini` - výchozí nastavení bere pouze `test_*.py`.
 - Starší skripty v `test/` (`test_form_readonly.py`, `test_ingredient_deletion.py`, `test_ingredient_soft_delete.py`, `test_vat_implementation.py`, `test_visual_editor.py`) zapisují při importu do ostré DB — jsou proto v `addopts` ignorované. Nesbírej je zpět.
 - Testy OCR běží nad uloženými anotacemi v `test/fixtures/ocr/` — nikdy nesahej na skutečné (placené) Mistral API. Bez `MISTRAL_API_KEY` běží zbytek aplikace i testy normálně.
 

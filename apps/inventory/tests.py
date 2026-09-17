@@ -1,17 +1,21 @@
-from django.test import TestCase
+from django.test import TestCase, TransactionTestCase, skipUnlessDBFeature
 from django.utils import timezone
 from decimal import Decimal
 from datetime import datetime, timedelta
+import threading
 import time
 
 from django.core.exceptions import ValidationError
+from django.db import connections
 
 from apps.canteens.models import Canteen, Warehouse
 from apps.core.models import Ingredient, Recipe, RecipeIngredient, Category
 from apps.inventory.models import (
-    StockItem, IngredientPriceHistory, StockTransfer,
+    StockItem, IngredientPriceHistory, StockTransfer, StockTransferItem,
     InventoryVerification, InventoryVerificationItem,
+    GoodsReceipt, GoodsReceiptItem,
 )
+from django.contrib.auth.models import User
 from django.urls import reverse
 
 
@@ -859,3 +863,291 @@ class InventoryVerificationZeroOutTest(TestCase):
         self.stock_item.refresh_from_db()
         self.assertEqual(self.stock_item.quantity, Decimal('10.000'))
 
+
+@skipUnlessDBFeature('has_select_for_update')
+class StockTransferLockingTest(TransactionTestCase):
+    """
+    Souběh dvou převodek v opačném směru mezi týmiž sklady.
+
+    Tohle je ten nejnebezpečnější vzorec, který přišel s PostgreSQL:
+    do převodu na PostgreSQL SQLite `SELECT ... FOR UPDATE` tiše ignorovala,
+    takže se nemohlo stát ani to dobré (zámky drží), ani to špatné
+    (deadlock). Na PostgreSQL platí obojí. Kdyby si každá převodka brala
+    zámky v pořadí "nejdřív můj zdroj, pak můj cíl", dvě převodky v opačném
+    směru se zaklesnou: první drží sklad A a čeká na B, druhá drží B a čeká
+    na A. PostgreSQL to po chvíli rozetne tím, že jednu transakci zabije
+    chybou - uživateli spadne uložení převodky.
+
+    Proto `StockItem.lock_existing()` bere všechny zámky předem a v pořadí
+    podle `pk`. Test to ověřuje: obě řady převodek musí doběhnout bez
+    výjimky a součty na skladech musí po vyrušení opačných směrů sedět
+    na původní hodnotu.
+
+    Test je `TransactionTestCase`, ne `TestCase` - vlákna potřebují vidět
+    skutečně zapsaná data, a `TestCase` drží všechno v jedné neuzavřené
+    transakci. Na SQLite se přeskakuje (`has_select_for_update`), protože
+    tam by neověřoval nic.
+    """
+
+    TRANSFERS_PER_DIRECTION = 10
+    INITIAL_QUANTITY = Decimal('100.000')
+    TRANSFER_QUANTITY = Decimal('1.000')
+    UNIT_PRICE = Decimal('10.00')
+
+    def setUp(self):
+        self.canteen = Canteen.objects.create(name='Rekreačka A')
+        self.warehouse_a = Warehouse.objects.create(name='Sklad A', canteen=self.canteen)
+        self.warehouse_b = Warehouse.objects.create(name='Sklad B', canteen=self.canteen)
+
+        # Víc surovin než jedna - s jedinou položkou by se křížové pořadí
+        # zámků nemuselo projevit.
+        self.ingredients = [
+            Ingredient.objects.create(
+                name=name,
+                unit='kg',
+                base_unit='kg',
+                recipe_unit='kg',
+                conversion_factor=Decimal('1')
+            )
+            for name in ('Mouka', 'Cukr', 'Sůl')
+        ]
+
+        for warehouse in (self.warehouse_a, self.warehouse_b):
+            for ingredient in self.ingredients:
+                StockItem.objects.create(
+                    warehouse=warehouse,
+                    ingredient=ingredient,
+                    quantity=self.INITIAL_QUANTITY,
+                    price=self.UNIT_PRICE
+                )
+
+        # Převodky se zakládají dopředu a s vlastním číslem. Generátor čísel
+        # (`_generate_transfer_number`) při souběhu skončí IntegrityError na
+        # unique - to je známé chování a není to předmět tohoto testu.
+        self.transfers_a_to_b = self._create_transfers(
+            self.warehouse_a, self.warehouse_b, prefix='AB'
+        )
+        self.transfers_b_to_a = self._create_transfers(
+            self.warehouse_b, self.warehouse_a, prefix='BA'
+        )
+
+    def _create_transfers(self, warehouse_from, warehouse_to, prefix):
+        transfers = []
+        for index in range(self.TRANSFERS_PER_DIRECTION):
+            transfer = StockTransfer.objects.create(
+                warehouse_from=warehouse_from,
+                warehouse_to=warehouse_to,
+                transfer_number=f'PRE-TEST-{prefix}-{index:03d}'
+            )
+            for ingredient in self.ingredients:
+                StockTransferItem.objects.create(
+                    stock_transfer=transfer,
+                    ingredient=ingredient,
+                    quantity=self.TRANSFER_QUANTITY,
+                    unit_price_with_vat=self.UNIT_PRICE
+                )
+            transfers.append(transfer)
+        return transfers
+
+    def _run_transfers(self, transfers, errors, barrier):
+        """Tělo vlákna. Bariéra sjednotí start, ať se převodky skutečně
+        potkají - jinak by každá doběhla dřív, než druhá začne."""
+        try:
+            barrier.wait(timeout=10)
+            for transfer in transfers:
+                transfer.start_and_complete()
+        except Exception as exc:  # noqa: BLE001 - výjimku chceme vidět v assertu
+            errors.append(exc)
+        finally:
+            # Spojení jsou thread-local; bez zavření by je test nechal viset
+            # a TransactionTestCase by neuklidil tabulky.
+            connections.close_all()
+
+    def test_opposite_transfers_do_not_deadlock(self):
+        errors = []
+        barrier = threading.Barrier(2, timeout=10)
+
+        threads = [
+            threading.Thread(
+                target=self._run_transfers,
+                args=(self.transfers_a_to_b, errors, barrier)
+            ),
+            threading.Thread(
+                target=self._run_transfers,
+                args=(self.transfers_b_to_a, errors, barrier)
+            ),
+        ]
+
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=60)
+
+        for thread in threads:
+            self.assertFalse(thread.is_alive(), "Vlákno s převodkami nedoběhlo - zaseklý zámek.")
+
+        self.assertEqual(errors, [], f"Převodky měly doběhnout bez chyby, ale spadly: {errors}")
+
+        # Stejný počet převodů oběma směry se vyruší, stavy musí sedět na původní.
+        for warehouse in (self.warehouse_a, self.warehouse_b):
+            for ingredient in self.ingredients:
+                stock_item = StockItem.objects.get(warehouse=warehouse, ingredient=ingredient)
+                self.assertEqual(
+                    stock_item.quantity,
+                    self.INITIAL_QUANTITY,
+                    f"{ingredient.name} na skladu {warehouse.name}: "
+                    f"{stock_item.quantity} místo {self.INITIAL_QUANTITY}. "
+                    f"Ztracený zápis při souběhu."
+                )
+
+        completed = StockTransfer.objects.filter(status='COMPLETED').count()
+        self.assertEqual(completed, 2 * self.TRANSFERS_PER_DIRECTION)
+
+
+
+@skipUnlessDBFeature('has_select_for_update')
+class CrossDocumentLockOrderTest(TransactionTestCase):
+    """
+    Souběh příjemky a převodky nad týmiž surovinami.
+
+    Tohle je díra, kterou první verze opravy nechala otevřenou. Převodky si
+    braly zámky předem v pořadí podle `pk`, ale příjemka a inventura si je
+    braly po jedné, v pořadí podle `ingredient_id`. Dokud pořadí karet podle
+    `pk` odpovídá pořadí podle suroviny, nic se nestane - jenže to databáze
+    nezaručuje. Stačí, aby skladová karta vznikla pro druhou surovinu dřív
+    (typicky ji založí první příjemka, která ji zmíní), a pořadí se rozejdou.
+
+    Test to rozejití vynucuje schválně: karty se zakládají v opačném pořadí,
+    než v jakém jdou suroviny. Bez jednotného zamykání pak příjemka drží
+    kartu, na kterou převodka čeká, a naopak.
+
+    Na SQLite se přeskakuje, tam by neověřoval nic.
+    """
+
+    ROUNDS = 10
+    INITIAL_QUANTITY = Decimal('1000.000')
+    UNIT_PRICE = Decimal('10.00')
+
+    def setUp(self):
+        self.user = User.objects.create_user('skladnik', 'skladnik@example.com', 'heslo123')
+        self.canteen = Canteen.objects.create(name='Rekreačka A')
+        self.warehouse_a = Warehouse.objects.create(name='Sklad A', canteen=self.canteen)
+        self.warehouse_b = Warehouse.objects.create(name='Sklad B', canteen=self.canteen)
+
+        self.first = Ingredient.objects.create(
+            name='Aaa mouka', unit='kg', base_unit='kg',
+            recipe_unit='kg', conversion_factor=Decimal('1')
+        )
+        self.second = Ingredient.objects.create(
+            name='Bbb cukr', unit='kg', base_unit='kg',
+            recipe_unit='kg', conversion_factor=Decimal('1')
+        )
+
+        # Karty se zakládají pozpátku, aby pořadí podle `pk` bylo přesně
+        # opačné než pořadí podle `ingredient_id`. Kdyby se zakládaly
+        # popořadě, obě pořadí by splynula a test by prošel i s chybou.
+        for warehouse in (self.warehouse_a, self.warehouse_b):
+            for ingredient in (self.second, self.first):
+                StockItem.objects.create(
+                    warehouse=warehouse,
+                    ingredient=ingredient,
+                    quantity=self.INITIAL_QUANTITY,
+                    price=self.UNIT_PRICE
+                )
+
+        self.assertGreater(
+            StockItem.objects.get(warehouse=self.warehouse_a, ingredient=self.first).pk,
+            StockItem.objects.get(warehouse=self.warehouse_a, ingredient=self.second).pk,
+            'Předpoklad testu neplatí: pořadí podle pk se neliší od pořadí podle suroviny.'
+        )
+
+        self.receipts = self._create_receipts()
+        self.transfers = self._create_transfers()
+
+    def _create_receipts(self):
+        receipts = []
+        for index in range(self.ROUNDS):
+            receipt = GoodsReceipt.objects.create(
+                warehouse=self.warehouse_a,
+                receipt_number=f'PRE-TEST-PR-{index:03d}',
+                receipt_date=timezone.now().date(),
+                supplier='Testovací dodavatel',
+                created_by=self.user
+            )
+            for ingredient in (self.first, self.second):
+                GoodsReceiptItem.objects.create(
+                    goods_receipt=receipt,
+                    ingredient=ingredient,
+                    warehouse=self.warehouse_a,
+                    quantity=Decimal('1.000'),
+                    price=self.UNIT_PRICE,
+                    price_without_vat=self.UNIT_PRICE,
+                    vat_rate=Decimal('0'),
+                    vat_amount=Decimal('0')
+                )
+            receipts.append(receipt)
+        return receipts
+
+    def _create_transfers(self):
+        transfers = []
+        for index in range(self.ROUNDS):
+            transfer = StockTransfer.objects.create(
+                warehouse_from=self.warehouse_a,
+                warehouse_to=self.warehouse_b,
+                transfer_number=f'PRE-TEST-PREV-{index:03d}'
+            )
+            for ingredient in (self.first, self.second):
+                StockTransferItem.objects.create(
+                    stock_transfer=transfer,
+                    ingredient=ingredient,
+                    quantity=Decimal('1.000'),
+                    unit_price_with_vat=self.UNIT_PRICE
+                )
+            transfers.append(transfer)
+        return transfers
+
+    def _run(self, action, documents, errors, barrier):
+        try:
+            barrier.wait(timeout=10)
+            for document in documents:
+                action(document)
+        except Exception as exc:  # noqa: BLE001 - výjimku chceme vidět v assertu
+            errors.append(exc)
+        finally:
+            connections.close_all()
+
+    def test_receipt_and_transfer_do_not_deadlock(self):
+        errors = []
+        barrier = threading.Barrier(2, timeout=10)
+
+        threads = [
+            threading.Thread(
+                target=self._run,
+                args=(lambda doc: doc.confirm(), self.receipts, errors, barrier)
+            ),
+            threading.Thread(
+                target=self._run,
+                args=(lambda doc: doc.start_and_complete(), self.transfers, errors, barrier)
+            ),
+        ]
+
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=60)
+
+        for thread in threads:
+            self.assertFalse(thread.is_alive(), 'Vlákno nedoběhlo - zaseklý zámek.')
+
+        self.assertEqual(errors, [], f'Doklady měly doběhnout bez chyby, ale spadly: {errors}')
+
+        # Příjemka přidá na sklad A, převodka tolikéž odebere - výsledek
+        # musí sedět na původní hodnotu.
+        for ingredient in (self.first, self.second):
+            stock_item = StockItem.objects.get(warehouse=self.warehouse_a, ingredient=ingredient)
+            self.assertEqual(
+                stock_item.quantity,
+                self.INITIAL_QUANTITY,
+                f'{ingredient.name}: {stock_item.quantity} místo {self.INITIAL_QUANTITY}. '
+                f'Ztracený zápis při souběhu.'
+            )

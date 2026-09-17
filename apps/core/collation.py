@@ -7,6 +7,13 @@ abecedy včetně spřežky "ch" (řadí se mezi H a I).
 Registruje se pod názvem "czech" na každé SQLite připojení přes signál
 ``connection_created`` (viz apps/core/apps.py) a používá se v Meta.ordering
 modelu Ingredient a v explicitních order_by pro vyhledávání surovin.
+
+**Aplikace už na SQLite neběží** - od převodu na PostgreSQL kolaci "czech"
+zakládá migrace ``core/0011_czech_collation`` přes ICU (locale cs-CZ).
+Tenhle modul tedy dnes nikdo nevolá; registrace je ošetřená podmínkou na
+vendor, takže neškodí. Necháváme ho pro případ, že by někdo potřeboval
+spustit aplikaci nad SQLite (rychlý lokální pokus, analýza staré zálohy) -
+volání ``Collate('name', 'czech')`` by tam jinak spadlo.
 """
 
 # Primární pořadí písmen české abecedy. Písmena s diakritikou, která

@@ -101,10 +101,23 @@ WSGI_APPLICATION = 'spiz_project.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
+# PostgreSQL všude - vývoj, testy i produkce. SQLite fallback tu schválně
+# není: řádkové zámky (`select_for_update()`) neumí a tiše je ignoruje,
+# takže by se testy lišily od provozu přesně v tom, na čem stojí správnost
+# skladu. K vývoji stačí `docker compose up -d db`.
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': Path(os.environ.get('SQLITE_DB_PATH', str(BASE_DIR / 'db.sqlite3'))),
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': os.environ.get('POSTGRES_DB', 'spiz'),
+        'USER': os.environ.get('POSTGRES_USER', 'spiz'),
+        'PASSWORD': os.environ.get('POSTGRES_PASSWORD', ''),
+        'HOST': os.environ.get('POSTGRES_HOST', 'localhost'),
+        'PORT': os.environ.get('POSTGRES_PORT', '5432'),
+        # Bez znovupoužití spojení se na 1,5 OCPU pozná každý request -
+        # navázání spojení k PG je dražší než otevření SQLite souboru.
+        'CONN_MAX_AGE': 60,
+        'CONN_HEALTH_CHECKS': True,
+        'OPTIONS': {'connect_timeout': 5},
     }
 }
 
@@ -192,6 +205,45 @@ MISTRAL_OCR_MODEL = os.environ.get('MISTRAL_OCR_MODEL', 'mistral-ocr-latest')
 # importy. Úklid provádí `manage.py purge_receipt_scans`, pouštěný z cronu.
 OCR_SCAN_RETENTION_DAYS = int(os.environ.get('OCR_SCAN_RETENTION_DAYS', '7'))
 
+# Zálohy databáze (pg_dump). Adresář leží v datovém volume a **mimo**
+# MEDIA_ROOT i STATIC_ROOT - záloha obsahuje hashe hesel a data všech
+# jídelen, takže ji nesmí servírovat whitenoise ani media.
+DB_BACKUP_DIR = Path(os.environ.get('DB_BACKUP_DIR', str(BASE_DIR / 'data' / 'backups')))
+
+# Vypínač stahování dumpu z /backup/. Nastavením na False jde přístup
+# zavřít bez nasazení nové verze.
+DB_DUMP_DOWNLOAD_ENABLED = os.environ.get('DB_DUMP_DOWNLOAD_ENABLED', 'True').lower() not in (
+    'false', '0', 'no'
+)
+
+# Zabezpečení pro provoz za HTTPS.
+#
+# Vypínač je jeden a **výchozí hodnota je False schválně**: kdyby se tohle
+# zapnulo na instalaci, která běží po HTTP, uživatelé by se okamžitě
+# nepřihlásili (cookie by prohlížeč neposlal) a `SECURE_SSL_REDIRECT` by
+# navíc udělal nekonečnou smyčku přesměrování. Zapněte HTTPS_ONLY=True až
+# ve chvíli, kdy aplikace jede za HTTPS.
+#
+# Za reverzní proxy je podstatná i `SECURE_PROXY_SSL_HEADER`. Bez ní Django
+# vidí spojení od proxy jako HTTP, znovu přesměruje na HTTPS a proxy pošle
+# požadavek zpátky - smyčka. Proxy tedy musí posílat `X-Forwarded-Proto`.
+#
+# Proč to není kosmetika: přes /backup/ se stahuje kompletní dump databáze
+# s hashi hesel a daty všech jídelen. Po HTTP by ho četl kdokoli na trase.
+HTTPS_ONLY = os.environ.get('HTTPS_ONLY', 'False').lower() in ('true', '1', 'yes')
+
+if HTTPS_ONLY:
+    SECURE_SSL_REDIRECT = True
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    # Rok. HSTS je nevratné po dobu své platnosti - prohlížeč si zapamatuje,
+    # že na tuhle doménu smí jen přes HTTPS, a zpátky to nejde odvolat jinak
+    # než vypršením. Proto až po ověření, že HTTPS spolehlivě funguje.
+    SECURE_HSTS_SECONDS = 31536000
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/6.0/ref/settings/#default-auto-field
 
@@ -204,6 +256,16 @@ LOGIN_URL = '/accounts/login/'
 LOGIN_REDIRECT_URL = '/'
 
 # Logging configuration
+#
+# Adresář se musí založit dřív, než ho logging dostane do ruky. `logs/` není
+# v gitu ani v build kontextu image, takže v čerstvém klonu i v čerstvém
+# kontejneru chybí - a `dictConfig` na chybějící cestě spadne rovnou při
+# `django.setup()` hláškou "Unable to configure handler 'file'". Aplikace
+# tedy vůbec nenaběhne a z hlášky není poznat, že jde jen o chybějící
+# adresář.
+LOG_DIR = BASE_DIR / 'logs'
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
@@ -221,7 +283,7 @@ LOGGING = {
         'file': {
             'level': 'INFO',
             'class': 'logging.handlers.RotatingFileHandler',
-            'filename': BASE_DIR / 'logs' / 'audit.log',
+            'filename': LOG_DIR / 'audit.log',
             'maxBytes': 10485760,  # 10MB
             'backupCount': 5,
             'formatter': 'verbose',

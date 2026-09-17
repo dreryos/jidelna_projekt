@@ -9,6 +9,7 @@ Opravuje:
 """
 
 from django.core.management.base import BaseCommand
+from django.db.models import F
 from decimal import Decimal
 
 from apps.core.models import Ingredient
@@ -36,8 +37,8 @@ class Command(BaseCommand):
         # že recipeUnit by měla být g/ml (ne kg/l), protože recepty používají gramy.
         same_unit_bad_factor = Ingredient.objects.exclude(
             conversion_factor=Decimal('1')
-        ).extra(
-            where=["base_unit = recipe_unit"]
+        ).filter(
+            base_unit=F('recipe_unit')
         )
 
         if same_unit_bad_factor.exists():

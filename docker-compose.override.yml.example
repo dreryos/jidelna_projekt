@@ -1,0 +1,19 @@
+# Vzor lokálního override pro vývoj. Zkopírujte na `docker-compose.override.yml`
+# (ten je v .gitignore a Compose ho načte sám).
+#
+# K čemu to je: hlavní `docker-compose.yml` databázi schválně nevystavuje
+# žádným portem - na serveru nemá být vidět odnikud. Při vývoji ale běží
+# Django z `.venv` mimo Docker a k databázi se potřebuje dostat.
+#
+# Vazba na `127.0.0.1` je podstatná. Samotné `5432:5432` by port otevřelo
+# na všech rozhraních stroje, tedy i ven.
+#
+# Na server tenhle soubor nekopírujte.
+
+services:
+  db:
+    ports:
+      - "127.0.0.1:55432:5432"
+
+# Port 55432, ne 5432: výchozí port na stroji často už drží jiný projekt.
+# Stejnou hodnotu nastavte i do `.env` jako POSTGRES_PORT.

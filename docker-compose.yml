@@ -1,8 +1,46 @@
 services:
-  spiz:
-    image: dreryos/jidelna_projekt:latest
+  db:
+    image: postgres:17-alpine
     volumes:
-      - sqlite_data:/app/data
+      - pg_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    # Ladění na Oracle Ampere A1 (1,5 OCPU / 5 GB RAM). Výchozí
+    # max_connections=100 je na tenhle stroj nesmysl; databáze má jednotky
+    # desítek MB, takže se celá vejde do shared_buffers a disk přestane hrát roli.
+    command: >
+      postgres
+      -c shared_buffers=512MB
+      -c effective_cache_size=1536MB
+      -c work_mem=8MB
+      -c maintenance_work_mem=128MB
+      -c max_connections=20
+      -c random_page_cost=1.1
+      -c wal_compression=on
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    # Žádné ports: - databáze nemá být vidět z internetu. Kdo potřebuje psql,
+    # jde přes `docker compose exec db psql`.
+
+  spiz:
+    # GitHub Container Registry, ne Docker Hub. Image staví CI po merge do
+    # main (.github/workflows/testy-a-image.yml) - ručně stavěný image se
+    # dělat nemá, protože bere i soubory, které v gitu nejsou.
+    # Návrat na starší verzi: nahradit `latest` za `sha-<commit>`.
+    image: ghcr.io/dreryos/jidelna_projekt:latest
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      # Datový adresář: automatické zálohy databáze (/app/data/backups).
+      # Je mimo MEDIA_ROOT i STATIC_ROOT, aby zálohu nikdy neservírovala statika.
+      - app_data:/app/data
       - static_volume:/app/staticfiles
       # Nahrané skeny dokladů. Jsou dočasné (mažou se po potvrzení příjemky,
       # nejpozději po OCR_SCAN_RETENTION_DAYS), ale rozdělaný import nesmí
@@ -13,30 +51,36 @@ services:
     environment:
       - DJANGO_ALLOWED_HOSTS=spiz.yourdomain.com,localhost,127.0.0.1
       - CSRF_TRUSTED_ORIGINS=https://spiz.yourdomain.com,http://spiz.yourdomain.com
-      - SECRET_KEY=change_me_in_production
+      # Hesla a klíče patří do .env vedle tohoto souboru, ne sem do gitu.
+      - SECRET_KEY=${SECRET_KEY}
       - DEBUG=False
-      - SQLITE_DB_PATH=/app/data/db.sqlite3
+      # Zapněte na True, jakmile aplikace jede za HTTPS - viz .env.example.
+      - HTTPS_ONLY=${HTTPS_ONLY:-False}
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
       # Superuser creation (optional)
-      - DJANGO_SUPERUSER_USERNAME=admin
-      - DJANGO_SUPERUSER_EMAIL=admin@example.com
-      - DJANGO_SUPERUSER_PASSWORD=admin
+      - DJANGO_SUPERUSER_USERNAME=${DJANGO_SUPERUSER_USERNAME:-admin}
+      - DJANGO_SUPERUSER_EMAIL=${DJANGO_SUPERUSER_EMAIL:-admin@example.com}
+      - DJANGO_SUPERUSER_PASSWORD=${DJANGO_SUPERUSER_PASSWORD}
       - MEDIA_ROOT=/app/media
+      # Noční zálohy databáze. Leží v app_data volume a mimo MEDIA_ROOT
+      # i STATIC_ROOT - obsahují hashe hesel a data všech jídelen.
+      - DB_BACKUP_DIR=/app/data/backups
+      - DB_DUMP_DOWNLOAD_ENABLED=${DB_DUMP_DOWNLOAD_ENABLED:-True}
       # Načítání příjemek z fotky. Bez klíče je funkce nedostupná,
       # zbytek aplikace běží normálně. Klíč patří do .env, ne sem.
       - MISTRAL_API_KEY=${MISTRAL_API_KEY:-}
       - OCR_SCAN_RETENTION_DAYS=7
-    # Pozor: tenhle command přebíjí docker-entrypoint.sh, takže kroky, které
-    # mají běžet při startu, musí být i tady.
-    # Nefatální je jen úklid skenů; migrace, statika a superuser musí projít,
-    # jinak by Gunicorn nastartoval nad nemigrovanou databází.
-    command: >
-      sh -c "python manage.py migrate &&
-      python manage.py collectstatic --noinput &&
-      python create_superuser.py &&
-      { python manage.py purge_receipt_scans || true; } &&
-      gunicorn --bind 0.0.0.0:8000 spiz_project.wsgi:application"
+    restart: unless-stopped
+    # Žádný command: override. Dřív tu byl a přebíjel docker-entrypoint.sh -
+    # aplikace pak běžela na jednom gunicorn workeru s timeoutem 30 s a bez
+    # `mkdocs build`, takže jedno pomalé PDF blokovalo všechny ostatní.
 
 volumes:
-  sqlite_data:
+  pg_data:
+  app_data:
   static_volume:
   media_volume:
