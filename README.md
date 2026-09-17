@@ -168,6 +168,7 @@ Většina má rozumnou výchozí hodnotu. Nastavit je potřeba `POSTGRES_PASSWOR
 | `POSTGRES_HOST` | `localhost` | Adresa serveru (v Dockeru `db`) |
 | `POSTGRES_PORT` | `5432` | Port |
 | `MEDIA_ROOT` | `media/` | Úložiště nahraných souborů (skeny dokladů) |
+| `HTTPS_ONLY` | `False` | Zapíná bezpečné cookie, HSTS a přesměrování na HTTPS. Zapněte až za HTTPS — na HTTP instalaci se nikdo nepřihlásí |
 | `DB_BACKUP_DIR` | `data/backups/` | Kam se ukládají noční zálohy databáze |
 | `DB_DUMP_DOWNLOAD_ENABLED` | `True` | Vypínač stahování zálohy z `/backup/` |
 | `MISTRAL_API_KEY` | prázdný | Klíč pro rozpoznávání dokladů z fotky. Bez něj je import z fotky vypnutý, zbytek aplikace běží dál |

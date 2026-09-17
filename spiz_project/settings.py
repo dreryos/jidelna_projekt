@@ -216,6 +216,34 @@ DB_DUMP_DOWNLOAD_ENABLED = os.environ.get('DB_DUMP_DOWNLOAD_ENABLED', 'True').lo
     'false', '0', 'no'
 )
 
+# Zabezpečení pro provoz za HTTPS.
+#
+# Vypínač je jeden a **výchozí hodnota je False schválně**: kdyby se tohle
+# zapnulo na instalaci, která běží po HTTP, uživatelé by se okamžitě
+# nepřihlásili (cookie by prohlížeč neposlal) a `SECURE_SSL_REDIRECT` by
+# navíc udělal nekonečnou smyčku přesměrování. Zapněte HTTPS_ONLY=True až
+# ve chvíli, kdy aplikace jede za HTTPS.
+#
+# Za reverzní proxy je podstatná i `SECURE_PROXY_SSL_HEADER`. Bez ní Django
+# vidí spojení od proxy jako HTTP, znovu přesměruje na HTTPS a proxy pošle
+# požadavek zpátky - smyčka. Proxy tedy musí posílat `X-Forwarded-Proto`.
+#
+# Proč to není kosmetika: přes /backup/ se stahuje kompletní dump databáze
+# s hashi hesel a daty všech jídelen. Po HTTP by ho četl kdokoli na trase.
+HTTPS_ONLY = os.environ.get('HTTPS_ONLY', 'False').lower() in ('true', '1', 'yes')
+
+if HTTPS_ONLY:
+    SECURE_SSL_REDIRECT = True
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    # Rok. HSTS je nevratné po dobu své platnosti - prohlížeč si zapamatuje,
+    # že na tuhle doménu smí jen přes HTTPS, a zpátky to nejde odvolat jinak
+    # než vypršením. Proto až po ověření, že HTTPS spolehlivě funguje.
+    SECURE_HSTS_SECONDS = 31536000
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/6.0/ref/settings/#default-auto-field
 

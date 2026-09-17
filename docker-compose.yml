@@ -50,6 +50,8 @@ services:
       # Hesla a klíče patří do .env vedle tohoto souboru, ne sem do gitu.
       - SECRET_KEY=${SECRET_KEY}
       - DEBUG=False
+      # Zapněte na True, jakmile aplikace jede za HTTPS - viz .env.example.
+      - HTTPS_ONLY=${HTTPS_ONLY:-False}
       - POSTGRES_DB=${POSTGRES_DB}
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}

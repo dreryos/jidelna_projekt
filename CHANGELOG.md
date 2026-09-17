@@ -27,6 +27,10 @@ a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
   - Gunicorn jede na 3 workerech s timeoutem 120 s a recyklací po 200 requestech — `command:` v compose dosud přebíjel entrypoint a spouštěl jediný worker s výchozím timeoutem 30 s, takže delší PDF padalo na timeout. WeasyPrint navíc nechává růst RSS, proto recyklace
   - Hesla (`SECRET_KEY`, heslo k databázi, heslo superuživatele) se berou z `.env`, ne z hodnot napsaných natvrdo v compose
 
+- **Zabezpečení pro provoz za HTTPS** (17.9.2026)
+  - Nová proměnná `HTTPS_ONLY` zapne bezpečné session i CSRF cookie, HSTS a přesměrování na HTTPS. Výchozí hodnota je `False` schválně: na instalaci běžící po HTTP by se uživatelé rázem nepřihlásili a přesměrování by se zacyklilo. Zapněte ji, až aplikace pojede za HTTPS
+  - Bez toho by se přes `/backup/` dala po nešifrovaném spojení odposlechnout kompletní záloha databáze. Se zapnutou proměnnou nemá `manage.py check --deploy` jediný nález
+
 - **Odstraněny konstrukce závislé na SQLite** (16.9.2026)
   - Test databázového omezení ve výdejkách předává čas parametrem místo funkce `datetime('now')`, kterou zná jen SQLite
   - Příkaz `fix_conversion_factors` používá `F()` místo dávno zastaralého `.extra()`
