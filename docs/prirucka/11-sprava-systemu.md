@@ -89,9 +89,113 @@ Dělá se dvěma způsoby:
 
 Stahování jde na serveru úplně vypnout proměnnou `DB_DUMP_DOWNLOAD_ENABLED=False` — bez nasazení nové verze. Noční automat běží dál.
 
+#### Ruční vytvoření zálohy
+
+Kromě tlačítka a nočního automatu jde záloha udělat i z příkazové řádky — hodí se před rizikovou operací:
+
+```bash
+docker compose exec -T db pg_dump -Fc --no-owner --no-privileges \
+    -U spiz -d spiz > zaloha.dump
+```
+
+> **Jméno uživatele a databáze.** Všechny příkazy v této kapitole počítají s výchozí konfigurací, kde se uživatel i databáze jmenují `spiz`. Máte-li v `.env` jiné hodnoty (`POSTGRES_USER`, `POSTGRES_DB`), dosaďte je — zjistíte je příkazem `grep POSTGRES_ .env`. Chybné jméno se projeví hláškou, že uživatel nebo databáze neexistuje, takže se omylem nezálohuje něco jiného.
+
+Přepínač `-T` u `docker compose exec` je **povinný**. Bez něj Docker přimíchá do výstupu řídicí znaky a výsledný soubor je nepoužitelný — což se pozná až při pokusu o obnovu.
+
+Co znamenají ostatní přepínače:
+
+* **`-Fc`** — *custom* formát: komprimovaný, binární, a hlavně dovolí při obnově vybrat jen některé tabulky. Bez `-F` vznikne čitelné SQL, jenže to už pak jde obnovit jen celé.
+* **`--no-owner --no-privileges`** — v záloze nebudou příkazy nastavující vlastníka objektů. Bez nich zálohu nenasadíte pod jiným databázovým uživatelem, než pod kterým vznikla.
+
+**Verze nástroje musí být stejná nebo vyšší než verze serveru.** U příkazů v této kapitole to nehrozí: běží uvnitř kontejneru `db`, kde je klient i server z téhož obrazu `postgres:17-alpine`. Ověřit to jde příkazem `docker compose exec -T db pg_dump --version`.
+
+Hlídat se to musí jinde — u záloh, které dělá **aplikace** (tlačítko na této stránce a noční automat). Ty spouštějí `pg_dump` uvnitř aplikačního kontejneru, a proto je v jeho obrazu `postgresql-client-17`, shodně s verzí databáze. Při povýšení PostgreSQL je potřeba povýšit obojí.
+
+#### Co je v záloze a jak se do ní podívat
+
+Záloha je binární soubor, `cat` ani textový editor nepomůžou. Nejdřív ji dostaňte do kontejneru s databází:
+
+```bash
+docker compose cp zaloha.dump db:/tmp/z.dump
+```
+
+**Obsah zálohy** — první kontrola, jestli soubor není useknutý:
+
+```bash
+docker compose exec -T db pg_restore -l /tmp/z.dump
+```
+
+```text
+;     dbname: spiz
+;     TOC Entries: 412
+;     Compression: gzip
+;     Format: CUSTOM
+```
+
+⚠️ Tenhle výpis jako jediný **nefunguje z roury**. `docker compose exec -T db pg_restore -l /dev/stdin < zaloha.dump` skončí hláškou `did not find magic string in file header`, protože `pg_restore` potřebuje v souboru skákat. Odtud to kopírování o odstavec výš.
+
+**Převod na čitelné SQL:**
+
+```bash
+docker compose exec -T db pg_restore -f - /tmp/z.dump | less
+docker compose exec -T db pg_restore -f - -t core_ingredient /tmp/z.dump
+```
+
+**Jen data jedné tabulky** (`-a`), když v záloze hledáte konkrétní záznam:
+
+```bash
+docker compose exec -T db pg_restore -a -t core_ingredient -f - /tmp/z.dump | grep "Hladká mouka"
+```
+
 #### Obnova zálohy
 
-Obnova se dělá z příkazové řádky serveru, ne z aplikace:
+Obnova se dělá z příkazové řádky serveru, ne z aplikace. Scénáře jsou tři.
+
+**1. Do nové prázdné databáze** — tohle chcete skoro vždycky. Nic nepřepíše, takže si zálohu můžete prohlédnout dřív, než se rozhodnete:
+
+```bash
+docker compose exec -T db psql -U spiz -d postgres -c "CREATE DATABASE nahled OWNER spiz;"
+docker compose exec -T db pg_restore --no-owner --no-privileges -U spiz -d nahled /tmp/z.dump
+docker compose exec -T db psql -U spiz -d nahled -c "SELECT count(*) FROM core_ingredient;"
+```
+
+Až skončíte: `docker compose exec -T db psql -U spiz -d postgres -c "DROP DATABASE nahled;"`
+
+**2. Jen jedna tabulka.** Pozor, tohle nejsou dvě jména v tomtéž příkazu — záleží, jestli se chcete podívat, nebo opravovat.
+
+*Podívat se, co v tabulce bylo* — do kontrolní databáze `nahled` ze scénáře 1 (musí už existovat, jinak příkaz skončí hláškou, že databáze neexistuje):
+
+```bash
+docker compose exec -T db pg_restore --no-owner -U spiz -d nahled -t core_ingredient /tmp/z.dump
+```
+
+*Opravit ostrou databázi* — tohle **není jednořádková operace** a `-d spiz` samo o sobě nestačí:
+
+* Pokud tabulka pořád existuje, `pg_restore -t` selže na `CREATE TABLE`, protože ji nemůže založit znovu.
+* Obnova jen dat (`-a`) se u neprázdné tabulky srazí s existujícími řádky na primárním klíči.
+* `-t` obnoví **jen tu jednu tabulku** — ani cizí klíče, které na ni odkazují z jiných tabulek, ani sekvenci pro její `id`. Po obnově tedy může první nový záznam spadnout na duplicitní klíč.
+
+Bezpečný postup je vytáhnout data jako SQL, prohlédnout si je a teprve pak vědomě nasadit:
+
+```bash
+# 1. zastavit aplikaci
+docker compose stop spiz
+
+# 2. vytáhnout data tabulky jako SQL a prohlédnout
+docker compose exec -T db pg_restore -a -t core_ingredient -f - /tmp/z.dump > obnova.sql
+less obnova.sql
+
+# 3. teprve pak nasadit
+docker compose cp obnova.sql db:/tmp/obnova.sql
+docker compose exec -T db psql -U spiz -d spiz -f /tmp/obnova.sql
+
+# 4. spustit aplikaci
+docker compose start spiz
+```
+
+Nejste-li si jistí, je čistší varianta scénář 3 — obnovit celou databázi ze zálohy a smířit se se ztrátou novějších záznamů — než skládat databázi po tabulkách.
+
+**3. Přepis ostré databáze** — po havárii. Tohle je ta nevratná varianta:
 
 ```bash
 # 1. zastavit aplikaci, ať do databáze nikdo nezapisuje
@@ -108,7 +212,14 @@ docker compose start spiz
 
 `--clean --if-exists` znamená, že se stávající obsah databáze **zahodí** a nahradí zálohou. Není to doplnění, je to přepis.
 
-⚠️ **Zálohu, kterou jste nikdy nezkusili obnovit, nepovažujte za zálohu.** Vyzkoušejte obnovu do prázdné databáze aspoň jednou — až v ostrém výpadku na to není čas.
+#### Na co si dát pozor
+
+* **Aplikaci zastavte před obnovou.** Zapisuje-li do databáze někdo ve chvíli, kdy pod ním měníte tabulky, skončíte s poloviční obnovou a nepoznáte to.
+* **Záloha ve formátu `-Fc` neobsahuje `CREATE DATABASE`.** Cílová databáze musí existovat předem — proto to `CREATE DATABASE` ve scénáři 1.
+* **Nikdy nespouštějte `docker compose down -v`.** Přepínač `-v` maže volumy, tedy i celou databázi.
+* Soubor se zálohou obsahuje hesla i data všech jídelen — platí pro něj totéž, co je napsané o stahování výš.
+
+⚠️ **Zálohu, kterou jste nikdy nezkusili obnovit, nepovažujte za zálohu.** Vyzkoušejte scénář 1 aspoň jednou — až v ostrém výpadku na to není čas.
 
 ### XML export a import (Pokročilé)
 

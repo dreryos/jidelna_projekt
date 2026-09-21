@@ -8,6 +8,15 @@ a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
 ## [Unreleased]
 
 ### Added
+- **Záznam o průběhu převodu na PostgreSQL** (21.9.2026)
+  - `plans/prevod-na-postgresql-jak-probehl.md` shrnuje osm pastí, které plán nepředvídal — od čtyř různých pořadí zámků přes `flush` mezi `migrate` a `loaddata` až po orphan kontejner, který compose nezastaví, protože o té službě neví, a který kvůli tomu celou dobu zapisoval do staré databáze
+  - Není to návod k opakování (zpátky na SQLite se nechystáme), ale záznam toho, co z těch pastí platí dál: chování Docker Compose, Django `loaddata` a PostgreSQL pod souběhem
+
+- **Příručka: práce se zálohou databáze** (17.9.2026)
+  - Kapitola 11 nově popisuje ruční `pg_dump`, prohlížení obsahu zálohy (`pg_restore -l`, převod na SQL, výpis dat jedné tabulky) a tři scénáře obnovy — do prázdné databáze, jedna tabulka, přepis ostré databáze
+  - Zdokumentovaná past: výpis obsahu zálohy jako jediný nefunguje z roury (`did not find magic string in file header`), protože `pg_restore` potřebuje v souboru skákat. Soubor se musí nejdřív zkopírovat do kontejneru
+  - Všechny příkazy ověřené proti běžící databázi, ne psané po paměti
+
 - **Automatický build image přes GitHub Actions** (17.9.2026)
   - Po merge do `main` se spustí celá testovací sada nad PostgreSQL a teprve pak se staví image. Dosud se stavěl ručně a publikoval bez ohledu na to, jestli kód funguje
   - Image se publikuje do GitHub Container Registry (`ghcr.io/dreryos/jidelna_projekt`) místo Docker Hubu — pro veřejné image zdarma, autentizace vestavěným `GITHUB_TOKEN` bez tokenu k opatrování a bez limitů na stahování
