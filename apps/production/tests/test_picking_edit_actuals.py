@@ -150,6 +150,22 @@ class PickingEditActualsTest(TestCase):
         self.assertEqual(self.stock.quantity, Decimal('100.000'))
         self.assertEqual(self.stock.quantity_blocked, Decimal('3.000'))
 
+    def test_non_finite_quantity_is_rejected(self):
+        """Ne-finitní hodnoty (NaN/Infinity) se musí odmítnout."""
+        for raw_value in ('Infinity', '+Infinity', '-Infinity', 'NaN'):
+            with self.subTest(raw_value=raw_value):
+                response = self.client.post(self._url(), data={
+                    f'quantity_actual_item_{self.item.id}': raw_value,
+                })
+                self.assertEqual(response.status_code, 302)
+
+                self.item.refresh_from_db()
+                self.assertEqual(self.item.status, PickingList.Status.PENDING)
+                self.assertIsNone(self.item.quantity_actual)
+                self.stock.refresh_from_db()
+                self.assertEqual(self.stock.quantity, Decimal('100.000'))
+                self.assertEqual(self.stock.quantity_blocked, Decimal('3.000'))
+
     def test_missing_field_leaves_item_unchanged(self):
         """Pole vůbec neodeslané (jiná akce) → položka beze změny."""
         response = self.client.post(self._url(), data={'cook': ''})

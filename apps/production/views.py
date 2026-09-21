@@ -1362,6 +1362,8 @@ def picking_list_edit(request, document_id):
 
                 try:
                     quantity = Decimal(quantity_str.replace(',', '.'))
+                    if not quantity.is_finite():
+                        raise ValueError('non-finite quantity')
                     # Nula je platná: znamená "vydáno nic". Položka se uzavře,
                     # blokace se uvolní a ze skladu se neodečte nic. Totéž
                     # dělá záměna jídla u původních surovin. Prázdné pole je

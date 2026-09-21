@@ -8,8 +8,8 @@ a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
 ## [Unreleased]
 
 ### Changed
-- **Nula ve výdejce znamená „vydáno nic"** (21.9.2026)
-  - Zadáním `0` do skutečně vydaného množství se řádek uzavře: blokace na skladu se uvolní a neodečte se nic. Dosud pole nulu odmítalo hláškou o neplatném množství, takže jedinou cestou, jak říct „tohle se nevydalo", byl koš — jenže ten řádek smaže a s ním i informaci, že se surovina vydávat měla
+- **Nula ve výdejce znamená „vydáno nic“** (21.9.2026)
+  - Zadáním `0` do skutečně vydaného množství se řádek uzavře: blokace na skladu se uvolní a neodečte se nic. Dosud pole nulu odmítalo hláškou o neplatném množství, takže jedinou cestou, jak říct „tohle se nevydalo“, byl koš — jenže ten řádek smaže a s ním i informaci, že se surovina vydávat měla
   - Na sklad má nula i koš stejný dopad; liší se tím, co po nich ve výdejce zůstane. Nula se hodí tam, kde se později dohledávají rozdíly na inventuře
   - Stejnou dvojici (`quantity_actual = 0` + dokončeno) používá záměna jídla u původních surovin už dřív, takže model ani sklad se měnit nemusely
 

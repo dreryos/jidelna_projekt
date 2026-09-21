@@ -51,7 +51,7 @@ Desetinná čísla lze psát s čárkou i tečkou.
 
 Surovinu, kterou nakonec nepoužijete, odeberete z výdejky **košem** u řádku (jen dokud není vydaná). Blokace na skladu se tím uvolní, jako by položka ve výdejce nikdy nebyla.
 
-💡 **Koš, nebo nula?** Na sklad mají obojí stejný dopad. Liší se tím, co po nich zůstane: koš řádek z výdejky smaže, nula ho nechá s údajem „vydáno 0". Nula je proto lepší tam, kde chcete mít doloženo, že se surovina vydávat **měla** a nevydala — třeba když se pak dohledávají rozdíly na inventuře. Koš se hodí na řádky, které se do výdejky dostaly omylem.
+💡 **Koš, nebo nula?** Na sklad mají obojí stejný dopad. Liší se tím, co po nich zůstane: koš řádek z výdejky smaže, nula ho nechá s údajem „vydáno 0“. Nula je proto lepší tam, kde chcete mít doloženo, že se surovina vydávat **měla** a nevydala — třeba když se pak dohledávají rozdíly na inventuře. Koš se hodí na řádky, které se do výdejky dostaly omylem.
 Potřebujete-li odebrat více řádků najednou, zaškrtněte nevydané položky (funguje stejně u jídel i v tabulce *Vydáno mimo plánovaná jídla*) a potvrďte tlačítko **Smazat vybrané**.
 
 ### Oprava omylem vydaného množství
