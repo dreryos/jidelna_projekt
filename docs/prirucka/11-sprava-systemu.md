@@ -98,6 +98,8 @@ docker compose exec -T db pg_dump -Fc --no-owner --no-privileges \
     -U spiz -d spiz > zaloha.dump
 ```
 
+> **Jméno uživatele a databáze.** Všechny příkazy v této kapitole počítají s výchozí konfigurací, kde se uživatel i databáze jmenují `spiz`. Máte-li v `.env` jiné hodnoty (`POSTGRES_USER`, `POSTGRES_DB`), dosaďte je — zjistíte je příkazem `grep POSTGRES_ .env`. Chybné jméno se projeví hláškou, že uživatel nebo databáze neexistuje, takže se omylem nezálohuje něco jiného.
+
 Přepínač `-T` u `docker compose exec` je **povinný**. Bez něj Docker přimíchá do výstupu řídicí znaky a výsledný soubor je nepoužitelný — což se pozná až při pokusu o obnovu.
 
 Co znamenají ostatní přepínače:
@@ -105,7 +107,9 @@ Co znamenají ostatní přepínače:
 * **`-Fc`** — *custom* formát: komprimovaný, binární, a hlavně dovolí při obnově vybrat jen některé tabulky. Bez `-F` vznikne čitelné SQL, jenže to už pak jde obnovit jen celé.
 * **`--no-owner --no-privileges`** — v záloze nebudou příkazy nastavující vlastníka objektů. Bez nich zálohu nenasadíte pod jiným databázovým uživatelem, než pod kterým vznikla.
 
-Verze `pg_dump` musí být **stejná nebo vyšší** než verze serveru. Proto je v aplikačním obrazu `postgresql-client-17` shodně s `postgres:17`.
+**Verze nástroje musí být stejná nebo vyšší než verze serveru.** U příkazů v této kapitole to nehrozí: běží uvnitř kontejneru `db`, kde je klient i server z téhož obrazu `postgres:17-alpine`. Ověřit to jde příkazem `docker compose exec -T db pg_dump --version`.
+
+Hlídat se to musí jinde — u záloh, které dělá **aplikace** (tlačítko na této stránce a noční automat). Ty spouštějí `pg_dump` uvnitř aplikačního kontejneru, a proto je v jeho obrazu `postgresql-client-17`, shodně s verzí databáze. Při povýšení PostgreSQL je potřeba povýšit obojí.
 
 #### Co je v záloze a jak se do ní podívat
 
@@ -157,11 +161,39 @@ docker compose exec -T db psql -U spiz -d nahled -c "SELECT count(*) FROM core_i
 
 Až skončíte: `docker compose exec -T db psql -U spiz -d postgres -c "DROP DATABASE nahled;"`
 
-**2. Jen jedna tabulka** — třeba když někdo omylem smazal číselník:
+**2. Jen jedna tabulka.** Pozor, tohle nejsou dvě jména v tomtéž příkazu — záleží, jestli se chcete podívat, nebo opravovat.
+
+*Podívat se, co v tabulce bylo* — do kontrolní databáze `nahled` ze scénáře 1 (musí už existovat, jinak příkaz skončí hláškou, že databáze neexistuje):
 
 ```bash
 docker compose exec -T db pg_restore --no-owner -U spiz -d nahled -t core_ingredient /tmp/z.dump
 ```
+
+*Opravit ostrou databázi* — tohle **není jednořádková operace** a `-d spiz` samo o sobě nestačí:
+
+* Pokud tabulka pořád existuje, `pg_restore -t` selže na `CREATE TABLE`, protože ji nemůže založit znovu.
+* Obnova jen dat (`-a`) se u neprázdné tabulky srazí s existujícími řádky na primárním klíči.
+* `-t` obnoví **jen tu jednu tabulku** — ani cizí klíče, které na ni odkazují z jiných tabulek, ani sekvenci pro její `id`. Po obnově tedy může první nový záznam spadnout na duplicitní klíč.
+
+Bezpečný postup je vytáhnout data jako SQL, prohlédnout si je a teprve pak vědomě nasadit:
+
+```bash
+# 1. zastavit aplikaci
+docker compose stop spiz
+
+# 2. vytáhnout data tabulky jako SQL a prohlédnout
+docker compose exec -T db pg_restore -a -t core_ingredient -f - /tmp/z.dump > obnova.sql
+less obnova.sql
+
+# 3. teprve pak nasadit
+docker compose cp obnova.sql db:/tmp/obnova.sql
+docker compose exec -T db psql -U spiz -d spiz -f /tmp/obnova.sql
+
+# 4. spustit aplikaci
+docker compose start spiz
+```
+
+Nejste-li si jistí, je čistší varianta scénář 3 — obnovit celou databázi ze zálohy a smířit se se ztrátou novějších záznamů — než skládat databázi po tabulkách.
 
 **3. Přepis ostré databáze** — po havárii. Tohle je ta nevratná varianta:
 
