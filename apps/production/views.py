@@ -1362,8 +1362,14 @@ def picking_list_edit(request, document_id):
 
                 try:
                     quantity = Decimal(quantity_str.replace(',', '.'))
-                    if quantity <= 0:
-                        raise ValueError('non-positive quantity')
+                    if not quantity.is_finite():
+                        raise ValueError('non-finite quantity')
+                    # Nula je platná: znamená "vydáno nic". Položka se uzavře,
+                    # blokace se uvolní a ze skladu se neodečte nic. Totéž
+                    # dělá záměna jídla u původních surovin. Prázdné pole je
+                    # něco jiného - tam se položka nechává rozdělaná.
+                    if quantity < 0:
+                        raise ValueError('negative quantity')
 
                     # Vyplněné množství = vydat: přechod na COMPLETED v
                     # PickingList.save() odblokuje a odečte quantity_actual ze skladu.

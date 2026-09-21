@@ -136,7 +136,7 @@ tr.marked-for-delete td {
 
 <div class="alert alert-info mb-3">
   <i class="fas fa-info-circle me-2"></i>
-  <strong>Instrukce:</strong> Zadejte skutečně vydaná množství. Vyplněný řádek se při uložení automaticky vydá a odečte ze skladu. Prázdné pole zůstane beze změny. Nepoužitou surovinu odeberte košem. Více surovin naráz odeberete zaškrtnutím a tlačítkem <strong>Smazat vybrané</strong>. Špatně vydané množství opravíte tlačítkem <strong>Zrušit výdej</strong>.
+  <strong>Instrukce:</strong> Zadejte skutečně vydaná množství. Vyplněný řádek se při uložení automaticky vydá a odečte ze skladu. Prázdné pole zůstane beze změny. Zadáním <strong>0</strong> řádek uzavřete jako nevydaný – ze skladu se neodečte nic. Nepoužitou surovinu odeberte košem. Více surovin naráz odeberete zaškrtnutím a tlačítkem <strong>Smazat vybrané</strong>. Špatně vydané množství opravíte tlačítkem <strong>Zrušit výdej</strong>.
 </div>
 {% endif %}
 
@@ -538,6 +538,7 @@ tr.marked-for-delete td {
         <ul class="mb-0">
           <li><strong>Vyplněné</strong> skutečné množství – řádek se vydá a automaticky odečte ze skladu</li>
           <li><strong>Prázdné</strong> pole – řádek zůstane beze změny, surovina zůstane zablokována</li>
+          <li><strong>Nula</strong> – řádek se uzavře jako nevydaný: blokace se uvolní, ze skladu se neodečte nic, ale ve výdejce zůstane záznam, že se surovina vydávat měla</li>
           <li>Nepoužitou surovinu odeberte <strong>košem</strong>, nebo víc naráz zaškrtnutím a tlačítkem <strong>Smazat vybrané</strong> – uvolní se blokace na skladu</li>
           <li>Špatně vydané množství opravíte tlačítkem <strong>Zrušit výdej</strong> – řádek se vrátí na sklad a zadáte znovu</li>
         </ul>

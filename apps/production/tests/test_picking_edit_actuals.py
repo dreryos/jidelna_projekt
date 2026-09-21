@@ -3,6 +3,7 @@
 Nová UX (větev výdejky-rework):
 - pole skutečného množství jsou defaultně prázdná,
 - vyplněné množství = vydat (COMPLETED + odečet ze skladu),
+- nula = vydáno nic (COMPLETED, blokace se uvolní, sklad beze změny),
 - prázdné pole = beze změny (položka zůstane PENDING, blokace drží),
 - koš odebere surovinu z výdejky a uvolní blokaci na skladu.
 """
@@ -115,10 +116,30 @@ class PickingEditActualsTest(TestCase):
         self.assertEqual(self.stock.quantity, Decimal('100.000'))
         self.assertEqual(self.stock.quantity_blocked, Decimal('3.000'))
 
-    def test_zero_quantity_is_rejected(self):
-        """0 není platné vydané množství – položka zůstane PENDING."""
+    def test_zero_closes_item_without_touching_stock(self):
+        """0 = vydáno nic: položka se uzavře, blokace se uvolní, sklad beze změny.
+
+        Liší se od prázdného pole (položka zůstane rozdělaná a dál blokuje)
+        i od koše (řádek z výdejky zmizí). Nula je záznam, že se surovina
+        vydávat měla a nevydala.
+        """
         response = self.client.post(self._url(), data={
             f'quantity_actual_item_{self.item.id}': '0',
+        })
+        self.assertEqual(response.status_code, 302)
+
+        self.item.refresh_from_db()
+        self.assertEqual(self.item.status, PickingList.Status.COMPLETED)
+        self.assertEqual(self.item.quantity_actual, Decimal('0.000'))
+
+        self.stock.refresh_from_db()
+        self.assertEqual(self.stock.quantity, Decimal('100.000'))
+        self.assertEqual(self.stock.quantity_blocked, Decimal('0.000'))
+
+    def test_negative_quantity_is_rejected(self):
+        """Záporné množství je pořád chyba – položka zůstane nedotčená."""
+        response = self.client.post(self._url(), data={
+            f'quantity_actual_item_{self.item.id}': '-1',
         })
         self.assertEqual(response.status_code, 302)
 
@@ -128,6 +149,22 @@ class PickingEditActualsTest(TestCase):
         self.stock.refresh_from_db()
         self.assertEqual(self.stock.quantity, Decimal('100.000'))
         self.assertEqual(self.stock.quantity_blocked, Decimal('3.000'))
+
+    def test_non_finite_quantity_is_rejected(self):
+        """Ne-finitní hodnoty (NaN/Infinity) se musí odmítnout."""
+        for raw_value in ('Infinity', '+Infinity', '-Infinity', 'NaN'):
+            with self.subTest(raw_value=raw_value):
+                response = self.client.post(self._url(), data={
+                    f'quantity_actual_item_{self.item.id}': raw_value,
+                })
+                self.assertEqual(response.status_code, 302)
+
+                self.item.refresh_from_db()
+                self.assertEqual(self.item.status, PickingList.Status.PENDING)
+                self.assertIsNone(self.item.quantity_actual)
+                self.stock.refresh_from_db()
+                self.assertEqual(self.stock.quantity, Decimal('100.000'))
+                self.assertEqual(self.stock.quantity_blocked, Decimal('3.000'))
 
     def test_missing_field_leaves_item_unchanged(self):
         """Pole vůbec neodeslané (jiná akce) → položka beze změny."""
