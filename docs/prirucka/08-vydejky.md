@@ -40,7 +40,8 @@ Zařazením položek do výdejkového dokumentu se plánované množství **zabl
 V editaci výdejky (`picking_list_edit`) má každá surovina pole **Skutečně vydáno**. Pole je vždy prázdné, placeholder jen ukazuje plán (nebo už vydané množství). Po uložení:
 
 * **vyplněné** pole = vydat — řádek se dokončí a skutečné množství se rovnou odečte ze skladu,
-* **prázdné** pole = beze změny — položka zůstává ČEKÁ, blokace na skladu drží dál.
+* **prázdné** pole = beze změny — položka zůstává ČEKÁ, blokace na skladu drží dál,
+* **nula** = vydáno nic — řádek se dokončí, blokace se uvolní a ze skladu se neodečte nic.
 
 Desetinná čísla lze psát s čárkou i tečkou.
 
@@ -49,6 +50,8 @@ Desetinná čísla lze psát s čárkou i tečkou.
 ### Odebrání nepoužité suroviny
 
 Surovinu, kterou nakonec nepoužijete, odeberete z výdejky **košem** u řádku (jen dokud není vydaná). Blokace na skladu se tím uvolní, jako by položka ve výdejce nikdy nebyla.
+
+💡 **Koš, nebo nula?** Na sklad mají obojí stejný dopad. Liší se tím, co po nich zůstane: koš řádek z výdejky smaže, nula ho nechá s údajem „vydáno 0". Nula je proto lepší tam, kde chcete mít doloženo, že se surovina vydávat **měla** a nevydala — třeba když se pak dohledávají rozdíly na inventuře. Koš se hodí na řádky, které se do výdejky dostaly omylem.
 Potřebujete-li odebrat více řádků najednou, zaškrtněte nevydané položky (funguje stejně u jídel i v tabulce *Vydáno mimo plánovaná jídla*) a potvrďte tlačítko **Smazat vybrané**.
 
 ### Oprava omylem vydaného množství
@@ -110,7 +113,7 @@ U dokumentu se eviduje i **kuchař** — kdo vaření zajišťoval (využívá a
 | Karta suroviny v minusu | Výdej přes nulu | Dohledat chybějící příjemku/převodku, případně srovnat inventurou |
 | Nelze archivovat dokument | Některá položka není dokončená | Dokončit či odebrat zbývající položky |
 | Vydáno špatné množství | Překlep, špatná surovina | **Zrušit výdej** u řádku → zadat znovu |
-| Surovina se nakonec nepoužila | Plán se nenaplnil | Odebrat řádek **košem** (jen dokud není vydaný) |
+| Surovina se nakonec nepoužila | Plán se nenaplnil | Zadat **0** (zůstane záznam), nebo odebrat řádek **košem** (jen dokud není vydaný) |
 | Jídlo se vařilo jinak, než plánoval jídelníček | Chybějící surovina, změna na poslední chvíli | **Zaměnit jídlo** — vybrat náhradní recept |
 
 ---
