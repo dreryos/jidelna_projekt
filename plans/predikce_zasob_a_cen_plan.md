@@ -236,36 +236,53 @@ Pozor na pasti z `CLAUDE.md`: ID ve formulářových atributech přes
 
 ### C0. Realita dat — čti dřív, než navrhneš metodu
 
-> **Opraveno 21. 9. 2026.** První verze měřila řady **po surovině se slitými
-> sklady**, jenže C1 predikuje po dvojici **(surovina, sklad)** — to je první
-> příčka fallback ladderu. Na správné jednotce jsou data podstatně řidší
-> a divočejší, než plán původně tvrdil. Čísla níž jsou obě, protože obě
-> příčky ladderu se používají.
+> **Opraveno dvakrát** (21. 9. a 5. 10. 2026), obě opravy na revizi:
+>
+> 1. První verze měřila řady **po surovině se slitými sklady**, jenže C1
+>    predikuje po dvojici **(surovina, sklad)**. Slité řady navíc nejsou
+>    skutečné cenové řady — prokládají záznamy z různých skladů.
+> 2. Do měření vstupovalo **448 záznamů s cenou 0** (14 % historie). Nejsou to
+>    zaplacené ceny a do odhadu nepatří. **393 z nich je první bod řady** —
+>    to odpovídá kódu, který zakládá `StockItem` s nulou při výdeji do mínusu
+>    (`PickingList.save()`) a při inventuře u nově nalezené suroviny („cena
+>    bude doplněna později"). U zbylých **55** (nula uprostřed nebo na konci
+>    řady) zdroj neznám. **71 řad je celých nulových**, tedy bez jediné
+>    skutečné ceny. Aktuálně má nulovou cenu 90 z 1 072 skladových karet.
+>
+> Původní čísla (s nulami): 1 085 řad, z toho 128 s ≥ 6 body, medián změny
+> 13,5 %, p90 99,4 %. Níž jsou čísla **po vyřazení nul**, tedy ta, se kterými
+> C1 skutečně pracuje.
 
-Změřeno na `inventory_ingredientpricehistory` (3 203 záznamů,
-rozsah **15. 1. – 16. 9. 2026, tj. 243 dní**):
+Změřeno na `inventory_ingredientpricehistory` (3 203 záznamů, po vyřazení nul
+**2 754**, rozsah **15. 1. – 16. 9. 2026, tj. 243 dní**). Sloupce jsou tři
+příčky fallback ladderu z C1:
 
-| | po dvojici (surovina, sklad) | po surovině (sklady slité) |
-|---|---|---|
-| počet řad | **1 085** | 402 |
-| z toho ≥ 6 cenových bodů | **128 (12 %)** | 192 (48 %) |
-| medián absolutní relativní změny | **13,5 %** | 9,1 % |
-| podíl nulových změn | 0,3 % | 18,2 % |
-| p90 absolutní změny | **99,4 %** | — |
+| | (surovina, sklad) — 1. příčka | (surovina, jídelna) — 2. příčka | surovina globálně — 3. příčka |
+|---|---|---|---|
+| počet řad | **1 014** | 952 | 375 |
+| z toho ≥ 6 cenových bodů | **95 (9 %)** | 109 (11 %) | 160 (43 %) |
+| medián absolutní relativní změny | **12,4 %** | 11,9 % | 7,4 % |
+| podíl nulových změn | 1,1 % | 3,1 % | 20,8 % |
+| p90 růstu ceny | **177 %** | 177 % | 202 % |
+| p90 poklesu ceny | **56 %** | 56 % | 48 % |
 
-Levý sloupec je to, s čím C1 počítá na první příčce. Pravý platí pro
-druhou příčku (fallback na jídelnu/globál).
+Pozorování, která se dají snadno přehlédnout:
 
-Dvě pozorování, která se dají snadno přehlédnout:
-
-- **Těch 18,2 % nulových změn v pravém sloupci je artefakt slévání skladů** —
+- **Růst a pokles jsou asymetrické**, proto se tu neuvádí jediné „p90 změny".
+  Desetina nárůstů je 2,8× a víc (p90 růstu 177 %), kdežto pokles o víc než
+  56 % je výjimka. Příčinu data nerozliší (podezřelé jsou změny dodavatele
+  nebo balení, ale to je hypotéza, ne měření). Pásma p10/p90 proto **nesmí být
+  symetrická** kolem mediánu — viz C1 bod 4.
+- **Těch 20,8 % nulových změn ve třetí příčce je artefakt slévání skladů** —
   vznikne prokládáním dvou skladů se shodnou cenou. Na skutečné řadě jsou
-  nulové změny 0,3 %, což odpovídá tomu, že se historie zapisuje jen při
-  změně ceny. Data nejsou klidnější, než vypadají; vypadala klidnější, než
-  jsou.
-- **p90 změny je 99,4 %** — cena se u desetiny změn zhruba zdvojnásobí.
-  Rozdělení má těžký ocas, takže pásma p10/p90 budou u části surovin široká.
-  Je to poctivé, ale UI na to musí být připravené.
+  nulové změny 1,1 %, což odpovídá tomu, že se historie zapisuje jen při
+  změně ceny. Data nejsou klidnější, než vypadají.
+- **Druhá příčka skoro nic nepřidává.** (surovina, jídelna) má 952 řad
+  proti 1 014 u skladu a jen o 14 řad víc s ≥ 6 body — většina surovin je
+  v jídelně na jednom skladu. Zda ji v ladderu ponechat, rozhodne C2 měřením,
+  ne tenhle odstavec.
+- **Třetí příčka je jediná, která má body na trend (43 %)**, jenže je
+  zároveň nejméně věrná: míchá ceny různých jídelen a dodavatelů.
 
 `StockItem.price` je **poslední nákupní cena**, ne vážený průměr
 (`GoodsReceipt.confirm()`, `apps/inventory/models.py:761`) — řada je tedy
@@ -277,12 +294,12 @@ Dvě pozorování, která se dají snadno přehlédnout:
    takže „brambory v březnu zdraží" model nemá z čeho vzít. Kdo to zkusí
    modelovat, nafituje šum.
 2. **Zákaz ARIMA / Prophet / ML / regrese s mnoha parametry.** Na 6–20 bodech
-   na sérii s 13% šumem přefitují. Do `requirements.txt` nepřibude žádná
+   na sérii s 12% šumem přefitují. Do `requirements.txt` nepřibude žádná
    knihovna pro time series.
-3. **Predikce musí vracet interval, ne číslo.** Při 13,5% mediánovém rozptylu
-   a p90 kolem 100 % je bodová cena „14,37 Kč" falešná přesnost.
-4. **Trend dostane jen zhruba osminu řad.** Při prahu ≥ 6 bodů na dvojici
-   (surovina, sklad) jde o 128 z 1 085. Zbylých 88 % skončí na plochém
+3. **Predikce musí vracet interval, ne číslo.** Při 12,4% mediánovém rozptylu
+   a p90 růstu 177 % je bodová cena „14,37 Kč" falešná přesnost.
+4. **Trend dostane jen zhruba desetinu řad.** Při prahu ≥ 6 bodů na dvojici
+   (surovina, sklad) jde o 95 z 1 014. Zbylých 91 % skončí na plochém
    odhadu nebo na fallbacku — tedy velmi blízko naivní baseline. Počítejte
    s tím, že **brána v C2 může C1 zamítnout**, a berte to jako regulérní
    výsledek, ne jako selhání.
@@ -295,6 +312,13 @@ odvíjejí všechny prahy v C1, takže se neopisují, ale přeměřují.
 
 `forecast_ingredient_price(ingredient, warehouse, target_date)`:
 
+**Vstup se čistí dřív, než se cokoli počítá: body s cenou ≤ 0 se zahodí.**
+Jsou to převážně zástupné ceny nově založených skladových karet (14 % historie,
+viz C0), ne zaplacené ceny. Medián „posledních 5 cen" by s jedinou nulou mezi nimi
+skočil dolů a nula na konci řady by dala nesmyslný „pokles o 100 %". Platí to
+i pro poslední příčku ladderu níž — aktuální `StockItem.price` se použije jen
+je-li kladná. Test: řada s nulovým bodem dá stejný výsledek jako bez něj.
+
 1. **Základ:** medián posledních N = 5 cen z `IngredientPriceHistory`
    za posledních 180 dní (winsorizace na 10./90. percentil série).
    Medián, ne poslední cena — poslední cena chytí jednu akční nákupku.
@@ -302,21 +326,23 @@ odvíjejí všechny prahy v C1, takže se neopisují, ale přeměřují.
    bodů ≥ 6**. Sklon **tlumit koeficientem 0,5** a extrapolaci omezit na
    **±15 % základu** bez ohledu na to, co regrese říká. Při < 6 bodech trend 0.
 
-   Ten práh splňuje **128 z 1 085 řad (12 %)** — viz C0. U zbytku je odhad
+   Ten práh splňuje **95 z 1 014 řad (9 %)** — viz C0. U zbytku je odhad
    plochý, tedy prakticky naivní baseline. Strop ±15 % je zhruba **jeden
-   typický cenový pohyb** (medián změny 13,5 %); není odvozený z ničeho
+   typický cenový pohyb** (medián změny 12,4 %); není odvozený z ničeho
    jemnějšího a není důvod ho dolaďovat dřív, než ho změří C2.
 3. **Horizont:** nad **90 dní** dopředu se trend přestane aplikovat úplně
    (plochá extrapolace) a interval se rozšíří. Delší horizont data neunesou.
 4. **Pásmo p10/p50/p90:** z **empirických reziduí** vlastní série
    (rozptyl historických relativních změn), ne z normálního rozdělení.
-   Rozdělení má těžký ocas (p90 změny 99,4 %), takže u části surovin vyjde
-   pásmo velmi široké. To je správný výstup, ne chyba — široké pásmo je
-   informace, že se ta cena nedá předpovědět. Nezužovat ho kosmeticky.
+   Změny jsou **asymetrické** (p90 růstu 177 %, p90 poklesu 56 %, viz C0),
+   takže pásmo **není symetrické** kolem mediánu: horní kvantil leží výrazně
+   dál než dolní. U části surovin vyjde pásmo velmi široké. To je správný
+   výstup, ne chyba — široké pásmo je informace, že se ta cena nedá
+   předpovědět. Nezužovat ho kosmeticky.
 5. **Fallback ladder** při nedostatku dat:
    (surovina, sklad) → (surovina, jídelna) → (surovina, globálně) →
    `SupplierIngredientTemplate.default_price_without_vat` →
-   aktuální `StockItem.price`. Použitou úroveň vrátit ve výstupu jako `source`,
+   aktuální `StockItem.price` (je-li > 0). Použitou úroveň vrátit ve výstupu jako `source`,
    aby UI mohlo říct „odhad z jediné ceny".
 
 Návrat: `{p10, p50, p90, source, sample_size, horizon_days}`.
