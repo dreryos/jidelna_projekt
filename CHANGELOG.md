@@ -7,6 +7,14 @@ a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+### Added
+- **QR kód na tištěné výdejce** (5.10.2026)
+  - Každá stránka PDF výdejky nese vpravo nahoře QR kód s odkazem na editaci dokumentu. Telefon ho otevře fotoaparátem bez aplikace a papír jde jednoznačně spárovat s výdejkou — to je podmínka pro pozdější načítání naskenovaných papírů
+  - Kód je v běžící hlavičce stránky, takže se tiskne na každé stránce dne, ne jen na první. Horní okraj stránky kvůli tomu vzrostl z 10 na 16 mm; počet stránek ověřeného vícedenního dokumentu zůstal stejný (9)
+  - Bez absolutní adresy serveru (PDF generované mimo request) se kóduje jen označení dokumentu místo odkazu
+  - Ověřeno načtením z vyrenderovaného PDF: kód se přečetl na všech 9 stránkách při 200 dpi, černobíle i po JPEG, a **nečte se při 120 dpi a méně**. Papíry proto skenovat v rozlišení alespoň 200 dpi. Čtení skutečným telefonem z vytištěného papíru zatím ověřené není
+  - Využívá `reportlab`, který už v závislostech je; žádná nová knihovna
+
 ### Changed
 - **Nula ve výdejce znamená „vydáno nic“** (21.9.2026)
   - Zadáním `0` do skutečně vydaného množství se řádek uzavře: blokace na skladu se uvolní a neodečte se nic. Dosud pole nulu odmítalo hláškou o neplatném množství, takže jedinou cestou, jak říct „tohle se nevydalo“, byl koš — jenže ten řádek smaže a s ním i informaci, že se surovina vydávat měla
