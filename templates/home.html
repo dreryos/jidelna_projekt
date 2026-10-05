@@ -48,15 +48,27 @@
 </div>
 {% endif %}
 
-{% if active_users_count %}
-<div class="alert alert-info alert-dismissible fade show" role="alert">
+{% if stale_picking %}
+<div class="alert alert-warning alert-dismissible fade show" role="alert">
   <h5 class="alert-heading">
-    <i class="fas fa-users me-2"></i>Aktuálně přihlášených uživatelů
+    <i class="fas fa-clipboard-list me-2"></i>Nezavřené výdejky
   </h5>
-  <p class="mb-0">
-    V systému je aktuálně přihlášeno <strong>{{ active_users_count }} uživatel{{ active_users_count|pluralize:"a,ů" }}</strong>.
+  <p class="mb-2">
+    Ve výdejkách zůstávají položky, u kterých nikdo nezadal skutečně vydané množství.
+    Každá drží blokaci na skladu a zkresluje objednávkový report.
   </p>
-  <hr>
+  <ul class="mb-2">
+    {% for row in stale_picking %}
+    <li>
+      <strong>{{ row.canteen_name }}</strong> –
+      nezavřených položek: {{ row.items }}, dokumentů: {{ row.documents }},
+      nejstarší z {{ row.oldest|date:"d.m.Y" }}
+      <a href="{% url 'production:picking_list_edit' row.oldest_document_id %}" class="btn btn-sm btn-warning ms-2">
+        <i class="fas fa-eye me-1"></i>Otevřít nejstarší
+      </a>
+    </li>
+    {% endfor %}
+  </ul>
   <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
 </div>
 {% endif %}

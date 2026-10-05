@@ -4,13 +4,15 @@ Utility funkce pro production app.
 import base64
 import time
 import logging
+from datetime import timedelta
 from decimal import Decimal
 from collections import defaultdict
 from io import BytesIO
 from django.core.files.base import ContentFile
 from django.template.loader import render_to_string
 from django.urls import reverse
-from django.db.models import F, Prefetch
+from django.core.exceptions import ObjectDoesNotExist
+from django.db.models import Count, F, Min, Prefetch
 from django.utils import timezone
 
 from .models import ProductionOrder, PickingList, PickingListDocument
@@ -35,6 +37,75 @@ MEAL_TYPE_ORDER = {
 # po dnech a slijeme přes pypdf, aby špička paměti WeasyPrintu zůstala nízko.
 # Menší výdejky renderujeme jednorázově (zachová průběžné číslování stran).
 PDF_CHUNK_MEAL_THRESHOLD = 60
+
+
+# Po kolika dnech se nezavřená položka výdejky považuje za zapomenutou.
+# Hodnota vychází z historie: Varvažov přestal zapisovat kolem 6. 7. 2026
+# a nezavřené položky se nakupily na tisíce, než si toho někdo všiml.
+STALE_PICKING_DAYS = 14
+
+
+def stale_picking_summary(user, today=None, days=STALE_PICKING_DAYS):
+    """
+    Nezavřené položky výdejek starší než `days` dní, po jídelnách.
+
+    Výdejky se vyplňují na papíře a zpětně přepisují. Zapomenutá položka drží
+    blokaci na skladu a zkresluje objednávkový report, takže se na úvodní
+    stránce ukazuje, dokud se nevyřídí. Nic se nezavírá automaticky: při
+    nulovém zápisu by automat vyráběl smyšlená data.
+
+    "Starší než 14 dní" znamená, že poslední den dokumentu (`date_to`) je
+    před `today - days`; dokument ze dne před přesně 14 dny ještě ne.
+
+    Respektuje jídelny uživatele (`UserProfile.canteens`), superuživatel
+    vidí všechny. Vrací seznam slovníků seřazený podle počtu položek sestupně.
+    """
+    today = today or timezone.localdate()
+    limit = today - timedelta(days=days)
+
+    items = PickingList.objects.filter(
+        status=PickingList.Status.PENDING,
+        document__isnull=False,
+        document__date_to__lt=limit,
+    )
+    if not user.is_superuser:
+        try:
+            items = items.filter(document__canteen__in=user.profile.canteens.all())
+        except (ObjectDoesNotExist, AttributeError):
+            return []
+
+    grouped = (
+        items.values('document__canteen_id', 'document__canteen__name')
+        .annotate(
+            item_count=Count('id'),
+            document_count=Count('document', distinct=True),
+            oldest=Min('document__date_to'),
+        )
+        .order_by('-item_count', 'document__canteen__name')
+    )
+
+    # Nejstarší dokument každé jídelny z jednoho dotazu (ne jeden dotaz na jídelnu,
+    # úvodní stránka se načítá při každém přihlášení). Odkaz vede na nejstarší
+    # dokument; při shodě data na ten s nižším id. distinct() sbalí položky na
+    # dokumenty, takže se čte jen pár řádků, ne všechny nezavřené položky.
+    oldest_document = {}
+    for canteen_id, document_id in (
+        items.order_by('document__date_to', 'document_id')
+        .values_list('document__canteen_id', 'document_id')
+        .distinct()
+    ):
+        oldest_document.setdefault(canteen_id, document_id)
+
+    return [
+        {
+            'canteen_name': g['document__canteen__name'],
+            'items': g['item_count'],
+            'documents': g['document_count'],
+            'oldest': g['oldest'],
+            'oldest_document_id': oldest_document[g['document__canteen_id']],
+        }
+        for g in grouped
+    ]
 
 
 def picking_document_qr_uri(document, base_url='/'):
