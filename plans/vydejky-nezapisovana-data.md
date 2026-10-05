@@ -251,7 +251,11 @@ jsem původně odhadoval:
 
 * identita řádku je tištěná — nemusí se z ruky rozpoznávat „Hladká mouka",
   stačí číslo řádku a pořadí je známé z dokumentu,
-* rozpoznává se **jen číslice**,
+* rozpoznávají se **číselné hodnoty včetně desetinného oddělovače**, ne jen
+  číslice — a právě desetinná čárka je hlavní riziko (`2,50` vs `250`),
+* čárka i tečka se normalizují na zápis s tečkou stejně jako dnes při ručním
+  zadání (`Decimal(quantity_str.replace(',', '.'))` v `picking_list_edit`),
+  takže `2,50` i `2.50` znamenají totéž,
 * u každého řádku je vytištěný plán, takže **kontrola je zadarmo**: přečte-li
   OCR u řádku s plánem 2,50 hodnotu 25, je to skoro jistě špatně přečtená
   desetinná čárka a systém to označí sám.
@@ -297,16 +301,18 @@ dokladu — pro opačný směr (rozdělit vícestránkové PDF na stránky) sta�
 
 ### 2.5 Brána proveditelnosti — dřív než jakékoli UI
 
-Ručně psané číslice ve formuláři jsou snazší než volné písmo, ale **pořád není
-ověřeno, že to Mistral OCR na těchhle papírech zvládne.** Zvlášť ne škrtance,
-opravy přes původní číslo a desetinnou čárku.
+Ručně psané číselné hodnoty ve formuláři jsou snazší než volné písmo, ale
+**pořád není ověřeno, že to Mistral OCR na těchhle papírech zvládne.** Zvlášť
+ne škrtance, opravy přes původní číslo a **desetinnou čárku**.
 
 Postup: vyžádat si **5–10 skutečných vyplněných papírů** z Varvažova, prohnat
 je `run_ocr()` skriptem a změřit podíl správně přečtených čísel — zvlášť
-u řádků, které se od plánu liší, protože tam je informace.
+u řádků, které se od plánu liší, protože tam je informace, a **zvlášť u hodnot
+s desetinným oddělovačem**, kde je chyba nejpravděpodobnější. Souhrnné procento
+by ji zřídilo mezi snadnými celými čísly.
 
 > **Když správně přečtených čísel není aspoň 90 %, fáze 2.3 se nestaví.**
-> Práh je vyšší než u příjemek schválně: tady se čte jen číslice ve formuláři,
+> Práh je vyšší než u příjemek schválně: tady se čte jen číselná hodnota ve formuláři,
 > takže horší výsledek znamená, že to ta metoda neumí. A oprava každého
 > desátého čísla je horší než opsání papíru — člověk musí zkontrolovat
 > všechno stejně, ale navíc nevěří tomu, co vidí. V tom případě zůstat
@@ -321,9 +327,24 @@ Pepř, kmín, sůl a olej se na jídlo nevažují; dřív se odepsal celý balí
 za čas. Řádek ve výdejce u nich nese nulu nebo vymyšlené číslo a **zavádí
 statistiku** (nula = „nevážilo se", ne „nevydalo se").
 
-Návrh: příznak na `Ingredient` (např. `evidovat_souhrnne`), který takovou
-surovinu **nezařadí do řádků výdejky** ani do blokací. Spotřeba se dál
-odepisuje tak, jak dosud — odpisem celého balení.
+Návrh: příznak na `Ingredient` (např. `evidovat_souhrnne`). Samotné přidání
+pole **nestačí** — chování se musí zavést na těchto místech:
+
+| místo | co se musí stát |
+|---|---|
+| `ProductionOrder.generate_picking_list()` (`apps/production/models.py:321`) | označenou surovinu **nezařadit do řádků výdejky** |
+| `PickingList.save()` (`models.py:857`, `:887`, `:911`) | blokace se dělá při uložení řádku, takže bez řádku žádná blokace nevznikne. Stávající nedokončené řádky označené suroviny se změnou příznaku **samy neuklidí** — chce to jednorázový krok |
+| `picking_list_edit`, přidání suroviny a druhá večeře (`apps/production/views.py:1605`, `:1857`) | ruční vytvoření řádku mimo generátor; rozhodnout, zda se označená surovina smí přidat ručně, nebo ne |
+| `ProductionOrder.calculate_cost()` (`models.py:587`) | **musí označenou surovinu dál počítat** (cena jídla z receptu), jinak se cena jídla podhodnotí. Proto se příznak **nesmí** promítnout do `get_required_ingredients()` (`models.py:493`), které používá i cena a report |
+| `generate_order_report()` (`apps/reports/views.py:139`) | rozhodnout: označená surovina se v reportu potřeb nebude ukazovat (nejde odhadnout), nebo se bude odhadovat z receptu. Bez rozhodnutí se pepř nebude objednávat podle jídelníčku vůbec |
+
+**Souhrnný odpis a jeho audit.** Spotřeba se dál odepisuje po celých baleních.
+K tomu je potřeba existující `StockWriteOff` (`apps/inventory/models.py`),
+který už nese autora, datum a položky, ale jeho `Category` (Úklid, Údržba,
+Prádelna, …) **kuchyňskou spotřebu nezná**. Přibývá proto nová kategorie
+(např. `KITCHEN_STAPLES` — „Kuchyň – koření a základní suroviny") a migrace.
+Audit tak zajistí stejné pole jako u ostatních odpisů, nic nového se
+nevymýšlí.
 
 **Rozsah, který data dokládají:** čtyři nejzřetelnější suroviny (pepř, kmín,
 sůl, olej) tvoří zhruba 12 % dokončených řádků od 23. 7. (659 z 5 516).
@@ -367,8 +388,17 @@ v `apps/core/views.py`) a `convert_to_base_unit()` jím vždy dělí. Výchozí
 hodnota je správná pro `kg ← g`, ale pro surovinu s **toutéž** základní
 a receptovou jednotkou je špatná. Loupáček (`ks → ks`, faktor 1000) má proto
 plán 1000× menší (medián zadáno/plán 1 047). Důsledek není jen statistický:
-**objednávkový report by loupáčky nikdy nenavrhl k objednání** a blokace na
-skladu je 1000× podhodnocená.
+objednávkový report počítá `to_order = max(0, needed − stock)`
+(`apps/reports/views.py:172`), takže při 1000× podhodnocené potřebě navrhne
+objednat zlomek kusu (např. 0,08 místo ~85) nebo nic, pokud sklad ten zlomek
+pokrývá. Blokace na skladu je u takového jídla stejně podhodnocená.
+
+**Pozorovaný dopad na produkční data je zatím malý:** Loupáček má 6
+dokončených řádků výdejek; u 5 je plán 0,083–0,265 ks při skutečných
+80–263 ks, šestý má plán 210 ks (správný). Sklady jsou −250 ks (Růžená)
+a −20 ks (Varvažov), blokace je nulová, protože všechny řádky jsou dokončené.
+Plná škoda by se projevila u plánovaného, ještě nevydaného jídla s touto
+surovinou.
 
 Podle dat je 13 surovin s toutéž základní a receptovou jednotkou a faktorem
 ≠ 1. Skutečně rozbitý je z nich **jen Loupáček**, u dalších to z dat nejde
