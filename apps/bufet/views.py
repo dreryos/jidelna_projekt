@@ -158,7 +158,7 @@ def _create_bufet_import_items(bufet_import, items, post_data):
         if ingredient_id and not skip:
             try:
                 ingredient = Ingredient.objects.get(id=ingredient_id)
-            except Ingredient.DoesNotExist:
+            except (Ingredient.DoesNotExist, ValueError):
                 pass
 
         BufetImportItem.objects.create(
@@ -304,8 +304,12 @@ def bufet_upload_step2(request):
 
     try:
         warehouse = Warehouse.objects.get(id=warehouse_id)
-    except Warehouse.DoesNotExist:
+    except (Warehouse.DoesNotExist, ValueError):
         messages.error(request, 'Sklad neexistuje. Začněte znovu.')
+        return redirect('bufet:upload_step1')
+
+    if not user_can_access_canteen(request.user, warehouse.canteen):
+        messages.error(request, 'Nemáte přístup k tomuto skladu.')
         return redirect('bufet:upload_step1')
 
     return render(request, 'bufet/bufet_upload_step2.html', {
@@ -335,7 +339,7 @@ def bufet_upload_step3(request):
 
     try:
         warehouse = Warehouse.objects.get(id=warehouse_id)
-    except Warehouse.DoesNotExist:
+    except (Warehouse.DoesNotExist, ValueError):
         messages.error(request, 'Sklad neexistuje.')
         return redirect('bufet:upload_step1')
 
@@ -375,9 +379,9 @@ def bufet_upload_step3(request):
             skipped_no_stock.append(f"{data['ingredient'].name}: {e.message}")
 
     # Propojení importu s write_off a potvrzení
-    bufet_import.write_off_id = write_off.id
+    bufet_import.write_off = write_off
     bufet_import.status = BufetImport.Status.CONFIRMED
-    bufet_import.save(update_fields=['write_off_id', 'status'])
+    bufet_import.save(update_fields=['write_off', 'status'])
 
     # Vyčištění session
     for key in ('bufet_items', 'bufet_warehouse_id', 'bufet_filename', 'bufet_export_date'):
@@ -398,22 +402,18 @@ def bufet_upload_step3(request):
 
 @login_required
 def bufet_detail(request, pk):
-    bufet_import = get_object_or_404(BufetImport, pk=pk)
+    bufet_import = get_object_or_404(
+        BufetImport.objects
+        .select_related('write_off')
+        .prefetch_related('write_off__items__ingredient'),
+        pk=pk,
+    )
     if not user_can_access_canteen(request.user, bufet_import.warehouse.canteen):
         messages.error(request, 'Nemáte přístup k tomuto záznamu.')
         return redirect('bufet:list')
 
-    write_off = None
-    if bufet_import.write_off_id:
-        try:
-            write_off = StockWriteOff.objects.prefetch_related('items__ingredient').get(
-                id=bufet_import.write_off_id
-            )
-        except StockWriteOff.DoesNotExist:
-            pass
-
     return render(request, 'bufet/bufet_detail.html', {
         'import': bufet_import,
         'items': bufet_import.items.select_related('ingredient'),
-        'write_off': write_off,
+        'write_off': bufet_import.write_off,
     })

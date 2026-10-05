@@ -39,7 +39,7 @@ GoodsReceipt ─< GoodsReceiptItem          Supplier ─< SupplierIngredientTemp
 GoodsReceipt ─1 GoodsReceiptScan          Supplier ─< SupplierItemAlias
 StockTransfer ─< StockTransferItem        StockWriteOff ─< StockWriteOffItem
 InventoryVerification ─< InventoryVerificationItem
-BufetImport ─< BufetImportItem (→ StockWriteOff přes write_off_id)
+BufetImport ─< BufetImportItem        BufetImport ─? StockWriteOff (FK `write_off`, SET_NULL)
 UserProfile (user 1:1, canteens M2M, is_readonly)
 ```
 

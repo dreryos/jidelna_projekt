@@ -2,6 +2,7 @@ from django.db import models
 from django.utils import timezone
 from apps.canteens.models import Warehouse
 from apps.core.models import Ingredient
+from apps.inventory.models import StockWriteOff
 
 
 class BufetImport(models.Model):
@@ -36,10 +37,13 @@ class BufetImport(models.Model):
         on_delete=models.PROTECT,
         verbose_name="Vytvořil",
     )
-    write_off_id = models.IntegerField(
+    write_off = models.ForeignKey(
+        StockWriteOff,
+        on_delete=models.SET_NULL,
         null=True, blank=True,
-        verbose_name="ID odepsání",
-        help_text="ID záznamu StockWriteOff vytvořeného při potvrzení importu",
+        related_name='bufet_imports',
+        verbose_name="Odepsání ze skladu",
+        help_text="Záznam StockWriteOff vytvořený při potvrzení importu",
     )
 
     class Meta:
@@ -52,13 +56,8 @@ class BufetImport(models.Model):
 
     def get_write_off_total_cost(self):
         """Celková nákupní cena odepsaného zboží (z interní DB, ne z exportu)."""
-        if not self.write_off_id:
-            return None
-        from apps.inventory.models import StockWriteOff
-        try:
-            return StockWriteOff.objects.get(id=self.write_off_id).get_total_cost()
-        except StockWriteOff.DoesNotExist:
-            return None
+        # Cizí klíč se SET_NULL: odkaz na neexistující odepsání už vzniknout nemůže.
+        return self.write_off.get_total_cost() if self.write_off_id else None
 
     def get_mapped_count(self):
         """Počet položek spárovaných se surovinou."""

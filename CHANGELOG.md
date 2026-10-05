@@ -7,6 +7,17 @@ a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+### Fixed
+- **Import bufetu: chybějící kontrola přístupu v kroku 2 a pád na nečíselném ID** (5.10.2026)
+  - Krok 2 (náhled položek) jako jediný nekontroloval, že uživatel smí k jídelně zvoleného skladu; kroky 1 a 3 to dělaly. Nešlo o běžně zneužitelnou díru, protože sklad do session nastavuje krok 1 po kontrole, ale o nedůslednost, která by se projevila např. při odebrání jídelny uživateli uprostřed nahrávání. Sjednoceno s ostatními kroky, hlídá to test
+  - Nečíselné ID skladu nebo suroviny ve formuláři nebo session končilo chybou 500 (`ValueError` se neodchytával); nově se uživatel vrátí na začátek nahrávání
+  - Do pohledů nahrání importu přibyly první testy; dosud se testoval jen parser
+
+### Changed
+- **`BufetImport.write_off_id` je nově cizí klíč na odepsání** (5.10.2026)
+  - Dřív to bylo holé celé číslo bez referenční integrity, takže po smazání odepsání zůstalo v importu číslo, které nikam nevede. Nově je to `ForeignKey` s `SET_NULL`: smazání odepsání historii importu nesmaže, jen zruší vazbu
+  - Migrace vazby **zachovává**. Automaticky generovaná varianta by pole smazala a založila znovu, takže by u stávajících importů vazba zmizela. Před změnou typu se vynulují odkazy na už neexistující odepsání, jinak by cizí klíč migraci shodil; každý takový import migrace vypíše i s původním číslem, aby po něm zůstala stopa v logu nasazení. Zpětná migrace vynulované odkazy neobnoví (ukazovaly na odepsání, která neexistují). Ověřeno na kopii produkční databáze: platná vazba se zachovala, visící se vynulovala a migrace jde vrátit zpět
+
 ### Added
 - **Upozornění na nezavřené výdejky na úvodní stránce** (5.10.2026)
   - Žlutý pruh se ukáže, jakmile je v dokumentu výdejky starším než 14 dní nezavřená položka. Pro každou jídelnu uvádí počet položek a dokumentů, datum nejstaršího a odkaz na něj. Respektuje jídelny uživatele; superuživatel vidí všechny
