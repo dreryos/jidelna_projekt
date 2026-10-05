@@ -14,6 +14,11 @@ a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
   - Pruh **nic nezavírá automaticky**: při nulovém zápisu by vyráběl smyšlená data
   - Hranice je přísně „starší než": dokument ze dne před přesně 14 dny ještě pruh nevyvolá
 
+### Fixed
+- **Upozornění na probíhající inventury na úvodní stránce ukazovalo inventury všech jídelen** (5.10.2026)
+  - Zaměstnanec jedné jídelny tak viděl sklady a jména kolegů z ostatních. Nově se ukazují jen inventury jídelen uživatele (`UserProfile.canteens`); superuživatel vidí všechny, uživatel bez profilu žádné. Je to pravidlo z `CLAUDE.md` a při přibývajících jídelnách by to vadilo čím dál víc
+  - Dotaz navíc nacházel jídelnu každé inventury zvlášť (šablona vypisuje `warehouse.canteen.name`); `select_related` to srazilo na jeden dotaz
+
 ### Removed
 - **Čítač „Aktuálně přihlášených uživatelů" z úvodní stránky** (5.10.2026)
   - Reálné použití se neukázalo. Byl to navíc context processor, který běžel při **každém** načtení **každé** stránky a pokaždé dekódoval všechny neexpirované session; jeho odstranění je tedy i drobné zrychlení celé aplikace

@@ -89,7 +89,20 @@ def home(request):
     
     active_verifications = InventoryVerification.objects.filter(
         status=InventoryVerification.Status.IN_PROGRESS
-    ).select_related('warehouse', 'started_by').order_by('-started_at')[:5]
+    )
+    # Jen jídelny uživatele - jinak by zaměstnanec jedné jídelny viděl sklady
+    # a jména kolegů z ostatních. Superuživatel vidí všechny.
+    if not request.user.is_superuser:
+        try:
+            active_verifications = active_verifications.filter(
+                warehouse__canteen__in=request.user.profile.canteens.all()
+            )
+        except (ObjectDoesNotExist, AttributeError):
+            active_verifications = active_verifications.none()
+    # warehouse__canteen kvůli šabloně, která vypisuje i jméno jídelny
+    active_verifications = active_verifications.select_related(
+        'warehouse__canteen', 'started_by'
+    ).order_by('-started_at')[:5]
     
     # Zapomenuté (nezavřené) položky výdejek - viz stale_picking_summary()
     from apps.production.utils import stale_picking_summary

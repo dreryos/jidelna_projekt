@@ -175,3 +175,55 @@ class DumpDownloadPermissionTest(TestCase):
         response = self.client.post(self.url)
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response['Location'], reverse('core:backup_page'))
+
+
+class HomeInventoryScopeTest(TestCase):
+    """Upozornění na probíhající inventury na úvodní stránce.
+
+    Každý dotaz nad daty jídelny musí respektovat jídelny uživatele. Úvodní
+    stránka dřív ukazovala probíhající inventury všech jídelen, takže zaměstnanec
+    jedné jídelny viděl sklady a jména kolegů z jiných.
+    """
+
+    def setUp(self):
+        from apps.canteens.models import Canteen, Warehouse
+        from apps.core.models import UserProfile
+        from apps.inventory.models import InventoryVerification
+
+        self.starter = User.objects.create_user('starter')
+        self.canteen_a = Canteen.objects.create(name='Jídelna A')
+        self.canteen_b = Canteen.objects.create(name='Jídelna B')
+        for canteen in (self.canteen_a, self.canteen_b):
+            warehouse = Warehouse.objects.create(name=f'Sklad {canteen.name}', canteen=canteen)
+            InventoryVerification.objects.create(
+                warehouse=warehouse,
+                status=InventoryVerification.Status.IN_PROGRESS,
+                started_by=self.starter,
+                created_by=self.starter,
+            )
+
+        self.user_a = User.objects.create_user('uzivatel_a')
+        profile, _ = UserProfile.objects.get_or_create(user=self.user_a)
+        profile.canteens.set([self.canteen_a])
+        self.superuser = User.objects.create_superuser('admin', password='x')
+
+    def _home(self, user):
+        self.client.force_login(user)
+        return self.client.get(reverse('home'))
+
+    def test_user_sees_only_own_canteen_inventories(self):
+        response = self._home(self.user_a)
+        self.assertContains(response, 'Sklad Jídelna A')
+        self.assertNotContains(response, 'Sklad Jídelna B')
+
+    def test_superuser_sees_all_inventories(self):
+        response = self._home(self.superuser)
+        self.assertContains(response, 'Sklad Jídelna A')
+        self.assertContains(response, 'Sklad Jídelna B')
+
+    def test_user_without_profile_sees_no_inventories(self):
+        from apps.core.models import UserProfile
+        user = User.objects.create_user('bezprofilu')
+        UserProfile.objects.filter(user=user).delete()
+        response = self._home(user)
+        self.assertNotContains(response, 'Probíhající inventury')
