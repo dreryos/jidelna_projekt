@@ -4,14 +4,11 @@ Papír se musí umět spárovat se svou výdejkou - jak pro otevření dokumentu
 telefonem, tak pro budoucí dávkové rozpoznávání naskenovaných papírů.
 """
 import base64
-import re
 from datetime import date
-from decimal import Decimal
 
 from django.contrib.auth.models import User
 from django.template.loader import render_to_string
 from django.test import TestCase
-from django.urls import reverse
 
 from apps.canteens.models import Canteen
 from apps.production.models import PickingListDocument
