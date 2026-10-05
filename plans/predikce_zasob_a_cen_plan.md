@@ -188,7 +188,7 @@ Změřeno na 8 112 nenulových dokončených položkách (poměr `actual / plann
 
 Jestli po tomhle čištění zbude dost řádků a ukáže se vychýlení, rozhodne
 přeměření. **Do té doby B1 nestavět.** Cena špatně nasazeného faktoru je
-vysoká: zabuduje do normy buď opisování plánu, nebo chyby jednotek.
+vysoká: zabuduje do normy buď opisování plánu, nebo chybnou normu či jednotku.
 
 **Model** (`apps/analytics/models.py`, dosud bez modelů):
 
