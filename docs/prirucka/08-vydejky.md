@@ -97,6 +97,7 @@ Výdejky se seskupují do **dokumentů** (den nebo více dní), které lze:
 
 * **editovat** — upravit plánovaná množství, doplnit skutečná, dokončovat položky,
 * **exportovat do PDF** — optimalizováno pro černobílý tisk do kuchyně; u vícedenních dokumentů se generuje po dnech,
+* **QR kód na každé stránce PDF** — vpravo nahoře. Nese odkaz na editaci té výdejky: kdo ho namíří telefonem, otevře se mu přímo ten dokument (přihlásit se musí jako obvykle). Zároveň jednoznačně určuje, ke které výdejce papír patří, což se hodí při dohledávání a při případném načítání naskenovaných papírů. Kód se tiskne jen na PDF vygenerovaná po zavedení této funkce; starší papíry ho nemají,
 * **archivovat** — dokument, jehož všechny položky jsou dokončené, lze archivovat; zmizí z aktivních přehledů, ale zůstává dohledatelný (včetně PDF).
 
 U dokumentu se eviduje i **kuchař** — kdo vaření zajišťoval (využívá analytika kuchařů, kapitola [10](10-analytika-a-reporty.md)).

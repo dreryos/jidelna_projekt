@@ -1,6 +1,7 @@
 """
 Utility funkce pro production app.
 """
+import base64
 import time
 import logging
 from decimal import Decimal
@@ -8,6 +9,7 @@ from collections import defaultdict
 from io import BytesIO
 from django.core.files.base import ContentFile
 from django.template.loader import render_to_string
+from django.urls import reverse
 from django.db.models import F, Prefetch
 from django.utils import timezone
 
@@ -33,6 +35,44 @@ MEAL_TYPE_ORDER = {
 # po dnech a slijeme přes pypdf, aby špička paměti WeasyPrintu zůstala nízko.
 # Menší výdejky renderujeme jednorázově (zachová průběžné číslování stran).
 PDF_CHUNK_MEAL_THRESHOLD = 60
+
+
+def picking_document_qr_uri(document, base_url='/'):
+    """
+    QR kód výdejky jako `data:` URI se SVG, připravený do `<img src>`.
+
+    Kód nese odkaz na editaci výdejky, takže ho telefon otevře fotoaparátem bez
+    jakékoli aplikace, a zároveň jednoznačně určuje, ke kterému dokumentu papír
+    patří - to je podmínka pro pozdější načítání naskenovaných papírů.
+
+    Bez absolutní adresy (PDF generované mimo request, `base_url='/'`) by byla
+    relativní cesta v kódu k ničemu, proto se pak kóduje jen označení dokumentu.
+    Papír jde pořád spárovat, jen se telefonem neotevře.
+
+    Používá `reportlab`, který už v závislostech je - žádná nová knihovna.
+    """
+    from reportlab.graphics import renderSVG
+    from reportlab.graphics.barcode.qr import QrCodeWidget
+    from reportlab.graphics.shapes import Drawing
+
+    if base_url.startswith(('http://', 'https://')):
+        path = reverse('production:picking_list_edit', args=[document.id])
+        payload = base_url.rstrip('/') + path
+    else:
+        payload = f'SPIZ-VYDEJKA-{document.id}'
+
+    # Úroveň M snese zašpiněný nebo zmuchlaný papír; okraj 2 moduly stačí,
+    # protože kód leží na bílém papíru a kolem něj je ještě okraj stránky.
+    widget = QrCodeWidget(payload, barLevel='M', barBorder=2)
+    x0, y0, x1, y1 = widget.getBounds()
+    size = 100  # velikost na papíře určuje CSS, SVG se škáluje
+    drawing = Drawing(size, size, transform=[size / (x1 - x0), 0, 0, size / (y1 - y0), 0, 0])
+    drawing.add(widget)
+
+    svg = renderSVG.drawToString(drawing)
+    if isinstance(svg, str):
+        svg = svg.encode('utf-8')
+    return 'data:image/svg+xml;base64,' + base64.b64encode(svg).decode('ascii')
 
 
 def _render_picking_pdf(context, base_url, sorted_daily_data, HTML,
@@ -277,6 +317,7 @@ def generate_picking_list_pdf_file(document, base_url='/', save=True):
             'missing_count': missing_count,
             'insufficient_count': insufficient_count,
             'large_document': total_items > 40,
+            'qr_uri': picking_document_qr_uri(document, base_url),
         }
 
         data_time = time.monotonic() - gen_start
