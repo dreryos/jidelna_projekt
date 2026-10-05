@@ -143,17 +143,47 @@ prostý součet norem receptů**. Agent: **Sonnet** (B1–B3), **Haiku** (B4 ša
 
 ### B1. Model `ConsumptionFactor` — korekce plán vs. skutečnost
 
-Data v produkční DB tuhle korekci ospravedlňují (měřeno na 5 615 dokončených
-položkách výdejek):
+> **Opraveno 5. 10. 2026.** Původní zdůvodnění tohoto kroku (medián poměru
+> 0,943, „normy nadhodnocují spotřebu o ~6 %", shoda 17,6 %, průměr 1,02)
+> **se nepodařilo reprodukovat** — a při přeměření na nové kopii (5. 10.) se
+> ukázalo, že ani opačný závěr nejde z dat vyčíst. Níž jsou čísla, která jsou
+> změřená; zda se B1 vůbec staví, se rozhodne až po vyčištění vstupu.
 
-- medián `quantity_actual / quantity_planned` = **0,943** → normy receptů
-  systematicky **nadhodnocují spotřebu o ~6 %**,
-- přesnou shodu plánu a skutečnosti má jen **17,6 %** položek,
-- 50,2 % položek se vydá méně než 0,95× plán, 27 % více než 1,05× plán,
-- **100 surovin ze 180** má ≥ 10 dokončených pozorování, 42 surovin má ≥ 30.
+Změřeno na 8 112 nenulových dokončených položkách (poměr `actual / planned`):
 
-Prostý součet norem tedy pro polovinu surovin míří vedle. Korekce je hlavní
-přidaná hodnota proti dnešnímu reportu.
+- medián je **1,000** ve všech řezech (s nulami, bez nul, bez koření), ale je to
+  **artefakt bodové masy**: **30,4 %** nenulových hodnot je přesně rovných
+  plánu. U průběžně zadaných dokonce 41 %, u zpětně doplněných z papíru 1 %.
+  Řádek, který plán jen opisuje, o odchylce nic nevypovídá.
+- po vyřazení přesných shod je medián **1,05**; pod 0,95× plánu je 28,4 %
+  položek, nad 1,05× plánu 34,8 %, do ±5 % 36,8 %. Rozdělení je zhruba
+  symetrické kolem plánu, **bez prokázaného systematického nadhodnocení**.
+  Směr odchylky z toho říct nejde — vyřazení přesných shod je výběrové
+  zkreslení.
+- aritmetický průměr poměru je **5,8**, geometrický 1,2 — ocas tvoří **chyby
+  jednotek**: 299 položek (3,7 %) je > 10× plán, 63 je > 100× (petrželka
+  mražená: plán 0,027, zadáno 150). Viz `plans/vydejky-nezapisovana-data.md`, 2.7.
+- **nuly jsou 26 %** dokončených položek a nejde je brát jako „nevydáno":
+  u koření (pepř 87 %, kmín 86 %) znamenají „nevážilo se", a podíl nul se liší
+  podle toho, jak se zapisovalo (38 % zpětně z papíru, 20 % průběžně).
+- **187 surovin** (bez pepře, kmínu, soli a oleje) má dokončené položky;
+  **123** má ≥ 10 pozorování, **78** má ≥ 30 (po vyřazení nul 116 resp. 56).
+
+**Čištění vstupu, bez kterého se z těchto dat žádný faktor nepočítá:**
+
+1. vyřadit suroviny, které se na jídlo nevažují (koření, sůl, olej — seznam
+   určí vedoucí kuchyně),
+2. **řádky přesně rovné plánu nepočítat jako pozorování**,
+3. vyřadit poměry > 10× (chyby jednotek). Původní ořez ⟨0,2; 3,0⟩ je příliš
+   hrubý: zahodí i skutečné velké odběry a zároveň pustí chybu jednotek
+   o řád níž, než je zadaná,
+4. nuly zpracovat zvlášť (pravděpodobnost „vydá se"), ne jako poměr 0,
+5. **Ostrovec je sezónní** a má jedno léto; faktor na úrovni (surovina, Ostrovec)
+   se nedá ověřit proti jiné sezóně.
+
+Jestli po tomhle čištění zbude dost řádků a ukáže se vychýlení, rozhodne
+přeměření. **Do té doby B1 nestavět.** Cena špatně nasazeného faktoru je
+vysoká: zabuduje do normy buď opisování plánu, nebo chyby jednotek.
 
 **Model** (`apps/analytics/models.py`, dosud bez modelů):
 
