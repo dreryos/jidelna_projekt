@@ -8,6 +8,11 @@ které import vytvořil. Proto se pole přejmenuje a změní jeho typ; sloupec
 Před změnou typu se vynulují odkazy na odepsání, která už neexistují. Odepsání
 jde smazat (`StockWriteOffDeleteView`), takže po takovém smazání zůstalo v importu
 číslo, které nikam nevede. Cizí klíč by na takové hodnotě migraci shodil.
+
+Zpětná migrace vynulované odkazy **neobnoví**. Ukazovaly na odepsání, která
+neexistují, takže není co obnovit; zůstalo by jen číslo. Aby po nich zůstala
+aspoň stopa, vypíše migrace při vynulování každý dotčený import a původní
+číslo - záznam je ve výstupu nasazení (`docker compose logs`).
 """
 
 import django.db.models.deletion
@@ -17,12 +22,19 @@ from django.db import migrations, models
 def null_dangling_write_offs(apps, schema_editor):
     BufetImport = apps.get_model('bufet', 'BufetImport')
     StockWriteOff = apps.get_model('inventory', 'StockWriteOff')
-    (
+    dangling = (
         BufetImport.objects
         .filter(write_off_id__isnull=False)
         .exclude(write_off_id__in=StockWriteOff.objects.values('id'))
-        .update(write_off_id=None)
     )
+    # Výpis před úpravou: po ní už by původní čísla nebylo odkud vzít.
+    for import_id, write_off_id in dangling.values_list('pk', 'write_off_id'):
+        print(
+            f'\n  bufet: import #{import_id} odkazoval na neexistující odepsání '
+            f'#{write_off_id}, odkaz vynulován',
+            end='',
+        )
+    dangling.update(write_off_id=None)
 
 
 class Migration(migrations.Migration):

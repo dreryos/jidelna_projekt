@@ -16,7 +16,7 @@ a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
 ### Changed
 - **`BufetImport.write_off_id` je nově cizí klíč na odepsání** (5.10.2026)
   - Dřív to bylo holé celé číslo bez referenční integrity, takže po smazání odepsání zůstalo v importu číslo, které nikam nevede. Nově je to `ForeignKey` s `SET_NULL`: smazání odepsání historii importu nesmaže, jen zruší vazbu
-  - Migrace vazby **zachovává**. Automaticky generovaná varianta by pole smazala a založila znovu, takže by u stávajících importů vazba zmizela. Před změnou typu se vynulují odkazy na už neexistující odepsání, jinak by cizí klíč migraci shodil. Ověřeno na kopii produkční databáze: platná vazba se zachovala, visící se vynulovala a migrace jde vrátit zpět
+  - Migrace vazby **zachovává**. Automaticky generovaná varianta by pole smazala a založila znovu, takže by u stávajících importů vazba zmizela. Před změnou typu se vynulují odkazy na už neexistující odepsání, jinak by cizí klíč migraci shodil; každý takový import migrace vypíše i s původním číslem, aby po něm zůstala stopa v logu nasazení. Zpětná migrace vynulované odkazy neobnoví (ukazovaly na odepsání, která neexistují). Ověřeno na kopii produkční databáze: platná vazba se zachovala, visící se vynulovala a migrace jde vrátit zpět
 
 ### Added
 - **Upozornění na nezavřené výdejky na úvodní stránce** (5.10.2026)
