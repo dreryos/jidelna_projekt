@@ -1,6 +1,70 @@
 # Plán: nezapisované výdejky na Varvažově a Ostrovci
 
-Měřeno 22. 9. 2026 nad produkční kopií.
+Měřeno 22. 9. 2026 nad produkční kopií, **aktualizováno 5. 10. 2026** nad novou
+kopií po zpětném doplnění výdejek kolegou. Původní text níž popisuje stav
+k 22. 9.; co se od té doby změnilo, je hned tady.
+
+## Aktualizace 5. 10. 2026
+
+**Kolega doplnil 3 742 položek ručně.** Nezavřené položky na Varvažově
+2 277 → 0, na Ostrovci 1 444 → 0; `quantity_blocked` na Varvažově
+44 997 → 403, na Ostrovci 13 067 → 0. Hodnoty nejsou slepě opsaný plán
+(shoda přesně s plánem 1 %). Tím se potvrdilo, že úkon je proveditelný;
+problém není schopnost, ale **včasnost** — trvalo to dva a půl měsíce.
+
+**Ostrovec je sezónní** (léto), jinak se chodí na jídlo do Varvažova. Chybějící
+doklady a příjemky po srpnu nejsou výpadek zápisu.
+
+**Koření se na jídlo nevážilo.** Pepř, kmín, sůl a olej se odepisovaly jednou za
+čas po celém balení. Nula u nich ve výdejce proto znamená „nevážilo se", ne
+„nevydalo se" (pepř 87 % nul, kmín 86 %, olej 54 %, sůl 43 %).
+
+**Dvě různé populace dat.** Řádky doplněné zpětně z papíru (3 619) a řádky
+zadané průběžně v systému (7 336) se chovají zásadně jinak:
+
+| | zpětně z papíru | zadáno průběžně |
+|---|---|---|
+| nula | 38 % | 20 % |
+| nenulové přesně = plán | **1 %** | **41 %** |
+| nenulové do ±5 % plánu | 11 % | 47 % |
+| nenulové > 10× plán | **7,1 %** | 2,4 % |
+
+Čtení (hypotéza, ne měření): u průběžného zadání se plán často **opisuje** —
+41 % hodnot je přesně rovných plánu —, kdežto hodnoty z papíru jsou skutečné
+a od plánu se liší skoro vždy. Papírové hodnoty jsou tedy pravděpodobně
+věrnější, ale mají víc chyb jednotek (7,1 % vs 2,4 %). Řádky nejsou
+v databázi označené, odkud pocházejí, takže je nejde zpětně spolehlivě oddělit.
+
+**Sklad po odepsání spadl do mínusu.** Karet v mínusu: Varvažov 5 → 56
+(Σ −2 348), Ostrovec 0 → 40 (Σ −1 211), Růžená 57 → 62 (Σ −8 067). Příčin je víc
+(viz „Chyby jednotek" níž), skutečný stav srovná jedině inventura.
+
+**Zadané množství mnohonásobně přesahuje plán.** U 299 dokončených položek
+(3,7 % nenulových) je zadáno víc než 10× plán. Poměr k plánu ale **nerozliší
+několik různých věcí**:
+
+* **celá balení** — plán je zlomek, odebírá se celé balení (droždí 1 kg,
+  kanystr oleje, 10 kg soli); většina z pásma 10–50×. Totéž je chléb níž,
+* **chybný převodní faktor** — loupáček: plán 0,16 ks, zadáno 200. Surovina
+  má `ks → ks`, ale `conversion_factor` 1000, takže se plán dělí tisícem
+  (viz „Past s výchozím faktorem 1000" níž). Kuchaři zadávají správně;
+  špatný je plán,
+* **granularita celých balení u chleba** — plán je zlomek bochníku
+  (plátky na porci), ale odebírá se celý bochník (nejčastěji zadáno 1).
+  **Není to chyba**: sklad chleba sedí (příjemky 890 bochníků, odepsáno
+  ~779, zůstatky +17 / 0,5 / −2),
+* **skutečné překlepy jednotek** — máslo: plán 0,67 kg, zadáno 375; petrželka
+  mražená: plán 0,027, zadáno 150.
+
+Kolik řádků je skutečný překlep, z poměru určit nejde. Dřívější odhad „70 %
+záporných stavů Varvažova jsou chyby jednotek" se **nedrží**: počítal se
+všemi řádky > 10×, tedy i celými baleními. Největší mínusy Varvažova (jogurt
+−621 ks, mléko −511 l, brambory −276 kg) vypadají spíš na chybějící příjemky.
+
+**Důsledky pro tento plán:** fáze 1 se nerealizuje; tlačítko „vydat podle
+plánu" **se nestaví** (viz 2.1); přibývá evidence koření souhrnně (2.6)
+a **kontrola nesmyslného množství (2.7) se musí navrhnout jinak, než
+se původně počítalo**. QR a brána OCR zůstávají.
 
 ## Co se děje
 
@@ -50,7 +114,11 @@ ne kvůli kódu** — jeho testy procházejí (15/15).
 
 ## Fáze 1 — úklid zaseknutých blokací
 
-Nezávislá na zbytku, dá se udělat hned.
+> **Nerealizovat. Překonáno 5. 10. 2026** — kolega zaseknuté položky doplnil
+> ručně se skutečnými hodnotami, což je lepší než cokoli, co by doplnil
+> automat. Text níž zůstává jako **záloha pro případ, že se to příští sezónu
+> znovu nakupí**. Jediné, co se dělá už teď, je **1.3** (varování), protože to
+> zabrání opakování.
 
 ### 1.1 Příznak `auto_closed` na `PickingList`
 
@@ -91,11 +159,13 @@ Pořadí je podstatné a není to pořadí podle zajímavosti:
 
 | # | Krok | Náklad | Kdy |
 |---|---|---|---|
-| 2.1 | tlačítko „vydat vše podle plánu" | půl dne | hned, možná stačí |
+| 2.1 | ~~tlačítko „vydat vše podle plánu"~~ | — | **nestavět** |
 | 2.2 | QR do tištěné výdejky | půl dne | hned, nezávisle |
 | 2.3 | OCR jednoho papíru | dny | až po 2.5 |
 | 2.4 | dávkový sken štosu | dny | až po 2.3 |
 | 2.5 | brána proveditelnosti | hodiny | **před 2.3** |
+| 2.6 | koření a základní suroviny souhrnně | půl dne | po rozhodnutí, které suroviny |
+| 2.7 | kontrola nesmyslného množství při zadání | hodiny | **přepracovat** (poměr k plánu nestačí) |
 
 **2.1 a 2.2 se dělají hned a nezávisle na sobě.** U 2.2 platí, že funguje jen
 na papírech vytištěných po té změně, takže každý týden odkladu je další štos
@@ -107,9 +177,16 @@ Na výdejce jedno tlačítko, které vyplní všem nevydaným řádkům plán, a
 opraví jen to, co sedělo jinak. Jednotka akce je celý dokument — přesně ta,
 na které se to dnes láme.
 
-Podle dat sedí plán přesně jen u 14–26 % řádků, takže úspora není zázračná.
-Ale je to **jedna akce místo padesáti políček**, a oprava několika řádků je
-proti opsání celého papíru nesrovnatelná.
+> **Nestavět. Přeměřeno 5. 10. 2026.** Právě u zpětně doplňovaných řádků, tedy
+> u toho, k čemu tlačítko mělo sloužit, je plán správně (do ±5 %) jen u **7 %**
+> všech řádků, 34–38 % je nula a zbytek jsou jiné hodnoty. Předvyplnění by
+> uživatele nutilo opravovat devět řádků z deseti — a hlavně by **institucionalizovalo
+> opisování plánu**, což je přesně to, co u průběžně zadaných dat vidíme
+> (41 % nenulových hodnot přesně rovných plánu). Dostali bychom víc dat,
+> ale horších.
+>
+> Původní odhad „14–26 % shoda" byl špatná míra a hodnoty z různých
+> populací se nedají míchat. Text níž zůstává jen jako záznam úvahy.
 
 Odhad: půl dne. Dokud tohle nevyzkoušíte v provozu, nemá smysl stavět OCR —
 možná je celý problém tady.
@@ -238,20 +315,126 @@ u řádků, které se od plánu liší, protože tam je informace.
 Anotace z těch papírů uložit do `test/fixtures/ocr/` jako testovací data;
 testy pak běží nad nimi, nikdy proti placenému API.
 
+### 2.6 Koření a základní suroviny souhrnně
+
+Pepř, kmín, sůl a olej se na jídlo nevažují; dřív se odepsal celý balík jednou
+za čas. Řádek ve výdejce u nich nese nulu nebo vymyšlené číslo a **zavádí
+statistiku** (nula = „nevážilo se", ne „nevydalo se").
+
+Návrh: příznak na `Ingredient` (např. `evidovat_souhrnne`), který takovou
+surovinu **nezařadí do řádků výdejky** ani do blokací. Spotřeba se dál
+odepisuje tak, jak dosud — odpisem celého balení.
+
+**Rozsah, který data dokládají:** čtyři nejzřetelnější suroviny (pepř, kmín,
+sůl, olej) tvoří zhruba 12 % dokončených řádků od 23. 7. (659 z 5 516).
+Ostatní suroviny s vysokým podílem nul (česnek mražený 52 %, marmeláda
+44 %, Rama 36 %) nejsou koření a mohou být skutečně nevydané. **Které suroviny
+příznak dostanou, určí vedoucí kuchyně, ne data.**
+
+Odhad: půl dne. Dělat až po tom, co někdo seznam potvrdí.
+
+### 2.7 Kontrola nesmyslného množství při zadání
+
+> **Původní návrh se nestaví.** Chtěl upozornit při zadání > 10× plán.
+> Ověření na datech (5. 10.) ukázalo, že to **nefunguje**: pásmo 10–50× tvoří
+> z velké části celá balení (bochník, droždí, olej, sůl), takže by se kuchaři
+> ptali na legitimní věci a upozornění by přestali číst.
+
+Co data skutečně říkají, rozpad řádků nad plán:
+
+| poměr | řádků | co v tom je |
+|---|---|---|
+| 10–20× | 118 | kg 60, bochník 29, l 18, ks 11 — převážně celá balení |
+| 20–50× | 79 | kg 31, bochník 30, ks 11, l 7 |
+| 50–100× | 39 | bochník 29 (celé bochníky při malém plánu) |
+| > 100× | 63 | bochník 30, ks 16, kg 15, l 2 |
+
+Dvě konkrétní zjištění a obě **jsou jiná, než jsem původně psal**:
+
+1. **Chléb (22 plátků) není chyba.** Plán je zlomek bochníku, protože porce
+   počítá plátky (`conversion_factor` 22), ale vydává se celý bochník — zadané
+   hodnoty jsou celá čísla (nejčastěji 1, pak 3, 2, 4). Sklad sedí. Proto
+   poměr zadáno/plán u chleba (medián 18,9) **nic neříká o chybě**, je to
+   zrnitost balení. Totéž platí pro jakoukoli surovinu, která se odebírá
+   po celých kusech.
+2. **Loupáček je skutečná chyba v datech** — viz další odstavec.
+
+### Past s výchozím faktorem 1000
+
+`Ingredient.conversion_factor` má **výchozí hodnotu 1000**
+(`apps/core/models.py:54`; stejnou výchozí hodnotu má AJAX přidání suroviny
+v `apps/core/views.py`) a `convert_to_base_unit()` jím vždy dělí. Výchozí
+hodnota je správná pro `kg ← g`, ale pro surovinu s **toutéž** základní
+a receptovou jednotkou je špatná. Loupáček (`ks → ks`, faktor 1000) má proto
+plán 1000× menší (medián zadáno/plán 1 047). Důsledek není jen statistický:
+**objednávkový report by loupáčky nikdy nenavrhl k objednání** a blokace na
+skladu je 1000× podhodnocená.
+
+Podle dat je 13 surovin s toutéž základní a receptovou jednotkou a faktorem
+≠ 1. Skutečně rozbitý je z nich **jen Loupáček**, u dalších to z dat nejde
+posoudit:
+
+| surovina | jednotka | faktor | výdejek | poznámka |
+|---|---|---|---|---|
+| Loupáček | ks | 1000 | 6 | **rozbité** (medián 1 047) — opravit faktor na 1 |
+| Tortilla | ks | 16 | 6 | medián 4,9, nejasné; ověřit |
+| Dobrá voda Yess | ks | 8 | 0 | zatím nepoužito |
+| Fruit&go kapsičky | ks | 1000 | 0 | zatím nepoužito, pravděpodobně chybné |
+| CLIN okena | l | 1000 | 0 | zatím nepoužito, pravděpodobně chybné |
+| Chléb, Vánočka (22 plátků), Toastový chléb (20) | bochník / balení | 22 / 20 | 209 / 17 / 5 | **záměrné** — faktor převádí plátky na kus |
+| Cuketa, rajčata, masové kuličky | kg / g | 1000 | 1–4 | vzorek moc malý na závěr |
+
+Návrh opravy: jednorázově opravit **Loupáček** v administraci (faktor 1)
+a projít Tortillu. Případně změnit výchozí hodnotu faktoru tak, aby se při
+shodných jednotkách nastavila na 1 — ale pozor, chléb a vánočka tu shodu
+jednotek (`bochník → bochník`) používají záměrně s faktorem 22, takže
+automatická validace „shodné jednotky ⇒ faktor 1" by je rozbila. Jednotku
+u nich popisuje `recipe_unit = 'bochník'`, přestože normy v receptech jsou
+v plátcích; správně by měla být `plátek`. Nechávám na rozhodnutí.
+
+Skutečné překlepy (máslo 375 kg, petrželka 150) jsou řádově desítky.
+Případná kontrola má smysl až **vůči vlastní historii suroviny**
+(např. > 20× horní decil dosavadních hodnot *téže suroviny*), ne vůči plánu.
+To je složitější, než jak to bylo původně nakreslené, a přínos je zatím
+neprokázaný. **Nejdřív opravit loupáček a zkontrolovat zbylé suroviny z tabulky
+výš a přeměřit**, teprve pak rozhodnout, zda kontrola vůbec zbyde.
+
 ---
 
 ## Co tenhle plán vědomě neřeší
 
-**Proč se na dvou jídelnách nezapisuje, když na třetí ano.** Růžená to zvládá
-ve stejné aplikaci. Je možné, že rozdíl není v nástroji, ale v tom, kdo a kdy
-to má v popisu práce — a pak žádná funkce nepomůže. Stojí za to se zeptat
-dřív, než se postaví OCR.
+**Proč se na dvou jídelnách nezapisovalo, když na třetí ano.** Aktualizace
+5. 10.: kolega zaseknuté položky doplnil, takže schopnost tu je; nezapisovalo
+se včas. Příčinou nejspíš není nástroj, ale kdo a kdy to má v popisu práce —
+a pak žádná funkce nepomůže. Papír → systém je ruční přepis a ten se odkládá.
+Proto má smysl hlavně to, co zkracuje cestu nebo zviditelňuje skluz (1.3, 2.2,
+2.4), ne další pohodlí při zadávání jednotlivých polí.
+
+**Skutečný stav skladu.** Žádný krok tohoto plánu ho nesrovnává. Záporné stavy
+(Varvažov 56 karet, Ostrovec 40) srovná jedině fyzická inventura. Pro sezónní
+provoz je přirozené místo **konec sezóny**; do té doby je záporný stav
+viditelný signál, ne chyba k opravě.
 
 ---
 
 ## Dopad na plán predikce
 
 `plans/predikce_zasob_a_cen_plan.md` staví fázi B na historii spotřeby.
-Ta historie od července existuje **pro jednu jídelnu ze tří**. Dokud se to
-nezmění, má predikce smysl jen pro Růženou — a ta funguje i bez ní.
-Tohle je tedy předpoklad fáze B, ne paralelní úkol.
+**Aktualizace 5. 10.:** spotřeba teď existuje pro všechny tři jídelny, takže
+původní předpoklad „jen Růžená" padl. Ale:
+
+* **koření je v datech zkreslené** (nula = nevážilo se) a musí se z modelu
+  „vydá se / nevydá se" vyřadit — viz 2.6;
+* **zrnitost celých balení** (chléb se odebírá po bochnících, plán je zlomek)
+  znamená, že poměr zadáno/plán **na úrovni jednoho jídla nemá smysl**.
+  Spotřeba takových surovin se musí agregovat na úrovni dokumentu nebo dne;
+  jinak by faktor "naučil", že chléb se spotřebuje 19× víc, než plán;
+* **chybný převodní faktor** (loupáček) a překlepy (máslo 375 kg) je potřeba
+  z dat vyčistit nebo ořezat dřív, než se počítá jakýkoli faktor — viz 2.7.
+  Poměr k plánu jako filtr nestačí;
+* **Varvažov a Ostrovec mají jednu sezónu**, takže sezónnost se nedá naučit;
+* **hodnoty zadané průběžně jsou z 41 % přesně rovné plánu** (u zpětně
+  z papíru 1 %). Takové řádky o odchylce od plánu nic nevypovídají. Pro
+  faktory spotřeby se proto řádky **přesně rovné plánu nesmí počítat jako
+  pozorování** — medián poměru skutečnost/plán vychází 1,000 právě kvůli té
+  bodové mase, ne proto, že by normy seděly.
