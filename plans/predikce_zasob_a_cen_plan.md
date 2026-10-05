@@ -160,12 +160,12 @@ Změřeno na 8 112 nenulových dokončených položkách (poměr `actual / plann
   symetrické kolem plánu, **bez prokázaného systematického nadhodnocení**.
   Směr odchylky z toho říct nejde — vyřazení přesných shod je výběrové
   zkreslení.
-- aritmetický průměr poměru je **5,8**, geometrický 1,2 — ocas tvoří **tři
-  různé věci**, které poměr k plánu nerozliší: celá balení (droždí 1 kg,
-  kanystr oleje), **nesedící normy** (chléb: plán 0,033 bochníku, bere se 4;
-  loupáček: plán 0,16 ks, zadáno 200) a skutečné překlepy jednotek (máslo
-  375 kg, petrželka 150). Přes 10× plán je 299 položek (3,7 %), přes 100×
-  63. Viz `plans/vydejky-nezapisovana-data.md`, 2.7.
+- aritmetický průměr poměru je **5,8**, geometrický 1,2 — ocas tvoří **několik
+  různých věcí**, které poměr k plánu nerozliší: **celá balení** (droždí 1 kg,
+  chléb po bochnících — plán je zlomek, odebírá se celý kus; sklad přitom
+  sedí), **chybný převodní faktor** (loupáček `ks → ks` s faktorem 1000, plán
+  1000× malý) a skutečné překlepy (máslo 375 kg). Přes 10× plán je 299
+  položek (3,7 %), přes 100× 63. Viz `plans/vydejky-nezapisovana-data.md`, 2.7.
 - **nuly jsou 26 %** dokončených položek a nejde je brát jako „nevydáno":
   u koření (pepř 87 %, kmín 86 %) znamenají „nevážilo se", a podíl nul se liší
   podle toho, jak se zapisovalo (38 % zpětně z papíru, 20 % průběžně).
@@ -178,17 +178,20 @@ Změřeno na 8 112 nenulových dokončených položkách (poměr `actual / plann
    určí vedoucí kuchyně),
 2. **řádky přesně rovné plánu nepočítat jako pozorování**,
 3. **ořez odlehlých hodnot dělat vůči vlastní historii suroviny**, ne
-   jedním plošným prahem. Poměr > 10× zachytí i celá balení a nesedící
-   normy; původní ořez ⟨0,2; 3,0⟩ zahodí skutečné velké odběry. Suroviny
-   s nesedící normou (chléb, loupáček) je potřeba nejdřív opravit u zdroje,
-   jinak se z nich spočítá faktor, který opravuje chybu v receptuře,
+   jedním plošným prahem. Poměr > 10× zachytí i celá balení; původní ořez
+   ⟨0,2; 3,0⟩ zahodí skutečné velké odběry. Suroviny s chybným převodním
+   faktorem (loupáček) je potřeba nejdřív opravit u zdroje, jinak se z nich
+   spočítá faktor, který opravuje chybu v nastavení suroviny,
+   a suroviny odebírané po celých kusech (chléb) **agregovat na úrovni
+   dokumentu nebo dne**, ne po jídlech,
 4. nuly zpracovat zvlášť (pravděpodobnost „vydá se"), ne jako poměr 0,
 5. **Ostrovec je sezónní** a má jedno léto; faktor na úrovni (surovina, Ostrovec)
    se nedá ověřit proti jiné sezóně.
 
 Jestli po tomhle čištění zbude dost řádků a ukáže se vychýlení, rozhodne
 přeměření. **Do té doby B1 nestavět.** Cena špatně nasazeného faktoru je
-vysoká: zabuduje do normy buď opisování plánu, nebo chybnou normu či jednotku.
+vysoká: zabuduje do normy buď opisování plánu, nebo chybné nastavení
+suroviny či zrnitost balení.
 
 **Model** (`apps/analytics/models.py`, dosud bez modelů):
 
