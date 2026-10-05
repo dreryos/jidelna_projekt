@@ -9,7 +9,9 @@ from decimal import Decimal
 from itertools import count
 
 from django.contrib.auth.models import User
+from django.db import connection
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 
 from apps.canteens.models import Canteen, Warehouse
@@ -104,6 +106,23 @@ class StalePickingTest(StalePickingBase):
         self._item(self.canteen_b, days_old=20)
         rows = stale_picking_summary(self.superuser, today=TODAY)
         self.assertEqual({r['canteen_name'] for r in rows}, {'Jídelna A', 'Jídelna B'})
+
+    def test_query_count_does_not_grow_with_canteens(self):
+        """Počet dotazů nesmí růst s počtem jídelen, které mají zapomenuté položky.
+
+        Úvodní stránka se načítá při každém přihlášení, takže dotaz na nejstarší
+        dokument jednou pro každou jídelnu by se násobil počtem jídelen.
+        """
+        self._item(self.canteen_a, days_old=20)
+        with CaptureQueriesContext(connection) as one:
+            stale_picking_summary(self.superuser, today=TODAY)
+
+        self._item(self.canteen_b, days_old=20)
+        with CaptureQueriesContext(connection) as two:
+            rows = stale_picking_summary(self.superuser, today=TODAY)
+
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(len(two), len(one))
 
     def test_user_without_profile_sees_nothing(self):
         self._item(self.canteen_a, days_old=20)

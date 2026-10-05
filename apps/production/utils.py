@@ -84,23 +84,28 @@ def stale_picking_summary(user, today=None, days=STALE_PICKING_DAYS):
         .order_by('-item_count', 'document__canteen__name')
     )
 
-    rows = []
-    for g in grouped:
-        # Odkaz vede na nejstarší dokument; při shodě data na ten s nižším id.
-        oldest_document = (
-            items.filter(document__canteen_id=g['document__canteen_id'])
-            .order_by('document__date_to', 'document_id')
-            .values_list('document_id', flat=True)
-            .first()
-        )
-        rows.append({
+    # Nejstarší dokument každé jídelny z jednoho dotazu (ne jeden dotaz na jídelnu,
+    # úvodní stránka se načítá při každém přihlášení). Odkaz vede na nejstarší
+    # dokument; při shodě data na ten s nižším id. distinct() sbalí položky na
+    # dokumenty, takže se čte jen pár řádků, ne všechny nezavřené položky.
+    oldest_document = {}
+    for canteen_id, document_id in (
+        items.order_by('document__date_to', 'document_id')
+        .values_list('document__canteen_id', 'document_id')
+        .distinct()
+    ):
+        oldest_document.setdefault(canteen_id, document_id)
+
+    return [
+        {
             'canteen_name': g['document__canteen__name'],
             'items': g['item_count'],
             'documents': g['document_count'],
             'oldest': g['oldest'],
-            'oldest_document_id': oldest_document,
-        })
-    return rows
+            'oldest_document_id': oldest_document[g['document__canteen_id']],
+        }
+        for g in grouped
+    ]
 
 
 def picking_document_qr_uri(document, base_url='/'):
