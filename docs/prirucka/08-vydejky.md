@@ -104,6 +104,14 @@ U dokumentu se eviduje i **kuchař** — kdo vaření zajišťoval (využívá a
 
 💡 **Proč se velká PDF generují „po dnech“:** Vícedenní dokument s desítkami jídel by se renderoval celý naráz a spotřeboval příliš mnoho paměti serveru. Nad ~60 jídel proto systém vykreslí každý den zvlášť a stránky spojí — výsledek je stejný, jen se nezahltí server.
 
+### Upozornění na nezavřené výdejky
+
+Na úvodní stránce se ukáže žlutý pruh **Nezavřené výdejky**, jakmile v dokumentu **starším než 14 dní** zůstanou položky, u kterých nikdo nezadal skutečně vydané množství. Pro každou jídelnu uvádí počet položek a dokumentů, datum nejstaršího a tlačítko, které ho otevře. Vidíte jen jídelny, ke kterým máte přístup.
+
+Proč na tom záleží: každá nezavřená položka drží **blokaci na skladu** a zkresluje objednávkový report. U papírových výdejek, které se přepisují zpětně, to bez upozornění snadno narůstá — v létě 2026 se takhle nakupily tisíce položek, než si toho někdo všiml.
+
+Pruh **nic nezavírá sám**. Kdyby se dopsala čísla, která nikdo nezadal, vznikla by v datech smyšlená spotřeba. Vyřešíte ho tak, že u položek doplníte skutečné množství, zadáte **0** (nevydáno, blokace se uvolní a ze skladu se nic neodečte), nebo je odeberete košem. Pruh zmizí, když žádný dokument starší než 14 dní nemá nezavřenou položku.
+
 ## Časté situace
 
 | Situace | Co se děje | Řešení |

@@ -8,7 +8,7 @@ Aplikace běží ve webovém prohlížeči. Na přihlašovací stránce zadejte 
 
 ![Přihlašovací obrazovka](img/01-prihlaseni.png)
 
-Po přihlášení se zobrazí **dashboard** — rozcestník do všech modulů s barevnými kartami (Recepty, Sklady, Jídelníčky, Analytika, Reporty, Administrace). Dashboard také ukazuje počet aktuálně přihlášených uživatelů.
+Po přihlášení se zobrazí **dashboard** — rozcestník do všech modulů s barevnými kartami (Recepty, Sklady, Jídelníčky, Analytika, Reporty, Administrace). Nahoře se mohou objevit upozornění: probíhající inventura (sklad je uzamčený) a **nezavřené výdejky** (viz kapitola [8](08-vydejky.md)).
 
 ⚠️ **Pozor:** Pokud po přihlášení nevidíte žádné sklady ani jídelníčky, pravděpodobně nemáte v profilu přiřazenou jídelnu. Obraťte se na správce (postup přiřazení je v kapitole [11](11-sprava-systemu.md)).
 

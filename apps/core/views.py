@@ -91,9 +91,13 @@ def home(request):
         status=InventoryVerification.Status.IN_PROGRESS
     ).select_related('warehouse', 'started_by').order_by('-started_at')[:5]
     
+    # Zapomenuté (nezavřené) položky výdejek - viz stale_picking_summary()
+    from apps.production.utils import stale_picking_summary
+
     context = {
         'user': request.user,
         'active_verifications': active_verifications,
+        'stale_picking': stale_picking_summary(request.user),
     }
     return render(request, 'home.html', context)
 

@@ -8,6 +8,17 @@ a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
 ## [Unreleased]
 
 ### Added
+- **Upozornění na nezavřené výdejky na úvodní stránce** (5.10.2026)
+  - Žlutý pruh se ukáže, jakmile je v dokumentu výdejky starším než 14 dní nezavřená položka. Pro každou jídelnu uvádí počet položek a dokumentů, datum nejstaršího a odkaz na něj. Respektuje jídelny uživatele; superuživatel vidí všechny
+  - Papírové výdejky se přepisují zpětně a zapomenutá položka drží blokaci na skladu a zkresluje objednávkový report. Varvažov přestal zapisovat kolem 6. 7. a nezavřené položky se nakupily na tisíce; práh 14 dní by pruh rozsvítil asi 20. 7., tedy přibližně 11 týdnů před vyřešením
+  - Pruh **nic nezavírá automaticky**: při nulovém zápisu by vyráběl smyšlená data
+  - Hranice je přísně „starší než": dokument ze dne před přesně 14 dny ještě pruh nevyvolá
+
+### Removed
+- **Čítač „Aktuálně přihlášených uživatelů" z úvodní stránky** (5.10.2026)
+  - Reálné použití se neukázalo. Byl to navíc context processor, který běžel při **každém** načtení **každé** stránky a pokaždé dekódoval všechny neexpirované session; jeho odstranění je tedy i drobné zrychlení celé aplikace
+
+### Added
 - **QR kód na tištěné výdejce** (5.10.2026)
   - Každá stránka PDF výdejky nese vpravo nahoře QR kód s odkazem na editaci dokumentu. Telefon ho otevře fotoaparátem bez aplikace a papír jde jednoznačně spárovat s výdejkou — to je podmínka pro pozdější načítání naskenovaných papírů
   - Kód je v běžící hlavičce stránky, takže se tiskne na každé stránce dne, ne jen na první. Horní okraj stránky kvůli tomu vzrostl z 10 na 16 mm; počet stránek ověřeného vícedenního dokumentu zůstal stejný (9)
