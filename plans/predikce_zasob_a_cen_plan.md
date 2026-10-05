@@ -143,17 +143,55 @@ prostý součet norem receptů**. Agent: **Sonnet** (B1–B3), **Haiku** (B4 ša
 
 ### B1. Model `ConsumptionFactor` — korekce plán vs. skutečnost
 
-Data v produkční DB tuhle korekci ospravedlňují (měřeno na 5 615 dokončených
-položkách výdejek):
+> **Opraveno 5. 10. 2026.** Původní zdůvodnění tohoto kroku (medián poměru
+> 0,943, „normy nadhodnocují spotřebu o ~6 %", shoda 17,6 %, průměr 1,02)
+> **se nepodařilo reprodukovat** — a při přeměření na nové kopii (5. 10.) se
+> ukázalo, že ani opačný závěr nejde z dat vyčíst. Níž jsou čísla, která jsou
+> změřená; zda se B1 vůbec staví, se rozhodne až po vyčištění vstupu.
 
-- medián `quantity_actual / quantity_planned` = **0,943** → normy receptů
-  systematicky **nadhodnocují spotřebu o ~6 %**,
-- přesnou shodu plánu a skutečnosti má jen **17,6 %** položek,
-- 50,2 % položek se vydá méně než 0,95× plán, 27 % více než 1,05× plán,
-- **100 surovin ze 180** má ≥ 10 dokončených pozorování, 42 surovin má ≥ 30.
+Změřeno na 8 112 nenulových dokončených položkách (poměr `actual / planned`):
 
-Prostý součet norem tedy pro polovinu surovin míří vedle. Korekce je hlavní
-přidaná hodnota proti dnešnímu reportu.
+- medián je **1,000** ve všech řezech (s nulami, bez nul, bez koření), ale je to
+  **artefakt bodové masy**: **30,4 %** nenulových hodnot je přesně rovných
+  plánu. U průběžně zadaných dokonce 41 %, u zpětně doplněných z papíru 1 %.
+  Řádek, který plán jen opisuje, o odchylce nic nevypovídá.
+- po vyřazení přesných shod je medián **1,05**; pod 0,95× plánu je 28,4 %
+  položek, nad 1,05× plánu 34,8 %, do ±5 % 36,8 %. Rozdělení je zhruba
+  symetrické kolem plánu, **bez prokázaného systematického nadhodnocení**.
+  Směr odchylky z toho říct nejde — vyřazení přesných shod je výběrové
+  zkreslení.
+- aritmetický průměr poměru je **5,8**, geometrický 1,2 — ocas tvoří **několik
+  různých věcí**, které poměr k plánu nerozliší: **celá balení** (droždí 1 kg,
+  chléb po bochnících — plán je zlomek, odebírá se celý kus; sklad přitom
+  sedí), **chybný převodní faktor** (loupáček `ks → ks` s faktorem 1000, plán
+  1000× malý) a skutečné překlepy (máslo 375 kg). Přes 10× plán je 299
+  položek (3,7 %), přes 100× 63. Viz `plans/vydejky-nezapisovana-data.md`, 2.7.
+- **nuly jsou 26 %** dokončených položek a nejde je brát jako „nevydáno":
+  u koření (pepř 87 %, kmín 86 %) znamenají „nevážilo se", a podíl nul se liší
+  podle toho, jak se zapisovalo (38 % zpětně z papíru, 20 % průběžně).
+- **187 surovin** (bez pepře, kmínu, soli a oleje) má dokončené položky;
+  **123** má ≥ 10 pozorování, **78** má ≥ 30 (po vyřazení nul 116 resp. 56).
+
+**Čištění vstupu, bez kterého se z těchto dat žádný faktor nepočítá:**
+
+1. vyřadit suroviny, které se na jídlo nevažují (koření, sůl, olej — seznam
+   určí vedoucí kuchyně),
+2. **řádky přesně rovné plánu nepočítat jako pozorování**,
+3. **ořez odlehlých hodnot dělat vůči vlastní historii suroviny**, ne
+   jedním plošným prahem. Poměr > 10× zachytí i celá balení; původní ořez
+   ⟨0,2; 3,0⟩ zahodí skutečné velké odběry. Suroviny s chybným převodním
+   faktorem (loupáček) je potřeba nejdřív opravit u zdroje, jinak se z nich
+   spočítá faktor, který opravuje chybu v nastavení suroviny,
+   a suroviny odebírané po celých kusech (chléb) **agregovat na úrovni
+   dokumentu nebo dne**, ne po jídlech,
+4. nuly zpracovat zvlášť (pravděpodobnost „vydá se"), ne jako poměr 0,
+5. **Ostrovec je sezónní** a má jedno léto; faktor na úrovni (surovina, Ostrovec)
+   se nedá ověřit proti jiné sezóně.
+
+Jestli po tomhle čištění zbude dost řádků a ukáže se vychýlení, rozhodne
+přeměření. **Do té doby B1 nestavět.** Cena špatně nasazeného faktoru je
+vysoká: zabuduje do normy buď opisování plánu, nebo chybné nastavení
+suroviny či zrnitost balení.
 
 **Model** (`apps/analytics/models.py`, dosud bez modelů):
 
@@ -236,16 +274,57 @@ Pozor na pasti z `CLAUDE.md`: ID ve formulářových atributech přes
 
 ### C0. Realita dat — čti dřív, než navrhneš metodu
 
-Změřeno na `inventory_ingredientpricehistory` (3 203 záznamů):
+> **Opraveno dvakrát** (21. 9. a 5. 10. 2026), obě opravy na revizi:
+>
+> 1. První verze měřila řady **po surovině se slitými sklady**, jenže C1
+>    predikuje po dvojici **(surovina, sklad)**. Slité řady navíc nejsou
+>    skutečné cenové řady — prokládají záznamy z různých skladů.
+> 2. Do měření vstupovalo **448 záznamů s cenou 0** (14 % historie). Nejsou to
+>    zaplacené ceny a do odhadu nepatří. **393 z nich je první bod řady** —
+>    to odpovídá kódu, který zakládá `StockItem` s nulou při výdeji do mínusu
+>    (`PickingList.save()`) a při inventuře u nově nalezené suroviny („cena
+>    bude doplněna později"). U zbylých **55** (nula uprostřed nebo na konci
+>    řady) zdroj neznám. **71 řad je celých nulových**, tedy bez jediné
+>    skutečné ceny. Aktuálně má nulovou cenu 90 z 1 072 skladových karet.
+>
+> Původní čísla (s nulami): 1 085 řad, z toho 128 s ≥ 6 body, medián změny
+> 13,5 %, p90 99,4 %. Níž jsou čísla **po vyřazení nul**, tedy ta, se kterými
+> C1 skutečně pracuje.
 
-- **rozsah historie: 15. 1. 2026 – 16. 9. 2026, tj. 8 měsíců,**
-- 402 surovin v historii, ale jen **192 má ≥ 6 cenových bodů**,
-  65 surovin má jediný bod,
-- medián absolutní relativní změny mezi po sobě jdoucími cenami **9,1 %**,
-  18,2 % změn je nulových,
-- `StockItem.price` je **poslední nákupní cena**, ne vážený průměr
-  (`GoodsReceipt.confirm()`, `apps/inventory/models.py:761`) — řada je tedy
-  čistá posloupnost skutečně zaplacených cen, ale skáče s dodavatelem a balením.
+Změřeno na `inventory_ingredientpricehistory` (3 203 záznamů, po vyřazení nul
+**2 754**, rozsah **15. 1. – 16. 9. 2026, tj. 243 dní**). Sloupce jsou tři
+příčky fallback ladderu z C1:
+
+| | (surovina, sklad) — 1. příčka | (surovina, jídelna) — 2. příčka | surovina globálně — 3. příčka |
+|---|---|---|---|
+| počet řad | **1 014** | 952 | 375 |
+| z toho ≥ 6 cenových bodů | **95 (9 %)** | 109 (11 %) | 160 (43 %) |
+| medián absolutní relativní změny | **12,4 %** | 11,9 % | 7,4 % |
+| podíl nulových změn | 1,1 % | 3,1 % | 20,8 % |
+| p90 růstu ceny | **177 %** | 177 % | 202 % |
+| p90 poklesu ceny | **56 %** | 56 % | 48 % |
+
+Pozorování, která se dají snadno přehlédnout:
+
+- **Růst a pokles jsou asymetrické**, proto se tu neuvádí jediné „p90 změny".
+  Desetina nárůstů je 2,8× a víc (p90 růstu 177 %), kdežto pokles o víc než
+  56 % je výjimka. Příčinu data nerozliší (podezřelé jsou změny dodavatele
+  nebo balení, ale to je hypotéza, ne měření). Pásma p10/p90 proto **nesmí být
+  symetrická** kolem mediánu — viz C1 bod 4.
+- **Těch 20,8 % nulových změn ve třetí příčce je artefakt slévání skladů** —
+  vznikne prokládáním dvou skladů se shodnou cenou. Na skutečné řadě jsou
+  nulové změny 1,1 %, což odpovídá tomu, že se historie zapisuje jen při
+  změně ceny. Data nejsou klidnější, než vypadají.
+- **Druhá příčka skoro nic nepřidává.** (surovina, jídelna) má 952 řad
+  proti 1 014 u skladu a jen o 14 řad víc s ≥ 6 body — většina surovin je
+  v jídelně na jednom skladu. Zda ji v ladderu ponechat, rozhodne C2 měřením,
+  ne tenhle odstavec.
+- **Třetí příčka je jediná, která má body na trend (43 %)**, jenže je
+  zároveň nejméně věrná: míchá ceny různých jídelen a dodavatelů.
+
+`StockItem.price` je **poslední nákupní cena**, ne vážený průměr
+(`GoodsReceipt.confirm()`, `apps/inventory/models.py:761`) — řada je tedy
+čistá posloupnost skutečně zaplacených cen, ale skáče s dodavatelem a balením.
 
 **Důsledky, které jsou závazné:**
 
@@ -253,14 +332,30 @@ Změřeno na `inventory_ingredientpricehistory` (3 203 záznamů):
    takže „brambory v březnu zdraží" model nemá z čeho vzít. Kdo to zkusí
    modelovat, nafituje šum.
 2. **Zákaz ARIMA / Prophet / ML / regrese s mnoha parametry.** Na 6–20 bodech
-   na sérii s 9% šumem přefitují. Do `requirements.txt` nepřibude žádná
+   na sérii s 12% šumem přefitují. Do `requirements.txt` nepřibude žádná
    knihovna pro time series.
-3. **Predikce musí vracet interval, ne číslo.** Při 9% mediánovém rozptylu je
-   bodová cena „14,37 Kč" falešná přesnost.
+3. **Predikce musí vracet interval, ne číslo.** Při 12,4% mediánovém rozptylu
+   a p90 růstu 177 % je bodová cena „14,37 Kč" falešná přesnost.
+4. **Trend dostane jen zhruba desetinu řad.** Při prahu ≥ 6 bodů na dvojici
+   (surovina, sklad) jde o 95 z 1 014. Zbylých 91 % skončí na plochém
+   odhadu nebo na fallbacku — tedy velmi blízko naivní baseline. Počítejte
+   s tím, že **brána v C2 může C1 zamítnout**, a berte to jako regulérní
+   výsledek, ne jako selhání.
+
+**Před spuštěním C1 měření zopakovat nad ostrými daty.** Čísla výš jsou
+z kopie k 16. 9. 2026 a každý další měsíc provozu je posune. Od nich se
+odvíjejí všechny prahy v C1, takže se neopisují, ale přeměřují.
 
 ### C1. Estimátor ceny — `apps/analytics/services/price_forecast.py`
 
 `forecast_ingredient_price(ingredient, warehouse, target_date)`:
+
+**Vstup se čistí dřív, než se cokoli počítá: body s cenou ≤ 0 se zahodí.**
+Jsou to převážně zástupné ceny nově založených skladových karet (14 % historie,
+viz C0), ne zaplacené ceny. Medián „posledních 5 cen" by s jedinou nulou mezi nimi
+skočil dolů a nula na konci řady by dala nesmyslný „pokles o 100 %". Platí to
+i pro poslední příčku ladderu níž — aktuální `StockItem.price` se použije jen
+je-li kladná. Test: řada s nulovým bodem dá stejný výsledek jako bez něj.
 
 1. **Základ:** medián posledních N = 5 cen z `IngredientPriceHistory`
    za posledních 180 dní (winsorizace na 10./90. percentil série).
@@ -268,14 +363,24 @@ Změřeno na `inventory_ingredientpricehistory` (3 203 záznamů):
 2. **Trend:** lineární regrese přes body posledních 180 dní, **jen pokud je
    bodů ≥ 6**. Sklon **tlumit koeficientem 0,5** a extrapolaci omezit na
    **±15 % základu** bez ohledu na to, co regrese říká. Při < 6 bodech trend 0.
+
+   Ten práh splňuje **95 z 1 014 řad (9 %)** — viz C0. U zbytku je odhad
+   plochý, tedy prakticky naivní baseline. Strop ±15 % je zhruba **jeden
+   typický cenový pohyb** (medián změny 12,4 %); není odvozený z ničeho
+   jemnějšího a není důvod ho dolaďovat dřív, než ho změří C2.
 3. **Horizont:** nad **90 dní** dopředu se trend přestane aplikovat úplně
    (plochá extrapolace) a interval se rozšíří. Delší horizont data neunesou.
 4. **Pásmo p10/p50/p90:** z **empirických reziduí** vlastní série
    (rozptyl historických relativních změn), ne z normálního rozdělení.
+   Změny jsou **asymetrické** (p90 růstu 177 %, p90 poklesu 56 %, viz C0),
+   takže pásmo **není symetrické** kolem mediánu: horní kvantil leží výrazně
+   dál než dolní. U části surovin vyjde pásmo velmi široké. To je správný
+   výstup, ne chyba — široké pásmo je informace, že se ta cena nedá
+   předpovědět. Nezužovat ho kosmeticky.
 5. **Fallback ladder** při nedostatku dat:
    (surovina, sklad) → (surovina, jídelna) → (surovina, globálně) →
    `SupplierIngredientTemplate.default_price_without_vat` →
-   aktuální `StockItem.price`. Použitou úroveň vrátit ve výstupu jako `source`,
+   aktuální `StockItem.price` (je-li > 0). Použitou úroveň vrátit ve výstupu jako `source`,
    aby UI mohlo říct „odhad z jediné ceny".
 
 Návrat: `{p10, p50, p90, source, sample_size, horizon_days}`.
