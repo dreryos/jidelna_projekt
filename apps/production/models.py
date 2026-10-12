@@ -36,6 +36,94 @@ class MenuTemplate(models.Model):
     def __str__(self):
         return self.name
 
+    # Typy jídel, které se do šablony nepřenášejí. Polévka a druhá večeře jsou
+    # technické karty s pseudo-receptem ("Polévka", "Výdej"), do kterých se
+    # suroviny doplňují ad hoc - nejsou to plánovaná jídla. Formát šablony je
+    # navíc nezná (MEAL_TYPE_MAPPING) a převod zpět by je tiše změnil na oběd.
+    TECHNICAL_MEAL_TYPES = ('SOUP', 'DINNER_SECOND')
+
+    _EMPTY_XML = (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<MenuImportDescription>\n  <Recipes/>\n  <MenuSchedule/>\n</MenuImportDescription>'
+    )
+
+    @classmethod
+    def schedule_from_menu_plan(cls, menu_plan):
+        """
+        Harmonogram šablony z jídelníčku: ({posun_dne: [jídla]}, report).
+
+        Přenáší se **jen struktura**: den (posun od začátku jídelníčku), recept
+        a typ jídla. Nepřenáší se počty porcí a koeficienty variant (patří ke
+        konkrétní skupině, ne k jídelníčku), úpravy surovin ani prodejní DPH.
+
+        Záměna jídla: do šablony jde **náhrada**, tedy to, co se skutečně
+        vařilo; původní zaměněné jídlo se vynechá. Pro opětovné použití
+        jídelníčku dává smysl právě skutečně uvařené.
+
+        Report: `meals` (přenesená jídla), `days` (dny s jídlem),
+        `technical_skipped` (polévky/druhé večeře), `replaced_skipped`
+        (zaměněné originály).
+        """
+        orders = list(
+            menu_plan.production_orders.select_related('recipe')
+            .order_by('date', 'meal_type', 'id')
+        )
+        replaced_ids = {o.replacement_of_id for o in orders if o.replacement_of_id}
+        # Počátek je začátek jídelníčku, aby den bez jídla na začátku zůstal
+        # prázdný; kdyby bylo jídlo před ním (nekonzistentní data), posune se
+        # počátek, ať nevzniknou záporné posuny.
+        origin = min([menu_plan.date_from] + [o.date for o in orders])
+
+        schedule = {}
+        report = {'meals': 0, 'days': 0, 'technical_skipped': 0, 'replaced_skipped': 0}
+        for order in orders:
+            if order.meal_type in cls.TECHNICAL_MEAL_TYPES:
+                report['technical_skipped'] += 1
+                continue
+            if order.id in replaced_ids:
+                report['replaced_skipped'] += 1
+                continue
+            offset = (order.date - origin).days
+            schedule.setdefault(offset, []).append({
+                'recipe_code': order.recipe.code,
+                'meal_type': order.meal_type,
+                'note': '',
+                'portion_count': None,
+            })
+            report['meals'] += 1
+        report['days'] = len(schedule)
+        return schedule, report
+
+    @classmethod
+    def create_from_menu_plan(cls, menu_plan, name, description=''):
+        """
+        Uloží jídelníček jako šablonu: vrací (šablona, report).
+
+        XML se neskládá ručně: používá se stejný zápis harmonogramu
+        (`update_schedule_from_dict`) jako vizuální editor, který výsledek
+        ověří parserem, kterým šablonu čte import.
+
+        Raises:
+            ValidationError: prázdný nebo duplicitní název, nebo jídelníček
+                neobsahuje žádné jídlo, které by šlo přenést.
+        """
+        name = (name or '').strip()
+        if not name:
+            raise ValidationError('Název šablony je povinný.')
+        if cls.objects.filter(name__iexact=name).exists():
+            raise ValidationError(f'Šablona s názvem "{name}" již existuje. Zvolte jiný název.')
+
+        schedule, report = cls.schedule_from_menu_plan(menu_plan)
+        if not schedule:
+            raise ValidationError(
+                'Jídelníček neobsahuje žádné jídlo, které by šlo uložit do šablony.'
+            )
+
+        template = cls(name=name, description=description, xml_content=cls._EMPTY_XML)
+        template.update_schedule_from_dict(schedule)
+        template.save()
+        return template, report
+
     def parse_schedule_to_dict(self):
         """
         Parsuje XML harmonogram do struktury vhodné pro vizuální editor.

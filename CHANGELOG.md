@@ -7,6 +7,15 @@ a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+### Added
+- **Uložení jídelníčku jako šablony** (12.10.2026)
+  - Na detailu jídelníčku přibylo tlačítko **Uložit jako šablonu**. Funguje pro jídelníček vytvořený ručně i pro už uvařený; dřív šlo šablonu založit jen z XML nebo ve vizuálním editoru od nuly. Před uložením stránka ukáže, kolik jídel a dnů se přenese a co se vynechá
+  - Přenáší se jen rozvržení (den, recept, typ jídla). Počty porcí, koeficienty variant, úpravy surovin a prodejní DPH se nepřenášejí — patří ke konkrétní skupině a nastavují se při použití šablony
+  - U zaměněného jídla se do šablony uloží **náhrada**, tedy to, co se skutečně vařilo
+  - Polévka a druhá večeře se **vynechávají**: jsou to technické karty s pseudo-receptem („Polévka", „Výdej") a formát šablony je nezná — `MEAL_TYPE_MAPPING` by je při zpětném čtení tiše změnil na oběd
+  - XML se neskládá ručně, ale stejným zápisem harmonogramu jako vizuální editor, který výsledek ověří parserem importu. Kulatý test prožene šablonu skutečným průvodcem importu a porovnává strukturu
+  - Ověřeno na všech 39 jídelnících v produkční kopii: všechny se převedou, 1 271 jídel, 0 varování parseru; vynecháno 34 zaměněných originálů a 114 technických karet
+
 ### Fixed
 - **Import bufetu: chybějící kontrola přístupu v kroku 2 a pád na nečíselném ID** (5.10.2026)
   - Krok 2 (náhled položek) jako jediný nekontroloval, že uživatel smí k jídelně zvoleného skladu; kroky 1 a 3 to dělaly. Nešlo o běžně zneužitelnou díru, protože sklad do session nastavuje krok 1 po kontrole, ale o nedůslednost, která by se projevila např. při odebrání jídelny uživateli uprostřed nahrávání. Sjednoceno s ostatními kroky, hlídá to test

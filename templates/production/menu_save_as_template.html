@@ -1,0 +1,86 @@
+{% extends 'base.html' %}
+
+{% block title %}Uložit jídelníček jako šablonu{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-7">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="card-title mb-0">
+                        <i class="fas fa-copy me-2"></i>Uložit jako šablonu
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <p>
+                        Z jídelníčku <strong>"{{ menu_plan.name }}"</strong>
+                        ({{ menu_plan.canteen.name }},
+                        {{ menu_plan.date_from|date:"d.m.Y" }} – {{ menu_plan.date_to|date:"d.m.Y" }})
+                        vznikne šablona, ze které půjde jídelník znovu vytvořit.
+                    </p>
+
+                    {% if report.meals %}
+                        <div class="alert alert-success">
+                            <i class="fas fa-check-circle me-2"></i>
+                            Do šablony se přenese <strong>{{ report.meals }}</strong> jídel
+                            v <strong>{{ report.days }}</strong> dnech.
+                        </div>
+                    {% else %}
+                        <div class="alert alert-danger">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            Jídelníček neobsahuje žádné jídlo, které by šlo do šablony uložit.
+                        </div>
+                    {% endif %}
+
+                    {% if report.replaced_skipped or report.technical_skipped %}
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle me-2"></i>
+                            <strong>Vynecháno:</strong>
+                            <ul class="mb-0">
+                                {% if report.replaced_skipped %}
+                                    <li>zaměněných původních jídel: {{ report.replaced_skipped }}
+                                        (do šablony jde náhrada, tedy to, co se skutečně vařilo)</li>
+                                {% endif %}
+                                {% if report.technical_skipped %}
+                                    <li>polévek a druhých večeří: {{ report.technical_skipped }}
+                                        (technické karty, ne plánovaná jídla)</li>
+                                {% endif %}
+                            </ul>
+                        </div>
+                    {% endif %}
+
+                    <p class="text-muted small">
+                        <i class="fas fa-info-circle me-1"></i>
+                        Šablona nese jen <strong>rozvržení</strong>: den, recept a typ jídla.
+                        <strong>Nepřenáší se</strong> počty porcí a koeficienty variant
+                        (nastavíte je při použití šablony), úpravy surovin ani prodejní DPH.
+                    </p>
+
+                    <form method="post">
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            <label for="id_name" class="form-label">Název šablony</label>
+                            <input type="text" class="form-control" id="id_name" name="name"
+                                   value="{{ name }}" maxlength="200" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="id_description" class="form-label">Popis (nepovinný)</label>
+                            <textarea class="form-control" id="id_description" name="description"
+                                      rows="2">{{ description }}</textarea>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <a href="{% url 'production:menu_detail' menu_plan.pk %}" class="btn btn-outline-secondary">
+                                <i class="fas fa-arrow-left me-1"></i>Zpět
+                            </a>
+                            <button type="submit" class="btn btn-primary" {% if not report.meals %}disabled{% endif %}>
+                                <i class="fas fa-save me-1"></i>Uložit šablonu
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

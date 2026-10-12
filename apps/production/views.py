@@ -2,7 +2,7 @@ from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.urls import reverse_lazy, reverse
-from django.views.generic import ListView, CreateView, UpdateView, DeleteView
+from django.views.generic import ListView, CreateView, UpdateView, DeleteView, DetailView
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django import forms
 from django.utils import timezone
@@ -22,11 +22,11 @@ from django.db.models import F, Sum, Prefetch, Q
 from django.db.models.functions import Collate
 from django.db.models.query import QuerySet
 from django.http import HttpRequest, HttpResponse, FileResponse
-from django.core.exceptions import PermissionDenied, ObjectDoesNotExist
+from django.core.exceptions import PermissionDenied, ObjectDoesNotExist, ValidationError
 from django.http import JsonResponse, Http404
 from django.db import IntegrityError, transaction
 
-from .models import ProductionOrder, PickingList, MenuPlan
+from .models import ProductionOrder, PickingList, MenuPlan, MenuTemplate
 from .forms import MenuPlanForm, MenuPlanCoefficientFormSet, MenuPlanCoefficientFormSetNoExtra
 from .utils import MEAL_TYPE_ORDER
 from apps.core.models import Recipe, UserProfile
@@ -379,6 +379,52 @@ class MenuPlanDeleteView(CanteenOwnerMixin, DeleteView):
         response = super().delete(request, *args, **kwargs)
         messages.success(request, f'Jídelníček "{menu_name}" byl smazán.')
         return response
+
+
+class MenuPlanSaveAsTemplateView(CanteenOwnerMixin, DetailView):
+    """Uloží jídelník (uvařený i rozvržený) jako šablonu pro další použití.
+
+    GET ukáže, co se do šablony přenese a co ne, aby se nic neztratilo potichu.
+    POST šablonu vytvoří.
+    """
+    model = MenuPlan
+    template_name = 'production/menu_save_as_template.html'
+    context_object_name = 'menu_plan'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        _, context['report'] = MenuTemplate.schedule_from_menu_plan(self.object)
+        context.setdefault('name', self.object.name)
+        context.setdefault('description', '')
+        return context
+
+    def post(self, request, *args, **kwargs):
+        self.object = self.get_object()
+        name = request.POST.get('name', '')
+        description = request.POST.get('description', '').strip()
+
+        try:
+            with transaction.atomic():
+                template, report = MenuTemplate.create_from_menu_plan(
+                    self.object, name, description
+                )
+        except ValidationError as error:
+            messages.error(request, ' '.join(error.messages))
+            context = self.get_context_data(object=self.object, name=name, description=description)
+            return self.render_to_response(context)
+
+        skipped = []
+        if report['replaced_skipped']:
+            skipped.append(f"zaměněných původních jídel: {report['replaced_skipped']}")
+        if report['technical_skipped']:
+            skipped.append(f"polévek a druhých večeří: {report['technical_skipped']}")
+        extra = f" Vynecháno: {', '.join(skipped)}." if skipped else ''
+        messages.success(
+            request,
+            f'Šablona "{template.name}" byla vytvořena: {report["meals"]} jídel '
+            f'v {report["days"]} dnech.{extra}'
+        )
+        return redirect('production:template_list')
 
 
 @login_required
