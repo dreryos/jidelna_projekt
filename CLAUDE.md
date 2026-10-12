@@ -63,7 +63,7 @@ docs/prirucka/    zdroje uživatelské příručky (MkDocs → staticdocs/ → /
 - Víceřádkový `{# … #}` komentář Django neodstraní a text unikne do stránky — na víc řádků použij `{% comment %} … {% endcomment %}`.
 - `format_html()` bez formátovacího argumentu je od Djanga 5.0 tvrdý `TypeError`, ne warning.
 - České desetinné číslo se píše čárkou (`USE_THOUSAND_SEPARATOR = True`, `DECIMAL_SEPARATOR = ','`); formuláře musí brát čárku i tečku.
-- PDF výdejky je A5 portrait pro černobílý tisk — po zásahu do PDF zkontroluj výstup okem.
+- PDF výdejky je A5 landscape pro černobílý tisk — po zásahu do PDF zkontroluj výstup okem.
 
 ## Git
 

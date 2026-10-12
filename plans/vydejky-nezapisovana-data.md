@@ -407,12 +407,14 @@ posoudit:
 | surovina | jednotka | faktor | výdejek | poznámka |
 |---|---|---|---|---|
 | Loupáček | ks | 1000 | 6 | **rozbité** (medián 1 047) — opravit faktor na 1 |
-| Tortilla | ks | 16 | 6 | medián 4,9, nejasné; ověřit |
+| Tortilla | ks | 16 | 6 | **chybná jednotka karty**, viz upřesnění níže |
 | Dobrá voda Yess | ks | 8 | 0 | zatím nepoužito |
 | Fruit&go kapsičky | ks | 1000 | 0 | zatím nepoužito, pravděpodobně chybné |
 | CLIN okena | l | 1000 | 0 | zatím nepoužito, pravděpodobně chybné |
 | Chléb, Vánočka (22 plátků), Toastový chléb (20) | bochník / balení | 22 / 20 | 209 / 17 / 5 | **záměrné** — faktor převádí plátky na kus |
-| Cuketa, rajčata, masové kuličky | kg / g | 1000 | 1–4 | vzorek moc malý na závěr |
+| Rajčata pomodoro, cherry, půlená | kg | 1000 | 4 / 1 / 5 | faktor **správný**, špatný je popisek `recipe_unit`, viz níže |
+| Cuketa | kg | 1000 | 1 | pravděpodobně chybný faktor, viz níže |
+| Masové kuličky (polotovar) | g | 1000 | 2 | výdejky v kg do karty v g, viz níže |
 
 Návrh opravy: jednorázově opravit **Loupáček** v administraci (faktor 1)
 a projít Tortillu. Případně změnit výchozí hodnotu faktoru tak, aby se při
@@ -421,6 +423,37 @@ jednotek (`bochník → bochník`) používají záměrně s faktorem 22, takže
 automatická validace „shodné jednotky ⇒ faktor 1" by je rozbila. Jednotku
 u nich popisuje `recipe_unit = 'bochník'`, přestože normy v receptech jsou
 v plátcích; správně by měla být `plátek`. Nechávám na rozhodnutí.
+
+#### Upřesnění z 12. 10. 2026 (kontrola proti receptům, výdejkám a příjemkám)
+
+Zbývající případy se dají rozhodnout z dat. Nic z toho nebylo v databázi
+změněno; jsou to návrhy k opravě v administraci.
+
+* **Rajčata drcená pomodoro, cherry, půlená:** recept má 60 / 30 / 8 na porci a plán
+  sedí (pomodoro 4,9 kg na ~80 porcí), takže se v receptu zadává v **gramech** a faktor
+  1000 správně převádí na kg. Špatně je jen `recipe_unit = 'kg'`: UI ukazuje „60 kg
+  na porci". Oprava: `recipe_unit` na `g`, faktor nechat.
+* **Cuketa:** recept 0,05 na porci a výdejka plánuje 5 kg i vydává 5 kg, což odpovídá
+  faktoru **1**. S faktorem 1000 by plán vyšel 0,005 kg. Oprava: faktor na 1. Vzorek je
+  jedna výdejka, před změnou ověřit na dalším receptu.
+* **Tortilla:** příjemky jsou 8 „ks" po ~160 Kč, tedy po **baleních** (16 ks), plán vychází
+  v baleních (16,1), ale kuchaři do výdejky píšou kusy (286, 160). Karta má špatnou
+  skladovou jednotku. Oprava stejným vzorem jako toastový chléb: `base_unit` na
+  `balení`, `recipe_unit` `ks`, faktor 16. Pozor na ceny: v `IngredientPriceHistory`
+  jsou už teď ceny za balení.
+* **Masové kuličky (polotovar):** skladová jednotka je `g`, příjemka z dokladu přišla
+  správně (20 000 g po 0,19 Kč/g), ale výdejky se zapisují v kg (20, 30) a ruční příjemka
+  v Růžené je „30 g" za **192,89 Kč/g**. Tím je znečištěná cenová historie a výdejky
+  stahují sklad 1000× méně, než se vydalo. Rozhodnout, jestli karta má být v kg
+  (jednodušší pro kuchaře), a cenu v Růžené opravit.
+* **CLIN okena, Fruit&go kapsičky, Dobrá voda Yess:** v receptech ani na výdejkách
+  nejsou, takže dnes bez dopadu. Faktor 1000 je u kusů a litrů zjevně výchozí hodnota;
+  Yess (8) je stejný případ jako Tortilla (balení po 8). Opravit při první úpravě karty.
+
+**Společný kořen:** u kusového zboží kuchaři zadávají kusy, zatímco karta (a příjemka
+z dokladu) drží balení, nebo naopak. Opravuje to jen správná skladová jednotka, ne
+kontrola množství. Do kroku 2.7 proto patří i upozornění „zadáno 286, plán 16" jako
+signál špatné jednotky karty, ne jako překlep.
 
 Skutečné překlepy (máslo 375 kg, petrželka 150) jsou řádově desítky.
 Případná kontrola má smysl až **vůči vlastní historii suroviny**
