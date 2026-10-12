@@ -10,13 +10,19 @@ Proč „před dokladem": alias vzniká až po vytvoření příjemky (`remember
 dnešní stav aliasů obsahuje u každé položky její vlastní odpověď. S ním by přesnost
 vyšla ~100 % a nic by neříkala.
 
-Omezení: alias, který člověk později přepsal, nese dnešní surovinu, ne tu původní.
-Přehrání je tím mírně příznivější než skutečnost; pro řádový odhad stačí.
+Omezení (data o minulém stavu se neukládají, nejdou dopočítat):
+- alias, který člověk později přepsal, nese dnešní surovinu, ne tu původní,
+- `times_used` aliasů je dnešní; rozhoduje jen o výběru mezi aliasy cizích
+  dodavatelů (vrstva `alias_other_supplier`, která se nepředvyplňuje),
+- dodavatel se bere z `supplier_obj` příjemky, jinak z textu přes `find_supplier`;
+  jak byl určen při importu, se neukládá.
+Přehrání je proto mírně příznivější než skutečnost; pro řádový odhad stačí.
 """
 import json
 from collections import Counter, defaultdict
 
 from django.core.management.base import BaseCommand
+from django.db.models import Q
 
 from apps.inventory.matching import (
     AUTOMATIC_SOURCES, IngredientResolver, find_supplier,
@@ -55,11 +61,16 @@ def replay_matching(supplier_name=None):
     items = (
         GoodsReceiptItem.objects
         .exclude(source_name='')
+        # Koncept ještě může projít úpravou suroviny; měří se jen potvrzené.
+        .filter(goods_receipt__status=GoodsReceipt.Status.CONFIRMED)
         .select_related('goods_receipt', 'goods_receipt__supplier_obj')
         .order_by('goods_receipt__created_at', 'goods_receipt_id', 'pk')
     )
     if supplier_name:
-        items = items.filter(goods_receipt__supplier__icontains=supplier_name)
+        items = items.filter(
+            Q(goods_receipt__supplier__icontains=supplier_name)
+            | Q(goods_receipt__supplier_obj__name__icontains=supplier_name)
+        )
 
     by_receipt = defaultdict(list)
     for item in items:

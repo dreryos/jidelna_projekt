@@ -41,6 +41,7 @@ class ReplayMatchingTest(TestCase):
             warehouse=self.warehouse, receipt_number=f'P{days_after_t0}-{GoodsReceipt.objects.count()}',
             receipt_date=date.today(), supplier='Dodavatel s.r.o.',
             supplier_obj=self.supplier, created_by=self.user,
+            status=GoodsReceipt.Status.CONFIRMED,
         )
         GoodsReceipt.objects.filter(pk=receipt.pk).update(
             created_at=self.t0 + timedelta(days=days_after_t0)
@@ -90,6 +91,28 @@ class ReplayMatchingTest(TestCase):
         """Ručně zadané příjemky nemají název z dokladu, nemá se z čeho přehrávat."""
         self._item(self._receipt(5), '', self.flour)
         self.assertEqual(replay_matching()['items'], 0)
+
+    def test_correct_fuzzy_suggestion_is_counted_as_correct(self):
+        self._item(self._receipt(5), 'Cukr krupice 1kg', self.sugar)
+
+        fuzzy = self._by_source(replay_matching())['fuzzy']
+
+        self.assertEqual((fuzzy['count'], fuzzy['correct']), (1, 1))
+
+    def test_draft_receipts_are_excluded(self):
+        receipt = self._receipt(5)
+        GoodsReceipt.objects.filter(pk=receipt.pk).update(status=GoodsReceipt.Status.DRAFT)
+        self._item(receipt, 'MOUKA HLADKA 1KG', self.flour)
+
+        self.assertEqual(replay_matching()['items'], 0)
+
+    def test_supplier_filter_matches_linked_supplier_name(self):
+        receipt = self._receipt(5)
+        GoodsReceipt.objects.filter(pk=receipt.pk).update(supplier='')
+        self._item(receipt, 'MOUKA HLADKA 1KG', self.flour)
+
+        self.assertEqual(replay_matching(supplier_name='Dodavatel')['items'], 1)
+        self.assertEqual(replay_matching(supplier_name='Jiný')['items'], 0)
 
     def test_wrong_suggestion_is_counted_as_wrong(self):
         """Fuzzy návrh na jinou surovinu, než kterou člověk potvrdil."""
