@@ -222,6 +222,14 @@ class SupplierItemAlias(models.Model):
         db_index=True,
         verbose_name="Klíč pro přihrádku"
     )
+    item_code = models.CharField(
+        max_length=64,
+        blank=True,
+        default='',
+        verbose_name="Kód položky u dodavatele",
+        help_text="Kód (EAN, číslo zboží) z dokladu; stabilnější než název, "
+                  "který dodavatel píše pokaždé jinak"
+    )
     ingredient = models.ForeignKey(
         Ingredient,
         on_delete=models.CASCADE,
@@ -330,6 +338,7 @@ class SupplierItemAlias(models.Model):
         ]
         indexes = [
             models.Index(fields=['supplier', 'core_key']),
+            models.Index(fields=['supplier', 'item_code']),
         ]
 
 

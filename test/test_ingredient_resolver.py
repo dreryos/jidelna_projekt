@@ -454,3 +454,71 @@ def test_presna_shoda_prebije_spornou_prihradku(bolero, suroviny):
 
     assert match.source == 'alias'
     assert match.ingredient == suroviny['jablko']
+
+
+# --- Kód položky u dodavatele ---
+
+def test_kod_pozna_zbozi_i_pri_jinem_nazvu(bolero, suroviny):
+    """Dodavatel přejmenoval položku, kód zůstal."""
+    SupplierItemAlias.objects.create(
+        supplier=bolero, raw_name='Mouka hladká 1kg', item_code='10234',
+        ingredient=suroviny['jablko'],
+    )
+
+    match = IngredientResolver(bolero).resolve(
+        'HLADKA MOUKA POLO', item_code='10234',
+    )
+
+    assert match.ingredient == suroviny['jablko']
+    assert match.source == 'alias_code'
+    assert match.is_automatic is True
+
+
+def test_kod_ma_prednost_pred_nazvem(bolero, suroviny):
+    SupplierItemAlias.objects.create(
+        supplier=bolero, raw_name='Zboží A', item_code='1',
+        ingredient=suroviny['jablko'],
+    )
+    SupplierItemAlias.objects.create(
+        supplier=bolero, raw_name='Zboží B', ingredient=suroviny['cibule'],
+    )
+
+    match = IngredientResolver(bolero).resolve('Zboží B', item_code='1')
+
+    assert match.ingredient == suroviny['jablko']
+
+
+def test_kod_jineho_dodavatele_se_nepouzije(bolero, makro, suroviny):
+    SupplierItemAlias.objects.create(
+        supplier=makro, raw_name='Zboží', item_code='55',
+        ingredient=suroviny['jablko'],
+    )
+
+    match = IngredientResolver(bolero).resolve('Něco úplně jiného', item_code='55')
+
+    assert match.source != 'alias_code'
+
+
+def test_sporny_kod_se_nepredvyplni(bolero, suroviny):
+    """Stejný kód vede na dvě různé suroviny – dodavatel ho použil znovu."""
+    SupplierItemAlias.objects.create(
+        supplier=bolero, raw_name='Zboží A', item_code='7',
+        ingredient=suroviny['jablko'],
+    )
+    SupplierItemAlias.objects.create(
+        supplier=bolero, raw_name='Zboží B', item_code='7',
+        ingredient=suroviny['cibule'],
+    )
+
+    match = IngredientResolver(bolero).resolve('Cokoli', item_code='7')
+
+    assert match.source != 'alias_code'
+
+
+def test_remember_ulozi_kod_a_prazdny_ho_neprepise(bolero, suroviny):
+    resolver = IngredientResolver(bolero, ingredients=[])
+    resolver.remember('Jablko Gala IT', ingredient=suroviny['jablko'], item_code=' 42 ')
+    resolver.remember('Jablko Gala IT', ingredient=suroviny['jablko'])
+
+    alias = SupplierItemAlias.objects.get(supplier=bolero)
+    assert alias.item_code == '42'

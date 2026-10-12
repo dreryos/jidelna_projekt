@@ -47,10 +47,11 @@ FUZZY_THRESHOLD = 0.4
 
 # Vrstvy, které se dají předvyplnit bez lidské kontroly.
 AUTOMATIC_SOURCES = frozenset({
-    'alias', 'alias_core', 'alias_global', 'alias_global_core',
+    'alias_code', 'alias', 'alias_core', 'alias_global', 'alias_global_core',
 })
 
 SOURCE_LABELS = {
+    'alias_code': 'naučeno podle kódu u tohoto dodavatele',
     'alias': 'naučeno u tohoto dodavatele',
     'alias_core': 'naučeno u tohoto dodavatele (jiná varianta názvu)',
     'alias_global': 'naučeno globálně',
@@ -126,6 +127,7 @@ class IngredientResolver:
             else Ingredient.objects.filter(is_active=True)
         )
 
+        self._supplier_by_code = {}
         self._supplier_by_raw = {}
         self._supplier_by_core = {}
         self._global_by_raw = {}
@@ -160,6 +162,10 @@ class IngredientResolver:
             elif self.supplier and alias.supplier_id == self.supplier.id:
                 self._supplier_by_raw.setdefault(alias.raw_key, alias)
                 self._index_core(self._supplier_by_core, alias)
+                if alias.item_code:
+                    self._index_core(
+                        self._supplier_by_code, alias, key=alias.item_code,
+                    )
             else:
                 # Aliasy cizích dodavatelů. Nejčastěji použitý vyhrává,
                 # protože ten je nejspíš správně. Tady se nic nepředvyplňuje,
@@ -169,7 +175,7 @@ class IngredientResolver:
                     self._other_by_core[alias.core_key] = alias
 
     @staticmethod
-    def _index_core(index, alias):
+    def _index_core(index, alias, key=None):
         """
         Zapíše alias do přihrádky podle `core_key`, pokud je jednoznačná.
 
@@ -180,13 +186,17 @@ class IngredientResolver:
         `Rohlík tukový karton` (12 kusů v balení) a `Rohlík tukový 43g`
         (jeden kus) mají stejný `core_key`, ale jiný `unit_factor`.
 
+        Stejně se indexuje i kód položky (`key`): dodavatel může kód
+        později použít pro jiné zboží a pak se mu nevěří.
+
         Sporná přihrádka se proto zahodí. Řádek pak spadne na nižší vrstvu,
         která se nepředvyplňuje, a rozhodne o něm člověk.
         """
-        existing = index.get(alias.core_key, _MISSING)
+        key = alias.core_key if key is None else key
+        existing = index.get(key, _MISSING)
 
         if existing is _MISSING:
-            index[alias.core_key] = alias
+            index[key] = alias
             return
         if existing is None:
             # Přihrádka už byla označena za spornou.
@@ -200,17 +210,18 @@ class IngredientResolver:
         if conflicting:
             logger.debug(
                 'Přihrádka „%s" je sporná, nepředvyplňuje se: %s vs %s',
-                alias.core_key, existing, alias,
+                key, existing, alias,
             )
-            index[alias.core_key] = None
+            index[key] = None
 
-    def resolve(self, raw_name, unit=None):
+    def resolve(self, raw_name, unit=None, item_code=None):
         """
         Najde surovinu pro jeden název z dokladu.
 
         Args:
             raw_name: název položky tak, jak stojí na dokladu
             unit: měrná jednotka z dokladu, kvůli přepočtu na skladovou
+            item_code: kód položky u dodavatele; má přednost před názvem
 
         Returns:
             MatchResult – vždy, i když se nic nenašlo.
@@ -219,6 +230,7 @@ class IngredientResolver:
         core_key = core_name(raw_name)
 
         tiers = (
+            (self._supplier_by_code, (item_code or '').strip(), 'alias_code', 100),
             (self._supplier_by_raw, raw_key, 'alias', 100),
             (self._supplier_by_core, core_key, 'alias_core', 95),
             (self._global_by_raw, raw_key, 'alias_global', 90),
@@ -333,7 +345,8 @@ class IngredientResolver:
         return match
 
     def remember(self, raw_name, ingredient=None, is_ignored=False,
-                 unit='', unit_factor=None, user=None, unit_resolved=None):
+                 unit='', unit_factor=None, user=None, unit_resolved=None,
+                 item_code=''):
         """
         Uloží, jak uživatel řádek namapoval, aby to příště sedlo samo.
 
@@ -371,6 +384,10 @@ class IngredientResolver:
         }
         if unit_resolved is not None:
             defaults['unit_resolved'] = unit_resolved
+        # Prázdný kód nepřepisuje dřív uložený (třeba při srovnání jednotek,
+        # kde kód po ruce není).
+        if item_code and item_code.strip():
+            defaults['item_code'] = item_code.strip()[:64]
 
         alias, created = SupplierItemAlias.objects.update_or_create(
             supplier=self.supplier,
