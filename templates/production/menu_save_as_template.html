@@ -20,7 +20,15 @@
                         vznikne šablona, ze které půjde jídelník znovu vytvořit.
                     </p>
 
-                    {% if report.meals %}
+                    {% if report.problems %}
+                        <div class="alert alert-danger">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            <strong>Šablonu nelze uložit</strong>, jídelníček obsahuje jídla, která nejdou přenést:
+                            <ul class="mb-0">
+                                {% for problem in report.problems %}<li>{{ problem }}</li>{% endfor %}
+                            </ul>
+                        </div>
+                    {% elif report.meals %}
                         <div class="alert alert-success">
                             <i class="fas fa-check-circle me-2"></i>
                             Do šablony se přenese <strong>{{ report.meals }}</strong> jídel
@@ -56,6 +64,11 @@
                         <strong>Nepřenáší se</strong> počty porcí a koeficienty variant
                         (nastavíte je při použití šablony), úpravy surovin ani prodejní DPH.
                     </p>
+                    <p class="text-muted small">
+                        <i class="fas fa-users me-1"></i>
+                        Šablony jsou <strong>společné pro všechny jídelny</strong>: uvidí ji a použít ji
+                        může každý uživatel. Název proto zvolte tak, aby nic neprozrazoval o konkrétní skupině.
+                    </p>
 
                     <form method="post">
                         {% csrf_token %}
@@ -73,7 +86,7 @@
                             <a href="{% url 'production:menu_detail' menu_plan.pk %}" class="btn btn-outline-secondary">
                                 <i class="fas fa-arrow-left me-1"></i>Zpět
                             </a>
-                            <button type="submit" class="btn btn-primary" {% if not report.meals %}disabled{% endif %}>
+                            <button type="submit" class="btn btn-primary" {% if not report.meals or report.problems %}disabled{% endif %}>
                                 <i class="fas fa-save me-1"></i>Uložit šablonu
                             </button>
                         </div>

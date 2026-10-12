@@ -123,6 +123,51 @@ class MenuTemplateFromPlanTest(TestCase):
         template, _ = MenuTemplate.create_from_menu_plan(self.plan, 'Čistá')
         self.assertEqual(self._parsed(template)['warnings'], [])
 
+    def test_meals_within_a_day_follow_meal_order_not_alphabet(self):
+        """Snídaně, oběd, večeře - ne podle abecedy (to by dalo večeři před oběd)."""
+        self._order(self.recipe_a, 0, 'DINNER')
+        self._order(self.recipe_b, 0, 'LUNCH')
+        self._order(self.recipe_c, 0, 'BREAKFAST')
+
+        template, _ = MenuTemplate.create_from_menu_plan(self.plan, 'Pořadí')
+
+        day0 = next(d for d in self._parsed(template)['schedule'] if d['date_offset'] == 0)
+        self.assertEqual([m['meal_type'] for m in day0['meals']], ['BREAKFAST', 'LUNCH', 'DINNER'])
+
+    def test_trailing_days_of_the_plan_are_kept(self):
+        """Jídelníček končí po posledním jídle: průvodce importu odvozuje konec
+        z nejvyššího posunu dne, takže bez prázdných dnů by vznikl kratší plán."""
+        self._order(self.recipe_a, 0)      # plán trvá 5 dní (0-4), jídlo je jen první den
+        template, _ = MenuTemplate.create_from_menu_plan(self.plan, 'Dlouhá')
+        offsets = [d['date_offset'] for d in self._parsed(template)['schedule']]
+        self.assertEqual(max(offsets), 4)
+
+    def test_trailing_days_do_not_count_as_days_with_meals(self):
+        self._order(self.recipe_a, 0)
+        _, report = MenuTemplate.create_from_menu_plan(self.plan, 'Počítání dní')
+        self.assertEqual(report['days'], 1)
+
+    def test_recipe_without_code_is_rejected(self):
+        """Prázdný kód parser importu zahodí celý den, takže se musí odmítnout dřív."""
+        Recipe.objects.filter(pk=self.recipe_a.pk).update(code='')
+        self.recipe_a.refresh_from_db()
+        self._order(self.recipe_a, 0)
+        self._order(self.recipe_b, 1)
+        with self.assertRaises(ValidationError):
+            MenuTemplate.create_from_menu_plan(self.plan, 'Bez kódu')
+        self.assertEqual(MenuTemplate.objects.count(), 0)
+
+    def test_unsupported_meal_type_is_rejected_not_turned_into_lunch(self):
+        """Nový typ jídla, který formát zatím nezná, nesmí potichu skončit jako oběd."""
+        self._order(self.recipe_a, 0, 'BRUNCH')
+        with self.assertRaises(ValidationError):
+            MenuTemplate.create_from_menu_plan(self.plan, 'Neznámý typ')
+
+    def test_too_long_name_is_rejected(self):
+        self._order(self.recipe_a, 0)
+        with self.assertRaises(ValidationError):
+            MenuTemplate.create_from_menu_plan(self.plan, 'x' * 201)
+
     def test_order_dates_before_plan_start_do_not_make_negative_offsets(self):
         """Nekonzistentní data: jídlo před začátkem jídelníčku."""
         self._order(self.recipe_a, -1)
@@ -144,7 +189,7 @@ class RoundTripThroughImportWizardTest(TestCase):
         ]
         self.plan = MenuPlan.objects.create(
             name='Původní', canteen=self.canteen,
-            date_from=START, date_to=START + timedelta(days=3),
+            date_from=START, date_to=START + timedelta(days=4),   # poslední den je bez jídla
         )
         for recipe, day, meal in [
             (self.recipes[0], 0, 'LUNCH'), (self.recipes[1], 0, 'DINNER'),
@@ -178,6 +223,8 @@ class RoundTripThroughImportWizardTest(TestCase):
 
         imported = MenuPlan.objects.get(name='Z šablony')
         self.assertEqual(imported.date_from, new_start)
+        # Konec se musí zachovat i s prázdným posledním dnem
+        self.assertEqual(imported.date_to - imported.date_from, self.plan.date_to - self.plan.date_from)
         self.assertEqual(self._structure(imported), self._structure(self.plan))
 
 
@@ -220,6 +267,36 @@ class SaveAsTemplateViewTest(TestCase):
         response = self.client.post(self.url, {'name': 'uložená'})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(MenuTemplate.objects.count(), 1)
+
+    def test_duplicate_name_error_is_shown_to_the_user(self):
+        """Odmítnutí bez vysvětlení by uživatele nechalo hádat, co se stalo."""
+        self.client.force_login(self.owner)
+        self.client.post(self.url, {'name': 'Uložená'})
+        response = self.client.post(self.url, {'name': 'uložená'})
+        self.assertContains(response, 'již existuje')
+
+    def test_too_long_name_shows_error_instead_of_server_error(self):
+        self.client.force_login(self.owner)
+        response = self.client.post(self.url, {'name': 'x' * 250})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'nejvýše')
+        self.assertEqual(MenuTemplate.objects.count(), 0)
+
+    def test_readonly_user_cannot_create_template(self):
+        """Tlačítko je pro uživatele jen pro čtení skryté, ale POST na URL musí
+        zablokovat server, ne šablona."""
+        profile = self.owner.profile
+        profile.is_readonly = True
+        profile.save()
+        self.client.force_login(self.owner)
+        response = self.client.post(self.url, {'name': 'Zákaz'})
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(MenuTemplate.objects.count(), 0)
+
+    def test_page_says_that_templates_are_shared(self):
+        """Šablony jsou společný katalog všech jídelen; uživatel to má vidět předem."""
+        self.client.force_login(self.owner)
+        self.assertContains(self.client.get(self.url), 'společné pro všechny jídelny')
 
     def test_user_of_other_canteen_gets_404(self):
         self.client.force_login(self.stranger)
