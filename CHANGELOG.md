@@ -8,6 +8,10 @@ a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
 ## [Unreleased]
 
 ### Added
+- **Kód položky u dodavatele se ukládá a používá při párování** (12.10.2026)
+  - Alias (`SupplierItemAlias`) si pamatuje kód z dokladu (OCR `kod`, `itemId` z Bidfood XML, EAN z CSV). Nová vrstva `alias_code` pozná zboží podle kódu u daného dodavatele i tehdy, když dodavatel změnil jeho název; předvyplňuje se bez dotazu a má přednost před názvem
+  - Kód, který u jednoho dodavatele vede na různé suroviny (dodavatel ho použil znovu), se nepředvyplní a rozhodne člověk. Prázdný kód dřív uložený kód nepřepíše
+  - Existující aliasy kód nemají, doplní se postupně při dalších importech. Proto zatím nejde změřit přínos přes `replay_matching`: u historických dokladů se kód neukládal
 - **Čištění názvů z dokladů a slovník zkratek** (12.10.2026)
   - `core_name()` odstraňuje čárový kód (`GTIN: 8594…`, oddělovač `_`), balení zapsané hvězdičkou (`4*500G`, `1*2,25 KG`), samostatné jednotky a obaly `folie`, `doza`. Dřív z `BEZLEPKO.CHLEBY KRÁJENÉ 4*500G` zůstalo `4 500g` v jednom kuse a číselné pravidlo ho nepoznalo
   - Nový slovník `SYNONYMS` v `naming.py` sjednocuje zkratky a zápisy téhož slova (`VEPŘ.` → vepřová, `Cheddar` → čedar, `Džem` → marmeláda). Aplikuje se i na názvy surovin v systému, takže obě strany porovnání mají stejný tvar

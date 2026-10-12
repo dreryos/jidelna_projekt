@@ -962,7 +962,10 @@ def _apply_ingredient_matching(receipt_data, all_ingredients):
     resolver = IngredientResolver(supplier=supplier, ingredients=all_ingredients)
 
     for item in receipt_data['items']:
-        match = resolver.resolve(item['item_name'], unit=item.get('unit_mapped'))
+        match = resolver.resolve(
+            item['item_name'], unit=item.get('unit_mapped'),
+            item_code=item.get('item_id'),
+        )
         item.update(match.as_dict())
         # Klíče pro stávající šablony.
         item['suggested_ingredient_id'] = item['ingredient_id']
@@ -1036,6 +1039,7 @@ def _remember_ingredient_mapping(receipt_data, mappings, user):
             ingredient=ingredient,
             unit=item.get('unit', ''),
             user=user,
+            item_code=item.get('item_id', ''),
         )
         if alias is not None:
             remembered += 1
@@ -3039,6 +3043,7 @@ def _remember_photo_mapping(supplier, mappings, skipped, user):
         if resolver.remember(item['item_name'], ingredient=ingredient,
                              unit=item.get('unit_mapped') or item.get('unit', ''),
                              unit_factor=unit_factor, user=user,
+                             item_code=item.get('item_id', ''),
                              # `False` by mohlo degradovat dřív potvrzený
                              # alias na nerozhodnutý (viz `remember()`) – tam,
                              # kde tenhle import o jednotkách nic neřeší, se
@@ -3048,7 +3053,8 @@ def _remember_photo_mapping(supplier, mappings, skipped, user):
 
     for item in skipped:
         if resolver.remember(item['item_name'], is_ignored=True,
-                             unit=item.get('unit', ''), user=user):
+                             unit=item.get('unit', ''), user=user,
+                             item_code=item.get('item_id', '')):
             remembered += 1
 
     return remembered
