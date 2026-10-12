@@ -69,6 +69,9 @@
                             <i class="fas fa-arrow-left me-1"></i>Zpět
                         </a>
                         {% if not request.user.profile.is_readonly %}
+                        <a href="{% url 'production:menu_save_as_template' menu_plan.pk %}" class="btn btn-outline-light btn-sm" title="Uložit rozvržení jídel jako šablonu pro další použití">
+                            <i class="fas fa-copy me-1"></i>Uložit jako šablonu
+                        </a>
                         <a href="{% url 'production:menu_delete' menu_plan.pk %}" class="btn btn-danger btn-sm">
                             <i class="fas fa-trash me-1"></i>Smazat
                         </a>

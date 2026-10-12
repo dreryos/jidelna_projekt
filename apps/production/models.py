@@ -36,6 +36,130 @@ class MenuTemplate(models.Model):
     def __str__(self):
         return self.name
 
+    # Typy jídel, které se do šablony nepřenášejí. Polévka a druhá večeře jsou
+    # technické karty s pseudo-receptem ("Polévka", "Výdej"), do kterých se
+    # suroviny doplňují ad hoc - nejsou to plánovaná jídla. Formát šablony je
+    # navíc nezná (MEAL_TYPE_MAPPING) a převod zpět by je tiše změnil na oběd.
+    TECHNICAL_MEAL_TYPES = ('SOUP', 'DINNER_SECOND')
+
+    _EMPTY_XML = (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<MenuImportDescription>\n  <Recipes/>\n  <MenuSchedule/>\n</MenuImportDescription>'
+    )
+
+    @classmethod
+    def schedule_from_menu_plan(cls, menu_plan):
+        """
+        Harmonogram šablony z jídelníčku: ({posun_dne: [jídla]}, report).
+
+        Přenáší se **jen struktura**: den (posun od začátku jídelníčku), recept
+        a typ jídla. Nepřenáší se počty porcí a koeficienty variant (patří ke
+        konkrétní skupině, ne k jídelníčku), úpravy surovin ani prodejní DPH.
+
+        Záměna jídla: do šablony jde **náhrada**, tedy to, co se skutečně
+        vařilo; původní zaměněné jídlo se vynechá. Pro opětovné použití
+        jídelníčku dává smysl právě skutečně uvařené.
+
+        Slovník obsahuje **všechny dny jídelníčku**, i prázdné: průvodce importu
+        odvozuje konec nového jídelníčku z nejvyššího posunu dne, takže bez
+        prázdných dnů na konci by vznikl kratší jídelníček, než byl zdroj.
+
+        Report: `meals` (přenesená jídla), `days` (dny s jídlem),
+        `technical_skipped` (polévky/druhé večeře), `replaced_skipped`
+        (zaměněné originály) a `problems` - seznam jídel, která nejdou přenést
+        (recept bez kódu, typ jídla, který formát nezná). Ta se **nevynechávají
+        potichu**: `create_from_menu_plan` je odmítne.
+        """
+        # Uvnitř funkce: utils importuje modely, takže na úrovni modulu by to
+        # byl kruhový import.
+        from .utils import MEAL_TYPE_ORDER
+
+        orders = list(menu_plan.production_orders.select_related('recipe'))
+        # Pořadí jídel v dni (snídaně, oběd, večeře), ne abecední: podle
+        # abecedy by večeře předcházela oběd.
+        orders.sort(key=lambda o: (
+            o.date, MEAL_TYPE_ORDER.get(o.meal_type, len(MEAL_TYPE_ORDER)), o.id,
+        ))
+        replaced_ids = {o.replacement_of_id for o in orders if o.replacement_of_id}
+        supported = set(MEAL_TYPE_MAPPING.values())
+
+        # Počátek je začátek jídelníčku, aby den bez jídla na začátku zůstal
+        # prázdný; kdyby bylo jídlo před ním (nekonzistentní data), posune se
+        # počátek, ať nevzniknou záporné posuny.
+        origin = min([menu_plan.date_from] + [o.date for o in orders])
+        last = max([menu_plan.date_to] + [o.date for o in orders])
+        schedule = {offset: [] for offset in range((last - origin).days + 1)}
+
+        report = {
+            'meals': 0, 'days': 0,
+            'technical_skipped': 0, 'replaced_skipped': 0, 'problems': [],
+        }
+        for order in orders:
+            if order.meal_type in cls.TECHNICAL_MEAL_TYPES:
+                report['technical_skipped'] += 1
+                continue
+            if order.id in replaced_ids:
+                report['replaced_skipped'] += 1
+                continue
+            if order.meal_type not in supported:
+                report['problems'].append(
+                    f'typ jídla "{order.meal_type}" ({order.recipe.name}) formát šablony nezná'
+                )
+                continue
+            if not order.recipe.code:
+                report['problems'].append(f'recept "{order.recipe.name}" nemá kód')
+                continue
+
+            schedule[(order.date - origin).days].append({
+                'recipe_code': order.recipe.code,
+                'meal_type': order.meal_type,
+                'note': '',
+                'portion_count': None,
+            })
+            report['meals'] += 1
+
+        report['days'] = sum(1 for meals in schedule.values() if meals)
+        return schedule, report
+
+    @classmethod
+    def create_from_menu_plan(cls, menu_plan, name, description=''):
+        """
+        Uloží jídelníček jako šablonu: vrací (šablona, report).
+
+        XML se neskládá ručně: používá se stejný zápis harmonogramu
+        (`update_schedule_from_dict`) jako vizuální editor, který výsledek
+        ověří parserem, kterým šablonu čte import.
+
+        Raises:
+            ValidationError: prázdný, příliš dlouhý nebo duplicitní název;
+                jídelníček neobsahuje žádné přenositelné jídlo, nebo obsahuje
+                jídlo, které přenést nejde (viz `report['problems']`).
+        """
+        name = (name or '').strip()
+        if not name:
+            raise ValidationError('Název šablony je povinný.')
+        max_length = cls._meta.get_field('name').max_length
+        if len(name) > max_length:
+            raise ValidationError(f'Název šablony může mít nejvýše {max_length} znaků.')
+        if cls.objects.filter(name__iexact=name).exists():
+            raise ValidationError(f'Šablona s názvem "{name}" již existuje. Zvolte jiný název.')
+
+        schedule, report = cls.schedule_from_menu_plan(menu_plan)
+        if report['problems']:
+            raise ValidationError(
+                'Jídelníček obsahuje jídla, která nejdou do šablony přenést: '
+                + '; '.join(report['problems']) + '.'
+            )
+        if not report['meals']:
+            raise ValidationError(
+                'Jídelníček neobsahuje žádné jídlo, které by šlo uložit do šablony.'
+            )
+
+        template = cls(name=name, description=description, xml_content=cls._EMPTY_XML)
+        template.update_schedule_from_dict(schedule)
+        template.save()
+        return template, report
+
     def parse_schedule_to_dict(self):
         """
         Parsuje XML harmonogram do struktury vhodné pro vizuální editor.

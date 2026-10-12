@@ -11,6 +11,7 @@ urlpatterns = [
     path('jidelnicky/novy/', views.MenuPlanCreateView.as_view(), name='menu_create'),
     path('jidelnicky/<int:pk>/', views.MenuPlanDetailView.as_view(), name='menu_detail'),
     path('jidelnicky/<int:pk>/smazat/', views.MenuPlanDeleteView.as_view(), name='menu_delete'),
+    path('jidelnicky/<int:pk>/ulozit-jako-sablonu/', views.MenuPlanSaveAsTemplateView.as_view(), name='menu_save_as_template'),
     
     # Šablony jídelníčků
     path('sablony/', template_views.MenuTemplateListView.as_view(), name='template_list'),

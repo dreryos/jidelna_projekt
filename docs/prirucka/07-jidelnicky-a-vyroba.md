@@ -43,6 +43,20 @@ Opakující se cykly (14denní jídelníček ŠVP…) uložte jako **šablonu** 
 
 💡 **Proč šablony odkazují na kódy receptů:** Šablona uchovává kódy (`PO-012`), ne názvy. Recept můžete přejmenovat a šablona dál funguje — proto je kód receptu neměnný (kapitola [3](03-suroviny-a-receptury.md)).
 
+### Uložení jídelníčku jako šablony
+
+Jídelník, který vznikl ručně (bez šablony), nebo už byl uvařený, jde uložit jako šablonu: na detailu jídelníčku tlačítko **Uložit jako šablonu**. Před uložením stránka ukáže, kolik jídel a dnů se přenese a co se vynechá.
+
+Do šablony se přenáší **rozvržení**: den (posun od začátku jídelníčku), recept a typ jídla. **Nepřenáší se:**
+
+* **počty porcí a koeficienty variant** — patří ke konkrétní skupině; nastavíte je při použití šablony v průvodci (viz níž),
+* **úpravy surovin** u jednotlivých jídel a prodejní DPH,
+* **polévka a druhá večeře** — jsou to technické karty, do kterých se suroviny doplňují ad hoc, ne plánovaná jídla.
+
+U **zaměněného jídla** (záměna za jiný recept) jde do šablony **náhrada**, tedy to, co se skutečně vařilo; původní jídlo se vynechá. Právě to dává smysl pro opětovné použití.
+
+Šablona se jmenuje podle jídelníčku, název můžete změnit; duplicitní název (bez ohledu na velikost písmen) systém odmítne. Jídelníček bez jediného přenositelného jídla uložit nejde. Uloženou šablonu pak najdete v **Jídelníčky → Šablony** a použijete ji stejně jako každou jinou.
+
 ### Tvorba jídelníčku ze šablony
 
 **Jídelníčky → Tvorba ze šablony** (`/production/import-jidelnicku/`) — třífázový průvodce:
