@@ -1,14 +1,15 @@
 # Větší projekty (backlog)
 
-Zapsáno 5. 10. 2026. **Nic z toho není zahájené.** U každého projektu je, co v kódu
+Zapsáno 5. 10. 2026, aktualizováno 12. 10. 2026 (projekt 3 hotový, projekt 2 rozpracovaný,
+projekt 1 čeká na seznam od kolegů). U každého projektu je, co v kódu
 a v datech už existuje, co se z nich dá říct a co zbývá rozhodnout. Čísla jsou
 z kopie produkční databáze z 5. 10. 2026 a ověřují se znovu před zahájením.
 
 | # | Projekt | Velikost | Blokováno čím |
 |---|---|---|---|
 | 1 | Suroviny odepisované nárazově (koření, základní suroviny) | střední | seznamem od kolegů |
-| 2 | Překladová vrstva názvů surovin z příjemek | střední, po etapách | nejdřív změřit (M0) |
-| 3 | Šablona jídelníčku z ručně zapsaného jídelníčku | malá | ničím |
+| 2 | Překladová vrstva názvů surovin z příjemek | střední, po etapách | **rozpracováno**: M0, čištění, kód hotové; zbývá dodavatel + správa aliasů |
+| 3 | Šablona jídelníčku z ručně zapsaného jídelníčku | malá | **hotovo** (PR #83) |
 
 Doporučené pořadí: **3** (levné, nezávislé), **2** začít měřením, **1** až budou kolegové
 mít seznam. Projekt 1 navazuje na krok 2.6 v `plans/vydejky-nezapisovana-data.md`
@@ -114,12 +115,46 @@ Census, který se tehdy nepodařilo změřit:
   **40 % položek (118 z 298)**, jenže v `SupplierItemAlias` ani `GoodsReceiptItem` pro něj
   není sloupec. Kód je u dodavatele stabilnější než název.
 
+### Stav k 12. 10. 2026
+
+| Krok | Stav | PR |
+|---|---|---|
+| M0 měření (`manage.py replay_matching`) | hotovo | #84 |
+| Čištění názvů + `SYNONYMS` (část F3) | hotovo | #85 |
+| Kód dodavatele u aliasu (vrstva `alias_code`) | hotovo, přínos zatím neměřitelný | #86 |
+| F1 `rapidfuzz` místo `difflib` | nezačato | |
+| F2 překlepy z OCR | **změřeno, zamítnuto** (viz níže) | |
+| Normalizace názvu dodavatele | nezačato | |
+| Správa aliasů mimo administraci | nezačato | |
+
+**Měření M0** (323 položek na 57 dokladech, 200 názvů; aliasy ve stavu před dokladem):
+
+| | základ | po čištění a synonymech |
+|---|---|---|
+| nepoznáno | 25 % | 15 % |
+| automaticky předvyplněno | 37 % (97 % správně) | 39 % (97 % správně) |
+| fuzzy návrh správně | 90 % | 89 % |
+
+* **Fuzzy je lepší, než se čekalo** (86–94 % ve všech pásmech jistoty od 40 %), takže
+  embedding teď nic podstatného nevyřeší. Chybí hlavně pokrytí, ne přesnost odhadu.
+* **Zbylých 15 % nepoznaných** jsou značky a sémantika (`ARO RAJČAT. PYŘE` → protlak,
+  `Pinova` → červené jablko), ne překlepy. Opraví je aliasy po prvním potvrzení.
+* **F2 zamítnuto.** Tolerance jednoho znaku u slov od 5 znaků změnila po zpřísnění jen 2
+  položky (jedna správně, jedna špatně). Širší varianta zachytila i skloňování
+  (`okurky`/`okurka`) a z nově navržených řádků bylo 5 špatně a 4 správně, tedy hůř než
+  stávající pásma. Nevyplatí se; vracet se k tomu jen s větším vzorkem.
+* **Zkratka země jen na konci názvu** (zamítnuto): fuzzy 89 → 86 %, nepoznáno 49 → 52.
+* **Pozor na přeladění:** `SYNONYMS` je vyladěný na stejném vzorku, na kterém se měří.
+* **Dva dosud neověřené předpoklady:** přínos kódu dodavatele (historické doklady kód
+  nemají) a reprezentativnost vzorku (323 položek jen z OCR importu, ručně zadané
+  příjemky `source_name` nemají).
+
 ### Návrh (po etapách, pořadí je podstatné)
 
 1. **M0 — změřit.** Replay harness nad 323 položkami: podíl podle vrstvy resolveru, přesnost
    fuzzy vrstvy, kolik skončí bez návrhu. Bez toho je každá další úvaha hádání. Vzorek je
    malý, takže výsledek je orientační — říct to v jeho výstupu.
-2. **Levné opravy z dřívější analýzy:** F1 `rapidfuzz` (už v `requirements.txt`), F2 překlepy
+2. **Levné opravy z dřívější analýzy (viz stav výše):** F1 `rapidfuzz` (už v `requirements.txt`), F2 překlepy
    z OCR, F3 slovník synonymů `SYNONYMS` v `apps/inventory/naming.py`.
 3. **Nové oproti dřívější analýze: kód dodavatele.** Ukládat ho k aliasu a párovat podle něj
    jako první. Dřív ověřit, jak často kód skutečně chybí (40 % je u OCR; u Bidfood XML bude
