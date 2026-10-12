@@ -8,6 +8,11 @@ a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
 ## [Unreleased]
 
 ### Added
+- **Změření párování názvů z dokladů: příkaz `replay_matching`** (12.10.2026)
+  - Zpětně přehraje položky potvrzených příjemek (s názvem z dokladu) přes `IngredientResolver` se stavem aliasů **před** daným dokladem a porovná odpověď se surovinou, kterou člověk potvrdil. Jen čte, nic nezapisuje. Volby `--supplier` a `--json`
+  - Proč: než se začne vylepšovat porovnávání názvů (rapidfuzz, synonyma, embedding), je potřeba vědět, kde dnes systém selhává. Dnešní aliasy by použít nešlo, každá položka by si odpověděla sama, protože alias z ní vznikl
+  - První měření (323 položek na 57 dokladech): 37 % řádků se předvyplní automaticky a z toho 97 % správně; fuzzy návrh trefí 90 %; 25 % řádků systém nepozná vůbec (zkratky `BK`, `DV`, `ARO`, kódy GTIN, balení `1*5KG`, překlepy)
+  - Z `IngredientResolver` se vyčlenila metoda `_alias_source()`, aby šel zdroj aliasů vyměnit bez kopírování logiky vrstev. Chování párování se nemění
 - **Uložení jídelníčku jako šablony** (12.10.2026)
   - Na detailu jídelníčku přibylo tlačítko **Uložit jako šablonu**. Funguje pro jídelníček vytvořený ručně i pro už uvařený; dřív šlo šablonu založit jen z XML nebo ve vizuálním editoru od nuly. Před uložením stránka ukáže, kolik jídel a dnů se přenese a co se vynechá
   - Přenáší se jen rozvržení (den, recept, typ jídla). Počty porcí, koeficienty variant, úpravy surovin a prodejní DPH se nepřenášejí — patří ke konkrétní skupině a nastavují se při použití šablony
