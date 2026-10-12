@@ -8,7 +8,7 @@ z kopie produkční databáze z 5. 10. 2026 a ověřují se znovu před zahájen
 | # | Projekt | Velikost | Blokováno čím |
 |---|---|---|---|
 | 1 | Suroviny odepisované nárazově (koření, základní suroviny) | střední | seznamem od kolegů |
-| 2 | Překladová vrstva názvů surovin z příjemek | střední, po etapách | **rozpracováno**: M0, čištění, kód hotové; zbývá dodavatel + správa aliasů |
+| 2 | Překladová vrstva názvů surovin z příjemek | střední, po etapách | **rozpracováno**: M0, čištění, kód hotové; zbývá dodavatel + správa aliasů (F1 odloženo, F2 zamítnuto) |
 | 3 | Šablona jídelníčku z ručně zapsaného jídelníčku | malá | **hotovo** (PR #83) |
 
 Doporučené pořadí: **3** (levné, nezávislé), **2** začít měřením, **1** až budou kolegové
@@ -122,7 +122,7 @@ Census, který se tehdy nepodařilo změřit:
 | M0 měření (`manage.py replay_matching`) | hotovo | #84 |
 | Čištění názvů + `SYNONYMS` (část F3) | hotovo | #85 |
 | Kód dodavatele u aliasu (vrstva `alias_code`) | hotovo, přínos zatím neměřitelný | #86 |
-| F1 `rapidfuzz` místo `difflib` | nezačato | |
+| F1 `rapidfuzz` místo `difflib` | **odloženo** — fuzzy je přesná (86–94 %), přínos by byl jen rychlost | |
 | F2 překlepy z OCR | **změřeno, zamítnuto** (viz níže) | |
 | Normalizace názvu dodavatele | nezačato | |
 | Správa aliasů mimo administraci | nezačato | |
@@ -149,28 +149,28 @@ Census, který se tehdy nepodařilo změřit:
   nemají) a reprezentativnost vzorku (323 položek jen z OCR importu, ručně zadané
   příjemky `source_name` nemají).
 
-### Návrh (po etapách, pořadí je podstatné)
+### Co zbývá
 
-1. **M0 — změřit.** Replay harness nad 323 položkami: podíl podle vrstvy resolveru, přesnost
-   fuzzy vrstvy, kolik skončí bez návrhu. Bez toho je každá další úvaha hádání. Vzorek je
-   malý, takže výsledek je orientační — říct to v jeho výstupu.
-2. **Levné opravy z dřívější analýzy (viz stav výše):** F1 `rapidfuzz` (už v `requirements.txt`), F2 překlepy
-   z OCR, F3 slovník synonymů `SYNONYMS` v `apps/inventory/naming.py`.
-3. **Nové oproti dřívější analýze: kód dodavatele.** Ukládat ho k aliasu a párovat podle něj
-   jako první. Dřív ověřit, jak často kód skutečně chybí (40 % je u OCR; u Bidfood XML bude
-   jiné číslo).
-4. **Normalizace názvu dodavatele** (jedna kanonická podoba, vazba na `supplier_obj`).
-5. **Správa aliasů mimo administraci** — vidět, upravit, sloučit špatně naučený alias.
-6. Embedding **jen když** M0 a kroky 2–4 ukážou, že zbývá netriviální podíl nespárovaných
-   řádků. Podmínky a omezení (musl/Alpine už neplatí, base image je `python:3.14-slim`) jsou
-   v dřívější analýze, 3.3.
+Hotové a zamítnuté kroky jsou ve stavu výše (M0, čištění + `SYNONYMS`, kód dodavatele, F2).
+Nevyřízené je:
+
+1. **Normalizace názvu dodavatele** (jedna kanonická podoba, vazba na `supplier_obj`). Název
+   v `GoodsReceipt.supplier` je volný text a alias podle dodavatele se tím rozbíjí.
+2. **Správa aliasů mimo administraci** — vidět, upravit, sloučit špatně naučený alias
+   (měření ukázalo alias `Chléb konz. BK Rohlik` → Rohlík špatně u 4 položek).
+3. **Změřit přínos kódu dodavatele** nad novými doklady, až jich přibude (historické kód
+   nemají).
+4. **F1 `rapidfuzz`** jen pokud bude vadit rychlost; přesnost nezlepší.
+5. Embedding **jen když** zbylých ~15 % nepoznaných řádků bude po aliasech stále
+   netriviální. Podmínky a omezení (base image je `python:3.14-slim`) jsou v dřívější
+   analýze, 3.3.
 
 ### Otevřené otázky
 
 * **Kde to bolí?** Které toky (OCR z fotky, Bidfood XML, ruční příjemka) mají nejvíc
   nespárovaných řádků. Ruční příjemky `source_name` nezaznamenávají, takže se z nich
   nic nenaučí — ověřit, zda to tak je.
-* Jak poznat úspěch: podíl řádků spárovaných bez ruční úpravy?
+* Jak poznat úspěch: podíl řádků spárovaných bez ruční úpravy (`replay_matching` ho měří).
 * Přejmenovat si suroviny u nás, nebo je nechat a překládat? (Cíl říká druhé.)
 
 ---
@@ -196,31 +196,23 @@ a příště znovu použít.
 * V datech je 6 šablon a 39 jídelníčků ve 3 jídelnách. Podle názvů se část opakuje
   (Adapťáky — I./II./III. týden, víkendovky) — **dojem z názvů, ne měření**.
 
-### Návrh
+### Jak je to uděláno (PR #83)
 
-Na detailu jídelníčku akce **Uložit jako šablonu**:
+Na detailu jídelníčku je tlačítko **Uložit jako šablonu**
+(`MenuTemplate.create_from_menu_plan`). Rozhodnutí, která byla dřív otevřená:
 
-* pro každý `ProductionOrder` jídelníčku: `date_offset = order.date − plan.date_from`,
-  `recipe.code`, `meal_type`, případně počet porcí;
-* **XML se nesklá ručně**, ale přes stávající převod ze slovníku a výsledek se ověří stejným
-  parserem, kterým šablonu čte import (`parse_menu_template_xml`);
-* **kulatý test:** jídelníček → šablona → import → jídelníček musí dát stejnou strukturu
-  (recepty, dny, typy jídel). Bez toho nikdo nepozná, že se při převodu něco ztratilo.
+* **Přenáší se jen rozvržení** (den, recept, typ jídla). Počty porcí, koeficienty variant,
+  úpravy surovin a prodejní DPH se nepřenášejí; stránka to říká před uložením.
+* **Záměna jídla:** uloží se náhrada, tedy to, co se skutečně vařilo.
+* **Polévka a druhá večeře se vynechávají.** Jsou to technické karty s pseudo-receptem
+  a formát šablony je nezná (`MEAL_TYPE_MAPPING` by je při čtení změnil na oběd).
+* **Prázdné dny na konci se zachovávají**, protože průvodce importu odvozuje konec
+  z nejvyššího posunu dne.
+* **Jídlo, které nejde přenést** (recept bez kódu, neznámý typ jídla), se odmítne,
+  nevynechá se potichu.
+* **XML se neskládá ručně**, ale stejným zápisem harmonogramu jako vizuální editor; kulatý
+  test prožene šablonu skutečným průvodcem importu.
+* Název se kontroluje na délku a duplicitu bez ohledu na velikost písmen.
 
-### Otevřené otázky (rozhodnout před implementací)
-
-* **Co se přenáší.** Šablona nezná úpravy surovin (`ProductionOrderIngredientOverride`,
-  `RecipeOverride`), koeficienty variant porcí ani záměny jídel. Navrhuju je **nepřenášet**
-  a říct to uživateli v potvrzení — ale je to rozhodnutí.
-* **Záměna jídla** (`replacement_of`): uložit původní, nebo skutečně uvařené? Pro opakované
-  použití dává smysl to, co se skutečně vařilo — rozhodnout s kuchyní.
-* **Polévka a druhá večeře** vznikají lazy a mají vlastní typy jídel; ověřit, že je šablona
-  a import umějí.
-* **Jídelníček s mezerami** (dny bez jídel) a jídelníček přes víc než týden.
-* **Název a popis šablony**: předvyplnit z názvu jídelníčku; hlídat duplicitní název
-  (`template_check_name_ajax` už existuje).
-
-### Odhad a rizika
-
-Malé — hodiny až den dva, protože převod sestavuje existující kód. Jediné skutečné riziko je
-**tichá ztráta dat při převodu**, proto je kulatý test povinný.
+**Omezení dodané verze:** šablony jsou společné pro všechny jídelny (stránka na to
+upozorňuje); scopeování šablon podle jídelny je samostatný návrh.
