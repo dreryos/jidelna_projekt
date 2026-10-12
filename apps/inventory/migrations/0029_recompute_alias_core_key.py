@@ -9,7 +9,17 @@ Po změně `SYNONYMS` nebo pravidel v `naming.py` je potřeba další takováto
 migrace (klíče se ukládají, nepočítají za běhu).
 
 Mění se jen odvozený sloupec, `raw_key` ani vazby na suroviny se nedotýkají.
-Zpětná migrace je prázdná: starý tvar klíče už nic nepoužívá.
+Zpětná migrace klíče **neobnoví**: staré pravidlo v kódu už neexistuje, takže
+není z čeho počítat (kód migrace běží vždy s dnešním `core_name()`). Po návratu
+na starší verzi aplikace proto přestanou hledání podle `core_key` trefovat
+přepočtené aliasy; přesná shoda podle `raw_key` jede dál. Napravuje to
+`SupplierItemAlias.save()` ve starší verzi, které klíč počítá znovu:
+
+    for a in SupplierItemAlias.objects.all(): a.save()
+
+Zpětná migrace tuhle instrukci vypíše. Ostrý chod nemá souběžné verze: aplikace
+je jeden kontejner a `migrate` běží v entrypointu před startem serveru, takže
+okno, kdy starý kód čte nové klíče, je v řádu sekund.
 """
 from django.db import migrations
 
@@ -28,6 +38,15 @@ def recompute(apps, schema_editor):
         print(f'\n  inventory: přepočten core_key u {changed} aliasů', end='')
 
 
+def warn_on_reverse(apps, schema_editor):
+    print(
+        '\n  inventory: core_key aliasů zůstává podle nových pravidel. Po návratu '
+        'na starší verzi je přepočítejte: '
+        'for a in SupplierItemAlias.objects.all(): a.save()',
+        end='',
+    )
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -35,5 +54,5 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RunPython(recompute, migrations.RunPython.noop),
+        migrations.RunPython(recompute, warn_on_reverse),
     ]
