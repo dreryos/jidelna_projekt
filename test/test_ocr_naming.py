@@ -35,6 +35,14 @@ def test_raw_key_zachova_vse_krome_diakritiky_a_interpunkce(vstup, ocekavano):
     ('Rajče volné NL', 'rajce volne'),
     # Zkratky, které o zboží něco říkají, se za zemi nepovažují.
     ('Mléko polotučné BIO 1,5l', 'mleko polotucne bio'),
+    # Balení zapsané hvězdičkou, čárový kód a samostatná jednotka.
+    ('BEZLEPKO.CHLEBY KRÁJENÉ 4*500G', 'bezlepkovy chleby krajene'),
+    ('ARCO VERMICELLI COUPES 1*5KG', 'arco vermicelli coupes'),
+    ('BOND. MALÁ BROKOLICE 1*2,25 KG', 'bond mala brokolice'),
+    # `ARO` velkými písmeny se čte jako zkratka země, značka odpadá.
+    ('ARO 1,5L NEPERLIVÁ GTIN: 8594001345724', 'neperliva'),
+    ('JOJO MARSHMALLOW 80G _ GTIN: 8445291382749', 'jojo marshmallow'),
+    ('Máslo folie 8*250g', 'maslo'),
 ])
 def test_core_key_odstrani_sum(vstup, ocekavano):
     assert core_name(vstup) == ocekavano
@@ -67,3 +75,13 @@ def test_prazdny_core_key_spadne_zpet_na_raw_key():
 
 def test_odstraneni_diakritiky():
     assert strip_diacritics('Žluťoučký kůň') == 'Zlutoucky kun'
+
+
+@pytest.mark.parametrize('vstup,ocekavano', [
+    ('VEPŘ. PLEC CHLAZENÁ *KT*', 'veprova plec chlazena'),
+    ('Vepřová plec', 'veprova plec'),
+    ('CHEDDAR PLÁTKY *1KG*', 'cedar platky'),
+    ('DŽEM JAHODOVÝ COR.EXTRA 1*4KG', 'marmelada jahodovy extra'),
+])
+def test_synonyma_sjednoti_zkratku_i_nazev_suroviny(vstup, ocekavano):
+    assert core_name(vstup) == ocekavano

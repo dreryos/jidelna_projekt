@@ -29,6 +29,7 @@ from apps.inventory.matching import (
 )
 from apps.inventory.models import GoodsReceipt, GoodsReceiptItem, SupplierItemAlias
 from apps.core.models import Ingredient
+from apps.inventory.naming import core_name
 
 FUZZY_BUCKET_WIDTH = 10
 
@@ -57,6 +58,10 @@ def replay_matching(supplier_name=None):
     """Vrátí slovník s výsledky přehrání (viz `report`)."""
     ingredients = list(Ingredient.objects.filter(is_active=True))
     aliases = list(SupplierItemAlias.objects.select_related('ingredient', 'supplier'))
+    # Uložený `core_key` je z doby vzniku aliasu. Přepočtem se měří dnešní
+    # pravidla čištění názvů tak, jako by po jejich změně proběhla migrace.
+    for alias in aliases:
+        alias.core_key = core_name(alias.raw_name)
 
     items = (
         GoodsReceiptItem.objects
