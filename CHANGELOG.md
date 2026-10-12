@@ -8,6 +8,12 @@ a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
 ## [Unreleased]
 
 ### Added
+- **Čištění názvů z dokladů a slovník zkratek** (12.10.2026)
+  - `core_name()` odstraňuje čárový kód (`GTIN: 8594…`, oddělovač `_`), balení zapsané hvězdičkou (`4*500G`, `1*2,25 KG`), samostatné jednotky a obaly `folie`, `doza`. Dřív z `BEZLEPKO.CHLEBY KRÁJENÉ 4*500G` zůstalo `4 500g` v jednom kuse a číselné pravidlo ho nepoznalo
+  - Nový slovník `SYNONYMS` v `naming.py` sjednocuje zkratky a zápisy téhož slova (`VEPŘ.` → vepřová, `Cheddar` → čedar, `Džem` → marmeláda). Aplikuje se i na názvy surovin v systému, takže obě strany porovnání mají stejný tvar
+  - Migrace `inventory/0029` přepočítá uložený `core_key` u existujících aliasů, jinak by se staré aliasy s kódem nebo balením v názvu přestaly trefovat. Mění jen odvozený sloupec
+  - Změřeno `replay_matching` (323 položek): nepoznáno 25 % → 15 %, automaticky předvyplněno 37 % → 39 % (97 % správně), fuzzy návrh 90 % → 89 % správně. Slovník je vyladěný na stejném vzorku, takže skutečný přínos bude o něco menší
+  - Vyzkoušené a zamítnuté: zahazovat zkratku země jen na konci názvu (`ZEL.POD SVÍČ.` by zůstalo celé) měření zhoršilo (fuzzy 89 → 86 %, nepoznáno 49 → 52)
 - **Změření párování názvů z dokladů: příkaz `replay_matching`** (12.10.2026)
   - Zpětně přehraje položky potvrzených příjemek (s názvem z dokladu) přes `IngredientResolver` se stavem aliasů **před** daným dokladem a porovná odpověď se surovinou, kterou člověk potvrdil. Jen čte, nic nezapisuje. Volby `--supplier` a `--json`
   - Proč: než se začne vylepšovat porovnávání názvů (rapidfuzz, synonyma, embedding), je potřeba vědět, kde dnes systém selhává. Dnešní aliasy by použít nešlo, každá položka by si odpověděla sama, protože alias z ní vznikl
