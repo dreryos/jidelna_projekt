@@ -138,6 +138,14 @@ class IngredientResolver:
             for ingredient in self.ingredients
         ]
 
+    def _alias_source(self):
+        """
+        Odkud se aliasy berou. Samostatná metoda proto, aby je šlo vyměnit
+        (např. pro zpětné přehrání nad stavem aliasů před daným dokladem, viz
+        příkaz `replay_matching`) bez kopírování logiky rozdělení do vrstev.
+        """
+        return SupplierItemAlias.objects.select_related('ingredient', 'supplier')
+
     def _load_aliases(self):
         """
         Načte aliasy do slovníků podle vrstev.
@@ -145,9 +153,7 @@ class IngredientResolver:
         Aliasů bývá řádově stovky, takže je levnější je mít v paměti než
         se na každý řádek dokladu ptát databáze.
         """
-        aliases = SupplierItemAlias.objects.select_related('ingredient', 'supplier')
-
-        for alias in aliases:
+        for alias in self._alias_source():
             if alias.supplier_id is None:
                 self._global_by_raw.setdefault(alias.raw_key, alias)
                 self._index_core(self._global_by_core, alias)
