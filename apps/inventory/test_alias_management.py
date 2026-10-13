@@ -264,3 +264,89 @@ class AliasManagementTest(TestCase):
         response = self.client.get(reverse('core:ingredient_list'))
 
         self.assertContains(response, f'?ingredient={self.flour.pk}')
+
+
+class SynonymTest(TestCase):
+    """Synonymum suroviny = globální alias; hledá se i podle podobnosti.
+
+    Příklad záměrně není `džem` → marmeláda: to už pokrývá slovník `SYNONYMS`
+    v kódu a test by prošel i bez synonyma.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user('kuchar', password='x')
+        UserProfile.objects.get_or_create(user=self.user)
+        self.client.force_login(self.user)
+        self.jam = Ingredient.objects.create(name='Brambory', unit='kg', base_unit='kg')
+        self.honey = Ingredient.objects.create(name='Med', unit='kg', base_unit='kg')
+        self.supplier = Supplier.objects.create(name='Testovací dodavatel A', slug='test-dodavatel-a')
+
+    def _resolver(self):
+        from apps.inventory.matching import IngredientResolver
+        return IngredientResolver(self.supplier, ingredients=[self.jam, self.honey])
+
+    def test_without_synonym_product_is_not_matched(self):
+        match = self._resolver().resolve('ZEMÁKY RANÉ PRAKTIK 1*5KG')
+
+        self.assertNotEqual(match.ingredient, self.jam)
+
+    def test_synonym_matches_by_similarity_not_only_exact_name(self):
+        SupplierItemAlias.objects.create(
+            supplier=None, raw_name='zemáky', ingredient=self.jam,
+        )
+
+        match = self._resolver().resolve('ZEMÁKY RANÉ PRAKTIK 1*5KG')
+
+        self.assertEqual(match.ingredient, self.jam)
+        self.assertEqual(match.source, 'fuzzy')
+
+    def test_synonym_exact_name_is_automatic(self):
+        SupplierItemAlias.objects.create(
+            supplier=None, raw_name='zemáky', ingredient=self.jam,
+        )
+
+        match = self._resolver().resolve('Zemáky')
+
+        self.assertEqual(match.source, 'alias_global')
+        self.assertTrue(match.is_automatic)
+
+    def test_supplier_alias_is_not_used_as_synonym(self):
+        """Alias jednoho dodavatele nesmí ovlivnit fuzzy hledání u všech."""
+        other = Supplier.objects.create(name='Testovací dodavatel B', slug='test-dodavatel-b')
+        SupplierItemAlias.objects.create(supplier=other, raw_name='zemáky', ingredient=self.jam)
+
+        match = self._resolver().resolve('ZEMÁKY RANÉ PRAKTIK 1*5KG')
+
+        self.assertNotEqual(match.source, 'fuzzy')
+
+    def test_ignored_global_alias_is_not_a_synonym(self):
+        SupplierItemAlias.objects.create(supplier=None, raw_name='doprava', is_ignored=True)
+
+        match = self._resolver().resolve('DOPRAVA PRAHA')
+
+        self.assertIsNone(match.ingredient)
+
+    def test_form_creates_synonym_without_supplier(self):
+        response = self.client.post(reverse('inventory:alias_add'), {
+            'supplier': '', 'raw_name': 'zemáky', 'ingredient': self.jam.pk,
+            'unit_factor': '1',
+        })
+
+        self.assertEqual(response.status_code, 302)
+        alias = SupplierItemAlias.objects.get()
+        self.assertIsNone(alias.supplier)
+        self.assertEqual(alias.ingredient, self.jam)
+
+    def test_list_marks_synonym(self):
+        SupplierItemAlias.objects.create(supplier=None, raw_name='zemáky', ingredient=self.jam)
+
+        response = self.client.get(reverse('inventory:alias_list'), {'supplier': 'global'})
+
+        self.assertContains(response, 'synonymum')
+
+    def test_add_synonym_page_explains_it(self):
+        response = self.client.get(
+            reverse('inventory:alias_add'), {'synonym': '1', 'ingredient': self.jam.pk},
+        )
+
+        self.assertContains(response, 'další jméno suroviny')

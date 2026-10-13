@@ -8,6 +8,10 @@ a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
 ## [Unreleased]
 
 ### Added
+- **Synonyma surovin jako globální aliasy** (13.10.2026)
+  - Synonymum je alias bez dodavatele: další jméno suroviny, které platí pro všechny. Je to **jeden model, jeden formulář a jeden seznam** jako u aliasů, takže se upravuje stejně. Na stránce aliasů přibylo tlačítko *Přidat synonymum* (a předvyplnění suroviny z jejího seznamu) a štítek *synonymum* v seznamu
+  - Nově se název synonyma započítává i do **fuzzy hledání**: synonymum `zemáky` u suroviny Brambory dotáhne `ZEMÁKY RANÉ PRAKTIK 1*5KG`, ne jen přesný název. Bez toho by globální alias fungoval jen na celý název a dlouhé názvy z dokladů by nezabíraly
+  - Slovník `SYNONYMS` v kódu (`VEPŘ.` → vepřová, `Cheddar` → čedar) zůstává: je to normalizace zkratek na úrovni slov, při které se mění klíče, takže ho uživatelsky editovat nejde bez přepočtu uložených klíčů
 - **Správa aliasů dodavatelských názvů v aplikaci** (13.10.2026)
   - Nová stránka **Aliasy dodavatelských názvů** (menu Sklady, a tlačítko s řetízkem a počtem u každé suroviny v seznamu surovin): seznam s hledáním podle názvu, kódu a suroviny, filtr podle dodavatele, aliasů **bez kódu** a nezbožních řádků. Alias jde přidat, opravit i smazat; dřív to šlo jen v administraci
   - Důvod: špatně naučený alias se opakuje při každém dalším importu a nikdo ho nenajde. V datech se `Chléb konz. BK Rohlik` → Rohlík trefil u čtyř položek, než se na něj přišlo

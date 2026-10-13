@@ -109,6 +109,12 @@ class AliasCreateView(_AliasFormMixin, CreateView):
                 initial[field] = value
         return initial
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        # `?synonym=1` z detailu suroviny: stejný formulář, jen s vysvětlením.
+        context['is_synonym'] = self.request.GET.get('synonym') == '1'
+        return context
+
     def _save(self, form):
         form.instance.created_by = self.request.user
         response = super()._save(form)

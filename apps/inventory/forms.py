@@ -800,7 +800,11 @@ class SupplierItemAliasForm(forms.ModelForm):
         ).order_by('name')
         self.fields['ingredient'].required = False
         self.fields['supplier'].queryset = Supplier.objects.order_by('name')
-        self.fields['supplier'].empty_label = 'všichni dodavatelé (globální alias)'
+        self.fields['supplier'].empty_label = 'všichni dodavatelé (synonymum suroviny)'
+        self.fields['supplier'].help_text = (
+            'Bez dodavatele je to synonymum: platí pro všechny dodavatele a hledá se '
+            'i podle podobnosti názvu. S dodavatelem je to alias přesného názvu z jeho dokladů.'
+        )
 
     def clean(self):
         cleaned = super().clean()

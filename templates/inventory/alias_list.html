@@ -1,24 +1,32 @@
 {% extends 'base.html' %}
 {% load l10n %}
 
-{% block title %}Aliasy dodavatelských názvů - Spíž{% endblock %}
+{% block title %}Aliasy a synonyma - Spíž{% endblock %}
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
   <h2 class="mb-0">
-    <i class="fas fa-link me-2"></i>Aliasy dodavatelských názvů
+    <i class="fas fa-link me-2"></i>Aliasy a synonyma
     {% if ingredient %}<small class="text-muted">– {{ ingredient.name }}</small>{% endif %}
   </h2>
   {% if not request.user.profile.is_readonly %}
-  <a href="{% url 'inventory:alias_add' %}{% if ingredient %}?ingredient={{ ingredient.pk|unlocalize }}{% endif %}"
-     class="btn btn-success">
-    <i class="fas fa-plus me-1"></i>Přidat alias
-  </a>
+  <div class="btn-group">
+    <a href="{% url 'inventory:alias_add' %}{% if ingredient %}?ingredient={{ ingredient.pk|unlocalize }}{% endif %}"
+       class="btn btn-success">
+      <i class="fas fa-plus me-1"></i>Přidat alias
+    </a>
+    <a href="{% url 'inventory:alias_add' %}?synonym=1{% if ingredient %}&ingredient={{ ingredient.pk|unlocalize }}{% endif %}"
+       class="btn btn-outline-success">
+      <i class="fas fa-font me-1"></i>Přidat synonymum
+    </a>
+  </div>
   {% endif %}
 </div>
 
 <p class="text-muted">
-  Alias říká, jakou surovinou je položka, kterou dodavatel na dokladu pojmenoval po svém.
+  <strong>Alias</strong> říká, jakou surovinou je položka, kterou konkrétní dodavatel
+  na dokladu pojmenoval po svém. <strong>Synonymum</strong> je totéž bez dodavatele:
+  jiný název suroviny, který platí všude a hledá se i podle podobnosti.
   Vznikají sami při potvrzení importu; tady je můžete doplnit, opravit nebo smazat.
   Špatný alias se jinak opakuje při každém dalším importu.
 </p>
@@ -32,7 +40,7 @@
   <div class="col-md-3">
     <select name="supplier" class="form-select">
       <option value="">Všichni dodavatelé</option>
-      <option value="global" {% if filters.supplier == 'global' %}selected{% endif %}>Globální aliasy</option>
+      <option value="global" {% if filters.supplier == 'global' %}selected{% endif %}>Synonyma (všichni dodavatelé)</option>
       {% for s in suppliers %}
       <option value="{{ s.pk|unlocalize }}" {% if filters.supplier == s.pk|unlocalize %}selected{% endif %}>{{ s.name }}</option>
       {% endfor %}
@@ -74,7 +82,7 @@
       <tr>
         <td>{{ alias.raw_name }}</td>
         <td>{% if alias.item_code %}<code>{{ alias.item_code }}</code>{% else %}<span class="text-muted">–</span>{% endif %}</td>
-        <td>{% if alias.supplier %}{{ alias.supplier.name }}{% else %}<em>všichni</em>{% endif %}</td>
+        <td>{% if alias.supplier %}{{ alias.supplier.name }}{% else %}<span class="badge bg-info text-dark">synonymum</span> <em class="text-muted small">všichni</em>{% endif %}</td>
         <td>
           {% if alias.is_ignored %}
             <span class="badge bg-secondary">nezbožní řádek</span>

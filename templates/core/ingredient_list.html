@@ -51,7 +51,7 @@
                   {% if not request.user.profile.is_readonly %}
                   <div class="btn-group" role="group">
                     <a href="{% url 'inventory:alias_list' %}?ingredient={{ ingredient.pk|unlocalize }}"
-                       class="btn btn-sm btn-outline-secondary" title="Aliasy názvů od dodavatelů">
+                       class="btn btn-sm btn-outline-secondary" title="Aliasy a synonyma">
                       <i class="fas fa-link"></i> {{ ingredient.alias_count }}
                     </a>
                     <a href="{% url 'core:ingredient_edit' ingredient.pk %}" class="btn btn-sm btn-outline-primary">
