@@ -19,6 +19,7 @@ import json
 
 from .models import MenuTemplate, MenuPlan, ProductionOrder, ProductionOrderPortionVariant
 from .forms import MenuTemplateForm, MenuImportForm
+from .utils import duplicate_meals
 from apps.core.models import Recipe, RecipeIngredient, Ingredient, Category
 from apps.canteens.models import Canteen
 
@@ -513,6 +514,20 @@ def menu_import_step3_confirm(request):
             
             # Vymažeme session data
             del request.session['import_data']
+
+            # Stejné jídlo ve dvou jídelníčcích (výměnná sobota): jedna kopie
+            # dostane výdejku, druhá zůstane viset.
+            duplicates = duplicate_meals(menu_plan)
+            if duplicates:
+                days = ', '.join(sorted({d['date'].strftime('%d.%m.') for d in duplicates}))
+                same = sum(1 for d in duplicates if d['same_recipe'])
+                messages.warning(
+                    request,
+                    f'Ve dnech {days} je stejný den a typ jídla už i v jiném jídelníčku '
+                    f'({len(duplicates)} jídel, z toho {same} se stejným receptem). '
+                    f'Totéž jídlo smažte z jednoho z jídelníčků, jinak se bude plánovat '
+                    f'spotřeba dvakrát.'
+                )
             
             # Success message
             messages.success(

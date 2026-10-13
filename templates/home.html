@@ -73,6 +73,44 @@
 </div>
 {% endif %}
 
+{% if orphan_picking %}
+<div class="alert alert-warning alert-dismissible fade show" role="alert">
+  <h5 class="alert-heading">
+    <i class="fas fa-calendar-times me-2"></i>Dny bez výdejky
+  </h5>
+  <p class="mb-2">
+    Výrobní příkazy v minulosti, které nepatří do žádné výdejky. Nic neblokují
+    ani neodečítají ze skladu, takže vypadají jako nedokončený jídelníček.
+  </p>
+  <ul class="mb-2">
+    {% for row in orphan_picking %}
+    <li>
+      <strong>{{ row.canteen_name }}</strong> –
+      jídel: {{ row.orders }}, položek: {{ row.items }},
+      {{ row.oldest|date:"d.m.Y" }}{% if row.newest != row.oldest %}–{{ row.newest|date:"d.m.Y" }}{% endif %}
+      {% if row.duplicates %}<br><small>
+        <i class="fas fa-clone me-1"></i>{{ row.duplicates }} z toho je duplicita: totéž jídlo má
+        výdejku v jiném jídelníčku. Smažte jídlo z jídelníčku, výdejku nevytvářejte.
+      </small>{% endif %}
+      {% if row.partial %}<br><small>
+        <i class="fas fa-puzzle-piece me-1"></i>{{ row.partial }} je vydáno jen částečně: jídlo už
+        má jiné položky ve výdejce. Generátor ho přeskočí, doplňte surovinu do stávající výdejky,
+        nebo ji odeberte.
+      </small>{% endif %}
+      {% if row.missing %}<br><small>
+        <i class="fas fa-file-invoice me-1"></i>{{ row.missing }} nemá výdejku vůbec: vytvořte ji
+        za ten den v generátoru, nebo jídlo smažte, pokud se nevařilo.
+      </small>{% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  <a href="{% url 'production:picking_list_generator' %}" class="btn btn-sm btn-warning">
+    <i class="fas fa-file-invoice me-1"></i>Otevřít generátor výdejek
+  </a>
+  <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+</div>
+{% endif %}
+
 <div class="row g-4">
   <!-- Recepty a suroviny -->
   <div class="col-lg-6">

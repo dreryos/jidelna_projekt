@@ -28,7 +28,7 @@ from django.db import IntegrityError, transaction
 
 from .models import ProductionOrder, PickingList, MenuPlan, MenuTemplate
 from .forms import MenuPlanForm, MenuPlanCoefficientFormSet, MenuPlanCoefficientFormSetNoExtra
-from .utils import MEAL_TYPE_ORDER
+from .utils import MEAL_TYPE_ORDER, duplicate_meals
 from apps.core.models import Recipe, UserProfile
 from apps.canteens.models import Canteen
 
@@ -246,6 +246,7 @@ class MenuPlanDetailView(CanteenOwnerMixin, UpdateView):
         context = super().get_context_data(**kwargs)
         
         context['recipes'] = Recipe.objects.all()
+        context['duplicate_meals'] = duplicate_meals(self.object)
         
         # Definice pořadí meal_types pro konzistentní zobrazení
         MEAL_TYPE_ORDER = [

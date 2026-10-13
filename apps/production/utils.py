@@ -108,6 +108,169 @@ def stale_picking_summary(user, today=None, days=STALE_PICKING_DAYS):
     ]
 
 
+# Jak daleko do minulosti se osiřelé položky hledají. Úvodní stránka volá
+# funkci při každém načtení, takže starý nevyřízený odpad nesmí zdržovat
+# donekonečna. Půl roku pokryje celou sezónu, starší už nikdo nezavírá.
+ORPHAN_PICKING_DAYS = 180
+
+
+def orphan_picking_summary(user, today=None, days=ORPHAN_PICKING_DAYS):
+    """
+    Minulé položky výdejek, které nepatří do žádného dokladu.
+
+    Položky vznikají s výrobním příkazem, ale doklad (a s ním blokace skladu
+    a vydání) vzniká až při generování výdejky za zvolený rozsah dnů. Den,
+    který nikdo nevybral, zůstane bez dokladu a `stale_picking_summary()` ho
+    nevidí, protože hledá jen položky v dokladech.
+
+    Příkazy se dělí na tři případy, které se opravují různě:
+
+    - **duplicita**: totéž jídlo (jídelna, den, typ jídla, **recept**) má
+      doklad v *jiném* jídelníčku, typicky sobota při výměně turnusu. Správně
+      se příkaz smaže, výdejka se nevytváří;
+    - **částečně vydaný**: příkaz už má jiné položky v dokladu (typicky přibyla
+      surovina). Generátor takový příkaz celý přeskakuje, takže ho nevyřeší;
+      položka se doplní do stávající výdejky, nebo se odebere;
+    - **chybí výdejka**: ostatní. Vytvoří se výdejka za ten den, nebo se příkaz
+      smaže, pokud se nevařilo.
+
+    Respektuje jídelny uživatele; vrací seznam slovníků podle jídelny.
+    """
+    today = today or timezone.localdate()
+
+    items = PickingList.objects.filter(
+        status=PickingList.Status.PENDING,
+        document__isnull=True,
+        production_order__isnull=False,
+        production_order__date__lt=today,
+        production_order__date__gte=today - timedelta(days=days),
+        # Stejný filtr jako generátor výdejek: náhrady ze záměn se nevydávají.
+        production_order__replacement_of__isnull=True,
+    )
+    if not user.is_superuser:
+        try:
+            items = items.filter(
+                production_order__canteen__in=user.profile.canteens.all()
+            )
+        except (ObjectDoesNotExist, AttributeError):
+            return []
+
+    # Jeden řádek na příkaz; počítají se jen osiřelé položky, ne všechny
+    # položky příkazu.
+    orders = list(
+        items.values(
+            'production_order_id', 'production_order__canteen_id',
+            'production_order__canteen__name', 'production_order__date',
+            'production_order__meal_type', 'production_order__recipe_id',
+            'production_order__menu_plan_id',
+        ).annotate(item_count=Count('id'))
+    )
+    if not orders:
+        return []
+
+    order_ids = {o['production_order_id'] for o in orders}
+    partial = set(
+        PickingList.objects.filter(
+            production_order_id__in=order_ids, document__isnull=False,
+        ).values_list('production_order_id', flat=True)
+    )
+
+    # Doklad má stejné jídlo v jiném jídelníčku? Jídelníček samotného příkazu
+    # se nepočítá: dvě varianty jídla v jednom jídelníčku nejsou duplicita.
+    dates = {o['production_order__date'] for o in orders}
+    covered = {}
+    for canteen_id, day, meal, recipe_id, menu_id in (
+        ProductionOrder.objects.filter(
+            replacement_of__isnull=True,
+            picking_list_items__document__isnull=False,
+            canteen_id__in={o['production_order__canteen_id'] for o in orders},
+            date__gte=min(dates), date__lte=max(dates),
+        ).values_list('canteen_id', 'date', 'meal_type', 'recipe_id', 'menu_plan_id')
+        .distinct()
+    ):
+        covered.setdefault((canteen_id, day, meal, recipe_id), set()).add(menu_id)
+
+    by_canteen = {}
+    for o in orders:
+        canteen_id = o['production_order__canteen_id']
+        day = o['production_order__date']
+        row = by_canteen.setdefault(canteen_id, {
+            'canteen_name': o['production_order__canteen__name'],
+            'orders': 0, 'items': 0, 'duplicates': 0, 'partial': 0, 'missing': 0,
+            'oldest': day, 'newest': day,
+        })
+        row['orders'] += 1
+        row['items'] += o['item_count']
+        row['oldest'] = min(row['oldest'], day)
+        row['newest'] = max(row['newest'], day)
+
+        key = (canteen_id, day, o['production_order__meal_type'],
+               o['production_order__recipe_id'])
+        if o['production_order_id'] in partial:
+            row['partial'] += 1
+        elif covered.get(key, set()) - {o['production_order__menu_plan_id']}:
+            row['duplicates'] += 1
+        else:
+            row['missing'] += 1
+
+    return sorted(by_canteen.values(), key=lambda r: (-r['items'], r['canteen_name']))
+
+
+def duplicate_meals(menu_plan):
+    """
+    Jídla jídelníčku, která mají stejnou jídelnu, den a typ jídla i v jiném
+    jídelníčku.
+
+    Typicky výměnná sobota: starý turnus končí sobotou, nový jí začíná a obě
+    kopie téhož jídla existují vedle sebe. Doklad dostane jen jedna, druhá visí
+    a systém plánuje spotřebu dvakrát.
+
+    Vrací seznam slovníků `date`, `meal_type`, `meal_label`, `others`
+    (jídelníčky se stejným slotem) a `same_recipe` (je tam i stejný recept)
+    seřazený podle data.
+    """
+    own = ProductionOrder.objects.filter(
+        menu_plan=menu_plan, replacement_of__isnull=True,
+    )
+    own_recipes = {}
+    for day, meal_type, recipe_id in own.values_list('date', 'meal_type', 'recipe_id'):
+        own_recipes.setdefault((day, meal_type), set()).add(recipe_id)
+    if not own_recipes:
+        return []
+
+    others = (
+        ProductionOrder.objects.filter(
+            canteen_id=menu_plan.canteen_id,
+            replacement_of__isnull=True,
+            date__gte=menu_plan.date_from,
+            date__lte=menu_plan.date_to,
+        )
+        .exclude(menu_plan=menu_plan)
+        .select_related('menu_plan')
+    )
+    found = {}
+    for order in others:
+        key = (order.date, order.meal_type)
+        if key in own_recipes:
+            entry = found.setdefault(key, {'plans': {}, 'same_recipe': False})
+            entry['plans'][order.menu_plan_id] = order.menu_plan
+            entry['same_recipe'] |= order.recipe_id in own_recipes[key]
+
+    labels = dict(ProductionOrder.MealType.choices)
+    return [
+        {
+            'date': date_,
+            'meal_type': meal_type,
+            'meal_label': labels.get(meal_type, meal_type),
+            'others': sorted(entry['plans'].values(), key=lambda m: m.pk),
+            # Totéž jídlo je téměř jistě chyba; jiný recept ve stejném slotu
+            # může být záměr (dvě skupiny najednou), proto se rozlišuje.
+            'same_recipe': entry['same_recipe'],
+        }
+        for (date_, meal_type), entry in sorted(found.items())
+    ]
+
+
 def picking_document_qr_uri(document, base_url='/'):
     """
     QR kód výdejky jako `data:` URI se SVG, připravený do `<img src>`.
