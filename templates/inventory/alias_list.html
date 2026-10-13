@@ -1,0 +1,123 @@
+{% extends 'base.html' %}
+{% load l10n %}
+
+{% block title %}Aliasy dodavatelských názvů - Spíž{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h2 class="mb-0">
+    <i class="fas fa-link me-2"></i>Aliasy dodavatelských názvů
+    {% if ingredient %}<small class="text-muted">– {{ ingredient.name }}</small>{% endif %}
+  </h2>
+  {% if not request.user.profile.is_readonly %}
+  <a href="{% url 'inventory:alias_add' %}{% if ingredient %}?ingredient={{ ingredient.pk|unlocalize }}{% endif %}"
+     class="btn btn-success">
+    <i class="fas fa-plus me-1"></i>Přidat alias
+  </a>
+  {% endif %}
+</div>
+
+<p class="text-muted">
+  Alias říká, jakou surovinou je položka, kterou dodavatel na dokladu pojmenoval po svém.
+  Vznikají sami při potvrzení importu; tady je můžete doplnit, opravit nebo smazat.
+  Špatný alias se jinak opakuje při každém dalším importu.
+</p>
+
+<form method="get" class="row g-2 mb-3">
+  {% if ingredient %}<input type="hidden" name="ingredient" value="{{ ingredient.pk|unlocalize }}">{% endif %}
+  <div class="col-md-4">
+    <input type="search" name="q" value="{{ filters.q }}" class="form-control"
+           placeholder="Název, kód nebo surovina">
+  </div>
+  <div class="col-md-3">
+    <select name="supplier" class="form-select">
+      <option value="">Všichni dodavatelé</option>
+      <option value="global" {% if filters.supplier == 'global' %}selected{% endif %}>Globální aliasy</option>
+      {% for s in suppliers %}
+      <option value="{{ s.pk|unlocalize }}" {% if filters.supplier == s.pk|unlocalize %}selected{% endif %}>{{ s.name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-md-3 d-flex align-items-center gap-3">
+    <div class="form-check">
+      <input class="form-check-input" type="checkbox" name="bez_kodu" value="1" id="f_bez_kodu"
+             {% if filters.bez_kodu == '1' %}checked{% endif %}>
+      <label class="form-check-label" for="f_bez_kodu">Bez kódu</label>
+    </div>
+    <div class="form-check">
+      <input class="form-check-input" type="checkbox" name="nezbozni" value="1" id="f_nezbozni"
+             {% if filters.nezbozni == '1' %}checked{% endif %}>
+      <label class="form-check-label" for="f_nezbozni">Nezbožní</label>
+    </div>
+  </div>
+  <div class="col-md-2 d-grid">
+    <button class="btn btn-primary"><i class="fas fa-search me-1"></i>Hledat</button>
+  </div>
+</form>
+
+{% if aliases %}
+<div class="table-responsive">
+  <table class="table table-hover align-middle">
+    <thead>
+      <tr>
+        <th>Název na dokladu</th>
+        <th>Kód</th>
+        <th>Dodavatel</th>
+        <th>Surovina</th>
+        <th>Jednotka</th>
+        <th class="text-end">Použito</th>
+        <th class="text-end">Akce</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for alias in aliases %}
+      <tr>
+        <td>{{ alias.raw_name }}</td>
+        <td>{% if alias.item_code %}<code>{{ alias.item_code }}</code>{% else %}<span class="text-muted">–</span>{% endif %}</td>
+        <td>{% if alias.supplier %}{{ alias.supplier.name }}{% else %}<em>všichni</em>{% endif %}</td>
+        <td>
+          {% if alias.is_ignored %}
+            <span class="badge bg-secondary">nezbožní řádek</span>
+          {% else %}
+            <a href="?ingredient={{ alias.ingredient_id|unlocalize }}">{{ alias.ingredient.name }}</a>
+          {% endif %}
+        </td>
+        <td>
+          {% if alias.unit %}{{ alias.unit }}{% if alias.unit_factor != 1 %} × {{ alias.unit_factor|floatformat:"-4" }}{% endif %}
+          {% else %}<span class="text-muted">–</span>{% endif %}
+        </td>
+        <td class="text-end">{{ alias.times_used }}{% if alias.last_used_at %}<br><small class="text-muted">{{ alias.last_used_at|date:"d.m.Y" }}</small>{% endif %}</td>
+        <td class="text-end">
+          {% if not request.user.profile.is_readonly %}
+          <div class="btn-group">
+            <a href="{% url 'inventory:alias_edit' alias.pk %}" class="btn btn-sm btn-outline-primary"><i class="fas fa-edit"></i></a>
+            <a href="{% url 'inventory:alias_delete' alias.pk %}" class="btn btn-sm btn-outline-danger"><i class="fas fa-trash"></i></a>
+          </div>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if is_paginated %}
+<nav>
+  <ul class="pagination justify-content-center">
+    {% if page_obj.has_previous %}
+    <li class="page-item"><a class="page-link" href="?{% if filter_query %}{{ filter_query }}&{% endif %}page={{ page_obj.previous_page_number|unlocalize }}">‹</a></li>
+    {% endif %}
+    <li class="page-item disabled"><span class="page-link">{{ page_obj.number|unlocalize }} / {{ page_obj.paginator.num_pages|unlocalize }}</span></li>
+    {% if page_obj.has_next %}
+    <li class="page-item"><a class="page-link" href="?{% if filter_query %}{{ filter_query }}&{% endif %}page={{ page_obj.next_page_number|unlocalize }}">›</a></li>
+    {% endif %}
+  </ul>
+</nav>
+{% endif %}
+{% else %}
+<div class="text-center py-5 text-muted">
+  <i class="fas fa-link fa-3x mb-3"></i>
+  <p>Žádné aliasy neodpovídají zadání.</p>
+</div>
+{% endif %}
+{% endblock %}

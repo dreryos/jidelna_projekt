@@ -8,6 +8,11 @@ a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
 ## [Unreleased]
 
 ### Added
+- **Správa aliasů dodavatelských názvů v aplikaci** (13.10.2026)
+  - Nová stránka **Aliasy dodavatelských názvů** (menu Sklady, a tlačítko s řetízkem a počtem u každé suroviny v seznamu surovin): seznam s hledáním podle názvu, kódu a suroviny, filtr podle dodavatele, aliasů **bez kódu** a nezbožních řádků. Alias jde přidat, opravit i smazat; dřív to šlo jen v administraci
+  - Důvod: špatně naučený alias se opakuje při každém dalším importu a nikdo ho nenajde. V datech se `Chléb konz. BK Rohlik` → Rohlík trefil u čtyř položek, než se na něj přišlo
+  - Formulář hlídá unikátnost názvu u dodavatele jako chybu u pole (ne chybu serveru), bere desetinnou čárku v přepočtu a nedovolí nezbožní alias se surovinou ani alias bez suroviny. `raw_key` a `core_key` počítá model z názvu, takže se nemohou rozejít
+  - Aliasy jsou sdílené napříč jídelnami (dodavatel a surovina jsou globální katalogy), zápis blokuje `ReadOnlyUserMiddleware` pro uživatele jen ke čtení
 - **Upozornění na dny bez výdejky a na jídla ve dvou jídelnících** (13.10.2026)
   - Položky výdejek vznikají s výrobním příkazem, ale doklad (a blokace) až při generování za zvolený rozsah dnů. Den, který nikdo nevybral, zůstal bez dokladu a upozornění na nezavřené výdejky ho nevidělo, protože hledá jen položky v dokladech. V produkční kopii visely 3 příkazy (30 položek) na Růžené
   - Úvodní stránka teď ukáže pruh **Dny bez výdejky** a rozliší **duplicitu** (totéž jídlo včetně receptu má výdejku v jiném jídelníčku, správně se smaže), **částečně vydané jídlo** (generátor ho přeskakuje, položka se doplní do stávající výdejky) a **chybějící výdejku** (správně se vytvoří). Respektuje jídelny uživatele; náhrady ze záměn se nepočítají, stejně jako v generátoru. Hledá jen posledních 180 dní, aby úvodní stránku nezdržoval starý odpad

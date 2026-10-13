@@ -13,7 +13,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.forms import inlineformset_factory
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import transaction
-from django.db.models import Model, ProtectedError
+from django.db.models import Count, Model, ProtectedError
 from django.utils import timezone
 from typing import Type, Any
 from functools import wraps
@@ -379,6 +379,9 @@ class IngredientListView(LoginRequiredMixin, ListView):
 		show_inactive = self.request.GET.get('show_inactive', 'false') == 'true'
 		if not show_inactive:
 			queryset = queryset.filter(is_active=True)
+		# Počet aliasů dodavatelských názvů pro odkaz na jejich správu;
+		# anotace místo dotazu na každý řádek.
+		queryset = queryset.annotate(alias_count=Count('supplier_aliases'))
 		return queryset
 
 

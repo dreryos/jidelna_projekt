@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+{% load django_bootstrap5 %}
+
+{% block title %}{% if object %}Upravit alias{% else %}Přidat alias{% endif %} - Spíž{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-7">
+    <div class="card">
+      <div class="card-header">
+        <h4 class="mb-0">
+          <i class="fas fa-link me-2"></i>{% if object %}Upravit alias{% else %}Přidat alias{% endif %}
+        </h4>
+      </div>
+      <div class="card-body">
+        <form method="post">
+          {% csrf_token %}
+          {% bootstrap_form_errors form type='non_fields' %}
+          {% bootstrap_field form.supplier %}
+          {% bootstrap_field form.raw_name %}
+          {% bootstrap_field form.item_code %}
+          {% bootstrap_field form.ingredient %}
+          {% bootstrap_field form.is_ignored %}
+          <div class="row">
+            <div class="col-md-6">{% bootstrap_field form.unit %}</div>
+            <div class="col-md-6">{% bootstrap_field form.unit_factor %}</div>
+          </div>
+          <div class="d-flex justify-content-between">
+            <a href="{% url 'inventory:alias_list' %}" class="btn btn-outline-secondary">Zpět</a>
+            <button type="submit" class="btn btn-success"><i class="fas fa-save me-1"></i>Uložit</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

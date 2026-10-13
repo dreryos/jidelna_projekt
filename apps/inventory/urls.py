@@ -1,6 +1,6 @@
 from django.urls import path
 from django.views.generic import RedirectView
-from . import views
+from . import alias_views, views
 
 app_name = 'inventory'
 
@@ -41,6 +41,10 @@ urlpatterns = [
     path('bidfood-import/create/', views.bidfood_xml_import_step3, name='bidfood_import_step3'),
     
     # Makro CSV Import
+    path('aliasy/', alias_views.AliasListView.as_view(), name='alias_list'),
+    path('aliasy/novy/', alias_views.AliasCreateView.as_view(), name='alias_add'),
+    path('aliasy/<int:pk>/', alias_views.AliasUpdateView.as_view(), name='alias_edit'),
+    path('aliasy/<int:pk>/smazat/', alias_views.AliasDeleteView.as_view(), name='alias_delete'),
     path('supplier-csv-import/', views.supplier_csv_import_step1, name='supplier_csv_import_step1'),
     path('supplier-csv-import/preview/', views.supplier_csv_import_step2, name='supplier_csv_import_step2'),
     path('supplier-csv-import/create/', views.supplier_csv_import_step3, name='supplier_csv_import_step3'),

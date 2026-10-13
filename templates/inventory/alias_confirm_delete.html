@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+
+{% block title %}Smazat alias - Spíž{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-6">
+    <div class="card border-danger">
+      <div class="card-header bg-danger text-white">
+        <h4 class="mb-0"><i class="fas fa-trash me-2"></i>Smazat alias</h4>
+      </div>
+      <div class="card-body">
+        <p>Opravdu smazat alias <strong>{{ object.raw_name }}</strong>
+          {% if object.ingredient %}→ {{ object.ingredient.name }}{% endif %}?</p>
+        <p class="text-muted small">
+          Při dalším importu této položky se bude surovina hledat znovu (podle podobnosti názvu)
+          a nabídne se ke kontrole. Doklady, které už alias použily, se nemění.
+        </p>
+        <form method="post">
+          {% csrf_token %}
+          <a href="{% url 'inventory:alias_list' %}" class="btn btn-outline-secondary">Zrušit</a>
+          <button type="submit" class="btn btn-danger">Smazat</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
