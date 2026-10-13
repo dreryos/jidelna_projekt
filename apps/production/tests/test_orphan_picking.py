@@ -17,7 +17,9 @@ from apps.core.models import Ingredient, Recipe, UserProfile
 from apps.production.models import (
     MenuPlan, PickingList, PickingListDocument, ProductionOrder,
 )
-from apps.production.utils import duplicate_meals, orphan_picking_summary
+from apps.production.utils import (
+    ORPHAN_PICKING_DAYS, duplicate_meals, orphan_picking_summary,
+)
 
 TODAY = date(2026, 10, 13)
 SATURDAY = TODAY - timedelta(days=10)
@@ -46,9 +48,10 @@ class Base(TestCase):
             name=name, canteen=canteen or self.canteen, date_from=d_from, date_to=d_to,
         )
 
-    def order(self, menu, day, meal=DINNER, documented=False, status=PickingList.Status.PENDING):
+    def order(self, menu, day, meal=DINNER, documented=False,
+              status=PickingList.Status.PENDING, recipe=None):
         order = ProductionOrder.objects.create(
-            menu_plan=menu, recipe=self.recipe, canteen=menu.canteen,
+            menu_plan=menu, recipe=recipe or self.recipe, canteen=menu.canteen,
             date=day, meal_type=meal,
         )
         document = None
@@ -135,6 +138,57 @@ class OrphanPickingTest(Base):
 
         self.assertEqual([r['canteen_name'] for r in rows], ['Růžená'])
 
+    def test_different_recipe_in_same_slot_is_not_duplicate(self):
+        """Jiný recept ve stejném slotu může být záměr; neradí se ho smazat."""
+        old = self.menu('Starý', SATURDAY, SATURDAY)
+        new = self.menu('Nový', SATURDAY, SATURDAY)
+        guláš = Recipe.objects.create(name='Guláš', base_portions=10)
+        self.order(old, SATURDAY, documented=True, recipe=guláš)
+        self.order(new, SATURDAY)
+
+        row = orphan_picking_summary(self.admin, today=TODAY)[0]
+
+        self.assertEqual((row['duplicates'], row['missing']), (0, 1))
+
+    def test_documented_sibling_in_same_menu_is_not_duplicate(self):
+        """Dvě varianty téhož jídla v jednom jídelníčku nejsou duplicita."""
+        menu = self.menu('M', SATURDAY, SATURDAY)
+        self.order(menu, SATURDAY, documented=True)
+        self.order(menu, SATURDAY)
+
+        row = orphan_picking_summary(self.admin, today=TODAY)[0]
+
+        self.assertEqual((row['duplicates'], row['missing']), (0, 1))
+
+    def test_item_count_ignores_documented_items_of_same_order(self):
+        menu = self.menu('M', SATURDAY, SATURDAY)
+        order = self.order(menu, SATURDAY)
+        document = PickingListDocument.objects.create(
+            name='D', canteen=self.canteen, date_from=SATURDAY, date_to=SATURDAY,
+            created_by=self.admin,
+        )
+        other = Ingredient.objects.create(
+            name='Cibule', unit='kg', base_unit='kg', recipe_unit='kg',
+            conversion_factor=Decimal('1'),
+        )
+        PickingList.objects.create(
+            production_order=order, document=document,
+            warehouse=self.warehouses[self.canteen.pk], ingredient=other,
+            quantity_planned=Decimal('1'),
+        )
+
+        row = orphan_picking_summary(self.admin, today=TODAY)[0]
+
+        self.assertEqual(row['items'], 1)
+        self.assertEqual((row['partial'], row['missing'], row['duplicates']), (1, 0, 0))
+
+    def test_orders_older_than_window_are_ignored(self):
+        old_day = TODAY - timedelta(days=ORPHAN_PICKING_DAYS + 1)
+        menu = self.menu('M', old_day, old_day)
+        self.order(menu, old_day)
+
+        self.assertEqual(orphan_picking_summary(self.admin, today=TODAY), [])
+
     def test_home_page_shows_warning(self):
         menu = self.menu('M', SATURDAY, SATURDAY)
         self.order(menu, SATURDAY)
@@ -146,6 +200,26 @@ class OrphanPickingTest(Base):
 
 
 class DuplicateMealsTest(Base):
+    def test_different_recipe_is_listed_but_marked(self):
+        old = self.menu('Starý', SATURDAY, SATURDAY)
+        new = self.menu('Nový', SATURDAY, SATURDAY)
+        guláš = Recipe.objects.create(name='Guláš', base_portions=10)
+        self.order(old, SATURDAY, recipe=guláš)
+        self.order(new, SATURDAY)
+
+        found = duplicate_meals(new)
+
+        self.assertEqual(len(found), 1)
+        self.assertFalse(found[0]['same_recipe'])
+
+    def test_same_recipe_is_marked(self):
+        old = self.menu('Starý', SATURDAY, SATURDAY)
+        new = self.menu('Nový', SATURDAY, SATURDAY)
+        self.order(old, SATURDAY)
+        self.order(new, SATURDAY)
+
+        self.assertTrue(duplicate_meals(new)[0]['same_recipe'])
+
     def test_overlapping_saturday_is_reported_in_both_menus(self):
         old = self.menu('Starý', SATURDAY - timedelta(days=14), SATURDAY)
         new = self.menu('Nový', SATURDAY, SATURDAY + timedelta(days=14))
@@ -188,4 +262,5 @@ class DuplicateMealsTest(Base):
 
         response = self.client.get(reverse('production:menu_detail', args=[new.pk]))
 
-        self.assertContains(response, 'Stejná jídla jsou i v jiném jídelníčku')
+        self.assertContains(response, 'je i v jiném jídelníčku')
+        self.assertContains(response, 'totéž jídlo')

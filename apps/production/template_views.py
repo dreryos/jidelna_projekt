@@ -520,11 +520,13 @@ def menu_import_step3_confirm(request):
             duplicates = duplicate_meals(menu_plan)
             if duplicates:
                 days = ', '.join(sorted({d['date'].strftime('%d.%m.') for d in duplicates}))
+                same = sum(1 for d in duplicates if d['same_recipe'])
                 messages.warning(
                     request,
-                    f'Jídla ve dnech {days} už jsou i v jiném jídelníčku '
-                    f'({len(duplicates)} jídel). Smažte je z jednoho z nich, '
-                    f'jinak se bude plánovat spotřeba dvakrát.'
+                    f'Ve dnech {days} je stejný den a typ jídla už i v jiném jídelníčku '
+                    f'({len(duplicates)} jídel, z toho {same} se stejným receptem). '
+                    f'Totéž jídlo smažte z jednoho z jídelníčků, jinak se bude plánovat '
+                    f'spotřeba dvakrát.'
                 )
             
             # Success message

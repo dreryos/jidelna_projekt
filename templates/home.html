@@ -89,8 +89,13 @@
       jídel: {{ row.orders }}, položek: {{ row.items }},
       {{ row.oldest|date:"d.m.Y" }}{% if row.newest != row.oldest %}–{{ row.newest|date:"d.m.Y" }}{% endif %}
       {% if row.duplicates %}<br><small>
-        <i class="fas fa-clone me-1"></i>{{ row.duplicates }} z toho je duplicita: stejné jídlo má
+        <i class="fas fa-clone me-1"></i>{{ row.duplicates }} z toho je duplicita: totéž jídlo má
         výdejku v jiném jídelníčku. Smažte jídlo z jídelníčku, výdejku nevytvářejte.
+      </small>{% endif %}
+      {% if row.partial %}<br><small>
+        <i class="fas fa-puzzle-piece me-1"></i>{{ row.partial }} je vydáno jen částečně: jídlo už
+        má jiné položky ve výdejce. Generátor ho přeskočí, doplňte surovinu do stávající výdejky,
+        nebo ji odeberte.
       </small>{% endif %}
       {% if row.missing %}<br><small>
         <i class="fas fa-file-invoice me-1"></i>{{ row.missing }} nemá výdejku vůbec: vytvořte ji

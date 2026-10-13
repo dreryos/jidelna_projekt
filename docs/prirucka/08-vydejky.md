@@ -114,12 +114,13 @@ Pruh **nic nezavírá sám**. Kdyby se dopsala čísla, která nikdo nezadal, vz
 
 ### Upozornění na dny bez výdejky
 
-Druhý žlutý pruh, **Dny bez výdejky**, ukáže jídla v minulosti, která nepatří do žádné výdejky. Nic neblokují ani neodečítají, takže jídelníček jen vypadá nedokončený. Pruh rozlišuje dva případy, které se opravují opačně:
+Druhý žlutý pruh, **Dny bez výdejky**, ukáže jídla z posledních 180 dní, která nepatří do žádné výdejky. Nic neblokují ani neodečítají, takže jídelníček jen vypadá nedokončený. Pruh rozlišuje tři případy, které se opravují různě:
 
-* **Duplicita** – stejné jídlo (jídelna, den, typ jídla) má výdejku v jiném jídelníčku. Typicky **výměnná sobota**: starý turnus končí sobotou, nový jí začíná a oba obsahují sobotní večeři. Jídlo **smažte z jídelníčku**, výdejku nevytvářejte, jinak se spotřeba započítá dvakrát.
+* **Duplicita** – totéž jídlo (jídelna, den, typ jídla **a recept**) má výdejku v jiném jídelníčku. Typicky **výměnná sobota**: starý turnus končí sobotou, nový jí začíná a oba obsahují sobotní večeři. Jídlo **smažte z jídelníčku**, výdejku nevytvářejte, jinak se spotřeba započítá dvakrát.
+* **Vydáno částečně** – jídlo už má v nějaké výdejce jiné položky (typicky přibyla surovina). Generátor ho přeskakuje, takže ho nevyřeší: doplňte surovinu do stávající výdejky, nebo ji odeberte.
 * **Chybí výdejka** – den nemá doklad vůbec. Pokud se vařilo, vytvořte výdejku za ten den v generátoru; pokud ne, jídlo z jídelníčku smažte.
 
-Stejnou duplicitu ukazuje žlutý box na **detailu jídelníčku** a po **importu ze šablony**, takže se dá zachytit hned při vzniku. Nejčistší prevence je nepřekrývat turnusy: výměnnou sobotu rozdělte po jídlech, např. snídaně a oběd starému turnusu, večeře novému.
+Překryv ukazuje žlutý box na **detailu jídelníčku** a po **importu ze šablony**, takže se dá zachytit hned při vzniku. Stejný recept označí jako téměř jistou chybu, jiný recept ve stejném slotu jako možný záměr (dvě skupiny najednou), který stačí ověřit. Nejčistší prevence je nepřekrývat turnusy: výměnnou sobotu rozdělte po jídlech, např. snídaně a oběd starému turnusu, večeře novému.
 
 ## Časté situace
 
