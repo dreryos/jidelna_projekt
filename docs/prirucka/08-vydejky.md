@@ -112,6 +112,15 @@ Proč na tom záleží: každá nezavřená položka drží **blokaci na skladu*
 
 Pruh **nic nezavírá sám**. Kdyby se dopsala čísla, která nikdo nezadal, vznikla by v datech smyšlená spotřeba. Vyřešíte ho tak, že u položek doplníte skutečné množství, zadáte **0** (nevydáno, blokace se uvolní a ze skladu se nic neodečte), nebo je odeberete košem. Pruh zmizí, když žádný dokument starší než 14 dní nemá nezavřenou položku.
 
+### Upozornění na dny bez výdejky
+
+Druhý žlutý pruh, **Dny bez výdejky**, ukáže jídla v minulosti, která nepatří do žádné výdejky. Nic neblokují ani neodečítají, takže jídelníček jen vypadá nedokončený. Pruh rozlišuje dva případy, které se opravují opačně:
+
+* **Duplicita** – stejné jídlo (jídelna, den, typ jídla) má výdejku v jiném jídelníčku. Typicky **výměnná sobota**: starý turnus končí sobotou, nový jí začíná a oba obsahují sobotní večeři. Jídlo **smažte z jídelníčku**, výdejku nevytvářejte, jinak se spotřeba započítá dvakrát.
+* **Chybí výdejka** – den nemá doklad vůbec. Pokud se vařilo, vytvořte výdejku za ten den v generátoru; pokud ne, jídlo z jídelníčku smažte.
+
+Stejnou duplicitu ukazuje žlutý box na **detailu jídelníčku** a po **importu ze šablony**, takže se dá zachytit hned při vzniku. Nejčistší prevence je nepřekrývat turnusy: výměnnou sobotu rozdělte po jídlech, např. snídaně a oběd starému turnusu, večeře novému.
+
 ## Časté situace
 
 | Situace | Co se děje | Řešení |

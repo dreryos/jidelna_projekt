@@ -8,6 +8,11 @@ a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
 ## [Unreleased]
 
 ### Added
+- **Upozornění na dny bez výdejky a na jídla ve dvou jídelnících** (13.10.2026)
+  - Položky výdejek vznikají s výrobním příkazem, ale doklad (a blokace) až při generování za zvolený rozsah dnů. Den, který nikdo nevybral, zůstal bez dokladu a upozornění na nezavřené výdejky ho nevidělo, protože hledá jen položky v dokladech. V produkční kopii visely 3 příkazy (30 položek) na Růžené
+  - Úvodní stránka teď ukáže pruh **Dny bez výdejky** a rozliší **duplicitu** (stejné jídlo má výdejku v jiném jídelníčku, správně se smaže) od **chybějící výdejky** (správně se vytvoří). Respektuje jídelny uživatele; náhrady ze záměn se nepočítají, stejně jako v generátoru
+  - Příčina byla ve výměnné sobotě: starý turnus končí sobotou, nový jí začíná a stejné jídlo je v obou jídelnících (v datech 6 takových dvojic, 5 v sobotu). Detail jídelníčku a import ze šablony proto upozorní, že stejná jídelna, den a typ jídla je už v jiném jídelníčku
+  - Nic se nemaže ani nevytváří samo: smazáním duplicity nebo vytvořením výdejky rozhoduje člověk, který ví, jestli se vařilo
 - **Kód položky u dodavatele se ukládá a používá při párování** (12.10.2026)
   - Alias (`SupplierItemAlias`) si pamatuje kód z dokladu (OCR `kod`, `itemId` z Bidfood XML, EAN z CSV). Nová vrstva `alias_code` pozná zboží podle kódu u daného dodavatele i tehdy, když dodavatel změnil jeho název; předvyplňuje se bez dotazu a má přednost před názvem
   - Kód, který u jednoho dodavatele vede na různé suroviny (dodavatel ho použil znovu), se nepředvyplní a rozhodne člověk. Prázdný kód dřív uložený kód nepřepíše

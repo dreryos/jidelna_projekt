@@ -37,6 +37,26 @@
 
 {% block content %}
 <div class="container-fluid mt-4">
+    {% if duplicate_meals %}
+    <div class="alert alert-warning">
+        <h6 class="alert-heading">
+            <i class="fas fa-clone me-1"></i>Stejná jídla jsou i v jiném jídelníčku
+        </h6>
+        <p class="mb-2 small">
+            Jídlo stejné jídelny, dne a typu je ve dvou jídelnících. Výdejku dostane jen jedno,
+            druhé zůstane viset a plánuje spotřebu podruhé. Smažte ho z jednoho z nich.
+        </p>
+        <ul class="mb-0 small">
+            {% for d in duplicate_meals %}
+            <li>
+                {{ d.date|date:"d.m.Y" }} – {{ d.meal_label }}:
+                {% for other in d.others %}<a href="{% url 'production:menu_detail' other.pk %}">{{ other.name }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
     <!-- Header s informacemi o jídelníčku -->
     <div class="card mb-4 shadow-sm menu-header-card">
         <div class="card-header bg-primary text-white">
