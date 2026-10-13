@@ -162,7 +162,11 @@ U navržené suroviny je vždy vidět **štítek, odkud návrh pochází**:
 
 ⚠️ **Pozor:** Naučené mapování se předvyplní zeleně a je snadné ho odklikat bez čtení. Když se dodavateli změní sortiment (jiný výrobce pod stejným názvem), zůstane naučené staré párování — proto zelené řádky aspoň přelétněte.
 
-Když systém navrhne trvale špatnou surovinu, opraví se to smazáním naučeného aliasu v Django adminu (kapitola [11](11-sprava-systemu.md)). Smazání aliasu jen zapomene pravidlo, na už zapsané doklady nesahá.
+Když systém navrhne trvale špatnou surovinu, opravíte to na stránce **Aliasy dodavatelských názvů** (menu *Sklady*, nebo tlačítko s řetízkem u suroviny v seznamu surovin). Alias tam můžete **opravit** (změnit surovinu, jednotku, přepočet), **doplnit** ručně, nebo **smazat**. Smazání jen zapomene pravidlo, na už zapsané doklady nesahá.
+
+U každého aliasu je vidět dodavatel, název na dokladu, **kód** zboží u dodavatele, surovina, jak často se použil a kdy naposled. Kód je u dodavatele stabilnější než název, takže když dodavatel zboží přejmenuje, pozná se podle kódu. Filtr **Bez kódu** ukáže aliasy, které se kód ještě nenaučily; doplní se samy při dalším importu.
+
+Aliasy nejsou vázané na jídelnu, jsou společné pro všechny, stejně jako suroviny a dodavatelé. Změna proto platí všude.
 
 ## Cenová historie
 
@@ -185,7 +189,7 @@ Každá změna skladové ceny (potvrzením příjemky, inventurou, převodkou) v
 | *„Doklad se nepodařilo zpracovat"* | Nečitelná, oříznutá nebo šikmá fotka | Vyfotit doklad celý, rovně a za světla |
 | *„Session vypršela. Začněte znovu."* | Průvodce importem přerušen dlouhou pauzou | Začít od kroku 1 — nic nevzniklo, příjemka se zakládá až posledním krokem |
 | Příjemku nejde potvrdit, svítí *„Nesedí měrné jednotky"* | Doklad je v jiné jednotce než sklad | **Srovnat měrné jednotky** a doplnit přepočet |
-| Import navrhl u položky špatnou surovinu | Naučené párování míří jinam | Vybrat správnou surovinu ručně (systém se přeučí); trvale opravit smazáním aliasu v adminu |
+| Import navrhl u položky špatnou surovinu | Naučené párování míří jinam | Vybrat správnou surovinu ručně (systém se přeučí); trvale opravit v Aliasy dodavatelských názvů (viz výše) |
 | Položka z fotky se naskladnila za nulu | Doklad neměl vytištěnou cenu | Cenu doplnit na kroku 2 importu; už potvrzenou příjemku srovnat dalším závozem |
 
 ---

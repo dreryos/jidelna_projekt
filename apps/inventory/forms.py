@@ -9,8 +9,9 @@ from .models import (
     GoodsReceipt, GoodsReceiptItem, Warehouse, Ingredient,
     InventoryVerification, InventoryVerificationItem,
     StockTransfer, StockTransferItem, StockItem,
-    StockWriteOff, StockWriteOffItem
+    StockWriteOff, StockWriteOffItem, Supplier, SupplierItemAlias,
 )
+from .naming import normalize_name
 
 logger = logging.getLogger(__name__)
 
@@ -759,3 +760,60 @@ StockWriteOffItemFormSet = inlineformset_factory(
     min_num=1,
     validate_min=True,
 )
+
+
+class SupplierItemAliasForm(forms.ModelForm):
+    """
+    Ruční úprava aliasu dodavatelského názvu.
+
+    `raw_key` a `core_key` se nezadávají, počítá je `SupplierItemAlias.save()`
+    z názvu, aby se nemohly rozejít. Proto je potřeba unikátnost hlídat tady:
+    bez toho by duplicitní název skončil na `IntegrityError` místo chybové
+    hlášky u pole.
+    """
+
+    class Meta:
+        model = SupplierItemAlias
+        fields = [
+            'supplier', 'raw_name', 'item_code', 'ingredient',
+            'is_ignored', 'unit', 'unit_factor',
+        ]
+        widgets = {
+            # Desetinná čárka (USE_THOUSAND_SEPARATOR): bez localize by pole
+            # nebralo "0,5" a ukazovalo by tečku.
+            'unit_factor': forms.TextInput(),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['unit_factor'] = forms.DecimalField(
+            label=self.fields['unit_factor'].label,
+            help_text=self.fields['unit_factor'].help_text,
+            localize=True, min_value=Decimal('0.0001'),
+            initial=Decimal('1'), decimal_places=4, max_digits=10,
+        )
+        # Surovina, kterou alias už má, musí v nabídce zůstat i po deaktivaci.
+        # Jinak by ModelChoiceField odmítl odeslanou hodnotu a nešlo by uložit
+        # ani nesouvisející změnu (třeba kódu).
+        self.fields['ingredient'].queryset = Ingredient.objects.filter(
+            Q(is_active=True) | Q(pk=self.instance.ingredient_id),
+        ).order_by('name')
+        self.fields['ingredient'].required = False
+        self.fields['supplier'].queryset = Supplier.objects.order_by('name')
+        self.fields['supplier'].empty_label = 'všichni dodavatelé (globální alias)'
+
+    def clean(self):
+        cleaned = super().clean()
+        raw_name = (cleaned.get('raw_name') or '').strip()
+        if raw_name:
+            duplicate = SupplierItemAlias.objects.filter(
+                supplier=cleaned.get('supplier'),
+                raw_key=normalize_name(raw_name),
+            ).exclude(pk=self.instance.pk)
+            if duplicate.exists():
+                self.add_error(
+                    'raw_name',
+                    'Alias s tímto názvem už u tohoto dodavatele existuje, '
+                    'upravte ten stávající.'
+                )
+        return cleaned

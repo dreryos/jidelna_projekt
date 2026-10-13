@@ -51,7 +51,7 @@ Katalog situací, hlášek a jejich řešení. Většina „chyb“ ve SPÍŽi j
 | *„Session vypršela. Začněte znovu."* | Průvodce přerušen dlouhou pauzou | Začít od kroku 1 — nic nevzniklo, příjemka se zakládá až posledním krokem |
 | Příjemku nejde potvrdit, svítí „Nesedí měrné jednotky" | Dodavatel fakturuje v jiné jednotce, než v jaké sklad surovinu vede | **Srovnat měrné jednotky** a doplnit přepočet (kapitola [4](04-prijem-zbozi.md)) |
 | *„… zadejte přepočet jako číslo."* / *„přepočet jednotek musí být kladné číslo"* | Prázdné pole, nula nebo nečíselný zápis | Vyplnit kladné číslo; kolik skladových jednotek je jedna jednotka z dokladu |
-| Systém navrhl u položky špatnou surovinu | Naučený alias dodavatele míří jinam | Vybrat správnou surovinu ručně (systém se přeučí); trvale opravit smazáním aliasu v adminu (kapitola [11](11-sprava-systemu.md)) |
+| Systém navrhl u položky špatnou surovinu | Naučený alias dodavatele míří jinam | Vybrat správnou surovinu ručně (systém se přeučí); trvale opravit v **Aliasy dodavatelských názvů** (kapitola [4](04-prijem-zbozi.md)) |
 | Cena položky je 0 | Doklad cenu vytištěnou nemá (rozvozový list) | Cenu na kroku 2 dopsat ručně, jinak se surovina naskladní za nulu |
 | Dodavatel se u dokladu nepřiřadil | Dodavatel není v katalogu nebo nesedí IČO | Vybrat dodavatele ručně na kroku 2; správce ho doplní do katalogu — bez dodavatele si systém mapování názvů nezapamatuje |
 
