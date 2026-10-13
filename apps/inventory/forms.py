@@ -803,7 +803,8 @@ class SupplierItemAliasForm(forms.ModelForm):
         self.fields['supplier'].empty_label = 'všichni dodavatelé (synonymum suroviny)'
         self.fields['supplier'].help_text = (
             'Bez dodavatele je to synonymum: platí pro všechny dodavatele a hledá se '
-            'i podle podobnosti názvu. S dodavatelem je to alias přesného názvu z jeho dokladů.'
+            'i podle podobnosti názvu. S dodavatelem je to alias, který platí jen pro doklady '
+            'tohoto dodavatele (včetně variant názvu bez země původu, gramáže a obalu).'
         )
 
     def clean(self):

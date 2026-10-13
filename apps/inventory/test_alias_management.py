@@ -337,6 +337,16 @@ class SynonymTest(TestCase):
         self.assertIsNone(alias.supplier)
         self.assertEqual(alias.ingredient, self.jam)
 
+    def test_synonym_filter_excludes_global_ignored_lines(self):
+        """Globální nezbožní řádek není synonymum, resolver ho tak nepoužívá."""
+        SupplierItemAlias.objects.create(supplier=None, raw_name='zemáky', ingredient=self.jam)
+        SupplierItemAlias.objects.create(supplier=None, raw_name='doprava', is_ignored=True)
+
+        response = self.client.get(reverse('inventory:alias_list'), {'supplier': 'global'})
+
+        self.assertContains(response, 'zemáky')
+        self.assertNotContains(response, 'doprava')
+
     def test_list_marks_synonym(self):
         SupplierItemAlias.objects.create(supplier=None, raw_name='zemáky', ingredient=self.jam)
 
