@@ -12,7 +12,9 @@ blokuje `ReadOnlyUserMiddleware` pro každé non-GET.
 """
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.db import IntegrityError, transaction
 from django.db.models import Q
+from django.http import HttpResponseRedirect
 from django.urls import reverse
 from django.views.generic import CreateView, DeleteView, ListView, UpdateView
 
@@ -71,6 +73,26 @@ class _AliasFormMixin(LoginRequiredMixin):
     form_class = SupplierItemAliasForm
     template_name = 'inventory/alias_form.html'
 
+    def form_valid(self, form):
+        """
+        Uloží alias; kolizi názvu z konkurenčního požadavku vrátí jako chybu
+        u pole. Kontrola v `clean()` a zápis nejsou jedna transakce, takže
+        dva souběžné požadavky projdou oba a unikátnost pak shodí až databáze.
+        """
+        try:
+            with transaction.atomic():
+                return self._save(form)
+        except IntegrityError:
+            form.add_error(
+                'raw_name',
+                'Alias s tímto názvem u tohoto dodavatele mezitím vznikl, '
+                'upravte ten stávající.'
+            )
+            return self.form_invalid(form)
+
+    def _save(self, form):
+        return super().form_valid(form)
+
     def get_success_url(self):
         ingredient_id = self.object.ingredient_id
         url = reverse('inventory:alias_list')
@@ -87,18 +109,23 @@ class AliasCreateView(_AliasFormMixin, CreateView):
                 initial[field] = value
         return initial
 
-    def form_valid(self, form):
+    def _save(self, form):
         form.instance.created_by = self.request.user
-        response = super().form_valid(form)
+        response = super()._save(form)
         messages.success(self.request, f'Alias „{self.object.raw_name}" byl přidán.')
         return response
 
 
 class AliasUpdateView(_AliasFormMixin, UpdateView):
-    def form_valid(self, form):
-        response = super().form_valid(form)
+    def _save(self, form):
+        # Jen upravená pole. Plné `save()` by zapsalo zpět i `times_used` a
+        # `last_used_at` z doby načtení formuláře a smazalo by použití, které
+        # mezitím zaznamenal import. Klíče počítá `save()` z názvu, proto jdou
+        # s sebou.
+        self.object = form.save(commit=False)
+        self.object.save(update_fields=[*form.fields, 'raw_key', 'core_key'])
         messages.success(self.request, f'Alias „{self.object.raw_name}" byl upraven.')
-        return response
+        return HttpResponseRedirect(self.get_success_url())
 
 
 class AliasDeleteView(LoginRequiredMixin, DeleteView):

@@ -792,8 +792,11 @@ class SupplierItemAliasForm(forms.ModelForm):
             localize=True, min_value=Decimal('0.0001'),
             initial=Decimal('1'), decimal_places=4, max_digits=10,
         )
+        # Surovina, kterou alias už má, musí v nabídce zůstat i po deaktivaci.
+        # Jinak by ModelChoiceField odmítl odeslanou hodnotu a nešlo by uložit
+        # ani nesouvisející změnu (třeba kódu).
         self.fields['ingredient'].queryset = Ingredient.objects.filter(
-            is_active=True,
+            Q(is_active=True) | Q(pk=self.instance.ingredient_id),
         ).order_by('name')
         self.fields['ingredient'].required = False
         self.fields['supplier'].queryset = Supplier.objects.order_by('name')

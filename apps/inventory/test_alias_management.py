@@ -125,6 +125,91 @@ class AliasManagementTest(TestCase):
         alias.refresh_from_db()
         self.assertEqual(alias.ingredient, self.sugar)
 
+    def test_edit_keeps_alias_with_deactivated_ingredient(self):
+        """Deaktivace suroviny nesmí zablokovat úpravu jiných polí aliasu."""
+        alias = self._alias('MOUKA', ingredient=self.flour)
+        Ingredient.objects.filter(pk=self.flour.pk).update(is_active=False)
+
+        response = self.client.post(reverse('inventory:alias_edit', args=[alias.pk]), {
+            'supplier': self.supplier.pk, 'raw_name': 'MOUKA',
+            'item_code': '555', 'ingredient': self.flour.pk, 'unit_factor': '1',
+        })
+
+        self.assertEqual(response.status_code, 302)
+        alias.refresh_from_db()
+        self.assertEqual(alias.item_code, '555')
+
+    def test_inactive_ingredient_is_not_offered_for_new_alias(self):
+        Ingredient.objects.filter(pk=self.sugar.pk).update(is_active=False)
+
+        response = self.client.get(reverse('inventory:alias_add'))
+
+        self.assertNotContains(response, 'Cukr (kg)')
+
+    def test_edit_does_not_overwrite_usage_counters(self):
+        """Import zaznamená použití po načtení formuláře: úprava ho nesmí smazat."""
+        from unittest import mock
+        from apps.inventory.alias_views import AliasUpdateView
+        alias = self._alias('MOUKA', times_used=1)
+        original = AliasUpdateView.get_object
+
+        def stale_get_object(view, *args, **kwargs):
+            instance = original(view, *args, **kwargs)     # načteno se starým počitadlem
+            SupplierItemAlias.objects.filter(pk=instance.pk).update(times_used=9)
+            return instance
+
+        with mock.patch.object(AliasUpdateView, 'get_object', stale_get_object):
+            response = self.client.post(reverse('inventory:alias_edit', args=[alias.pk]), {
+                'supplier': self.supplier.pk, 'raw_name': 'MOUKA',
+                'item_code': '1', 'ingredient': self.flour.pk, 'unit_factor': '1',
+            })
+
+        self.assertEqual(response.status_code, 302)
+        alias.refresh_from_db()
+        self.assertEqual(alias.times_used, 9)
+        self.assertEqual(alias.item_code, '1')
+
+    def test_edit_recomputes_keys_from_new_name(self):
+        alias = self._alias('MOUKA')
+
+        self.client.post(reverse('inventory:alias_edit', args=[alias.pk]), {
+            'supplier': self.supplier.pk, 'raw_name': 'Mouka polohrubá 1kg CZ',
+            'ingredient': self.flour.pk, 'unit_factor': '1',
+        })
+
+        alias.refresh_from_db()
+        self.assertEqual(alias.raw_key, 'mouka polohruba 1kg cz')
+        self.assertEqual(alias.core_key, 'mouka polohruba')
+
+    def test_concurrent_duplicate_is_field_error_not_server_error(self):
+        """Kontrola v clean() proběhne dřív, než souběžný požadavek zapíše."""
+        from unittest import mock
+        from apps.inventory.forms import SupplierItemAliasForm
+
+        def racing_clean(form):
+            # souběžný požadavek zapsal stejný název mezi kontrolou a uložením
+            SupplierItemAlias.objects.create(
+                supplier=self.supplier, raw_name='MOUKA', ingredient=self.flour,
+            )
+            return form.cleaned_data
+
+        with mock.patch.object(SupplierItemAliasForm, 'clean', racing_clean):
+            response = self.client.post(reverse('inventory:alias_add'), {
+                'supplier': self.supplier.pk, 'raw_name': 'MOUKA',
+                'ingredient': self.flour.pk, 'unit_factor': '1',
+            })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'mezitím vznikl')
+        self.assertEqual(SupplierItemAlias.objects.count(), 1)
+
+    def test_unit_factor_renders_as_text_input(self):
+        """Prohlížeč odmítá hodnotu s čárkou v poli type=number."""
+        response = self.client.get(reverse('inventory:alias_add'))
+
+        self.assertContains(response, 'name="unit_factor"')
+        self.assertContains(response, 'type="text" name="unit_factor"')
+
     def test_edit_can_keep_own_name(self):
         """Uložení beze změny názvu nesmí hlásit kolizi sám se sebou."""
         alias = self._alias('MOUKA')
@@ -142,7 +227,15 @@ class AliasManagementTest(TestCase):
         response = self.client.post(reverse('inventory:alias_delete', args=[alias.pk]))
 
         self.assertEqual(response.status_code, 302)
-        self.assertFalse(SupplierItemAlias.objects.exists())
+        self.assertFalse(SupplierItemAlias.objects.filter(pk=alias.pk).exists())
+
+    def test_delete_keeps_other_aliases(self):
+        alias = self._alias('MOUKA')
+        other = self._alias('CUKR', ingredient=self.sugar)
+
+        self.client.post(reverse('inventory:alias_delete', args=[alias.pk]))
+
+        self.assertTrue(SupplierItemAlias.objects.filter(pk=other.pk).exists())
 
     def test_readonly_user_cannot_write(self):
         profile = self.user.profile
