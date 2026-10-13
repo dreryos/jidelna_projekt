@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% load django_bootstrap5 %}
 
-{% block title %}{% if object %}Upravit alias{% else %}Přidat alias{% endif %} - Spíž{% endblock %}
+{% block title %}{% if object %}Upravit alias{% elif is_synonym %}Přidat synonymum{% else %}Přidat alias{% endif %} - Spíž{% endblock %}
 
 {% block content %}
 <div class="row justify-content-center">
@@ -9,13 +9,21 @@
     <div class="card">
       <div class="card-header">
         <h4 class="mb-0">
-          <i class="fas fa-link me-2"></i>{% if object %}Upravit alias{% else %}Přidat alias{% endif %}
+          <i class="fas fa-link me-2"></i>{% if object %}Upravit alias{% elif is_synonym %}Přidat synonymum{% else %}Přidat alias{% endif %}
         </h4>
       </div>
       <div class="card-body">
         <form method="post">
           {% csrf_token %}
           {% bootstrap_form_errors form type='non_fields' %}
+          {% if is_synonym %}
+          <div class="alert alert-info small">
+            <strong>Synonymum</strong> je další jméno suroviny, které platí pro všechny dodavatele
+            (nechte dodavatele prázdného). Například <em>zemáky</em> u suroviny <em>Brambory</em>:
+            každá položka, v jejímž názvu je „zemáky", se pak nabídne jako Brambory.
+            Zadejte krátké, výstižné slovo nebo slovní spojení, ne celý název z dokladu.
+          </div>
+          {% endif %}
           {% bootstrap_field form.supplier %}
           {% bootstrap_field form.raw_name %}
           {% bootstrap_field form.item_code %}

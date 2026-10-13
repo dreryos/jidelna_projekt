@@ -134,11 +134,23 @@ class IngredientResolver:
         self._global_by_core = {}
         self._other_by_core = {}
 
+        self._synonyms = []
+
         self._load_aliases()
         self._ingredient_keys = [
             (ingredient, core_name(ingredient.name))
             for ingredient in self.ingredients
         ]
+        # Synonymum suroviny = globální alias (bez dodavatele). Kromě přesné
+        # shody celého názvu se jeho název počítá i jako další jméno suroviny
+        # ve fuzzy hledání, takže `džem` dotáhne `DŽEM JAHODOVÝ EXTRA 1*4KG`
+        # ke Marmeládě. Alias a synonymum jsou tak jeden model a jeden formulář,
+        # liší se jen platností (jeden dodavatel × všichni).
+        by_id = {ingredient.pk: ingredient for ingredient in self.ingredients}
+        for alias in self._synonyms:
+            ingredient = by_id.get(alias.ingredient_id)
+            if ingredient is not None and alias.core_key:
+                self._ingredient_keys.append((ingredient, alias.core_key))
 
     def _alias_source(self):
         """
@@ -159,6 +171,8 @@ class IngredientResolver:
             if alias.supplier_id is None:
                 self._global_by_raw.setdefault(alias.raw_key, alias)
                 self._index_core(self._global_by_core, alias)
+                if alias.ingredient_id and not alias.is_ignored:
+                    self._synonyms.append(alias)
             elif self.supplier and alias.supplier_id == self.supplier.id:
                 self._supplier_by_raw.setdefault(alias.raw_key, alias)
                 self._index_core(self._supplier_by_core, alias)

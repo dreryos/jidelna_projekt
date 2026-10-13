@@ -166,7 +166,9 @@ Když systém navrhne trvale špatnou surovinu, opravíte to na stránce **Alias
 
 U každého aliasu je vidět dodavatel, název na dokladu, **kód** zboží u dodavatele, surovina, jak často se použil a kdy naposled. Kód je u dodavatele stabilnější než název, takže když dodavatel zboží přejmenuje, pozná se podle kódu. Filtr **Bez kódu** ukáže aliasy, které se kód ještě nenaučily; doplní se samy při dalším importu.
 
-Aliasy nejsou vázané na jídelnu, jsou společné pro všechny, stejně jako suroviny a dodavatelé. Změna proto platí všude.
+**Synonymum** je alias bez dodavatele: další jméno suroviny, které platí pro všechny dodavatele. Přidáte ho tlačítkem *Přidat synonymum* (u suroviny, nebo na stránce aliasů). Funguje dvojím způsobem: přesný název se rozpozná rovnou, a navíc se synonymum hledá i podle **podobnosti**, takže synonymum *zemáky* u suroviny *Brambory* dotáhne i `ZEMÁKY RANÉ PRAKTIK 1*5KG`. Zadávejte krátké výstižné slovo, ne celý název z dokladu, jinak podobnost nezabere.
+
+Aliasy a synonyma nejsou vázané na jídelnu, jsou společné pro všechny, stejně jako suroviny a dodavatelé. Změna proto platí všude.
 
 ## Cenová historie
 

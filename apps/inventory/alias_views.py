@@ -43,7 +43,11 @@ class AliasListView(LoginRequiredMixin, ListView):
         if params.get('supplier', '').isdigit():
             qs = qs.filter(supplier_id=params['supplier'])
         elif params.get('supplier') == 'global':
-            qs = qs.filter(supplier__isnull=True)
+            # Synonyma: globální alias se surovinou. Globální nezbožní řádek
+            # (doprava, obal) synonymem není a resolver ho tak nepoužívá.
+            qs = qs.filter(
+                supplier__isnull=True, is_ignored=False, ingredient__isnull=False,
+            )
         if params.get('ingredient', '').isdigit():
             qs = qs.filter(ingredient_id=params['ingredient'])
         if params.get('bez_kodu') == '1':
@@ -108,6 +112,12 @@ class AliasCreateView(_AliasFormMixin, CreateView):
             if value.isdigit():
                 initial[field] = value
         return initial
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        # `?synonym=1` z detailu suroviny: stejný formulář, jen s vysvětlením.
+        context['is_synonym'] = self.request.GET.get('synonym') == '1'
+        return context
 
     def _save(self, form):
         form.instance.created_by = self.request.user
