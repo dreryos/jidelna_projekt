@@ -16,6 +16,7 @@ from decimal import Decimal
 from datetime import timedelta
 from django.utils import timezone
 
+from apps.core.http import get_int_param
 from apps.production.models import MenuPlan, ProductionOrder
 from apps.core.models import Recipe, Category
 from apps.canteens.models import Canteen, Warehouse
@@ -202,8 +203,8 @@ def recipe_cost_analysis(request):
     Zobrazuje průměrné náklady pro každý recept na základě historických dat.
     """
     # Filtry
-    canteen_id = request.GET.get('canteen')
-    category_id = request.GET.get('category')
+    canteen_id = get_int_param(request, 'canteen')
+    category_id = get_int_param(request, 'category')
     
     # Získáme všechny recepty s počtem použití
     recipes_query = Recipe.objects.all().select_related('category').prefetch_related('recipeingredient_set__ingredient')
@@ -438,7 +439,7 @@ def write_off_analytics(request):
             write_offs = StockWriteOff.objects.none()
     
     # Filtry z formuláře
-    warehouse_id = request.GET.get('warehouse')
+    warehouse_id = get_int_param(request, 'warehouse')
     category = request.GET.get('category')
     date_from = request.GET.get('date_from')
     date_to = request.GET.get('date_to')
@@ -541,7 +542,7 @@ def cook_analytics(request):
     # Filtry
     date_from_str = request.GET.get('date_from', '')
     date_to_str = request.GET.get('date_to', '')
-    canteen_id = request.GET.get('canteen', '')
+    canteen_id = get_int_param(request, 'canteen')
 
     # Bez filtru by se počítaly úplně všechny výdejky od začátku provozu –
     # pro každou se navíc dopočítává cena porce (dotazy do historie cen za

@@ -50,6 +50,10 @@ a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
   - Ověřeno na všech 39 jídelnících v produkční kopii: všechny se převedou, 1 271 jídel, 0 varování parseru; vynecháno 34 zaměněných originálů a 114 technických karet
 
 ### Fixed
+- **Nečíselný filtr v adrese už neshodí stránku na HTTP 500** (6.11.2026)
+  - Lokální ZAP test našel, že např. `/inventory/goods-receipts/?warehouse=x` skončilo `ValueError: Field 'id' expected a number` a chybou serveru. Týkalo se filtrů podle skladu, dodavatele, jídelny a kategorie receptu v seznamech příjemek, převodek, odpisů, skladu, inventur, jídelníčků, receptů a v analytice
+  - Filtry teď čtou ID přes helper `apps/core/http.py` (`get_int_param`, `get_int_list_param`): nečíselná hodnota se ignoruje, jako by filtr nebyl zadán. Scopeování podle jídelen uživatele se nemění, helper jen čte parametr
+  - Regresní test `test/test_nonnumeric_filters.py`
 - **Import bufetu: chybějící kontrola přístupu v kroku 2 a pád na nečíselném ID** (5.10.2026)
   - Krok 2 (náhled položek) jako jediný nekontroloval, že uživatel smí k jídelně zvoleného skladu; kroky 1 a 3 to dělaly. Nešlo o běžně zneužitelnou díru, protože sklad do session nastavuje krok 1 po kontrole, ale o nedůslednost, která by se projevila např. při odebrání jídelny uživateli uprostřed nahrávání. Sjednoceno s ostatními kroky, hlídá to test
   - Nečíselné ID skladu nebo suroviny ve formuláři nebo session končilo chybou 500 (`ValueError` se neodchytával); nově se uživatel vrátí na začátek nahrávání

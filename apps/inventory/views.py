@@ -15,6 +15,7 @@ from django.core.cache import cache
 from django.db.models import Count, Q
 from django.db.models.functions import Collate
 from django.conf import settings
+from apps.core.http import get_int_param, get_int_list_param
 from apps.core.views import CanteenAccessMixin, user_can_access_canteen
 from decimal import Decimal, InvalidOperation
 from datetime import date
@@ -51,7 +52,7 @@ class StockListView(CanteenAccessMixin, ListView):
         queryset = super().get_queryset().select_related('ingredient', 'warehouse', 'warehouse__canteen')
         
         # Filtrování podle skladu/skladů
-        warehouse_ids = self.request.GET.getlist('warehouse')
+        warehouse_ids = get_int_list_param(self.request, 'warehouse')
         
         # Pokud nejsou vybrány sklady a uživatel není superuser, defaultně vyber user's managed warehouses
         if not warehouse_ids and not self.request.user.is_superuser:
@@ -109,7 +110,7 @@ class StockListView(CanteenAccessMixin, ListView):
         context['grouped_warehouses'] = grouped_warehouses
         
         # Pokud nejsou vybrány sklady, použij defaultní
-        selected = self.request.GET.getlist('warehouse')
+        selected = [str(w) for w in get_int_list_param(self.request, 'warehouse')]
         context['selected_warehouses'] = selected if selected else [str(wid) for wid in default_warehouse_ids]
         context['show_transit'] = self.request.GET.get('show_transit', False)
         
@@ -525,12 +526,12 @@ class GoodsReceiptListView(CanteenAccessMixin, ListView):
             queryset = queryset.filter(receipt_number__icontains=search)
 
         # Filtrování podle dodavatele
-        supplier_id = self.request.GET.get('supplier')
+        supplier_id = get_int_param(self.request, 'supplier')
         if supplier_id:
             queryset = queryset.filter(supplier_obj_id=supplier_id)
 
         # Filtrování podle skladu
-        warehouse_id = self.request.GET.get('warehouse')
+        warehouse_id = get_int_param(self.request, 'warehouse')
         if warehouse_id:
             queryset = queryset.filter(warehouse_id=warehouse_id)
 
@@ -1222,7 +1223,7 @@ class InventoryVerificationListView(CanteenAccessMixin, ListView):
         )
         
         # Filtrování podle skladu
-        warehouse_id = self.request.GET.get('warehouse')
+        warehouse_id = get_int_param(self.request, 'warehouse')
         if warehouse_id:
             queryset = queryset.filter(warehouse_id=warehouse_id)
         
@@ -1265,7 +1266,7 @@ class InventoryVerificationCreateView(LoginRequiredMixin, CreateView):
     def get_initial(self):
         """Předvyplnění skladu z URL parametru."""
         initial = super().get_initial()
-        warehouse_id = self.request.GET.get('warehouse')
+        warehouse_id = get_int_param(self.request, 'warehouse')
         if warehouse_id:
             initial['warehouse'] = warehouse_id
         return initial
@@ -1584,7 +1585,7 @@ class StockTransferListView(CanteenAccessMixin, ListView):
                 queryset = queryset.none()
         
         # Filtrování podle skladu (from nebo to)
-        warehouse_id = self.request.GET.get('warehouse')
+        warehouse_id = get_int_param(self.request, 'warehouse')
         if warehouse_id:
             queryset = queryset.filter(
                 Q(warehouse_from_id=warehouse_id) | Q(warehouse_to_id=warehouse_id)
@@ -1847,8 +1848,8 @@ def stock_transfer_pdf(request, pk):
 @login_required
 def get_stock_item_price(request):
     """AJAX endpoint pro získání ceny a dostupného množství suroviny ze skladu."""
-    ingredient_id = request.GET.get('ingredient')
-    warehouse_id = request.GET.get('warehouse')
+    ingredient_id = get_int_param(request, 'ingredient')
+    warehouse_id = get_int_param(request, 'warehouse')
     
     if not ingredient_id or not warehouse_id:
         return JsonResponse({
@@ -1890,7 +1891,7 @@ def get_warehouse_ingredients(request):
 
     Vrací i neaktivní suroviny - pokud jsou fyzicky na skladě, musí jít převést.
     """
-    warehouse_id = request.GET.get('warehouse')
+    warehouse_id = get_int_param(request, 'warehouse')
     if not warehouse_id:
         return JsonResponse({
             'success': False,
@@ -2061,7 +2062,7 @@ class StockWriteOffListView(CanteenAccessMixin, ListView):
         queryset = super().get_queryset().select_related('warehouse', 'warehouse__canteen', 'created_by').prefetch_related('items')
         
         # Filtrování podle skladu
-        warehouse_id = self.request.GET.get('warehouse')
+        warehouse_id = get_int_param(self.request, 'warehouse')
         if warehouse_id:
             queryset = queryset.filter(warehouse_id=warehouse_id)
         
