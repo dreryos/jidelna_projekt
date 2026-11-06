@@ -22,6 +22,7 @@ import json
 import logging
 import mimetypes
 
+from apps.core.http import get_int_param
 from apps.core.models import Recipe, RecipeIngredient, Ingredient
 from apps.core.forms import RecipeIngredientForm, RecipeForm, IngredientForm
 from apps.core.backup import export_backup_xml, import_backup_xml, ENTITY_DEPENDENCIES, ENTITY_LABELS
@@ -256,8 +257,8 @@ class RecipeListView(LoginRequiredMixin, ListView):
 	
 	def get_queryset(self):
 		queryset = super().get_queryset().select_related('category')
-		category_id = self.request.GET.get('category')
-		if category_id:
+		category_id = get_int_param(self.request, 'category')
+		if category_id is not None:
 			queryset = queryset.filter(category_id=category_id)
 		return queryset.order_by('category__code', 'code')
 	

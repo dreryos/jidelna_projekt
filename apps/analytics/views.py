@@ -16,6 +16,7 @@ from decimal import Decimal
 from datetime import timedelta
 from django.utils import timezone
 
+from apps.core.http import get_int_param
 from apps.production.models import MenuPlan, ProductionOrder
 from apps.core.models import Recipe, Category
 from apps.canteens.models import Canteen, Warehouse
@@ -202,14 +203,14 @@ def recipe_cost_analysis(request):
     Zobrazuje průměrné náklady pro každý recept na základě historických dat.
     """
     # Filtry
-    canteen_id = request.GET.get('canteen')
-    category_id = request.GET.get('category')
+    canteen_id = get_int_param(request, 'canteen')
+    category_id = get_int_param(request, 'category')
     
     # Získáme všechny recepty s počtem použití
     recipes_query = Recipe.objects.all().select_related('category').prefetch_related('recipeingredient_set__ingredient')
     
     # Aplikujeme filtry pokud jsou zadány
-    if category_id:
+    if category_id is not None:
         recipes_query = recipes_query.filter(category_id=category_id)
     
     recipes = recipes_query
@@ -221,7 +222,7 @@ def recipe_cost_analysis(request):
         orders_query = ProductionOrder.objects.filter(recipe=recipe).select_related('canteen', 'menu_plan')
         
         # Aplikujeme filtry pokud jsou zadány
-        if canteen_id:
+        if canteen_id is not None:
             orders_query = orders_query.filter(
                 Q(canteen_id=canteen_id) | Q(menu_plan__canteen_id=canteen_id)
             )
@@ -292,8 +293,8 @@ def recipe_cost_analysis(request):
         'recipes_data': recipes_data,
         'canteens': canteens,
         'categories': categories,
-        'selected_canteen': canteen_id,
-        'selected_category': category_id,
+        'selected_canteen': str(canteen_id) if canteen_id is not None else "",
+        'selected_category': str(category_id) if category_id is not None else "",
     }
     
     return render(request, 'analytics/recipe_cost_analysis.html', context)
@@ -438,12 +439,12 @@ def write_off_analytics(request):
             write_offs = StockWriteOff.objects.none()
     
     # Filtry z formuláře
-    warehouse_id = request.GET.get('warehouse')
+    warehouse_id = get_int_param(request, 'warehouse')
     category = request.GET.get('category')
     date_from = request.GET.get('date_from')
     date_to = request.GET.get('date_to')
     
-    if warehouse_id:
+    if warehouse_id is not None:
         write_offs = write_offs.filter(warehouse_id=warehouse_id)
     if category:
         write_offs = write_offs.filter(category=category)
@@ -512,7 +513,7 @@ def write_off_analytics(request):
         'total_stats': total_stats,
         'available_warehouses': available_warehouses,
         'category_choices': StockWriteOff.Category.choices,
-        'selected_warehouse': warehouse_id,
+        'selected_warehouse': str(warehouse_id) if warehouse_id is not None else "",
         'selected_category': category,
         'selected_date_from': date_from,
         'selected_date_to': date_to,
@@ -541,7 +542,7 @@ def cook_analytics(request):
     # Filtry
     date_from_str = request.GET.get('date_from', '')
     date_to_str = request.GET.get('date_to', '')
-    canteen_id = request.GET.get('canteen', '')
+    canteen_id = get_int_param(request, 'canteen')
 
     # Bez filtru by se počítaly úplně všechny výdejky od začátku provozu –
     # pro každou se navíc dopočítává cena porce (dotazy do historie cen za
@@ -571,7 +572,7 @@ def cook_analytics(request):
         docs_qs = docs_qs.filter(date_from__gte=date_from_str)
     if date_to_str:
         docs_qs = docs_qs.filter(date_to__lte=date_to_str)
-    if canteen_id:
+    if canteen_id is not None:
         docs_qs = docs_qs.filter(canteen_id=canteen_id)
 
     # Deep prefetch – eliminuje N+1 na production_order a jeho závislosti.
@@ -725,6 +726,6 @@ def cook_analytics(request):
         'canteens': canteens_qs,
         'selected_date_from': date_from_str,
         'selected_date_to': date_to_str,
-        'selected_canteen': canteen_id,
+        'selected_canteen': str(canteen_id) if canteen_id is not None else "",
     }
     return render(request, 'analytics/cook_analytics.html', context)

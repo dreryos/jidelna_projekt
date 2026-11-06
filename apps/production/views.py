@@ -29,6 +29,7 @@ from django.db import IntegrityError, transaction
 from .models import ProductionOrder, PickingList, MenuPlan, MenuTemplate
 from .forms import MenuPlanForm, MenuPlanCoefficientFormSet, MenuPlanCoefficientFormSetNoExtra
 from .utils import MEAL_TYPE_ORDER, duplicate_meals
+from apps.core.http import get_int_param
 from apps.core.models import Recipe, UserProfile
 from apps.canteens.models import Canteen
 
@@ -127,8 +128,8 @@ class MenuPlanListView(CanteenOwnerMixin, ListView):
             'production_orders__picking_list_items__document'
         ).order_by('-created_at')
         
-        canteen_filter = self.request.GET.get('canteen')
-        if canteen_filter:
+        canteen_filter = get_int_param(self.request, 'canteen')
+        if canteen_filter is not None:
             user = cast('User', self.request.user)
             try:
                 if user.is_superuser or user.profile.canteens.filter(pk=canteen_filter).exists(): # type: ignore
@@ -636,7 +637,7 @@ def delete_order_ajax(request, order_pk, *args, **kwargs):
 def daily_picking_list(request):
     """Zobrazí nebo stáhne výdejku pro konkrétní den."""
     picking_date_str = request.GET.get('date')
-    canteen_id = request.GET.get('canteen')
+    canteen_id = get_int_param(request, 'canteen')
     format_type = request.GET.get('format', 'html')
     
     if not picking_date_str:
@@ -661,7 +662,7 @@ def daily_picking_list(request):
             orders_query = orders_query.none()
 
     selected_canteen = None
-    if canteen_id:
+    if canteen_id is not None:
         try:
             # Ensure the user can access the selected canteen
             if user.is_superuser or user.profile.canteens.filter(pk=canteen_id).exists(): # type: ignore
