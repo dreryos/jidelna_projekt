@@ -527,12 +527,12 @@ class GoodsReceiptListView(CanteenAccessMixin, ListView):
 
         # Filtrování podle dodavatele
         supplier_id = get_int_param(self.request, 'supplier')
-        if supplier_id:
+        if supplier_id is not None:
             queryset = queryset.filter(supplier_obj_id=supplier_id)
 
         # Filtrování podle skladu
         warehouse_id = get_int_param(self.request, 'warehouse')
-        if warehouse_id:
+        if warehouse_id is not None:
             queryset = queryset.filter(warehouse_id=warehouse_id)
 
         # Filtrování podle stavu
@@ -1224,7 +1224,7 @@ class InventoryVerificationListView(CanteenAccessMixin, ListView):
         
         # Filtrování podle skladu
         warehouse_id = get_int_param(self.request, 'warehouse')
-        if warehouse_id:
+        if warehouse_id is not None:
             queryset = queryset.filter(warehouse_id=warehouse_id)
         
         # Filtrování podle statusu
@@ -1267,7 +1267,7 @@ class InventoryVerificationCreateView(LoginRequiredMixin, CreateView):
         """Předvyplnění skladu z URL parametru."""
         initial = super().get_initial()
         warehouse_id = get_int_param(self.request, 'warehouse')
-        if warehouse_id:
+        if warehouse_id is not None:
             initial['warehouse'] = warehouse_id
         return initial
     
@@ -1586,7 +1586,7 @@ class StockTransferListView(CanteenAccessMixin, ListView):
         
         # Filtrování podle skladu (from nebo to)
         warehouse_id = get_int_param(self.request, 'warehouse')
-        if warehouse_id:
+        if warehouse_id is not None:
             queryset = queryset.filter(
                 Q(warehouse_from_id=warehouse_id) | Q(warehouse_to_id=warehouse_id)
             )
@@ -2063,7 +2063,7 @@ class StockWriteOffListView(CanteenAccessMixin, ListView):
         
         # Filtrování podle skladu
         warehouse_id = get_int_param(self.request, 'warehouse')
-        if warehouse_id:
+        if warehouse_id is not None:
             queryset = queryset.filter(warehouse_id=warehouse_id)
         
         # Filtrování podle kategorie

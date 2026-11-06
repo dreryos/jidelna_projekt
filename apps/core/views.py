@@ -258,7 +258,7 @@ class RecipeListView(LoginRequiredMixin, ListView):
 	def get_queryset(self):
 		queryset = super().get_queryset().select_related('category')
 		category_id = get_int_param(self.request, 'category')
-		if category_id:
+		if category_id is not None:
 			queryset = queryset.filter(category_id=category_id)
 		return queryset.order_by('category__code', 'code')
 	

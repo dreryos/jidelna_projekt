@@ -37,3 +37,24 @@ def test_get_int_param(rf):
     assert get_int_param(rf.get('/', {'a': '12'}), 'a') == 12
     assert get_int_param(rf.get('/', {'a': 'x'}), 'a') is None
     assert get_int_param(rf.get('/'), 'a') is None
+
+
+def test_nulovy_filtr_se_aplikuje(client):
+    """?warehouse=0 nesmí filtr přeskočit a vrátit vše."""
+    from apps.canteens.models import Canteen, Warehouse
+    user = get_user_model().objects.create_superuser('vedouci', password='tajne')
+    client.force_login(user)
+    Warehouse.objects.create(name='Sklad', canteen=Canteen.objects.create(name='J'))
+    response = client.get(reverse('inventory:goods_receipt_list'), {'warehouse': '0'})
+    assert response.status_code == 200
+    assert 'Sklad' in response.content.decode()  # v rozbalovátku skladů
+    assert list(response.context['object_list']) == []
+
+
+def test_vybrany_sklad_v_analytice_zustane_oznaceny(client):
+    from apps.canteens.models import Canteen, Warehouse
+    user = get_user_model().objects.create_superuser('vedouci', password='tajne')
+    client.force_login(user)
+    wh = Warehouse.objects.create(name='Sklad', canteen=Canteen.objects.create(name='J'))
+    response = client.get(reverse('analytics:write_off_analytics'), {'warehouse': wh.pk})
+    assert response.context['selected_warehouse'] == str(wh.pk)

@@ -129,7 +129,7 @@ class MenuPlanListView(CanteenOwnerMixin, ListView):
         ).order_by('-created_at')
         
         canteen_filter = get_int_param(self.request, 'canteen')
-        if canteen_filter:
+        if canteen_filter is not None:
             user = cast('User', self.request.user)
             try:
                 if user.is_superuser or user.profile.canteens.filter(pk=canteen_filter).exists(): # type: ignore
@@ -662,7 +662,7 @@ def daily_picking_list(request):
             orders_query = orders_query.none()
 
     selected_canteen = None
-    if canteen_id:
+    if canteen_id is not None:
         try:
             # Ensure the user can access the selected canteen
             if user.is_superuser or user.profile.canteens.filter(pk=canteen_id).exists(): # type: ignore
