@@ -56,9 +56,14 @@ a tento projekt dodržuje [Semantic Versioning](https://semver.org/lang/cs/).
 ### Fixed
 - **Příjemka naskladňuje každou položku do jejího skladu** (9.11.2026)
   - Formulář příjemky i importy (fotka, Bidfood XML, CSV) nechají u položky zvolit jiný sklad než výchozí, ale `GoodsReceipt.confirm()` to ignorovalo a všechno přičetlo do skladu z hlavičky. V produkční kopii z 9. 11. 2026 takhle skončilo 91 položek v jiném skladu, než bylo zvoleno, z toho 67 položek bufetu Růžená za 42 tis. Kč v kuchyni Růžená. Bufet pak měl na kartách méně, než skutečně přijal, kuchyně víc
-  - Potvrzení teď zamyká a navyšuje karty podle dvojice (surovina, sklad položky), zámek inventury hlídá u všech dotčených skladů a view odmítne potvrdit, pokud má položka sklad jídelny, ke které uživatel nemá přístup (importy berou sklad položky z formuláře bez této kontroly)
-  - Detail a potvrzovací stránka příjemky ukazují sklad u každé položky. Historická data se neopravují, jen kód
-  - Regresní test `test/test_receipt_item_warehouse.py`
+  - Potvrzení teď zamyká a navyšuje karty podle dvojice (surovina, sklad položky). Položky řadí podle (surovina, sklad), aby dvě příjemky zakládaly nové karty ve stejném pořadí a nezasekly se
+  - Řádky skladů položek se v potvrzení zamykají a `is_locked` se čte až pod zámkem – stejný zámek bere zahájení inventury. Bez toho mohla inventura snapshotnout stav těsně před naskladněním a jejím dokončením by se příjem přepsal
+  - Oprávnění ke skladům položek ověřuje `confirm(user=…)` nad zamčenými položkami, ne view mimo transakci. Importy (fotka, Bidfood, CSV) přijmou jen sklad jídelny uživatele; hlášky cizí sklady nejmenují
+  - Detail, seznam, úprava i potvrzení příjemky jsou vidět jen tomu, komu patří sklad hlavičky **i všech položek** – stránky vypisují sklady položek a jinak by prozradily cizí sklady. Filtr podle skladu v seznamu najde příjemku i podle skladu položky
+  - Úprava položek a srovnání jednotek běží pod zámkem hlavičky (`GoodsReceipt.lock_draft()`), takže úprava souběžná s potvrzením už nemůže potvrzené příjemce změnit sklad nebo množství
+  - Záloha ukládá u položky i jídelnu skladu; dřív se po obnově položka se skladem jiné jídelny přiřadila skladu stejného názvu v jídelně hlavičky. Starší zálohy bez jídelny u položky se čtou jako dřív
+  - Detail a potvrzovací stránka příjemky ukazují sklad u každé položky, v adminu se položky filtrují podle svého skladu. Historická data se neopravují, jen kód
+  - Testy `test/test_receipt_item_warehouse.py`, `test/test_receipt_item_warehouse_concurrency.py`
 - **Nečíselný filtr v adrese už neshodí stránku na HTTP 500** (6.11.2026)
   - Lokální ZAP test našel, že např. `/inventory/goods-receipts/?warehouse=x` skončilo `ValueError: Field 'id' expected a number` a chybou serveru. Týkalo se filtrů podle skladu, dodavatele, jídelny a kategorie receptu v seznamech příjemek, převodek, odpisů, skladu, inventur, jídelníčků, receptů a v analytice
   - Filtry teď čtou ID přes helper `apps/core/http.py` (`get_int_param`, `get_int_list_param`): nečíselná hodnota se ignoruje, jako by filtr nebyl zadán. Scopeování podle jídelen uživatele se nemění, helper jen čte parametr

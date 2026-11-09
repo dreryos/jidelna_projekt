@@ -429,6 +429,9 @@ def _export_goods_receipts(root: ET.Element, include: bool = True) -> None:
             item_el = ET.SubElement(items_el, "Item")
             item_el.set("ingredientName", item.ingredient.name)
             item_el.set("warehouseName", item.warehouse.name if item.warehouse else "")
+            # Položka může mířit do skladu jiné jídelny než hlavička – bez jídelny
+            # by ho import hledal pod jídelnou hlavičky a položku dal jinam.
+            item_el.set("canteenName", item.warehouse.canteen.name if item.warehouse and item.warehouse.canteen else "")
             item_el.set("quantity", str(item.quantity))
             item_el.set("price", str(item.price))
             if item.price_without_vat:
@@ -1193,7 +1196,9 @@ def _import_goods_receipts(
                 )
                 continue
 
-            item_wh_key = f"{canteen_name}:{item_wh_name}"
+            # Starší zálohy jídelnu u položky nemají – pak platí jídelna hlavičky.
+            item_canteen_name = item_el.get("canteenName", "").strip() or canteen_name
+            item_wh_key = f"{item_canteen_name}:{item_wh_name}"
             item_warehouse = warehouse_map.get(item_wh_key, warehouse)
 
             items_to_create.append(

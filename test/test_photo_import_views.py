@@ -998,3 +998,26 @@ def test_obrazkovy_sken_se_posle_jako_obrazek(client, uzivatel, sklad, media_roo
     response = client.get(reverse('inventory:photo_import_scan', args=[scan.pk]))
 
     assert response['Content-Type'] == 'image/jpeg'
+
+
+def test_sklad_cizi_jidelny_u_polozky_se_odmitne(client, sklad, bolero, suroviny,
+                                                 media_root, ocr_bez_site):
+    # Sklad položky přichází z POST – podvržené ID skladu cizí jídelny
+    # nesmí založit položku, a hláška ho nesmí pojmenovat.
+    from apps.core.models import UserProfile
+
+    vedouci = get_user_model().objects.create_user('vedouci-foto', password='tajne')
+    profil, _ = UserProfile.objects.get_or_create(user=vedouci)
+    profil.canteens.add(sklad.canteen)
+    client.force_login(vedouci)
+    cizi = Warehouse.objects.create(
+        name='Tajný sklad', canteen=Canteen.objects.create(name='Cizí jídelna'),
+    )
+    nahrat_doklad(client, sklad)
+
+    response = odeslat_prijemku(client, cizi, suroviny)
+
+    assert not GoodsReceipt.objects.exists()
+    obsah = response.content.decode()
+    assert 'nemáte přístup' in obsah
+    assert 'Tajný sklad' not in obsah

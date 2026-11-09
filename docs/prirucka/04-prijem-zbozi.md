@@ -30,7 +30,7 @@ Dokud je příjemka koncept, můžete položky přidávat, mazat i opravovat —
 ![Nová příjemka](img/04-prijemka-nova.png)
 
 1. **Číslo dokladu** — opište číslo dodacího listu nebo faktury; slouží k pozdějšímu dohledání.
-2. **Výchozí sklad**, **datum příjmu** a **dodavatel**. Výchozí sklad se předvyplní u všech položek; u každé položky ho můžete změnit (např. část závozu jde do bufetu) a naskladní se tam, kam ukazuje položka.
+2. **Výchozí sklad**, **datum příjmu** a **dodavatel**. Výchozí sklad se předvyplní u všech položek; u každé položky ho můžete změnit (např. část závozu jde do bufetu) a naskladní se tam, kam ukazuje položka. Nabízí se jen sklady jídelen, ke kterým máte přístup. Příjemku, jejíž položka míří do skladu jiné jídelny, uvidí a potvrdí jen ten, kdo má přístup ke všem jejím skladům.
 3. **Položky**: surovina, množství (ve skladové jednotce!), cena a DPH. Cenu lze zadat bez DPH (systém dopočte s DPH) nebo s DPH — dopočítává se vždy druhá hodnota podle sazby (0/12/21 %).
 4. Uložit jako koncept → zkontrolovat → **Potvrdit**.
 

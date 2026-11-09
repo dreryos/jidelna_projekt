@@ -85,7 +85,7 @@ class GoodsReceiptAdmin(admin.ModelAdmin):
 @admin.register(GoodsReceiptItem)
 class GoodsReceiptItemAdmin(admin.ModelAdmin):
     list_display = ('goods_receipt', 'ingredient', 'quantity', 'price_without_vat', 'vat_rate', 'price', 'total_price')
-    list_filter = ('goods_receipt__warehouse', 'vat_rate')
+    list_filter = ('warehouse', 'vat_rate')
     search_fields = ('ingredient__name', 'goods_receipt__receipt_number')
     autocomplete_fields = ['ingredient', 'goods_receipt']
     readonly_fields = ('vat_amount', 'price', 'total_price')
