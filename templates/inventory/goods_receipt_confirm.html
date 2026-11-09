@@ -53,8 +53,8 @@
             {% for outlier in price_outliers %}
               <tr>
                 <td>{{ outlier.item.ingredient.name }}</td>
-                <td class="text-end">{{ outlier.item.price|floatformat:2 }} Kč/{{ outlier.item.ingredient.unit }}</td>
-                <td class="text-end">{{ outlier.median|floatformat:2 }} Kč/{{ outlier.item.ingredient.unit }}</td>
+                <td class="text-end">{{ outlier.item.price|floatformat:2 }} Kč/{{ outlier.unit }}</td>
+                <td class="text-end">{{ outlier.median|floatformat:2 }} Kč/{{ outlier.unit }}</td>
                 <td class="text-end">{{ outlier.times|floatformat:0 }}× {{ outlier.direction }}</td>
               </tr>
             {% endfor %}
@@ -89,7 +89,7 @@
               {% for item in goods_receipt.items.all %}
                 <tr>
                   <td>{{ item.ingredient.name }}</td>
-                  <td>{{ item.quantity|floatformat:3 }} {{ item.ingredient.unit }}</td>
+                  <td>{{ item.quantity|floatformat:3 }} {{ item.ingredient.base_unit }}</td>
                   <td>{{ item.price|floatformat:2 }} Kč</td>
                   <td>{{ item.total_price|floatformat:2 }} Kč</td>
                 </tr>

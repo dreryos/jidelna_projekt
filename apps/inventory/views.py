@@ -827,23 +827,26 @@ def goods_receipt_confirm(request, pk):
         )
         return redirect('inventory:goods_receipt_resolve_units', pk=pk)
     
-    from .receipt_checks import check_price_outliers
-    price_outliers = check_price_outliers(goods_receipt.items.select_related('ingredient'))
+    from .receipt_checks import PriceOutlierError, check_price_outliers
 
     if request.method == 'POST':
         # Řádově chybná cena se potvrzením propíše do skladové karty a odtud
         # do každé výdejky – banán za 2 480 Kč/kg tak v sezóně 2026 nafoukl
         # spotřebu o statisíce. Zablokovat to nejde (cena může být opravdu
         # jiná, třeba kartón místo kusu), proto stačí výslovné potvrzení.
-        if price_outliers and not request.POST.get('prices_checked'):
+        # Hlídá ho `confirm()`, tady se jen překládá na hlášku.
+        try:
+            goods_receipt.confirm(prices_checked=bool(request.POST.get('prices_checked')))
+        except PriceOutlierError:
             messages.error(
                 request,
                 'Některé ceny se řádově liší od obvyklých. Ověřte je na dokladu '
                 'a zaškrtněte, že jsou správně.'
             )
             return redirect('inventory:goods_receipt_confirm', pk=pk)
-        try:
-            goods_receipt.confirm()
+        except Exception as e:
+            messages.error(request, f'Chyba při potvrzování příjmu: {str(e)}')
+        else:
             # Fotka dokladu už není k ničemu – rozpoznaná data jsou v příjemce
             # a anotace zůstává u skenu kvůli dohledatelnosti.
             scan = getattr(goods_receipt, 'scan', None)
@@ -854,15 +857,16 @@ def goods_receipt_confirm(request, pk):
                 f'Příjem zboží "{goods_receipt.receipt_number}" byl potvrzen. '
                 f'Sklady byly aktualizovány.'
             )
-        except Exception as e:
-            messages.error(request, f'Chyba při potvrzování příjmu: {str(e)}')
         
         return redirect('inventory:goods_receipt_detail', pk=pk)
     
     # GET - zobrazíme potvrzovací stránku
     context = {
         'goods_receipt': goods_receipt,
-        'price_outliers': price_outliers,
+        'price_outliers': check_price_outliers(
+            goods_receipt.items.select_related('ingredient'),
+            goods_receipt.warehouse.canteen_id,
+        ),
     }
     return render(request, 'inventory/goods_receipt_confirm.html', context)
 

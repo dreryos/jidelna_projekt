@@ -41,7 +41,7 @@ Dokud je příjemka koncept, můžete položky přidávat, mazat i opravovat —
 
 ⚠️ **Pozor na ceny:** Překlep v ceně se potvrzením propíše do skladu a do všech kalkulací. Před potvrzením porovnejte celkovou hodnotu příjemky s fakturou — je vidět v detailu dokladu.
 
-Potvrzovací stránka sama upozorní na cenu, která je **10× vyšší nebo nižší** než obvyklá nákupní cena suroviny (medián potvrzených příjemek, pokud se surovina nakoupila aspoň třikrát). Takové položky ukáže v červeném rámečku a příjemku pustí až po zaškrtnutí *Ceny označené výše jsem ověřil na dokladu*. Nejčastější příčina je celková cena řádku zadaná jako cena za jednotku nebo posunutá desetinná čárka.
+Potvrzovací stránka sama upozorní na cenu, která je **10× vyšší nebo nižší** než obvyklá nákupní cena suroviny (medián potvrzených příjemek téže jídelny, pokud se surovina nakoupila aspoň na třech příjemkách; ceny z doby, kdy surovina měla jinou skladovou jednotku, se nepočítají). Takové položky ukáže v červeném rámečku a příjemku pustí až po zaškrtnutí *Ceny označené výše jsem ověřil na dokladu*. Nejčastější příčina je celková cena řádku zadaná jako cena za jednotku nebo posunutá desetinná čárka.
 
 ## Dodavatelé a šablony položek
 
