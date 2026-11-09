@@ -21,7 +21,7 @@
         Potvrzením dojde k následujícím akcím:
       </p>
       <ul class="mt-2">
-        <li>Množství všech surovin bude přičteno do skladu <strong>{{ goods_receipt.warehouse.name }}</strong></li>
+        <li>Množství surovin bude přičteno do skladu uvedeného u každé položky</li>
         <li>Ceny surovin budou aktualizovány podle cen v příjmu</li>
         <li>Změny cen budou zaznamenány do historie cen</li>
         <li>Stav příjmu bude změněn na "Potvrzeno" a nebude možné ho dále upravovat</li>
@@ -81,6 +81,7 @@
               <tr>
                 <th>Surovina</th>
                 <th>Množství</th>
+                <th>Sklad</th>
                 <th>Cena za jedn.</th>
                 <th>Celkem</th>
               </tr>
@@ -90,6 +91,7 @@
                 <tr>
                   <td>{{ item.ingredient.name }}</td>
                   <td>{{ item.quantity|floatformat:3 }} {{ item.ingredient.base_unit }}</td>
+                  <td>{{ item.warehouse.name }}</td>
                   <td>{{ item.price|floatformat:2 }} Kč</td>
                   <td>{{ item.total_price|floatformat:2 }} Kč</td>
                 </tr>
@@ -97,7 +99,7 @@
             </tbody>
             <tfoot>
               <tr class="table-light">
-                <th colspan="3" class="text-end">Celková hodnota:</th>
+                <th colspan="4" class="text-end">Celková hodnota:</th>
                 <th>{{ goods_receipt.get_total_value|floatformat:2 }} Kč</th>
               </tr>
             </tfoot>

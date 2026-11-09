@@ -508,6 +508,48 @@ def warehouse_ajax_delete(request, pk):
 
 # CRUD pro příjem zboží (GoodsReceipt)
 
+def receipts_for_user(user, queryset):
+    """
+    Příjemky, jejichž sklady – hlavička i **všechny** položky – patří
+    jídelnám uživatele. Superuser vidí vše.
+
+    Nestačí scopovat podle hlavičky: položka se naskladňuje do svého skladu
+    a detail i potvrzovací stránka vypisují jeho název, takže příjemka
+    s položkou v cizí jídelně by ji prozradila.
+    """
+    if user.is_superuser:
+        return queryset
+    try:
+        canteen_ids = list(user.profile.canteens.values_list('pk', flat=True))
+    except (ObjectDoesNotExist, AttributeError):
+        return queryset.none()
+    foreign = GoodsReceiptItem.objects.exclude(warehouse__canteen__in=canteen_ids)
+    return queryset.filter(warehouse__canteen__in=canteen_ids).exclude(
+        pk__in=foreign.values('goods_receipt_id')
+    )
+
+
+def user_warehouses(user):
+    """
+    Sklady jídelen uživatele (superuser všechny).
+
+    Importy berou sklad položky z POST, takže bez tohoto omezení by šlo
+    podvrženým ID založit položku na sklad cizí jídelny.
+    """
+    if user.is_superuser:
+        return Warehouse.objects.all()
+    try:
+        return Warehouse.objects.filter(canteen__in=user.profile.canteens.all())
+    except (ObjectDoesNotExist, AttributeError):
+        return Warehouse.objects.none()
+
+
+def user_can_access_receipt(user, goods_receipt):
+    return receipts_for_user(
+        user, GoodsReceipt.objects.filter(pk=goods_receipt.pk)
+    ).exists()
+
+
 class GoodsReceiptListView(CanteenAccessMixin, ListView):
     model = GoodsReceipt
     template_name = 'inventory/goods_receipt_list.html'
@@ -515,7 +557,9 @@ class GoodsReceiptListView(CanteenAccessMixin, ListView):
     paginate_by = 20
     
     def get_queryset(self):
-        queryset = super().get_queryset().select_related(
+        queryset = receipts_for_user(
+            self.request.user, super().get_queryset()
+        ).select_related(
             'warehouse', 'warehouse__canteen', 'created_by', 'supplier_obj',
         )
 
@@ -533,7 +577,11 @@ class GoodsReceiptListView(CanteenAccessMixin, ListView):
         # Filtrování podle skladu
         warehouse_id = get_int_param(self.request, 'warehouse')
         if warehouse_id is not None:
-            queryset = queryset.filter(warehouse_id=warehouse_id)
+            # Sklad je i u položek – příjemka bufetu s výchozím skladem
+            # kuchyně musí být vidět i pod bufetem.
+            queryset = queryset.filter(
+                Q(warehouse_id=warehouse_id) | Q(items__warehouse_id=warehouse_id)
+            ).distinct()
 
         # Filtrování podle stavu
         status = self.request.GET.get('status')
@@ -600,7 +648,9 @@ class GoodsReceiptDetailView(LoginRequiredMixin, DetailView):
     context_object_name = 'goods_receipt'
     
     def get_queryset(self):
-        return GoodsReceipt.objects.select_related('warehouse', 'warehouse__canteen', 'created_by').prefetch_related('items__ingredient')
+        return receipts_for_user(
+            self.request.user, GoodsReceipt.objects.all()
+        ).select_related('warehouse', 'warehouse__canteen', 'created_by').prefetch_related('items__ingredient', 'items__warehouse')
 
 
 @login_required
@@ -637,7 +687,7 @@ def goods_receipt_create(request):
             request.POST['items-TOTAL_FORMS'] = '1'
             request.POST._mutable = False if hasattr(request.POST, '_mutable') else None
             # Znovu vytvořit formset s aktualizovanými daty
-            formset = GoodsReceiptItemFormSet(request.POST)
+            formset = GoodsReceiptItemFormSet(request.POST, form_kwargs={'user': request.user})
         
         if form.is_valid() and formset.is_valid():
             try:
@@ -711,7 +761,7 @@ def goods_receipt_edit(request, pk):
     goods_receipt = get_object_or_404(GoodsReceipt, pk=pk)
 
     # Kontrola oprávnění - přístup k jídelně skladu
-    if not user_can_access_canteen(request.user, goods_receipt.warehouse.canteen):
+    if not user_can_access_receipt(request.user, goods_receipt):
         messages.error(request, 'Nemáte oprávnění k této akci.')
         return redirect('inventory:goods_receipt_list')
 
@@ -748,6 +798,7 @@ def goods_receipt_edit(request, pk):
         if form.is_valid() and formset.is_valid():
             try:
                 with transaction.atomic():
+                    goods_receipt.lock_draft()
                     updated_receipt = form.save(commit=False)
                     default_warehouse = form.cleaned_data.get('default_warehouse')
                     if default_warehouse:
@@ -773,6 +824,9 @@ def goods_receipt_edit(request, pk):
                     )
                     return redirect('inventory:goods_receipt_detail', pk=updated_receipt.pk)
 
+            except ValidationError as e:
+                messages.warning(request, ' '.join(e.messages))
+                return redirect('inventory:goods_receipt_detail', pk=pk)
             except Exception as e:
                 messages.error(request, f'Chyba při ukládání příjmu: {str(e)}')
         else:
@@ -811,10 +865,11 @@ def goods_receipt_confirm(request, pk):
     goods_receipt = get_object_or_404(GoodsReceipt, pk=pk)
     
     # Kontrola oprávnění - přístup k jídelně skladu
-    if not user_can_access_canteen(request.user, goods_receipt.warehouse.canteen):
+    if not user_can_access_receipt(request.user, goods_receipt):
         messages.error(request, 'Nemáte oprávnění k této akci.')
         return redirect('inventory:goods_receipt_list')
-    
+
+
     if goods_receipt.status != GoodsReceipt.Status.DRAFT:
         messages.warning(request, 'Tento příjem již byl potvrzen.')
         return redirect('inventory:goods_receipt_detail', pk=pk)
@@ -837,7 +892,10 @@ def goods_receipt_confirm(request, pk):
         # jiná, třeba kartón místo kusu), proto stačí výslovné potvrzení.
         # Hlídá ho `confirm()`, tady se jen překládá na hlášku.
         try:
-            goods_receipt.confirm(prices_checked=bool(request.POST.get('prices_checked')))
+            goods_receipt.confirm(
+                prices_checked=bool(request.POST.get('prices_checked')),
+                user=request.user,
+            )
         except PriceOutlierError:
             messages.error(
                 request,
@@ -878,7 +936,7 @@ def goods_receipt_delete(request, pk):
     goods_receipt = get_object_or_404(GoodsReceipt, pk=pk)
     
     # Kontrola oprávnění - přístup k jídelně skladu
-    if not user_can_access_canteen(request.user, goods_receipt.warehouse.canteen):
+    if not user_can_access_receipt(request.user, goods_receipt):
         messages.error(request, 'Nemáte oprávnění k této akci.')
         return redirect('inventory:goods_receipt_list')
     
@@ -1148,9 +1206,13 @@ def bidfood_xml_import_step3(request):
             continue
         
         try:
-            warehouse = Warehouse.objects.get(id=warehouse_id)
-        except Warehouse.DoesNotExist:
-            messages.warning(request, f'Sklad s ID {warehouse_id} neexistuje.')
+            warehouse = user_warehouses(request.user).get(id=warehouse_id)
+        except (Warehouse.DoesNotExist, ValueError):
+            messages.warning(
+                request,
+                f'Položka "{item["item_name"]}" přeskočena - vybraný sklad '
+                f'neexistuje nebo k němu nemáte přístup.'
+            )
             continue
         
         # Získání nebo vytvoření suroviny
@@ -2465,7 +2527,14 @@ def supplier_csv_import_step3(request):
         
         # Získání skladu pro tuto položku
         warehouse_id = request.POST.get(f'warehouse_{idx}', default_warehouse_id)
-        warehouse = Warehouse.objects.get(id=warehouse_id)
+        warehouse = user_warehouses(request.user).filter(id=warehouse_id).first()
+        if warehouse is None:
+            messages.error(
+                request,
+                f'Řádek {idx + 1}: vybraný sklad neexistuje nebo k němu nemáte přístup.'
+            )
+            transaction.set_rollback(True)
+            return redirect('inventory:supplier_csv_import_step2')
         
         # Přepočet na skladovou jednotku. Co se přepočítat nedá, projde
         # s poměrem 1 a příjemka se bez doplnění poměru nepotvrdí.
@@ -2837,11 +2906,14 @@ def photo_import_step3(request):
                     )
                     return redirect('inventory:photo_import_step2')
 
-            warehouse = Warehouse.objects.filter(
+            warehouse = user_warehouses(request.user).filter(
                 id=request.POST.get(f'warehouse_{idx}', default_warehouse_id)
             ).first()
             if warehouse is None:
-                messages.error(request, f'Řádek {idx + 1}: vybraný sklad neexistuje.')
+                messages.error(
+                    request,
+                    f'Řádek {idx + 1}: vybraný sklad neexistuje nebo k němu nemáte přístup.'
+                )
                 return redirect('inventory:photo_import_step2')
 
             # Jednotky, které se automaticky nepřevedou (např. „ks" na
@@ -3126,7 +3198,7 @@ def goods_receipt_resolve_units(request, pk):
         GoodsReceipt.objects.select_related('warehouse__canteen', 'supplier_obj'), pk=pk,
     )
 
-    if not user_can_access_canteen(request.user, goods_receipt.warehouse.canteen):
+    if not user_can_access_receipt(request.user, goods_receipt):
         messages.error(request, 'Nemáte oprávnění k této akci.')
         return redirect('inventory:goods_receipt_list')
 
@@ -3175,18 +3247,23 @@ def goods_receipt_resolve_units(request, pk):
 
             factors[item.pk] = factor
 
-        with transaction.atomic():
-            for item in conflicts:
-                factor = factors[item.pk]
-                item.apply_unit_factor(factor)
+        try:
+            with transaction.atomic():
+                goods_receipt.lock_draft()
+                for item in conflicts:
+                    factor = factors[item.pk]
+                    item.apply_unit_factor(factor)
 
-                # Ať se na totéž zboží podruhé neptáme.
-                if resolver and item.source_name:
-                    resolver.remember(
-                        item.source_name, ingredient=item.ingredient,
-                        unit=item.source_unit, unit_factor=factor,
-                        user=request.user, unit_resolved=True,
-                    )
+                    # Ať se na totéž zboží podruhé neptáme.
+                    if resolver and item.source_name:
+                        resolver.remember(
+                            item.source_name, ingredient=item.ingredient,
+                            unit=item.source_unit, unit_factor=factor,
+                            user=request.user, unit_resolved=True,
+                        )
+        except ValidationError as e:
+            messages.warning(request, ' '.join(e.messages))
+            return redirect('inventory:goods_receipt_detail', pk=pk)
 
         # Hlásit úspěch podle počtu zpracovaných řádků je slib naslepo –
         # rozhoduje stav po zápisu, ne kolik položek do smyčky vlezlo.

@@ -784,7 +784,23 @@ class GoodsReceipt(models.Model):
             total += item.quantity * item.price
         return total
     
-    def confirm(self, prices_checked=False):
+    def lock_draft(self):
+        """
+        Zamkne hlavičku příjemky a ověří, že je pořád koncept.
+
+        Úprava položek (formulář, srovnání jednotek) musí běžet pod stejným
+        zámkem jako `confirm()`. Jinak projde kontrolou konceptu, mezitím
+        se příjemka potvrdí a úprava pak uloží jiný sklad nebo množství –
+        potvrzený doklad by přestal sedět se skladem.
+
+        Volat **jen uvnitř `transaction.atomic()`**.
+        """
+        locked = GoodsReceipt.objects.select_for_update().get(pk=self.pk)
+        if locked.status != self.Status.DRAFT:
+            raise ValidationError('Potvrzenou příjemku už upravovat nelze.')
+        return locked
+
+    def confirm(self, prices_checked=False, user=None):
         """
         Potvrdí příjem zboží - aktualizuje stavy ve skladu a ceny.
         Pouze pokud je ve stavu DRAFT.
@@ -793,31 +809,62 @@ class GoodsReceipt(models.Model):
         medián (viz `check_price_outliers`) jsou správně. Bez něj se taková
         příjemka nepotvrdí – kontrola sedí tady, ne ve view, aby ji neobešel
         žádný jiný volající.
+
+        `user` omezí sklady položek na jídelny uživatele (superuser smí vše).
+        Bez něj se oprávnění nekontroluje – pro interní volání a testy.
         """
         from apps.inventory.receipt_checks import (
             PriceOutlierError, check_price_outliers,
         )
 
-        # Kontrola zda sklad není uzamčen
-        if self.warehouse.is_locked:
-            raise ValidationError(
-                f"Sklad '{self.warehouse.name}' je uzamčen kvůli probíhající inventuře. "
-                f"Nelze potvrdit příjem zboží na uzamčený sklad."
-            )
-
         with transaction.atomic():
             # Stav i položky se čtou až pod zámkem. Dva souběžné POSTy by jinak
             # oba prošly kontrolou stavu na svých zastaralých instancích a druhý
-            # by naskladnil podruhé. Zámek položek zase drží jejich ceny, takže
-            # kontrola cen a naskladnění pracují s týmiž čísly – úprava položky
+            # by naskladnil podruhé. Zámek položek zase drží jejich ceny i sklad,
+            # takže kontroly a naskladnění pracují s týmiž daty – úprava položky
             # z jiného okna počká, až potvrzení doběhne.
             locked = GoodsReceipt.objects.select_for_update().get(pk=self.pk)
             if locked.status != self.Status.DRAFT:
                 raise ValueError("Příjem lze potvrdit pouze ve stavu Koncept")
+            # Řazení podle (surovina, sklad): neexistující karty zakládá
+            # lock_or_create() v pořadí smyčky, takže dvě příjemky se stejnými
+            # dvojicemi je musí zakládat ve stejném pořadí, jinak se zaklesnou.
             items = list(
                 self.items.select_for_update(of=('self',))
-                .select_related('ingredient').order_by('ingredient_id')
+                .select_related('ingredient', 'warehouse')
+                .order_by('ingredient_id', 'warehouse_id')
             )
+
+            # Každá položka se naskladňuje do svého skladu (formulář i importy
+            # ho u položky nechají změnit). Oprávnění se proto ověřuje nad
+            # zamčenými položkami, ne ve view – položka se jinak mezi kontrolou
+            # a naskladněním může přepnout na cizí sklad. Hláška schválně
+            # neprozrazuje názvy cizích skladů.
+            if user is not None and not user.is_superuser:
+                allowed = set(user.profile.canteens.values_list('pk', flat=True)) \
+                    if hasattr(user, 'profile') else set()
+                if any(item.warehouse.canteen_id not in allowed for item in items):
+                    raise ValidationError(
+                        'Příjemka obsahuje položku na sklad, do kterého '
+                        'nemáte oprávnění naskladňovat.'
+                    )
+
+            # Zámek inventury se hlídá u všech dotčených skladů a pod zámkem
+            # řádku skladu. InventoryVerification.start() bere stejný zámek
+            # (sklad, pak skladové karty), takže buď počká, až příjemka
+            # přičte, nebo příjemka uvidí is_locked. Bez zámku by inventura
+            # mohla snapshotnout starý stav a dokončením naskladnění přepsat.
+            warehouses = list(
+                Warehouse.objects.select_for_update()
+                .filter(pk__in={item.warehouse_id for item in items})
+                .order_by('pk')
+            )
+            locked_names = sorted(w.name for w in warehouses if w.is_locked)
+            if locked_names:
+                raise ValidationError(
+                    f"Sklad '{', '.join(locked_names)}' je uzamčen kvůli probíhající inventuře. "
+                    f"Nelze potvrdit příjem zboží na uzamčený sklad."
+                )
 
             # Potvrzení je jediné místo, kde se mění stav skladu, takže se tu
             # hlídá i to, že jsou všechny položky ve skladové jednotce. Kdyby
@@ -847,7 +894,7 @@ class GoodsReceipt(models.Model):
             # a čekala na druhou, zatímco převodka (která řadí podle `pk`) drží
             # přesně opačnou dvojici. PostgreSQL by jednu z nich zabila.
             StockItem.lock_existing(
-                [(item.ingredient, self.warehouse) for item in items]
+                [(item.ingredient, item.warehouse) for item in items]
             )
 
             for item in items:
@@ -855,7 +902,7 @@ class GoodsReceipt(models.Model):
                 # viz StockItem.lock_or_create()
                 stock_item = StockItem.lock_or_create(
                     ingredient=item.ingredient,
-                    warehouse=self.warehouse,
+                    warehouse=item.warehouse,
                     defaults={
                         'quantity': Decimal('0'),
                         'price': item.price,

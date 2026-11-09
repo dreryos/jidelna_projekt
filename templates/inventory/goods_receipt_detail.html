@@ -150,6 +150,7 @@
               <th>Surovina</th>
               <th>Množství</th>
               <th>Jednotka</th>
+              <th>Sklad</th>
               <th class="text-end">Cena bez DPH</th>
               <th class="text-end">DPH %</th>
               <th class="text-end">Částka DPH</th>
@@ -164,6 +165,7 @@
                 <td><strong>{{ item.ingredient.name }}</strong></td>
                 <td class="text-end">{{ item.quantity|floatformat:3 }}</td>
                 <td>{{ item.ingredient.unit }}</td>
+                <td>{{ item.warehouse.name }}</td>
                 <td class="text-end">
                   {% if item.price_without_vat %}
                     {{ item.price_without_vat|floatformat:2 }} Kč
@@ -193,7 +195,7 @@
           </tbody>
           <tfoot>
             <tr class="table-light">
-              <th colspan="7" class="text-end">Celkem:</th>
+              <th colspan="8" class="text-end">Celkem:</th>
               <th class="text-end">{{ goods_receipt.get_total_value|floatformat:2 }} Kč</th>
               <th></th>
             </tr>
