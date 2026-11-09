@@ -784,46 +784,108 @@ class GoodsReceipt(models.Model):
             total += item.quantity * item.price
         return total
     
-    def confirm(self):
+    def lock_draft(self):
+        """
+        Zamkne hlavičku příjemky a ověří, že je pořád koncept.
+
+        Úprava položek (formulář, srovnání jednotek) musí běžet pod stejným
+        zámkem jako `confirm()`. Jinak projde kontrolou konceptu, mezitím
+        se příjemka potvrdí a úprava pak uloží jiný sklad nebo množství –
+        potvrzený doklad by přestal sedět se skladem.
+
+        Volat **jen uvnitř `transaction.atomic()`**.
+        """
+        locked = GoodsReceipt.objects.select_for_update().get(pk=self.pk)
+        if locked.status != self.Status.DRAFT:
+            raise ValidationError('Potvrzenou příjemku už upravovat nelze.')
+        return locked
+
+    def confirm(self, prices_checked=False, user=None):
         """
         Potvrdí příjem zboží - aktualizuje stavy ve skladu a ceny.
         Pouze pokud je ve stavu DRAFT.
+
+        `prices_checked` je výslovné potvrzení, že ceny řádově mimo obvyklý
+        medián (viz `check_price_outliers`) jsou správně. Bez něj se taková
+        příjemka nepotvrdí – kontrola sedí tady, ne ve view, aby ji neobešel
+        žádný jiný volající.
+
+        `user` omezí sklady položek na jídelny uživatele (superuser smí vše).
+        Bez něj se oprávnění nekontroluje – pro interní volání a testy.
         """
-        if self.status != self.Status.DRAFT:
-            raise ValueError("Příjem lze potvrdit pouze ve stavu Koncept")
-        
-        # Každá položka se naskladňuje do svého skladu (formulář i importy ho
-        # u položky nechají změnit), takže zámek inventury se hlídá u všech
-        # dotčených skladů. Kontrola jen hlavičky by pustila zboží do skladu,
-        # na kterém právě běží inventura, a ta by ho při dokončení přepsala.
-        locked = sorted({
-            item.warehouse.name
-            for item in self.items.select_related('warehouse')
-            if item.warehouse.is_locked
-        })
-        if locked:
-            raise ValidationError(
-                f"Sklad '{', '.join(locked)}' je uzamčen kvůli probíhající inventuře. "
-                f"Nelze potvrdit příjem zboží na uzamčený sklad."
-            )
-        
-        # Potvrzení je jediné místo, kde se mění stav skladu, takže se tu
-        # hlídá i to, že jsou všechny položky ve skladové jednotce. Kdyby
-        # kontrola seděla jen v importech, obešlo by ji ruční založení
-        # položky i import, který někdo přidá později.
-        conflicts = [item for item in self.items.select_related('ingredient')
-                     if item.has_unit_conflict]
-        if conflicts:
-            raise ValidationError(
-                'Příjemku nelze potvrdit, dokud se nesrovnají měrné jednotky. '
-                'U těchto položek není jasné, kolik se má naskladnit: '
-                + '; '.join(item.unit_conflict_label for item in conflicts) + '.'
-            )
-        
+        from apps.inventory.receipt_checks import (
+            PriceOutlierError, check_price_outliers,
+        )
+
         with transaction.atomic():
+            # Stav i položky se čtou až pod zámkem. Dva souběžné POSTy by jinak
+            # oba prošly kontrolou stavu na svých zastaralých instancích a druhý
+            # by naskladnil podruhé. Zámek položek zase drží jejich ceny i sklad,
+            # takže kontroly a naskladnění pracují s týmiž daty – úprava položky
+            # z jiného okna počká, až potvrzení doběhne.
+            locked = GoodsReceipt.objects.select_for_update().get(pk=self.pk)
+            if locked.status != self.Status.DRAFT:
+                raise ValueError("Příjem lze potvrdit pouze ve stavu Koncept")
+            # Řazení podle (surovina, sklad): neexistující karty zakládá
+            # lock_or_create() v pořadí smyčky, takže dvě příjemky se stejnými
+            # dvojicemi je musí zakládat ve stejném pořadí, jinak se zaklesnou.
             items = list(
-                self.items.select_related('ingredient', 'warehouse').order_by('ingredient_id')
+                self.items.select_for_update(of=('self',))
+                .select_related('ingredient', 'warehouse')
+                .order_by('ingredient_id', 'warehouse_id')
             )
+
+            # Každá položka se naskladňuje do svého skladu (formulář i importy
+            # ho u položky nechají změnit). Oprávnění se proto ověřuje nad
+            # zamčenými položkami, ne ve view – položka se jinak mezi kontrolou
+            # a naskladněním může přepnout na cizí sklad. Hláška schválně
+            # neprozrazuje názvy cizích skladů.
+            if user is not None and not user.is_superuser:
+                allowed = set(user.profile.canteens.values_list('pk', flat=True)) \
+                    if hasattr(user, 'profile') else set()
+                if any(item.warehouse.canteen_id not in allowed for item in items):
+                    raise ValidationError(
+                        'Příjemka obsahuje položku na sklad, do kterého '
+                        'nemáte oprávnění naskladňovat.'
+                    )
+
+            # Zámek inventury se hlídá u všech dotčených skladů a pod zámkem
+            # řádku skladu. InventoryVerification.start() bere stejný zámek
+            # (sklad, pak skladové karty), takže buď počká, až příjemka
+            # přičte, nebo příjemka uvidí is_locked. Bez zámku by inventura
+            # mohla snapshotnout starý stav a dokončením naskladnění přepsat.
+            warehouses = list(
+                Warehouse.objects.select_for_update()
+                .filter(pk__in={item.warehouse_id for item in items})
+                .order_by('pk')
+            )
+            locked_names = sorted(w.name for w in warehouses if w.is_locked)
+            if locked_names:
+                raise ValidationError(
+                    f"Sklad '{', '.join(locked_names)}' je uzamčen kvůli probíhající inventuře. "
+                    f"Nelze potvrdit příjem zboží na uzamčený sklad."
+                )
+
+            # Potvrzení je jediné místo, kde se mění stav skladu, takže se tu
+            # hlídá i to, že jsou všechny položky ve skladové jednotce. Kdyby
+            # kontrola seděla jen v importech, obešlo by ji ruční založení
+            # položky i import, který někdo přidá později.
+            conflicts = [item for item in items if item.has_unit_conflict]
+            if conflicts:
+                raise ValidationError(
+                    'Příjemku nelze potvrdit, dokud se nesrovnají měrné jednotky. '
+                    'U těchto položek není jasné, kolik se má naskladnit: '
+                    + '; '.join(item.unit_conflict_label for item in conflicts) + '.'
+                )
+
+            if not prices_checked:
+                outliers = check_price_outliers(items, self.warehouse.canteen_id)
+                if outliers:
+                    raise PriceOutlierError(
+                        'Některé ceny se řádově liší od obvyklých: '
+                        + ', '.join(o['item'].ingredient.name for o in outliers)
+                        + '. Ověřte je na dokladu a potvrďte, že jsou správně.'
+                    )
 
             # Všechny zámky předem a v pořadí podle `pk`, viz
             # StockItem.lock_existing(). Řadit položky podle suroviny nestačí:
@@ -955,6 +1017,16 @@ class GoodsReceiptItem(models.Model):
         verbose_name="Použitý přepočet",
         help_text="Kolika skladovými jednotkami je jedna jednotka z dokladu"
     )
+    stock_unit = models.CharField(
+        max_length=10,
+        blank=True,
+        verbose_name="Skladová jednotka ceny",
+        help_text=(
+            "Skladová jednotka suroviny v době zápisu – cena je za ni. Kdyby se "
+            "jednotka suroviny později změnila (ks → kg), staré ceny by bez "
+            "téhle poznámky nešly odlišit od nových."
+        )
+    )
     unit_resolved = models.BooleanField(
         default=False,
         verbose_name="Přepočet vyřešen",
@@ -1057,6 +1129,8 @@ class GoodsReceiptItem(models.Model):
             self.vat_amount = (self.price - self.price_without_vat).quantize(MONEY)
     
     def save(self, *args, **kwargs):
+        if not self.stock_unit:
+            self.stock_unit = self.ingredient.base_unit
         # Automatický výpočet DPH polí
         if self.price_without_vat and self.vat_rate is not None and not self.price:
             self.calculate_vat_fields()
