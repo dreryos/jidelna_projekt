@@ -14,7 +14,7 @@ KONCEPT (DRAFT) ──[Potvrdit]──► POTVRZENO (CONFIRMED)
 
 Dokud je příjemka koncept, můžete položky přidávat, mazat i opravovat — sklad se ničeho nedotkne. Teprve **Potvrzení** provede naráz:
 
-1. u každé položky navýší množství na skladové kartě (kartu založí, pokud neexistuje),
+1. u každé položky navýší množství na skladové kartě **ve skladu zvoleném u položky** (kartu založí, pokud neexistuje),
 2. zapíše novou cenu a sazbu DPH na skladovou kartu,
 3. každou změnu ceny uloží do **cenové historie**,
 4. příjemku zamkne proti dalším úpravám.
@@ -30,7 +30,7 @@ Dokud je příjemka koncept, můžete položky přidávat, mazat i opravovat —
 ![Nová příjemka](img/04-prijemka-nova.png)
 
 1. **Číslo dokladu** — opište číslo dodacího listu nebo faktury; slouží k pozdějšímu dohledání.
-2. **Sklad**, **datum příjmu** a **dodavatel**.
+2. **Výchozí sklad**, **datum příjmu** a **dodavatel**. Výchozí sklad se předvyplní u všech položek; u každé položky ho můžete změnit (např. část závozu jde do bufetu) a naskladní se tam, kam ukazuje položka.
 3. **Položky**: surovina, množství (ve skladové jednotce!), cena a DPH. Cenu lze zadat bez DPH (systém dopočte s DPH) nebo s DPH — dopočítává se vždy druhá hodnota podle sazby (0/12/21 %).
 4. Uložit jako koncept → zkontrolovat → **Potvrdit**.
 
@@ -183,7 +183,7 @@ Každá změna skladové ceny (potvrzením příjemky, inventurou, převodkou) v
 
 | Situace | Příčina | Řešení |
 |---|---|---|
-| *„Sklad je uzamčen kvůli probíhající inventuře“* při potvrzení | Na skladu běží inventura | Počkat na dokončení inventury, pak potvrdit (koncept zůstává uložen) |
+| *„Sklad je uzamčen kvůli probíhající inventuře“* při potvrzení | Na skladu některé z položek běží inventura | Počkat na dokončení inventury, pak potvrdit (koncept zůstává uložen) |
 | Potvrzená příjemka má chybnou cenu | Překlep, pozdě odhalený | Neopravovat „nasilu“ — vytvořit novou příjemku/odpis dle povahy chyby; cena se srovná dalším závozem |
 | Po importu chybí surovina | Nový artikl dodavatele | Import ji nabídne založit; zkontrolujte jednotky a převodní koeficient |
 | Kalkulace porce vychází nulová | Surovina ještě neprošla příjemkou | Naskladnit první příjemkou — do té doby má cena hodnotu 0 |

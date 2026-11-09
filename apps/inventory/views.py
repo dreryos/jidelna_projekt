@@ -600,7 +600,7 @@ class GoodsReceiptDetailView(LoginRequiredMixin, DetailView):
     context_object_name = 'goods_receipt'
     
     def get_queryset(self):
-        return GoodsReceipt.objects.select_related('warehouse', 'warehouse__canteen', 'created_by').prefetch_related('items__ingredient')
+        return GoodsReceipt.objects.select_related('warehouse', 'warehouse__canteen', 'created_by').prefetch_related('items__ingredient', 'items__warehouse')
 
 
 @login_required
@@ -814,7 +814,22 @@ def goods_receipt_confirm(request, pk):
     if not user_can_access_canteen(request.user, goods_receipt.warehouse.canteen):
         messages.error(request, 'Nemáte oprávnění k této akci.')
         return redirect('inventory:goods_receipt_list')
-    
+
+    # Potvrzení naskladňuje do skladu u každé položky, ne do hlavičky.
+    # Importy berou sklad položky z POST bez kontroly jídelny, takže
+    # oprávnění se ověřuje tady – na jediném místě, kde se mění stav skladu.
+    foreign = sorted({
+        item.warehouse.name
+        for item in goods_receipt.items.select_related('warehouse__canteen')
+        if not user_can_access_canteen(request.user, item.warehouse.canteen)
+    })
+    if foreign:
+        messages.error(
+            request,
+            f'Nemáte oprávnění naskladňovat do skladu: {", ".join(foreign)}.'
+        )
+        return redirect('inventory:goods_receipt_detail', pk=pk)
+
     if goods_receipt.status != GoodsReceipt.Status.DRAFT:
         messages.warning(request, 'Tento příjem již byl potvrzen.')
         return redirect('inventory:goods_receipt_detail', pk=pk)

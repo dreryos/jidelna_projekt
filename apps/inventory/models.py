@@ -792,10 +792,18 @@ class GoodsReceipt(models.Model):
         if self.status != self.Status.DRAFT:
             raise ValueError("Příjem lze potvrdit pouze ve stavu Koncept")
         
-        # Kontrola zda sklad není uzamčen
-        if self.warehouse.is_locked:
+        # Každá položka se naskladňuje do svého skladu (formulář i importy ho
+        # u položky nechají změnit), takže zámek inventury se hlídá u všech
+        # dotčených skladů. Kontrola jen hlavičky by pustila zboží do skladu,
+        # na kterém právě běží inventura, a ta by ho při dokončení přepsala.
+        locked = sorted({
+            item.warehouse.name
+            for item in self.items.select_related('warehouse')
+            if item.warehouse.is_locked
+        })
+        if locked:
             raise ValidationError(
-                f"Sklad '{self.warehouse.name}' je uzamčen kvůli probíhající inventuře. "
+                f"Sklad '{', '.join(locked)}' je uzamčen kvůli probíhající inventuře. "
                 f"Nelze potvrdit příjem zboží na uzamčený sklad."
             )
         
@@ -813,7 +821,9 @@ class GoodsReceipt(models.Model):
             )
         
         with transaction.atomic():
-            items = list(self.items.select_related('ingredient').order_by('ingredient_id'))
+            items = list(
+                self.items.select_related('ingredient', 'warehouse').order_by('ingredient_id')
+            )
 
             # Všechny zámky předem a v pořadí podle `pk`, viz
             # StockItem.lock_existing(). Řadit položky podle suroviny nestačí:
@@ -822,7 +832,7 @@ class GoodsReceipt(models.Model):
             # a čekala na druhou, zatímco převodka (která řadí podle `pk`) drží
             # přesně opačnou dvojici. PostgreSQL by jednu z nich zabila.
             StockItem.lock_existing(
-                [(item.ingredient, self.warehouse) for item in items]
+                [(item.ingredient, item.warehouse) for item in items]
             )
 
             for item in items:
@@ -830,7 +840,7 @@ class GoodsReceipt(models.Model):
                 # viz StockItem.lock_or_create()
                 stock_item = StockItem.lock_or_create(
                     ingredient=item.ingredient,
-                    warehouse=self.warehouse,
+                    warehouse=item.warehouse,
                     defaults={
                         'quantity': Decimal('0'),
                         'price': item.price,
