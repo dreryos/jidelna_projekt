@@ -1206,6 +1206,7 @@ def _import_goods_receipts(
                     price_without_vat=price_without_vat,
                     vat_rate=vat_rate,
                     notes=item_notes,
+                    stock_unit=ingredient_map[ing_name].base_unit,
                 )
             )
 

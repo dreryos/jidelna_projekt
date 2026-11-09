@@ -185,3 +185,174 @@ def test_nulova_cena_se_neresi():
 
     assert check_price_precision(Decimal('0'), Decimal('1000')) is None
     assert check_price_precision(Decimal('10'), Decimal('0')) is None
+
+
+# --- Cena řádově mimo medián (potvrzení příjemky) ---
+
+from django.urls import reverse
+
+from apps.inventory.models import GoodsReceiptItem
+from apps.inventory.receipt_checks import check_price_outliers
+
+
+def _autor():
+    return get_user_model().objects.get_or_create(username='nakupci')[0]
+
+
+def nakup(sklad, surovina, cena, status=GoodsReceipt.Status.CONFIRMED, cislo=None):
+    prijemka = GoodsReceipt.objects.create(
+        warehouse=sklad, receipt_number=cislo or f'N{GoodsReceipt.objects.count()}',
+        status=status, created_by=_autor(),
+    )
+    return GoodsReceiptItem.objects.create(
+        goods_receipt=prijemka, ingredient=surovina, warehouse=sklad,
+        quantity=Decimal('250'), price=Decimal(cena),
+    )
+
+
+@pytest.fixture
+def historie_cen(sklad, rajce):
+    for cena in ('9.20', '8.40', '12.00'):
+        nakup(sklad, rajce, cena)
+
+
+def test_desetinasobek_mediánu_se_ohlasi(sklad, rajce, historie_cen):
+    # Případ z příjemky 20260454: celková cena řádku zadaná jako jednotková.
+    polozka = nakup(sklad, rajce, '2480', status=GoodsReceipt.Status.DRAFT)
+
+    [nalez] = check_price_outliers([polozka], sklad.canteen_id)
+
+    assert nalez['median'] == Decimal('9.20')
+    assert nalez['direction'] == 'vyšší'
+    assert round(nalez['times']) == 270
+
+
+def test_desetina_mediánu_se_ohlasi_taky(sklad, rajce, historie_cen):
+    polozka = nakup(sklad, rajce, '0.50', status=GoodsReceipt.Status.DRAFT)
+
+    [nalez] = check_price_outliers([polozka], sklad.canteen_id)
+
+    assert nalez['direction'] == 'nižší'
+
+
+def test_bezne_zdrazeni_projde(sklad, rajce, historie_cen):
+    polozka = nakup(sklad, rajce, '45', status=GoodsReceipt.Status.DRAFT)
+
+    assert check_price_outliers([polozka], sklad.canteen_id) == []
+
+
+def test_bez_dostatku_historie_se_nesrovnava(sklad, rajce):
+    nakup(sklad, rajce, '9')
+    nakup(sklad, rajce, '10')
+    polozka = nakup(sklad, rajce, '2480', status=GoodsReceipt.Status.DRAFT)
+
+    assert check_price_outliers([polozka], sklad.canteen_id) == []
+
+
+def test_koncepty_se_do_mediánu_nepocitaji(sklad, rajce, historie_cen):
+    for _ in range(5):
+        nakup(sklad, rajce, '2480', status=GoodsReceipt.Status.DRAFT)
+    polozka = nakup(sklad, rajce, '2480', status=GoodsReceipt.Status.DRAFT)
+
+    assert len(check_price_outliers([polozka], sklad.canteen_id)) == 1
+
+
+@pytest.fixture
+def prihlaseny(client):
+    user = get_user_model().objects.create_superuser('skladnik-m', password='x')
+    client.force_login(user)
+    return user
+
+
+def test_potvrzeni_bez_zaskrtnuti_cenu_nepusti(client, prihlaseny, sklad, rajce, historie_cen):
+    polozka = nakup(sklad, rajce, '2480', status=GoodsReceipt.Status.DRAFT)
+    url = reverse('inventory:goods_receipt_confirm', args=[polozka.goods_receipt.pk])
+
+    assert 'Zkontrolujte ceny na dokladu' in client.get(url).content.decode()
+    client.post(url)
+
+    polozka.goods_receipt.refresh_from_db()
+    assert polozka.goods_receipt.status == GoodsReceipt.Status.DRAFT
+    assert not StockItem.objects.filter(ingredient=rajce, warehouse=sklad).exists()
+
+
+def test_potvrzeni_se_zaskrtnutim_projde(client, prihlaseny, sklad, rajce, historie_cen):
+    polozka = nakup(sklad, rajce, '2480', status=GoodsReceipt.Status.DRAFT)
+    url = reverse('inventory:goods_receipt_confirm', args=[polozka.goods_receipt.pk])
+
+    client.post(url, {'prices_checked': '1'})
+
+    polozka.goods_receipt.refresh_from_db()
+    assert polozka.goods_receipt.status == GoodsReceipt.Status.CONFIRMED
+
+
+def test_bezna_prijemka_zaskrtnuti_nepotrebuje(client, prihlaseny, sklad, rajce, historie_cen):
+    polozka = nakup(sklad, rajce, '10', status=GoodsReceipt.Status.DRAFT)
+    url = reverse('inventory:goods_receipt_confirm', args=[polozka.goods_receipt.pk])
+
+    assert 'prices_checked' not in client.get(url).content.decode()
+    client.post(url)
+
+    polozka.goods_receipt.refresh_from_db()
+    assert polozka.goods_receipt.status == GoodsReceipt.Status.CONFIRMED
+
+
+def test_ceny_cizi_jidelny_se_do_mediánu_nepocitaji(sklad, rajce):
+    # Medián z cizích nákupů by prozradil cenovou hladinu jídelny,
+    # do které uživatel nevidí.
+    cizi = Warehouse.objects.create(
+        name='Cizí sklad', canteen=Canteen.objects.create(name='Cizí jídelna'))
+    for cena in ('9', '10', '11'):
+        nakup(cizi, rajce, cena)
+    polozka = nakup(sklad, rajce, '2480', status=GoodsReceipt.Status.DRAFT)
+
+    assert check_price_outliers([polozka], sklad.canteen_id) == []
+
+
+def test_vic_radku_na_jedne_prijemce_je_jeden_nakup(sklad, rajce):
+    prvni = nakup(sklad, rajce, '9')
+    for _ in range(2):
+        GoodsReceiptItem.objects.create(
+            goods_receipt=prvni.goods_receipt, ingredient=rajce, warehouse=sklad,
+            quantity=Decimal('1'), price=Decimal('9'),
+        )
+    nakup(sklad, rajce, '10')
+    polozka = nakup(sklad, rajce, '2480', status=GoodsReceipt.Status.DRAFT)
+
+    assert check_price_outliers([polozka], sklad.canteen_id) == []
+
+
+def test_ceny_v_jine_skladove_jednotce_se_nesrovnavaji(sklad, rajce, historie_cen):
+    # Surovina přešla z kusů na kila – staré ceny za kus nejsou srovnatelné.
+    GoodsReceiptItem.objects.filter(ingredient=rajce).update(stock_unit='ks')
+    polozka = nakup(sklad, rajce, '2480', status=GoodsReceipt.Status.DRAFT)
+
+    assert polozka.stock_unit == rajce.base_unit != 'ks'
+    assert check_price_outliers([polozka], sklad.canteen_id) == []
+
+
+def test_confirm_bez_potvrzeni_cen_neprojde_ani_mimo_view(sklad, rajce, historie_cen):
+    from apps.inventory.receipt_checks import PriceOutlierError
+
+    prijemka = nakup(sklad, rajce, '2480', status=GoodsReceipt.Status.DRAFT).goods_receipt
+
+    with pytest.raises(PriceOutlierError):
+        prijemka.confirm()
+    prijemka.refresh_from_db()
+    assert prijemka.status == GoodsReceipt.Status.DRAFT
+
+    prijemka.confirm(prices_checked=True)
+    prijemka.refresh_from_db()
+    assert prijemka.status == GoodsReceipt.Status.CONFIRMED
+
+
+def test_druhe_potvrzeni_ze_zastarale_instance_nenaskladni_znovu(sklad, rajce):
+    # Dva souběžné POSTy: oba si načetly koncept dřív, než ten první potvrdil.
+    prijemka = nakup(sklad, rajce, '10', status=GoodsReceipt.Status.DRAFT).goods_receipt
+    zastarala = GoodsReceipt.objects.get(pk=prijemka.pk)
+
+    prijemka.confirm()
+    with pytest.raises(ValueError):
+        zastarala.confirm()
+
+    assert StockItem.objects.get(ingredient=rajce, warehouse=sklad).quantity == Decimal('250')
