@@ -185,3 +185,113 @@ def test_nulova_cena_se_neresi():
 
     assert check_price_precision(Decimal('0'), Decimal('1000')) is None
     assert check_price_precision(Decimal('10'), Decimal('0')) is None
+
+
+# --- Cena řádově mimo medián (potvrzení příjemky) ---
+
+from django.urls import reverse
+
+from apps.inventory.models import GoodsReceiptItem
+from apps.inventory.receipt_checks import check_price_outliers
+
+
+def _autor():
+    return get_user_model().objects.get_or_create(username='nakupci')[0]
+
+
+def nakup(sklad, surovina, cena, status=GoodsReceipt.Status.CONFIRMED, cislo=None):
+    prijemka = GoodsReceipt.objects.create(
+        warehouse=sklad, receipt_number=cislo or f'N{GoodsReceipt.objects.count()}',
+        status=status, created_by=_autor(),
+    )
+    return GoodsReceiptItem.objects.create(
+        goods_receipt=prijemka, ingredient=surovina, warehouse=sklad,
+        quantity=Decimal('250'), price=Decimal(cena),
+    )
+
+
+@pytest.fixture
+def historie_cen(sklad, rajce):
+    for cena in ('9.20', '8.40', '12.00'):
+        nakup(sklad, rajce, cena)
+
+
+def test_desetinasobek_mediánu_se_ohlasi(sklad, rajce, historie_cen):
+    # Případ z příjemky 20260454: celková cena řádku zadaná jako jednotková.
+    polozka = nakup(sklad, rajce, '2480', status=GoodsReceipt.Status.DRAFT)
+
+    [nalez] = check_price_outliers([polozka])
+
+    assert nalez['median'] == Decimal('9.20')
+    assert nalez['direction'] == 'vyšší'
+    assert round(nalez['times']) == 270
+
+
+def test_desetina_mediánu_se_ohlasi_taky(sklad, rajce, historie_cen):
+    polozka = nakup(sklad, rajce, '0.50', status=GoodsReceipt.Status.DRAFT)
+
+    [nalez] = check_price_outliers([polozka])
+
+    assert nalez['direction'] == 'nižší'
+
+
+def test_bezne_zdrazeni_projde(sklad, rajce, historie_cen):
+    polozka = nakup(sklad, rajce, '45', status=GoodsReceipt.Status.DRAFT)
+
+    assert check_price_outliers([polozka]) == []
+
+
+def test_bez_dostatku_historie_se_nesrovnava(sklad, rajce):
+    nakup(sklad, rajce, '9')
+    nakup(sklad, rajce, '10')
+    polozka = nakup(sklad, rajce, '2480', status=GoodsReceipt.Status.DRAFT)
+
+    assert check_price_outliers([polozka]) == []
+
+
+def test_koncepty_se_do_mediánu_nepocitaji(sklad, rajce, historie_cen):
+    for _ in range(5):
+        nakup(sklad, rajce, '2480', status=GoodsReceipt.Status.DRAFT)
+    polozka = nakup(sklad, rajce, '2480', status=GoodsReceipt.Status.DRAFT)
+
+    assert len(check_price_outliers([polozka])) == 1
+
+
+@pytest.fixture
+def prihlaseny(client):
+    user = get_user_model().objects.create_superuser('skladnik-m', password='x')
+    client.force_login(user)
+    return user
+
+
+def test_potvrzeni_bez_zaskrtnuti_cenu_nepusti(client, prihlaseny, sklad, rajce, historie_cen):
+    polozka = nakup(sklad, rajce, '2480', status=GoodsReceipt.Status.DRAFT)
+    url = reverse('inventory:goods_receipt_confirm', args=[polozka.goods_receipt.pk])
+
+    assert 'Zkontrolujte ceny na dokladu' in client.get(url).content.decode()
+    client.post(url)
+
+    polozka.goods_receipt.refresh_from_db()
+    assert polozka.goods_receipt.status == GoodsReceipt.Status.DRAFT
+    assert not StockItem.objects.filter(ingredient=rajce, warehouse=sklad).exists()
+
+
+def test_potvrzeni_se_zaskrtnutim_projde(client, prihlaseny, sklad, rajce, historie_cen):
+    polozka = nakup(sklad, rajce, '2480', status=GoodsReceipt.Status.DRAFT)
+    url = reverse('inventory:goods_receipt_confirm', args=[polozka.goods_receipt.pk])
+
+    client.post(url, {'prices_checked': '1'})
+
+    polozka.goods_receipt.refresh_from_db()
+    assert polozka.goods_receipt.status == GoodsReceipt.Status.CONFIRMED
+
+
+def test_bezna_prijemka_zaskrtnuti_nepotrebuje(client, prihlaseny, sklad, rajce, historie_cen):
+    polozka = nakup(sklad, rajce, '10', status=GoodsReceipt.Status.DRAFT)
+    url = reverse('inventory:goods_receipt_confirm', args=[polozka.goods_receipt.pk])
+
+    assert 'prices_checked' not in client.get(url).content.decode()
+    client.post(url)
+
+    polozka.goods_receipt.refresh_from_db()
+    assert polozka.goods_receipt.status == GoodsReceipt.Status.CONFIRMED

@@ -41,6 +41,8 @@ Dokud je příjemka koncept, můžete položky přidávat, mazat i opravovat —
 
 ⚠️ **Pozor na ceny:** Překlep v ceně se potvrzením propíše do skladu a do všech kalkulací. Před potvrzením porovnejte celkovou hodnotu příjemky s fakturou — je vidět v detailu dokladu.
 
+Potvrzovací stránka sama upozorní na cenu, která je **10× vyšší nebo nižší** než obvyklá nákupní cena suroviny (medián potvrzených příjemek, pokud se surovina nakoupila aspoň třikrát). Takové položky ukáže v červeném rámečku a příjemku pustí až po zaškrtnutí *Ceny označené výše jsem ověřil na dokladu*. Nejčastější příčina je celková cena řádku zadaná jako cena za jednotku nebo posunutá desetinná čárka.
+
 ## Dodavatelé a šablony položek
 
 Časté dodavatele založí správce v systému (včetně barvy a ikony tlačítka a **IČO**, podle kterého se dodavatel páruje s dokladem). Katalog obsahuje reálné dodavatele — **Bidfood, Makro, Bolero, DK Open** — a doplňuje se podle potřeby provozu. Každému dodavateli lze připravit **šablonu položek** — seznam surovin s výchozí cenou a DPH v obvyklém pořadí dodacího listu.

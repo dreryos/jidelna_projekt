@@ -7,9 +7,13 @@ každá z nich má legitimní výjimku (dodavatel opravdu zdražil, doklad se
 opravdu importuje znovu po smazání).
 """
 import logging
+from collections import defaultdict
 from decimal import Decimal
+from statistics import median
 
-from apps.inventory.models import GoodsReceipt, IngredientPriceHistory, StockItem
+from apps.inventory.models import (
+    GoodsReceipt, GoodsReceiptItem, IngredientPriceHistory, StockItem,
+)
 
 logger = logging.getLogger('apps.inventory')
 
@@ -126,6 +130,59 @@ def collect_receipt_warnings(items, warehouse_by_index=None):
             f'{abs(deviation["ratio"]) * 100:.0f} %. Zkontrolujte ji na dokladu.'
         )
     return warnings
+
+
+# Kolikrát smí cena uhnout od mediánu nákupních cen, než se potvrzení zeptá.
+# Desetinásobek je řádová chyba (celková cena řádku zadaná jako jednotková,
+# posunutá čárka), ne zdražení – sezónní výkyvy i rozdíly mezi dodavateli se
+# vejdou hluboko pod něj.
+PRICE_OUTLIER_FACTOR = Decimal('10')
+
+# Medián ze dvou nákupů nic neříká; jedna chybná cena by byla „normál".
+PRICE_OUTLIER_MIN_SAMPLES = 3
+
+
+def check_price_outliers(items):
+    """
+    Najde položky, jejichž cena se řádově liší od obvyklé nákupní ceny.
+
+    Na rozdíl od `check_price_deviation` se nesrovnává s poslední cenou, ale
+    s mediánem všech potvrzených nákupů suroviny napříč sklady. Poslední cena
+    je sama zranitelná: po jedné chybně potvrzené příjemce (banán za 2 480 Kč
+    za kg) by se správná cena tvářila jako zlevnění o 99 % a další chyba
+    stejného řádu by prošla. Medián jedna chyba nepohne.
+
+    Args:
+        items: položky příjemky (`GoodsReceiptItem`)
+
+    Returns:
+        list dictů s klíči `item`, `median`, `times` a `direction`.
+    """
+    items = list(items)
+    prices = defaultdict(list)
+    for ingredient_id, price in GoodsReceiptItem.objects.filter(
+        ingredient_id__in={item.ingredient_id for item in items},
+        goods_receipt__status=GoodsReceipt.Status.CONFIRMED,
+        price__gt=0,
+    ).values_list('ingredient_id', 'price'):
+        prices[ingredient_id].append(price)
+
+    outliers = []
+    for item in items:
+        history = prices.get(item.ingredient_id, [])
+        if len(history) < PRICE_OUTLIER_MIN_SAMPLES or not item.price or item.price <= 0:
+            continue
+        typical = median(history)
+        ratio = item.price / typical
+        if PRICE_OUTLIER_FACTOR > ratio > 1 / PRICE_OUTLIER_FACTOR:
+            continue
+        outliers.append({
+            'item': item,
+            'median': typical,
+            'times': ratio if ratio >= 1 else 1 / ratio,
+            'direction': 'vyšší' if ratio >= 1 else 'nižší',
+        })
+    return outliers
 
 
 # Přesnost, se kterou se ceny ukládají – odpovídá decimal_places cenových polí.

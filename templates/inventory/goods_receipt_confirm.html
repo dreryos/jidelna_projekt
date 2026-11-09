@@ -28,6 +28,42 @@
       </ul>
     </div>
     
+    {% if price_outliers %}
+    <div class="alert alert-danger mt-3">
+      <h5>
+        <i class="fas fa-search-dollar me-2"></i>
+        Zkontrolujte ceny na dokladu
+      </h5>
+      <p>
+        Tyto ceny jsou řádově jinde než obvyklá nákupní cena suroviny
+        (medián potvrzených příjemek). Častá příčina je celková cena řádku
+        zadaná jako cena za jednotku nebo posunutá desetinná čárka.
+      </p>
+      <div class="table-responsive">
+        <table class="table table-sm mb-0">
+          <thead>
+            <tr>
+              <th>Surovina</th>
+              <th class="text-end">Cena v příjemce</th>
+              <th class="text-end">Obvyklá cena</th>
+              <th class="text-end">Rozdíl</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for outlier in price_outliers %}
+              <tr>
+                <td>{{ outlier.item.ingredient.name }}</td>
+                <td class="text-end">{{ outlier.item.price|floatformat:2 }} Kč/{{ outlier.item.ingredient.unit }}</td>
+                <td class="text-end">{{ outlier.median|floatformat:2 }} Kč/{{ outlier.item.ingredient.unit }}</td>
+                <td class="text-end">{{ outlier.times|floatformat:0 }}× {{ outlier.direction }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endif %}
+
     <div class="card mt-3">
       <div class="card-header">
         <h5 class="mb-0">Přehled příjmu</h5>
@@ -72,6 +108,14 @@
     
     <form method="post" class="mt-4">
       {% csrf_token %}
+      {% if price_outliers %}
+      <div class="form-check mb-3">
+        <input class="form-check-input" type="checkbox" name="prices_checked" value="1" id="prices_checked" required>
+        <label class="form-check-label" for="prices_checked">
+          Ceny označené výše jsem ověřil na dokladu a jsou správně
+        </label>
+      </div>
+      {% endif %}
       <button type="submit" class="btn btn-success btn-lg">
         <i class="fas fa-check me-2"></i>Ano, potvrdit příjem
       </button>

@@ -827,7 +827,21 @@ def goods_receipt_confirm(request, pk):
         )
         return redirect('inventory:goods_receipt_resolve_units', pk=pk)
     
+    from .receipt_checks import check_price_outliers
+    price_outliers = check_price_outliers(goods_receipt.items.select_related('ingredient'))
+
     if request.method == 'POST':
+        # Řádově chybná cena se potvrzením propíše do skladové karty a odtud
+        # do každé výdejky – banán za 2 480 Kč/kg tak v sezóně 2026 nafoukl
+        # spotřebu o statisíce. Zablokovat to nejde (cena může být opravdu
+        # jiná, třeba kartón místo kusu), proto stačí výslovné potvrzení.
+        if price_outliers and not request.POST.get('prices_checked'):
+            messages.error(
+                request,
+                'Některé ceny se řádově liší od obvyklých. Ověřte je na dokladu '
+                'a zaškrtněte, že jsou správně.'
+            )
+            return redirect('inventory:goods_receipt_confirm', pk=pk)
         try:
             goods_receipt.confirm()
             # Fotka dokladu už není k ničemu – rozpoznaná data jsou v příjemce
@@ -848,6 +862,7 @@ def goods_receipt_confirm(request, pk):
     # GET - zobrazíme potvrzovací stránku
     context = {
         'goods_receipt': goods_receipt,
+        'price_outliers': price_outliers,
     }
     return render(request, 'inventory/goods_receipt_confirm.html', context)
 
